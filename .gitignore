@@ -1,22 +1,79 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
+# ======================
+# Environnement virtuel Python
+# ======================
+.muntu_saas/
+.venv/
+venv/
+env/
+ENV/
+virtualenv/
+pipenv/
+
+# ======================
+# Fichiers sensibles (secrets)
+# ======================
+.env
+.env.local
+.env.*
+!.env.example
+
+# ======================
+# Python spécifiques (FastAPI)
+# ======================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ======================
+# Logs et caches
+# ======================
+*.log
+logs/
+*.sqlite3
+*.db
+
+# ======================
+# IDE / Éditeurs
+# ======================
 .vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-file
-*.flf
-#Test results file
-TestResults.xml
+.idea/
+*.swp
+*.swo
+*~
+
+# ======================
+# Tests et coverage
+# ======================
+.coverage
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.cache/
+.mypy_cache/
+.ruff_cache/
+
+# ======================
+# Autres (optionnel mais utile)
+# ======================
+.DS_Store
+Thumbs.db
