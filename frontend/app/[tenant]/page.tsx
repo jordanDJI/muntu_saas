@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import ContactForm from "./contact-form";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,8 +25,9 @@ async function getSiteData(slug: string) {
   return site ? { ...site, tenant } : null;
 }
 
-export default async function TenantSitePage({ params }: { params: { tenant: string } }) {
-  const site = await getSiteData(params.tenant);
+export default async function TenantSitePage({ params }: { params: Promise<{ tenant: string }> }) {
+  const { tenant: tenantSlug } = await params;
+  const site = await getSiteData(tenantSlug);
 
   if (!site) {
     return (
@@ -76,33 +78,9 @@ export default async function TenantSitePage({ params }: { params: { tenant: str
       {/* Contact form */}
       <section className="max-w-xl mx-auto py-16 px-6">
         <h2 className="text-2xl font-bold mb-6 text-center">Prendre contact</h2>
-        <ContactForm tenantSlug={params.tenant} />
+        <ContactForm tenantSlug={tenantSlug} />
       </section>
     </main>
   );
 }
 
-function ContactForm({ tenantSlug }: { tenantSlug: string }) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-  return (
-    <form
-      action={`${apiUrl}/api/v1/leads/public/${tenantSlug}`}
-      method="POST"
-      className="space-y-4"
-    >
-      <div className="grid grid-cols-2 gap-4">
-        <input name="first_name" placeholder="Prénom" required className="border rounded-lg px-3 py-2 w-full" />
-        <input name="last_name" placeholder="Nom" required className="border rounded-lg px-3 py-2 w-full" />
-      </div>
-      <input name="email" type="email" placeholder="Email" className="border rounded-lg px-3 py-2 w-full" />
-      <input name="phone" type="tel" placeholder="Téléphone" className="border rounded-lg px-3 py-2 w-full" />
-      <input type="hidden" name="source" value="website" />
-      <input type="hidden" name="audience_type" value="b2c" />
-      <input type="hidden" name="request_type" value="contact" />
-      <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700">
-        Envoyer ma demande
-      </button>
-    </form>
-  );
-}

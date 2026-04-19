@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from uuid import UUID
 from app.middleware.tenant import get_current_tenant
-from app.core.supabase import get_supabase
+from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.appointment import AppointmentCreateIn, AppointmentUpdateIn, AppointmentOut
 from app.services.email import send_appointment_confirmation
 
@@ -14,10 +14,16 @@ async def list_appointments(
     tenant_id: str = Depends(get_current_tenant),
 ):
     supabase = get_supabase()
+    # Récupérer les calendar_ids du tenant d'abord
+    calendars = supabase.table("calendar").select("id").eq("tenant_id", tenant_id).execute().data
+    if not calendars:
+        return []
+    calendar_ids = [c["id"] for c in calendars]
+
     query = (
         supabase.table("appointment")
         .select("*, contact(first_name, last_name, email, phone), service_offer(name)")
-        .eq("calendar.tenant_id", tenant_id)
+        .in_("calendar_id", calendar_ids)
         .order("scheduled_at", desc=False)
     )
     if status:

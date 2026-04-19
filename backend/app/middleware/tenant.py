@@ -1,27 +1,68 @@
+import logging
+from functools import lru_cache
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from fastapi.security import OAuth2PasswordBearer
+import httpx
+from jose import jwk as jose_jwk, jwt as jose_jwt
+from jose.exceptions import JWTError, ExpiredSignatureError
+
 from app.core.config import settings
 
-security = HTTPBearer()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+logger = logging.getLogger(__name__)
 
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> dict:
-    token = credentials.credentials
+@lru_cache(maxsize=1)
+def _fetch_jwks() -> tuple:
+    url = f"{settings.supabase_url}/auth/v1/.well-known/jwks.json"
+    resp = httpx.get(url, timeout=10)
+    resp.raise_for_status()
+    keys = tuple(resp.json().get("keys", []))
+    logger.info(f"JWKS fetched: {len(keys)} key(s)")
+    return keys
+
+
+def _decode_supabase_jwt(token: str) -> dict:
     try:
-        payload = jwt.decode(
-            token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
-            options={"verify_aud": False},
-        )
-        if not payload.get("sub"):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token invalide")
-        return payload
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token invalide ou expiré")
+        header = jose_jwt.get_unverified_header(token)
+    except Exception as e:
+        logger.error(f"JWT header error: {e}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token malformé")
+
+    kid = header.get("kid")
+    alg = header.get("alg", "ES256")
+
+    try:
+        keys = _fetch_jwks()
+    except Exception as e:
+        logger.error(f"JWKS fetch failed: {e}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Erreur JWKS")
+
+    for key_data in keys:
+        if kid and key_data.get("kid") != kid:
+            continue
+        try:
+            ec_key = jose_jwk.construct(key_data, algorithm=alg)
+            return jose_jwt.decode(token, ec_key, algorithms=[alg], audience="authenticated")
+        except ExpiredSignatureError:
+            logger.error("Token expiré")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expiré")
+        except JWTError as e:
+            logger.error(f"JWT decode failed: {type(e).__name__}: {e}")
+            continue
+
+    logger.error(f"Aucune clé JWKS ne correspond au kid={kid}")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token invalide")
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+    payload = _decode_supabase_jwt(token)
+    return {
+        "sub": payload.get("sub"),
+        "email": payload.get("email"),
+        "app_metadata": payload.get("app_metadata", {}),
+        "user_metadata": payload.get("user_metadata", {}),
+    }
 
 
 async def get_current_tenant(user: dict = Depends(get_current_user)) -> str:

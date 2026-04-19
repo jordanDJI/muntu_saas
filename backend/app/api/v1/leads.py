@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from uuid import UUID
 from app.middleware.tenant import get_current_tenant
-from app.core.supabase import get_supabase, get_supabase_admin
+from app.core.supabase import get_supabase_admin
 from app.models.lead import LeadCreateIn, LeadUpdateIn, LeadOut
 from app.services.email import send_lead_notification
 
@@ -14,7 +14,7 @@ async def list_leads(
     audience_type: str | None = None,
     tenant_id: str = Depends(get_current_tenant),
 ):
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     query = (
         supabase.table("lead")
         .select("*, contact(first_name, last_name, email, phone)")
@@ -73,7 +73,7 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
 
 @router.patch("/{lead_id}")
 async def update_lead(lead_id: UUID, body: LeadUpdateIn, tenant_id: str = Depends(get_current_tenant)):
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
     updates = body.model_dump(exclude_none=True)
     if not updates:
         raise HTTPException(status_code=400, detail="Aucune donnée à mettre à jour")

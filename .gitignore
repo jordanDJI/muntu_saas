@@ -73,7 +73,17 @@ htmlcov/
 .ruff_cache/
 
 # ======================
+# Next.js
+# ======================
+frontend/.next/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
+frontend/next-env.d.ts
+
+# ======================
 # Autres (optionnel mais utile)
 # ======================
 .DS_Store
 Thumbs.db
+.claude/
+nul

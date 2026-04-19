@@ -2,7 +2,7 @@ import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from pydantic import BaseModel
 from app.middleware.tenant import get_current_tenant
-from app.core.supabase import get_supabase, get_supabase_admin
+from app.core.supabase import get_supabase_admin
 from app.core.config import settings
 
 stripe.api_key = settings.stripe_secret_key
@@ -18,7 +18,7 @@ class CheckoutIn(BaseModel):
 
 @router.post("/checkout")
 async def create_checkout(body: CheckoutIn, tenant_id: str = Depends(get_current_tenant)):
-    supabase = get_supabase()
+    supabase = get_supabase_admin()
 
     plan = supabase.table("plan_subscription").select("id, name, stripe_price_id").eq("id", body.plan_id).single().execute().data
     if not plan or not plan.get("stripe_price_id"):

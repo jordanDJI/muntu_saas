@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from uuid import UUID
 from app.middleware.tenant import get_current_tenant
-from app.core.supabase import get_supabase
+from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.site import SiteCreateIn, SiteUpdateIn, SiteOut
 
 router = APIRouter(prefix="/sites", tags=["Sites"])

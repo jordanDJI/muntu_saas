@@ -8,8 +8,11 @@ export const supabase = createBrowserClient(
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  // getUser() valide la session côté serveur Supabase et rafraîchit si nécessaire
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return {};
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -32,6 +35,7 @@ export const api = {
   createSite: (body: object) => apiFetch("/api/v1/sites/", { method: "POST", body: JSON.stringify(body) }),
   updateSite: (id: string, body: object) => apiFetch(`/api/v1/sites/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   publishSite: (id: string) => apiFetch(`/api/v1/sites/${id}/publish`, { method: "POST" }),
+  unpublishSite: (id: string) => apiFetch(`/api/v1/sites/${id}/unpublish`, { method: "POST" }),
 
   // Leads
   getLeads: (params?: { status?: string; audience_type?: string }) => {

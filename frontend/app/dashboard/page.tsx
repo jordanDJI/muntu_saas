@@ -1,11 +1,18 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { api, supabase } from "@/lib/api";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [leads, setLeads] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
 
   useEffect(() => {
     api.getLeads().then(setLeads).catch(console.error);
@@ -17,7 +24,12 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-8">
-      <h1 className="text-2xl font-bold">Tableau de bord</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Tableau de bord</h1>
+        <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-red-500">
+          Déconnexion
+        </button>
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-4">
