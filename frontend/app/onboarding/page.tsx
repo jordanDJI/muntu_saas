@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/api";
+import { supabase } from "../../lib/api";
 
 const SECTORS = [
   { value: "health",   label: "Santé (infirmier·e, kiné...)" },

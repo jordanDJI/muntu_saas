@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api } from "../../../lib/api";
 
 export default function SettingsPage() {
   const router = useRouter();
