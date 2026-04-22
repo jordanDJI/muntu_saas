@@ -27,5 +27,11 @@ class Settings(BaseSettings):
     frontend_url_prod: str = ""
     secret_key: str
 
+    # Agents IA
+    gemini_api_key: str = ""
+    agent_link_secret: str = ""          # clé HMAC pour signer les tokens JWT agent_link
+    agent_link_expiry_days: int = 90     # durée de validité des liens client converti
+    agent_ocr_max_size_mb: int = 10      # taille max des fichiers envoyés pour OCR
+
 
 settings = Settings()

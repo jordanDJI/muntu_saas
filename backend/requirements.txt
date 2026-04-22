@@ -11,3 +11,5 @@ stripe==10.12.0
 sentry-sdk[fastapi]==2.15.0
 httpx==0.27.2
 email-validator
+google-genai==1.10.0
+python-multipart==0.0.12

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import ContactForm from "./contact-form";
+import ChatbotWidget from "../../components/ChatbotWidget";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -80,6 +81,9 @@ export default async function TenantSitePage({ params }: { params: Promise<{ ten
         <h2 className="text-2xl font-bold mb-6 text-center">Prendre contact</h2>
         <ContactForm tenantSlug={tenantSlug} />
       </section>
+
+      {/* Agent 1 — Chatbot vitrine */}
+      <ChatbotWidget tenantSlug={tenantSlug} />
     </main>
   );
 }

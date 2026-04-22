@@ -54,4 +54,28 @@ export const api = {
 
   // Subscriptions
   createCheckout: (body: object) => apiFetch("/api/v1/subscriptions/checkout", { method: "POST", body: JSON.stringify(body) }),
+
+  // Agents IA — config
+  getAgentConfigs: () => apiFetch<any[]>("/api/v1/agents/config"),
+  getAgentConfig: (agentType: string) => apiFetch<any>(`/api/v1/agents/config/${agentType}`),
+  updateAgentConfig: (agentType: string, body: object) =>
+    apiFetch<any>(`/api/v1/agents/config/${agentType}`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  // Agents IA — liens client (Agent 2)
+  createAgentLink: (body: { contact_id: string; channel?: string; expiry_days?: number }) =>
+    apiFetch<any>("/api/v1/agents/links", { method: "POST", body: JSON.stringify(body) }),
+  getAgentLinks: () => apiFetch<any[]>("/api/v1/agents/links"),
+
+  // Agents IA — OCR
+  uploadOCRDocument: (contactId: string, file: File, appointmentId?: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    const qs = new URLSearchParams({ contact_id: contactId });
+    if (appointmentId) qs.set("appointment_id", appointmentId);
+    return apiFetch<any>(`/api/v1/agents/ocr?${qs}`, { method: "POST", body: form, headers: {} });
+  },
+  getOCRSummaries: (contactId: string) => apiFetch<any[]>(`/api/v1/agents/ocr/${contactId}`),
+
+  // Agents IA — synthèses (Worker 4)
+  getAgentSyntheses: (limit = 10) => apiFetch<any[]>(`/api/v1/agents/synthesis?limit=${limit}`),
 };
