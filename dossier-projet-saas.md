@@ -138,6 +138,115 @@ L'indépendant voit tout depuis un tableau de bord simple, sans jongler entre pl
 
 ---
 
+## 5bis. Architecture des agents IA
+
+La plateforme intègre **3 agents visibles** et **1 worker de synthèse** couvrant l'ensemble du parcours client et du pilotage tenant.
+
+---
+
+### Agent 1 — Chatbot vitrine (côté prospect)
+
+| Attribut | Valeur |
+|---|---|
+| **Canal** | Widget embarqué sur le site vitrine |
+| **Utilisateur cible** | Visiteur anonyme / prospect |
+| **Déclencheur** | Visite du site public du tenant |
+
+**Capacités :**
+- Répond aux questions FAQ du domaine du tenant (tarifs, services, zone d'intervention, horaires)
+- Accède uniquement aux données publiques du tenant (non-sensibles)
+- Consulte les créneaux disponibles du calendrier
+- Crée un rendez-vous (booking)
+- Modifie un rendez-vous existant via son identifiant — **uniquement après vérification d'un code envoyé au contact** (email ou téléphone)
+
+**Limites strictes :**
+- Aucun accès aux données personnelles des autres contacts
+- Aucun accès aux données médicales
+- Périmètre limité au domaine métier du tenant (pas de réponses hors-sujet)
+
+---
+
+### Agent 2 — Agent Support & RDV (côté client converti)
+
+| Attribut | Valeur |
+|---|---|
+| **Canal** | WhatsApp (lien unique signé / QR code remis post-conversion) |
+| **Utilisateur cible** | Client converti (patient, client B2C ou contact B2B) |
+| **Déclencheur** | Remise du lien signé après conversion du prospect |
+
+**Capacités :**
+- Gestion complète des rendez-vous (création, modification, annulation)
+- Lecture de documents envoyés par le client (ordonnances, dossiers médicaux, images)
+  - Traitement OCR en mémoire uniquement — **le document original n'est jamais persisté en base**
+  - Seul le **résumé structuré** extrait par OCR est conservé, lié au contact et au rendez-vous
+- Préparation du rendez-vous : enrichissement du contexte avant la séance
+- Réponses aux questions opérationnelles post-conversion
+
+**Sécurité d'accès :**
+- Le lien/QR code embarque un **token JWT signé à usage unique**, lié au `contact_id`
+- Token expirant (durée configurable par le tenant)
+- Un numéro WhatsApp = un contact identifié — vérification à la première connexion
+
+**Contraintes RGPD :**
+- Les résumés OCR contiennent potentiellement des données de santé (Article 9) → chiffrés en base via `pgcrypto`
+- Consentement explicite requis avant la première utilisation de l'agent
+
+---
+
+### Agent 3 — Agent Assistant Tenant (côté professionnel)
+
+| Attribut | Valeur |
+|---|---|
+| **Canal** | WhatsApp + Dashboard back-office |
+| **Utilisateur cible** | Le tenant (indépendant ou collaborateur autorisé) |
+| **Déclencheur** | Disponible en continu après activation |
+
+**Capacités :**
+- Notification en temps réel de tout événement RDV (création, modification, annulation, no-show)
+- Résumés périodiques des conversations tenues par les agents 1 et 2 avec les clients (fréquence configurable par le tenant, ex. : toutes les 3h)
+- Gestion du calendrier : ouverture et fermeture de créneaux de disponibilité
+- Assistant opérationnel, administratif et de secrétariat
+
+**Mémoire partagée :**
+- La session de l'agent est **canal-agnostique** : le contexte est identique que le tenant réponde via WhatsApp ou depuis le Dashboard
+- Une seule conversation active par tenant, synchronisée entre les deux canaux
+
+---
+
+### Worker 4 — Worker de synthèse (interne, non visible)
+
+| Attribut | Valeur |
+|---|---|
+| **Type** | Tâche planifiée (cron configurable par tenant) |
+| **Utilisateur cible** | Aucun (interne) |
+| **Déclencheur** | Schedule défini par le tenant (ex. : toutes les 3h) |
+
+**Fonctionnement :**
+1. Récupère toutes les conversations des agents 1 et 2 depuis la dernière synthèse
+2. Appelle le LLM pour produire un résumé consolidé
+3. Pousse le résumé à l'Agent 3 (notification tenant via WhatsApp + Dashboard)
+4. Marque les conversations comme "synthétisées"
+
+> **Note de coût :** Ce worker génère des appels LLM proportionnels au nombre de tenants actifs × fréquence de synthèse. À monitorer dès le premier déploiement multi-tenant.
+
+---
+
+### Vue d'ensemble — Flux de données agents
+
+```
+Prospect        →  [Agent 1 / Chatbot vitrine]
+                           ↓ conversion
+Client converti →  [Agent 2 / Support & RDV]  ←→  OCR (mémoire) → résumé chiffré → DB
+                           ↓ conversations
+                   [Worker 4 / Synthèse]  ← schedule tenant (ex. toutes les 3h)
+                           ↓ résumé consolidé
+Tenant          ←  [Agent 3 / Assistant Tenant]  ←→  WhatsApp + Dashboard
+                           ↓ gestion calendrier
+                       Calendar DB
+```
+
+---
+
 ## 6. Ce que la plateforme n'est pas (limites claires)
 
 - Ce n'est pas un logiciel de comptabilité complet (mais une facturation légère est prévue en V2)
@@ -165,7 +274,7 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 | 6 | **Abonnement Stripe** | Monétiser dès le premier client réel | Pas de freemium complexe — un seul plan à X €/mois |
 
 **Ce que le MVP ne contient pas (volontairement) :**
-- Chatbot LLM (coûteux, complexe à configurer)
+- Agents IA (chatbot LLM, agents WhatsApp — coûteux, complexe à configurer)
 - WhatsApp Business API (approbation Meta + coût par message)
 - ROI prédictif (nécessite des données historiques)
 - CRM avancé (PartnerAccount, pipeline, notes)
@@ -174,25 +283,33 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 
 ### V1 — après validation marché (mois 3 à 5)
 
-| Fonctionnalité | Déclencheur pour l'ajouter |
-|---|---|
-| Chatbot FAQ statique (sans LLM) | Quand les clients posent les mêmes questions en dehors du chatbot |
-| Intégration Telegram Bot | Quand un client demande explicitement un canal de messagerie |
-| CRM léger (liste contacts + historique) | Quand les indépendants ont > 20 contacts à gérer |
-| Mode absence | Retour terrain : les indépendants oublient de fermer leur calendrier |
+| Fonctionnalité | Agent concerné | Déclencheur |
+|---|---|---|
+| **Agent 1 — Chatbot vitrine (FAQ statique)** | Agent 1 | Quand les visiteurs posent les mêmes questions répétitives |
+| CRM léger (liste contacts + historique) | — | Quand les indépendants ont > 20 contacts à gérer |
+| Mode absence | Agent 3 (partiel) | Retour terrain : les indépendants oublient de fermer leur calendrier |
+| Intégration Telegram Bot | Agent 2 / 3 (préparation) | Quand un client demande explicitement un canal de messagerie |
 
 ### V2 — croissance (mois 6 à 9)
 
-| Fonctionnalité | Notes |
-|---|---|
-| Chatbot LLM (Mistral) | Seulement si les FAQ statiques montrent leurs limites |
-| ROI estimé simple | Formule basée sur les données déjà collectées en V1 |
-| WhatsApp Business API | Si la demande terrain est forte et que les revenus couvrent le coût |
-| Comptes partenaires B2B | Si le segment santé/structure prend de l'ampleur |
+| Fonctionnalité | Agent concerné | Notes |
+|---|---|---|
+| **Agent 1 — Chatbot vitrine LLM** | Agent 1 | Upgrade FAQ statique → LLM (Mistral) quand les questions deviennent variées |
+| **Agent 3 — Assistant tenant (Dashboard)** | Agent 3 | D'abord sur Dashboard uniquement, sans WhatsApp |
+| **Worker 4 — Synthèse conversations** | Worker 4 | Activé dès que l'Agent 3 est en production |
+| WhatsApp Business API | Agents 2 & 3 | Si la demande terrain est forte et que les revenus couvrent ~50 €/mois |
+| ROI estimé simple | — | Formule basée sur les données collectées en V1 |
+| Comptes partenaires B2B | — | Si le segment santé/structure prend de l'ampleur |
 
 ### V3 — scalabilité
 
-Contenu SEO automatique, verticalisation sectorielle, parrainage B2B, facturation intégrée.
+| Fonctionnalité | Agent concerné | Notes |
+|---|---|---|
+| **Agent 2 — Support & RDV client (WhatsApp + OCR)** | Agent 2 | Nécessite WhatsApp Business API approuvé + pipeline OCR stable |
+| **Agent 3 — Assistant tenant sur WhatsApp** | Agent 3 | Extension du Dashboard vers WhatsApp |
+| Contenu SEO automatique | — | — |
+| Verticalisation sectorielle | — | — |
+| Parrainage B2B, facturation intégrée | — | — |
 
 ---
 
@@ -240,6 +357,10 @@ Contenu SEO automatique, verticalisation sectorielle, parrainage B2B, facturatio
 | Service IA / chatbot | LLM (OpenAI / Mistral) appelé par le moteur chatbot |
 | Service de paiement | Stripe ou équivalent pour les abonnements |
 | Service de calendrier externe | Google Calendar API / Cal.com pour synchronisation |
+| **Agent 1 — Chatbot vitrine** | Widget LLM embarqué sur le site public, périmètre FAQ + calendrier |
+| **Agent 2 — Support & RDV client** | Agent WhatsApp post-conversion, avec capacité OCR documents |
+| **Agent 3 — Assistant Tenant** | Agent WhatsApp + Dashboard, secrétariat et pilotage opérationnel |
+| **Worker de synthèse** | Tâche cron interne, résume les conversations des agents 1 et 2 pour le tenant |
 
 ---
 
@@ -953,6 +1074,19 @@ ROI_MODEL(id PK, tenant_id FK->TENANT.id, version, estimated_monthly_leads, esti
 ROI_MODEL_KPI(roi_model_id FK->ROI_MODEL.id, kpi_id FK->KPI.id, PK(roi_model_id, kpi_id))
 
 RECOMMENDATION(id PK, tenant_id FK->TENANT.id, roi_model_id FK->ROI_MODEL.id, type, priority, message, status, created_at)
+
+-- AGENTS IA
+
+AGENT_CONFIG(id PK, tenant_id FK->TENANT.id, agent_type ENUM('vitrine','support_client','assistant_tenant'), status, model, system_prompt, synthesis_schedule_minutes, created_at, updated_at)
+
+AGENT_LINK(id PK, tenant_id FK->TENANT.id, contact_id FK->CONTACT.id, token UNIQUE, channel VARCHAR(30), expires_at, used_at, created_at)
+-- token JWT signé à usage unique remis au client converti pour accéder à l'Agent 2
+
+OCR_SUMMARY(id PK, tenant_id FK->TENANT.id, contact_id FK->CONTACT.id, appointment_id FK->APPOINTMENT.id NULL, summary_encrypted TEXT, document_type, processed_at, created_at)
+-- résumé chiffré (pgcrypto) extrait par OCR — le document source n'est jamais persisté
+
+AGENT_SYNTHESIS(id PK, tenant_id FK->TENANT.id, agent_config_id FK->AGENT_CONFIG.id, content TEXT, period_start, period_end, delivered_at, created_at)
+-- résumé consolidé produit par le Worker 4 et poussé à l'Agent 3
 ```
 
 ---
@@ -1466,6 +1600,76 @@ ALTER TABLE dashboard          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE roi_model          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recommendation     ENABLE ROW LEVEL SECURITY;
 
+-- ============================================================
+-- AGENTS IA
+-- ============================================================
+
+CREATE TYPE agent_type_enum AS ENUM ('vitrine', 'support_client', 'assistant_tenant');
+
+CREATE TABLE agent_config (
+  id                        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id                 UUID NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  agent_type                agent_type_enum NOT NULL,
+  status                    VARCHAR(30)  NOT NULL DEFAULT 'active',
+  model                     VARCHAR(100) NOT NULL DEFAULT 'mistral-small',
+  system_prompt             TEXT,
+  synthesis_schedule_minutes INT NOT NULL DEFAULT 180,
+  created_at                TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at                TIMESTAMP NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_agent_config UNIQUE (tenant_id, agent_type)
+);
+
+CREATE INDEX idx_agent_config_tenant ON agent_config(tenant_id);
+
+CREATE TABLE agent_link (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   UUID NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  contact_id  UUID NOT NULL REFERENCES contact(id) ON DELETE CASCADE,
+  token       VARCHAR(512) NOT NULL,
+  channel     VARCHAR(30)  NOT NULL DEFAULT 'whatsapp',
+  expires_at  TIMESTAMP    NOT NULL,
+  used_at     TIMESTAMP,
+  created_at  TIMESTAMP    NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_agent_link_token UNIQUE (token)
+);
+
+CREATE INDEX idx_agent_link_contact ON agent_link(contact_id);
+CREATE INDEX idx_agent_link_token   ON agent_link(token);
+
+CREATE TABLE ocr_summary (
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id          UUID NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  contact_id         UUID NOT NULL REFERENCES contact(id) ON DELETE CASCADE,
+  appointment_id     UUID REFERENCES appointment(id),
+  summary_encrypted  TEXT NOT NULL,
+  document_type      VARCHAR(100),
+  processed_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+  created_at         TIMESTAMP NOT NULL DEFAULT NOW()
+  -- Le document source n'est JAMAIS persisté. Seul ce résumé chiffré est conservé.
+);
+
+CREATE INDEX idx_ocr_summary_contact     ON ocr_summary(contact_id);
+CREATE INDEX idx_ocr_summary_appointment ON ocr_summary(appointment_id);
+
+CREATE TABLE agent_synthesis (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id        UUID NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  agent_config_id  UUID NOT NULL REFERENCES agent_config(id),
+  content          TEXT NOT NULL,
+  period_start     TIMESTAMP NOT NULL,
+  period_end       TIMESTAMP NOT NULL,
+  delivered_at     TIMESTAMP,
+  created_at       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_agent_synthesis_tenant ON agent_synthesis(tenant_id);
+CREATE INDEX idx_agent_synthesis_period ON agent_synthesis(period_start, period_end);
+
+ALTER TABLE agent_config    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_link      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ocr_summary     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agent_synthesis ENABLE ROW LEVEL SECURITY;
+
 -- Exemple de policy RLS (à adapter selon le mécanisme d'auth applicatif)
 -- L'application passe le tenant courant via current_setting('app.current_tenant_id')
 
@@ -1497,6 +1701,16 @@ Les tenants du secteur santé (infirmiers, kinés, médecins) traitent des **don
 | Consentement | Champ `consent_given_at` sur `contact` à ajouter |
 | DPA (Data Processing Agreement) | Contrat à signer avec chaque tenant santé |
 | Données hors UE | Les appels LLM (OpenAI US) doivent passer par l'API EU ou être remplacés par Mistral (hébergement FR) |
+
+### Agents IA — points spécifiques
+
+| Point | Implémentation recommandée |
+|---|---|
+| **OCR documents médicaux** | Traitement en mémoire uniquement (Mistral Vision ou Tesseract) — aucun stockage du fichier original. Seul `ocr_summary.summary_encrypted` est persisté, chiffré via `pgcrypto` |
+| **Token Agent 2 (client WhatsApp)** | JWT signé (HS256) embarquant `contact_id` + `tenant_id` + `exp`. Usage unique : marquer `used_at` à la première activation. Durée d'expiration configurable par le tenant |
+| **Mémoire canal-agnostique Agent 3** | Stocker la session de l'agent 3 en base (`conversation` liée au tenant, pas au canal) — WhatsApp et Dashboard lisent/écrivent dans la même ligne |
+| **Coût LLM Worker 4** | Monitorer les tokens consommés par tenant dès le premier déploiement. Prévoir un circuit-breaker si le coût/tenant dépasse un seuil |
+| **Consentement Agent 2** | Champ `consent_given_at` sur `contact` + bannière explicite avant première utilisation. Obligatoire RGPD Article 9 pour les secteurs santé |
 
 ### WhatsApp Business API
 
@@ -1691,6 +1905,29 @@ Next.js gère le site public, le back-office ET les API routes dans un seul dép
 
 ---
 
+### Stack spécifique aux agents IA (V1 → V3)
+
+| Composant | Solution recommandée | Alternative | Notes |
+|---|---|---|---|
+| **LLM** | Mistral API (EU, RGPD-compliant) | OpenAI GPT-4o-mini | Mistral préféré pour les données de santé — hébergement FR/EU |
+| **OCR documents** | Mistral Vision (multimodal) | Tesseract + pré-processing | Mistral Vision évite un service OCR dédié |
+| **Orchestration agents** | LangChain (Python) ou appels directs Mistral API | LangGraph pour agents complexes | Commencer par des appels directs, LangChain si la logique se complexifie |
+| **Mémoire agent (court terme)** | `conversation` + `message` en PostgreSQL (déjà dans le schéma) | Redis pour sessions éphémères | PostgreSQL suffit au démarrage |
+| **Worker de synthèse** | APScheduler (déjà en place) → cron par tenant | Celery + Redis à plus grande échelle | Un job par tenant actif, déclenché selon `agent_config.synthesis_schedule_minutes` |
+| **Webhooks WhatsApp** | 360dialog (intermédiaire Meta) ou Twilio WhatsApp | Meta Cloud API directe | 360dialog simplifie l'approbation Meta |
+| **Signature tokens Agent 2** | `python-jose` (JWT HS256) | PyJWT | Token embarque `contact_id`, `tenant_id`, `exp` |
+
+**Coût estimé agents en production (par tranche) :**
+
+| Tenants actifs | Coût LLM estimé/mois | Notes |
+|---|---|---|
+| 1–10 | < 5 € | Worker synthèse toutes les 3h, ~10 messages/client/jour |
+| 10–50 | 15–40 € | À surveiller — prévoir alertes budget Mistral |
+| 50–100 | 50–100 € | Envisager cache des réponses FAQ fréquentes |
+| 100+ | Négocier un plan volume Mistral | — |
+
+---
+
 ## 18. Glossaire
 
 | Terme | Définition |
@@ -1712,6 +1949,11 @@ Next.js gère le site public, le back-office ET les API routes dans un seul dép
 | INAMI | Institut National d'Assurance Maladie-Invalidité (Belgique) |
 | LLM | Large Language Model — modèle d'intelligence artificielle pour le traitement du langage |
 | Webhook | Mécanisme permettant à une API externe de notifier l'application d'un événement |
+| Agent IA | Programme autonome qui utilise un LLM pour répondre, agir et orchestrer des tâches (booking, OCR, notifications) |
+| OCR | Optical Character Recognition — reconnaissance de caractères dans une image ou un document |
+| Agent Link | Token JWT signé à usage unique remis au client converti pour accéder à l'Agent 2 via WhatsApp |
+| Worker de synthèse | Tâche cron interne qui résume périodiquement les conversations des agents 1 & 2 pour le tenant |
+| Canal-agnostique | Session d'agent dont le contexte est partagé entre plusieurs canaux (ex : WhatsApp + Dashboard) |
 
 ---
 

@@ -1,6 +1,6 @@
 # Data Catalogue — SaaS Présence Digitale
 
-**Version :** 1.0  
+**Version :** 1.1  
 **Date :** Avril 2026  
 **Base de données :** PostgreSQL avec Row-Level Security (RLS)  
 **Portée :** Toutes les tables du modèle physique
@@ -65,6 +65,10 @@ Chaque table est décrite avec :
 | 34 | [roi_model](#34-roi_model) | Pilotage | Modèle de calcul du ROI |
 | 35 | [roi_model_kpi](#35-roi_model_kpi) | Pilotage | Association ROI model ↔ KPI |
 | 36 | [recommendation](#36-recommendation) | Pilotage | Suggestion générée automatiquement |
+| 37 | [agent_config](#37-agent_config) | Agents IA | Configuration d'un agent IA par tenant |
+| 38 | [agent_link](#38-agent_link) | Agents IA | Token d'accès WhatsApp pour client converti |
+| 39 | [ocr_summary](#39-ocr_summary) | Agents IA | Résumé chiffré extrait par OCR (document jamais persisté) |
+| 40 | [agent_synthesis](#40-agent_synthesis) | Agents IA | Résumé consolidé des conversations produit par le Worker 4 |
 
 ---
 
@@ -862,6 +866,118 @@ estimated_roi      = (estimated_value - estimated_cost) / estimated_cost
 
 ---
 
+# CATÉGORIE : AGENTS IA
+
+---
+
+## 37. `agent_config`
+
+**Rôle :** Configuration d'un agent IA pour un tenant donné. Chaque type d'agent (chatbot vitrine, support client, assistant tenant) a sa propre ligne de configuration. Permet au tenant de personnaliser le prompt système, le modèle LLM et la fréquence de synthèse.
+
+**Utilisée par :** Instanciation des agents, Worker de synthèse, Dashboard de configuration.
+
+**RLS activée.**
+
+| Colonne | Type | Contraintes | Description | Exemple |
+|---|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique | `h4i5j6k7-...` |
+| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant propriétaire | `a1b2c3d4-...` |
+| `agent_type` | ENUM | NN | Type d'agent : `vitrine`, `support_client`, `assistant_tenant` | `vitrine` |
+| `status` | VARCHAR(30) | NN, défaut `active` | État : `active`, `inactive`, `training` | `active` |
+| `model` | VARCHAR(100) | NN, défaut `mistral-small` | Modèle LLM utilisé : `faq_static`, `mistral-small`, `mistral-large` | `mistral-small` |
+| `system_prompt` | TEXT | nullable | Prompt système envoyé au LLM pour contextualiser les réponses | `Tu es l'assistant de Yolande, infirmière à Halle...` |
+| `synthesis_schedule_minutes` | INT | NN, défaut `180` | Fréquence en minutes du Worker de synthèse (Agent 3 uniquement) | `180` |
+| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-02-01 10:00:00` |
+| `updated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de dernière modification | `2026-04-10 09:00:00` |
+
+**Contrainte :** `UNIQUE(tenant_id, agent_type)` — un tenant ne peut avoir qu'une configuration par type d'agent.
+
+**Règles métier :**
+- `synthesis_schedule_minutes` n'est pertinent que pour le type `assistant_tenant`
+- Un agent `inactive` ne répond plus mais sa configuration est conservée
+- Le `system_prompt` doit être validé pour éviter tout contenu hors-sujet (injection de prompt)
+
+---
+
+## 38. `agent_link`
+
+**Rôle :** Token d'accès sécurisé remis au client converti pour accéder à l'Agent 2 (Support & RDV) via WhatsApp. Chaque lien est unique, signé, expirant, et lié à un contact précis. Garantit qu'un numéro WhatsApp correspond bien à un contact identifié.
+
+**Utilisée par :** Génération du lien/QR code post-conversion, authentification de l'Agent 2.
+
+**RLS activée.**
+
+| Colonne | Type | Contraintes | Description | Exemple |
+|---|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique | `i5j6k7l8-...` |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant émetteur | `a1b2c3d4-...` |
+| `contact_id` | UUID | FK → `contact.id`, NN, IDX | Contact destinataire du lien | `n4o5p6q7-...` |
+| `token` | VARCHAR(512) | NN, UQ | JWT signé (HS256) embarquant `contact_id`, `tenant_id`, `exp` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` |
+| `channel` | VARCHAR(30) | NN, défaut `whatsapp` | Canal cible : `whatsapp`, `telegram` | `whatsapp` |
+| `expires_at` | TIMESTAMP | NN | Date d'expiration du token | `2026-07-22 10:00:00` |
+| `used_at` | TIMESTAMP | nullable | Date de première utilisation — token invalidé après usage | `2026-04-22 14:30:00` |
+| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de génération | `2026-04-22 10:00:00` |
+
+**Règles métier :**
+- Un token déjà utilisé (`used_at` non null) est rejeté — usage unique
+- Un token expiré (`expires_at < NOW()`) est rejeté
+- La durée d'expiration est configurable par le tenant (30, 60, 90 jours)
+- Un contact peut avoir plusieurs liens (si le tenant en génère un nouveau), mais un seul actif à la fois
+
+---
+
+## 39. `ocr_summary`
+
+**Rôle :** Résumé structuré extrait par OCR d'un document envoyé par un client à l'Agent 2 (ordonnance, dossier médical, image médicale). **Le document source n'est jamais persisté en base** — seul ce résumé chiffré est conservé pour préparer le rendez-vous.
+
+**Utilisée par :** Agent 2 (Support & RDV), préparation des rendez-vous, historique contact.
+
+**RLS activée. Données de santé (Article 9 RGPD) → `summary_encrypted` chiffré via `pgcrypto`.**
+
+| Colonne | Type | Contraintes | Description | Exemple |
+|---|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique | `j6k7l8m9-...` |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant concerné | `a1b2c3d4-...` |
+| `contact_id` | UUID | FK → `contact.id`, NN, IDX | Contact ayant envoyé le document | `n4o5p6q7-...` |
+| `appointment_id` | UUID | FK → `appointment.id`, nullable, IDX | Rendez-vous préparé par ce document | `z6a7b8c9-...` |
+| `summary_encrypted` | TEXT | NN | Résumé chiffré (pgcrypto) extrait par OCR | `[contenu chiffré]` |
+| `document_type` | VARCHAR(100) | nullable | Type de document identifié : `ordonnance`, `analyse_sang`, `imagerie`, `autre` | `ordonnance` |
+| `processed_at` | TIMESTAMP | NN, défaut `NOW()` | Date de traitement OCR | `2026-04-18 10:15:00` |
+| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-04-18 10:15:00` |
+
+**Règles métier :**
+- Le fichier original (image, PDF) est traité en mémoire puis immédiatement détruit — jamais stocké sur disque ou en base
+- `summary_encrypted` doit être déchiffré au niveau applicatif, jamais exposé brut dans les logs
+- Soumis au droit à l'oubli RGPD : supprimé lors de l'anonymisation du contact
+
+---
+
+## 40. `agent_synthesis`
+
+**Rôle :** Résumé consolidé produit par le Worker 4 à intervalles réguliers. Agrège les conversations tenues par les agents 1 et 2 sur une période donnée et pousse le résultat à l'Agent 3 (Assistant Tenant) pour notification au professionnel.
+
+**Utilisée par :** Worker de synthèse (Worker 4), Agent 3 (notification tenant), Dashboard back-office.
+
+**RLS activée.**
+
+| Colonne | Type | Contraintes | Description | Exemple |
+|---|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique | `k7l8m9n0-...` |
+| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant concerné | `a1b2c3d4-...` |
+| `agent_config_id` | UUID | FK → `agent_config.id`, NN | Configuration de l'agent ayant déclenché la synthèse | `h4i5j6k7-...` |
+| `content` | TEXT | NN | Texte du résumé consolidé généré par le LLM | `Entre 07h00 et 10h00 : 3 nouvelles demandes de RDV...` |
+| `period_start` | TIMESTAMP | NN, IDX | Début de la période couverte par la synthèse | `2026-04-22 07:00:00` |
+| `period_end` | TIMESTAMP | NN, IDX | Fin de la période couverte | `2026-04-22 10:00:00` |
+| `delivered_at` | TIMESTAMP | nullable | Date de livraison effective au tenant (null si en attente) | `2026-04-22 10:00:30` |
+| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-04-22 10:00:00` |
+
+**Règles métier :**
+- Une synthèse couvre exactement la période depuis la dernière synthèse (`period_start` = `period_end` de la précédente)
+- `delivered_at` null = livraison en attente (retry possible en cas d'erreur WhatsApp/Dashboard)
+- Conservé 90 jours puis supprimé (données opérationnelles non critiques)
+
+---
+
 ## Récapitulatif des relations clés
 
 ```
@@ -875,6 +991,12 @@ tenant ──< calendar ──< availability_slot
 tenant ──< dashboard ──< kpi
 tenant ──< roi_model ──< recommendation
 site ──< visitor_session ──< tracking_event
+
+-- Agents IA
+tenant ──< agent_config           (1 par type d'agent : vitrine / support_client / assistant_tenant)
+tenant ──< agent_link >── contact (token WhatsApp remis au client converti)
+tenant ──< ocr_summary >── contact, appointment (résumé chiffré, document jamais persisté)
+tenant ──< agent_synthesis ──< agent_config (résumés Worker 4 → Agent 3)
 ```
 
 ---
@@ -909,7 +1031,12 @@ site ──< visitor_session ──< tracking_event
 | `tracking_event.event_type` | `page_view`, `form_submit`, `booking_click`, `chatbot_open`, `phone_click` |
 | `recommendation.type` | `response_time`, `conversion_rate`, `content_gap`, `channel_add`, `absence_detected` |
 | `recommendation.priority` | `low`, `medium`, `high` |
+| `agent_config.agent_type` | `vitrine`, `support_client`, `assistant_tenant` |
+| `agent_config.status` | `active`, `inactive`, `training` |
+| `agent_config.model` | `faq_static`, `mistral-small`, `mistral-large` |
+| `agent_link.channel` | `whatsapp`, `telegram` |
+| `ocr_summary.document_type` | `ordonnance`, `analyse_sang`, `imagerie`, `autre` |
 
 ---
 
-*Document maintenu par Jordan — à synchroniser avec le MPD à chaque modification du schéma. Dernière mise à jour : avril 2026.*
+*Document maintenu par Jordan — à synchroniser avec le MPD à chaque modification du schéma. Dernière mise à jour : avril 2026 (v1.1 — ajout catégorie Agents IA : tables 37–40).*
