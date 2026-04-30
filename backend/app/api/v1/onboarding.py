@@ -84,6 +84,13 @@ async def setup_tenant(body: TenantSetupIn, user: dict = Depends(get_current_use
         "default_language": "fr"
     }).execute()
 
+    # Créer les 3 configs d'agents IA par défaut
+    supabase.table("agent_config").insert([
+        {"tenant_id": tenant_id, "agent_type": "vitrine",          "status": "active", "model": "gemini-2.0-flash"},
+        {"tenant_id": tenant_id, "agent_type": "support_client",   "status": "active", "model": "gemini-2.0-flash"},
+        {"tenant_id": tenant_id, "agent_type": "assistant_tenant", "status": "active", "model": "gemini-2.0-flash"},
+    ]).execute()
+
     # Injecter tenant_id dans app_metadata du JWT
     import httpx
     from app.core.config import settings

@@ -51,11 +51,27 @@ def _require_config(sb, tenant_id: str, agent_type: str) -> dict:
 
 # ── agent_config ──────────────────────────────────────────────────────────────
 
+_DEFAULT_AGENT_TYPES = ["vitrine", "support_client", "assistant_tenant"]
+
+
 @router.get("/config", response_model=list[AgentConfigOut])
 async def list_agent_configs(tenant_id: str = Depends(get_current_tenant)):
     sb = get_supabase_admin()
     res = sb.table("agent_config").select("*").eq("tenant_id", tenant_id).execute()
-    return res.data or []
+    configs = res.data or []
+
+    # Auto-création pour les tenants qui ont été créés avant cette fonctionnalité
+    existing_types = {c["agent_type"] for c in configs}
+    missing = [t for t in _DEFAULT_AGENT_TYPES if t not in existing_types]
+    if missing:
+        new_rows = [
+            {"tenant_id": tenant_id, "agent_type": t, "status": "active", "model": "gemini-2.0-flash"}
+            for t in missing
+        ]
+        created = sb.table("agent_config").insert(new_rows).execute()
+        configs = configs + (created.data or [])
+
+    return configs
 
 
 @router.get("/config/{agent_type}", response_model=AgentConfigOut)
@@ -160,10 +176,10 @@ async def upload_document_for_ocr(
     tenant_id: str = Depends(get_current_tenant),
 ):
     """
-    Reçoit un document, l'envoie à Mistral Vision pour OCR,
+    Reçoit un document, l'envoie à Gemini Vision pour OCR,
     stocke uniquement le résumé chiffré. Le fichier n'est jamais persisté.
     """
-    if not settings.mistral_api_key:
+    if not settings.gemini_api_key:
         raise HTTPException(status_code=503, detail="Service OCR non configuré")
 
     sb = get_supabase_admin()
