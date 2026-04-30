@@ -56,6 +56,7 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
         "priority": "normal",
         "audience_type": body.audience_type,
         "request_type": body.request_type,
+        "notes": body.message,
     }
     if stage:
         lead_data["pipeline_stage_id"] = stage["id"]

@@ -1,9 +1,9 @@
 # Dossier Projet — SaaS de gestion de présence digitale pour indépendants et structures locales
 
-**Version :** 2.1 — Corrigée et mise à jour  
+**Version :** 2.3 — Mise à jour complète  
 **Date :** Avril 2026  
 **Auteur :** Jordan (porteur du projet)  
-**Statut :** En cours de développement — phase de cadrage
+**Statut :** En développement actif — MVP déployé, V1 en cours (agents IA + site builder)
 
 ---
 
@@ -83,12 +83,36 @@ La plateforme détecte automatiquement quel type de visiteur consulte le site et
 
 ### 5.1 Création et gestion du site
 
-- L'indépendant choisit son métier dans une liste (infirmier, plombier, coach, etc.)
-- Le site est généré automatiquement avec les bons textes, services et mentions légales
-- Il peut personnaliser : couleurs, photos, textes, langues, zone géographique
-- Le site est hébergé et maintenu par la plateforme — l'indépendant ne gère rien de technique
-- Le site est visible sur ordinateur et téléphone mobile
-- Pages séparées pour les particuliers et les partenaires professionnels
+L'indépendant configure son site via un **wizard guidé en 9 étapes** accessible depuis le dashboard (`/dashboard/site-builder`) :
+
+| Étape | Contenu |
+|---|---|
+| 1. Votre image & photos | Logo (a / n'a pas / texte simple), palette de couleurs (6 choix), style de police (moderne / classique / manuscrit), option photos (stock / propres). Si "propres photos" : champs URL pour 4 zones (héro, à propos, services, contact) avec guide visuel intégré (popover wireframe) |
+| 2. Votre contenu | Pages à inclure (Accueil, Présentation, Services, Contact) |
+| 3. Identité | Nom de l'activité, accroche (tagline), description |
+| 4. Contact & Réseaux | Téléphone, email, adresse, liens Facebook/Instagram/LinkedIn |
+| 5. Zones d'intervention | Liste des villes/régions couvertes |
+| 6. Prestations | Nom, description, durée en minutes (facultatif), prix en € (facultatif) |
+| 7. Nos atouts | Jusqu'à 6 atouts avec icône emoji, titre et description |
+| 8. Témoignages | Avis clients (auteur, rôle, texte, note 1–5) |
+| 9. Suivi & Lancement | IDs de tracking analytics (GA4, Meta Pixel, GTM), CSS premium (plan Business), bouton de publication |
+
+**Rendu du site vitrine (template inspiré EvaCare.be) :**
+- Navigation fixe avec ancres (Prestations, À propos, Contact)
+- Hero pleine largeur avec couleur, police et photo choisies par le tenant
+- Section À propos avec photo optionnelle, grille de prestations sur fond photo optionnel, zones d'intervention, atouts, témoignages, section contact avec coordonnées + formulaire + photo optionnelle, footer
+- Chatbot IA flottant (Agent 1)
+- Scripts tracking (GA4, Meta Pixel, GTM) injectés si configurés
+- CSS premium injecté si fourni (plan Business)
+- Styles appliqués dynamiquement via CSS inline (6 palettes × 3 polices = 18 combinaisons sans reconstruire le CSS)
+
+**Intégration sur site existant (`/dashboard/embed`) :**
+- Un client qui a déjà son propre site (WordPress, Wix, Squarespace, etc.) peut y ajouter le chatbot IA via un snippet JavaScript et/ou le tracking via les snippets GA4/Meta/GTM — sans refaire son site. Voir [`docs/site-internet.md`](docs/site-internet.md) pour le guide complet.
+
+**Ce que le professionnel ne gère pas :**
+- Hébergement (Vercel)
+- Maintenance technique
+- Renouvellement SSL
 
 ### 5.2 Réception des demandes (boîte unifiée)
 
@@ -262,51 +286,47 @@ Tenant          ←  [Agent 3 / Assistant Tenant]  ←→  WhatsApp + Dashboard
 
 Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur. Chaque fonctionnalité doit pouvoir être testée avec un seul client pilote (ex. : la sœur du fondateur) avant d'être proposée à d'autres.
 
-### MVP — ce qu'il faut livrer en premier (semaines 1 à 8)
+### MVP — ✅ Livré
 
-| # | Fonctionnalité | Pourquoi c'est prioritaire | Ce qu'on ne fait PAS encore |
-|---|---|---|---|
-| 1 | **Générateur de site par template métier** | Sans site, rien n'existe | Pas d'éditeur visuel complexe — textes modifiables dans un formulaire simple |
-| 2 | **Formulaire de contact → notification email** | Le besoin n°1 de l'indépendant : ne pas rater une demande | Pas de WhatsApp, pas de Telegram — email suffit pour valider |
-| 3 | **Prise de rendez-vous (Cal.com embed)** | Valeur immédiate visible, élimine les allers-retours | Pas de synchronisation Google Calendar — le lien Cal.com suffit |
-| 4 | **Rappel email automatique** | Réduit les no-shows sans effort | Pas de SMS, pas de WhatsApp |
-| 5 | **Back-office minimal** | L'indépendant doit voir ses demandes et rendez-vous | Pas de pipeline CRM, pas de KPI — juste une liste |
-| 6 | **Abonnement Stripe** | Monétiser dès le premier client réel | Pas de freemium complexe — un seul plan à X €/mois |
-
-**Ce que le MVP ne contient pas (volontairement) :**
-- Agents IA (chatbot LLM, agents WhatsApp — coûteux, complexe à configurer)
-- WhatsApp Business API (approbation Meta + coût par message)
-- ROI prédictif (nécessite des données historiques)
-- CRM avancé (PartnerAccount, pipeline, notes)
-- Analytics (Matomo, tracking events)
-- Multi-langue
-
-### V1 — après validation marché (mois 3 à 5)
-
-| Fonctionnalité | Agent concerné | Déclencheur |
+| # | Fonctionnalité | Statut |
 |---|---|---|
-| **Agent 1 — Chatbot vitrine (FAQ statique)** | Agent 1 | Quand les visiteurs posent les mêmes questions répétitives |
-| CRM léger (liste contacts + historique) | — | Quand les indépendants ont > 20 contacts à gérer |
-| Mode absence | Agent 3 (partiel) | Retour terrain : les indépendants oublient de fermer leur calendrier |
-| Intégration Telegram Bot | Agent 2 / 3 (préparation) | Quand un client demande explicitement un canal de messagerie |
+| 1 | Générateur de site par template métier | ✅ Déployé |
+| 2 | Formulaire de contact → notification email | ✅ Déployé |
+| 3 | Prise de rendez-vous (Cal.com embed) | ✅ Déployé |
+| 4 | Rappel email automatique (APScheduler) | ✅ Déployé |
+| 5 | Back-office minimal (leads + RDV) | ✅ Déployé |
+| 6 | Abonnement Stripe | ✅ Déployé |
 
-### V2 — croissance (mois 6 à 9)
+### V1 — ✅ En production (Avril 2026)
 
-| Fonctionnalité | Agent concerné | Notes |
+| Fonctionnalité | Agent concerné | Statut |
 |---|---|---|
-| **Agent 1 — Chatbot vitrine LLM** | Agent 1 | Upgrade FAQ statique → LLM (Mistral) quand les questions deviennent variées |
-| **Agent 3 — Assistant tenant (Dashboard)** | Agent 3 | D'abord sur Dashboard uniquement, sans WhatsApp |
-| **Worker 4 — Synthèse conversations** | Worker 4 | Activé dès que l'Agent 3 est en production |
-| WhatsApp Business API | Agents 2 & 3 | Si la demande terrain est forte et que les revenus couvrent ~50 €/mois |
-| ROI estimé simple | — | Formule basée sur les données collectées en V1 |
-| Comptes partenaires B2B | — | Si le segment santé/structure prend de l'ampleur |
+| **Landing page publique** | — | ✅ Livré — présente le SaaS, CTA inscription/connexion |
+| **Site builder wizard (9 étapes)** | — | ✅ Livré — logo, couleurs, police, pages, photos avec guide visuel, zones, prestations, atouts, témoignages, tracking + publication |
+| **Template tenant enrichi** | — | ✅ Livré — inspiré EvaCare.be, couleurs/police/photos dynamiques, tracking injecté |
+| **Intégration site existant** | — | ✅ Livré — `/dashboard/embed` génère les snippets chatbot + GA4/Meta/GTM pour coller sur un site externe |
+| **Personnalisation CSS premium** | — | ✅ Livré — éditeur CSS libre à l'étape 9 (plan Business) |
+| **Agent 1 — Chatbot vitrine LLM (Gemini)** | Agent 1 | ✅ Livré — widget flottant, FAQ + RDV, retry 429/503 |
+| **Page de configuration des agents** | Dashboard | ✅ Livré — toggle actif/inactif, modèle LLM, prompt système |
+| CRM léger (liste contacts + historique) | — | ✅ Livré |
+| Mode absence | — | ✅ Livré |
 
-### V3 — scalabilité
+### V2 — 🔄 En cours / Planifié
 
-| Fonctionnalité | Agent concerné | Notes |
+| Fonctionnalité | Agent concerné | Statut |
 |---|---|---|
-| **Agent 2 — Support & RDV client (WhatsApp + OCR)** | Agent 2 | Nécessite WhatsApp Business API approuvé + pipeline OCR stable |
-| **Agent 3 — Assistant tenant sur WhatsApp** | Agent 3 | Extension du Dashboard vers WhatsApp |
+| **Agent 3 — Assistant tenant (Dashboard)** | Agent 3 | 🔄 Backend livré — configuration dashboard opérationnelle |
+| **Worker 4 — Synthèse conversations** | Worker 4 | 🔄 Backend livré (APScheduler, toutes les 30 min par défaut) |
+| WhatsApp Business API | Agents 2 & 3 | ⏳ Bloqué — approbation Meta en attente |
+| ROI estimé simple | — | ⏳ Planifié |
+| Comptes partenaires B2B | — | ⏳ Planifié |
+
+### V3 — ⏳ Non commencé
+
+| Fonctionnalité | Agent concerné | Prérequis |
+|---|---|---|
+| **Agent 2 — Support & RDV client (WhatsApp + OCR)** | Agent 2 | WhatsApp Business API approuvé |
+| **Agent 3 — Assistant tenant sur WhatsApp** | Agent 3 | WhatsApp Business API approuvé |
 | Contenu SEO automatique | — | — |
 | Verticalisation sectorielle | — | — |
 | Parrainage B2B, facturation intégrée | — | — |
@@ -459,7 +479,7 @@ graph TB
         TG["Telegram Bot"]
         MAIL["Email — Resend"]
         GCAL["Google Calendar"]
-        LLM["LLM — Mistral"]
+        LLM["LLM — Gemini (Google)"]
         STRIPE["Stripe"]
         ANALYTICS["Matomo"]
     end
@@ -1021,7 +1041,13 @@ INVOICE(id PK, subscription_id FK->SUBSCRIPTION.id, number UNIQUE, amount, statu
 
 TEMPLATE(id PK, name, business_type, version, active)
 
-SITE(id PK, tenant_id FK->TENANT.id, template_id FK->TEMPLATE.id, domain, title, status, audience_mode, default_language, absence_mode, absence_message, created_at, updated_at)
+SITE(id PK, tenant_id FK->TENANT.id, template_id FK->TEMPLATE.id, domain, title, tagline, description, phone, email_contact, address, coverage_zones JSONB, values_list JSONB, social_links JSONB, site_style JSONB, status, audience_mode, default_language, absence_mode, absence_message, created_at, updated_at)
+-- site_style : { logo_option, primary_color, font_style, pages_enabled[], photos_option }
+-- coverage_zones : ["Bruxelles", "Hal", "Tubize", ...]
+-- values_list : [{ icon, title, description }, ...]
+-- social_links : { facebook, instagram, linkedin }
+
+TESTIMONIAL(id PK, site_id FK->SITE.id, author_name, author_role, content, rating SMALLINT, created_at)
 
 PAGE(id PK, site_id FK->SITE.id, title, slug, type, audience_type, seo_title, seo_description, status, updated_at, UNIQUE(site_id, slug))
 

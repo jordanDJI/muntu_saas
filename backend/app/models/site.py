@@ -1,15 +1,13 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from uuid import UUID
 
 
 class ServiceOfferIn(BaseModel):
     name: str
     description: Optional[str] = None
-    target_audience: str = "all"
-    price_from: Optional[float] = None
-    bookable: bool = True
-    duration_minutes: Optional[int] = None
+    duration_min: Optional[int] = None
+    price_eur: Optional[float] = None
 
 
 class ServiceAreaIn(BaseModel):
@@ -17,6 +15,13 @@ class ServiceAreaIn(BaseModel):
     postal_code: Optional[str] = None
     region: Optional[str] = None
     country: str = "BE"
+
+
+class TestimonialIn(BaseModel):
+    author_name: str
+    author_role: Optional[str] = None
+    content: str
+    rating: int = 5
 
 
 class SiteCreateIn(BaseModel):
@@ -30,19 +35,36 @@ class SiteCreateIn(BaseModel):
 
 class SiteUpdateIn(BaseModel):
     title: Optional[str] = None
+    tagline: Optional[str] = None
+    description: Optional[str] = None
+    phone: Optional[str] = None
+    email_contact: Optional[str] = None
+    address: Optional[str] = None
     audience_mode: Optional[str] = None
     default_language: Optional[str] = None
     absence_mode: Optional[bool] = None
     absence_message: Optional[str] = None
+    coverage_zones: Optional[list[str]] = None
+    values_list: Optional[list[Any]] = None
+    social_links: Optional[dict] = None
+    site_style: Optional[dict] = None
 
 
 class SiteOut(BaseModel):
     id: UUID
     tenant_id: UUID
     title: str
+    tagline: Optional[str] = None
+    description: Optional[str] = None
+    phone: Optional[str] = None
+    email_contact: Optional[str] = None
+    address: Optional[str] = None
     status: str
     audience_mode: str
     default_language: str
-    domain: Optional[str] = None
     absence_mode: bool
     absence_message: Optional[str] = None
+    coverage_zones: Optional[list] = None
+    values_list: Optional[list] = None
+    social_links: Optional[dict] = None
+    site_style: Optional[dict] = None

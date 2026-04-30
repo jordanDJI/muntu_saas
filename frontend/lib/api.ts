@@ -37,6 +37,16 @@ export const api = {
   publishSite: (id: string) => apiFetch(`/api/v1/sites/${id}/publish`, { method: "POST" }),
   unpublishSite: (id: string) => apiFetch(`/api/v1/sites/${id}/unpublish`, { method: "POST" }),
 
+  // Site builder — prestations
+  getSiteOffers: (siteId: string) => apiFetch<any[]>(`/api/v1/sites/${siteId}/offers`),
+  replaceSiteOffers: (siteId: string, offers: object[]) =>
+    apiFetch(`/api/v1/sites/${siteId}/offers`, { method: "PUT", body: JSON.stringify(offers) }),
+
+  // Site builder — témoignages
+  getSiteTestimonials: (siteId: string) => apiFetch<any[]>(`/api/v1/sites/${siteId}/testimonials`),
+  replaceSiteTestimonials: (siteId: string, testimonials: object[]) =>
+    apiFetch(`/api/v1/sites/${siteId}/testimonials`, { method: "PUT", body: JSON.stringify(testimonials) }),
+
   // Leads
   getLeads: (params?: { status?: string; audience_type?: string }) => {
     const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";

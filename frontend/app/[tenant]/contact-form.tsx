@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-export default function ContactForm({ tenantSlug }: { tenantSlug: string }) {
+export default function ContactForm({ tenantSlug, accentColor = "#4f46e5" }: { tenantSlug: string; accentColor?: string }) {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
@@ -21,6 +21,7 @@ export default function ContactForm({ tenantSlug }: { tenantSlug: string }) {
           last_name: get("last_name"),
           email: get("email"),
           phone: get("phone"),
+          message: get("message"),
           source: "website",
           audience_type: "b2c",
           request_type: "contact",
@@ -50,8 +51,14 @@ export default function ContactForm({ tenantSlug }: { tenantSlug: string }) {
       </div>
       <input name="email" type="email" placeholder="Email" className="border rounded-lg px-3 py-2 w-full" />
       <input name="phone" type="tel" placeholder="Téléphone" className="border rounded-lg px-3 py-2 w-full" />
+      <textarea
+        name="message"
+        placeholder="Motif du contact / Objet de votre demande"
+        rows={3}
+        className="border rounded-lg px-3 py-2 w-full resize-none"
+      />
       {error && <p className="text-red-500 text-sm">{error}</p>}
-      <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700">
+      <button type="submit" className="w-full text-white py-3 rounded-lg font-semibold transition-opacity hover:opacity-90" style={{ backgroundColor: accentColor }}>
         Envoyer ma demande
       </button>
     </form>

@@ -16,6 +16,7 @@ def send_lead_notification(tenant_email: str, lead: dict, contact: dict) -> None
         <p><strong>Téléphone :</strong> {contact.get('phone', '—')}</p>
         <p><strong>Type :</strong> {lead.get('request_type')}</p>
         <p><strong>Canal :</strong> {lead.get('source')}</p>
+        {f"<p><strong>Motif :</strong> {lead.get('notes')}</p>" if lead.get('notes') else ""}
         <br>
         <a href="{settings.frontend_url}/dashboard/leads/{lead.get('id')}">
             Voir la demande dans le tableau de bord →

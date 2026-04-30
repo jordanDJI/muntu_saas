@@ -87,7 +87,9 @@ export default function DashboardPage() {
 
       {/* Nav */}
       <nav className="flex gap-4 flex-wrap">
-        <Link href="/dashboard/leads" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Demandes</Link>
+        <Link href="/dashboard/site-builder" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">🌐 Mon site</Link>
+        <Link href="/dashboard/embed" className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">🔗 Intégrer</Link>
+        <Link href="/dashboard/leads" className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">Demandes</Link>
         <Link href="/dashboard/appointments" className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">Rendez-vous</Link>
         <Link href="/dashboard/agents" className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">Agents IA</Link>
         <Link href="/dashboard/settings" className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">Paramètres</Link>

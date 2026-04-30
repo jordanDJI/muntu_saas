@@ -75,9 +75,29 @@ async def setup_tenant(body: TenantSetupIn, user: dict = Depends(get_current_use
         {"tenant_id": tenant_id, "name": "Conclu",   "position": 5},
     ]).execute()
 
+    # Créer le site par défaut
+    supabase.table("site").insert({
+        "tenant_id": tenant_id,
+        "title": body.tenant_name,
+        "status": "draft",
+        "audience_mode": "b2c",
+        "default_language": "fr"
+    }).execute()
+
     # Injecter tenant_id dans app_metadata du JWT
-    supabase.auth.admin.update_user_by_id(user_id, {
-        "app_metadata": {"tenant_id": tenant_id}
-    })
+    import httpx
+    from app.core.config import settings
+    try:
+        httpx.put(
+            f"{settings.supabase_url}/auth/v1/admin/users/{user_id}",
+            headers={
+                "apikey": settings.supabase_service_role_key,
+                "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                "Content-Type": "application/json"
+            },
+            json={"app_metadata": {"tenant_id": tenant_id}}
+        )
+    except Exception as e:
+        print(f"Failed to update app_metadata: {e}")
 
     return {"tenant_id": tenant_id, "slug": body.tenant_slug}
