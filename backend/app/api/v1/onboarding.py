@@ -94,17 +94,21 @@ async def setup_tenant(body: TenantSetupIn, user: dict = Depends(get_current_use
     # Injecter tenant_id dans app_metadata du JWT
     import httpx
     from app.core.config import settings
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
     try:
-        httpx.put(
-            f"{settings.supabase_url}/auth/v1/admin/users/{user_id}",
-            headers={
-                "apikey": settings.supabase_service_role_key,
-                "Authorization": f"Bearer {settings.supabase_service_role_key}",
-                "Content-Type": "application/json"
-            },
-            json={"app_metadata": {"tenant_id": tenant_id}}
-        )
+        async with httpx.AsyncClient(timeout=15.0) as _client:
+            _resp = await _client.put(
+                f"{settings.supabase_url}/auth/v1/admin/users/{user_id}",
+                headers={
+                    "apikey": settings.supabase_service_role_key,
+                    "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"app_metadata": {"tenant_id": tenant_id}},
+            )
+            _resp.raise_for_status()
     except Exception as e:
-        print(f"Failed to update app_metadata: {e}")
+        _log.error("Failed to update app_metadata for user %s: %s", user_id, e)
 
     return {"tenant_id": tenant_id, "slug": body.tenant_slug}

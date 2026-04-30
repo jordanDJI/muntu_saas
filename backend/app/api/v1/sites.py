@@ -73,7 +73,6 @@ async def unpublish_site(site_id: UUID, tenant_id: str = Depends(get_current_ten
 
 
 # ── Service offers ────────────────────────────────────────────────────────────
-# Mapping entre noms de colonnes DB (duration_minutes/price_from) et API (duration_min/price_eur)
 
 def _offer_from_db(row: dict) -> dict:
     return {
@@ -81,20 +80,19 @@ def _offer_from_db(row: dict) -> dict:
         "site_id": row.get("site_id"),
         "name": row.get("name"),
         "description": row.get("description"),
-        "duration_min": row.get("duration_min") or row.get("duration_minutes"),
-        "price_eur": row.get("price_eur") or row.get("price_from"),
+        "duration_min": row.get("duration_min"),
+        "price_eur": row.get("price_eur"),
         "created_at": row.get("created_at"),
     }
 
 def _offer_to_db(site_id: str, offer: ServiceOfferIn) -> dict:
-    # Colonne réelles en base (à renommer via migration 004 quand elle sera appliquée)
     row: dict = {"site_id": site_id, "name": offer.name}
     if offer.description is not None:
         row["description"] = offer.description
     if offer.duration_min is not None:
-        row["duration_minutes"] = offer.duration_min   # nom actuel en base
+        row["duration_min"] = offer.duration_min
     if offer.price_eur is not None:
-        row["price_from"] = offer.price_eur            # nom actuel en base
+        row["price_eur"] = offer.price_eur
     return row
 
 

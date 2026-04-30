@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
 
 export default function AppointmentsPage() {
+  const router = useRouter();
   const [appointments, setAppointments] = useState<any[]>([]);
 
   const load = () => {
@@ -21,7 +23,15 @@ export default function AppointmentsPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Rendez-vous</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold">Rendez-vous</h1>
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="text-sm text-gray-600 hover:text-gray-900"
+        >
+          ← Retour au dashboard
+        </button>
+      </div>
 
       <div className="space-y-3">
         {appointments.map((appt) => (

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api } from "../../../lib/api";
+import { api, supabase } from "../../../lib/api";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -215,18 +215,34 @@ export default function SiteBuilderPage() {
   const [openGuide, setOpenGuide] = useState<string | null>(null);
 
   const [noSite, setNoSite] = useState(false);
+  const [loadError, setLoadError] = useState<"session" | string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   // ── Chargement du site existant ─────────────────────────────────────────────
 
   useEffect(() => {
     const load = async () => {
-      const sites = await api.getSites().catch(() => []);
+      let sites: any[];
+      try {
+        sites = await api.getSites();
+      } catch {
+        // JWT peut manquer du tenant_id juste après l'onboarding → on tente un refresh
+        try {
+          await supabase.auth.refreshSession();
+          sites = await api.getSites();
+        } catch (err2: any) {
+          const msg: string = err2?.message ?? "";
+          const isSession = msg.toLowerCase().includes("tenant") || msg.includes("403") || msg.includes("Forbidden");
+          setLoadError(isSession ? "session" : msg || "Erreur de chargement");
+          setNoSite(true);
+          return;
+        }
+      }
       if (!sites.length) { setNoSite(true); return; }
       const s = sites[0];
       setSiteId(s.id);
 
       // Récupérer le slug tenant pour le lien de prévisualisation
-      const { supabase } = await import("../../../lib/api");
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: membership } = await supabase
@@ -387,12 +403,55 @@ export default function SiteBuilderPage() {
     );
   };
 
+  const createDefaultSite = async () => {
+    setCreating(true);
+    try {
+      const site = await api.createSite({ title: "Mon site", audience_mode: "b2c", default_language: "fr" }) as any;
+      setSiteId(site.id);
+      setNoSite(false);
+    } catch (err: any) {
+      const msg: string = err?.message ?? "";
+      const isSession = msg.toLowerCase().includes("tenant") || msg.includes("403");
+      setLoadError(isSession ? "session" : msg || "Erreur de création");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   if (noSite) return (
-    <div className="max-w-2xl mx-auto p-6 text-center space-y-4 pt-20">
-      <p className="text-gray-500">Aucun site trouvé pour votre compte.</p>
-      <Link href="/dashboard" className="text-indigo-600 hover:underline text-sm">← Retour au dashboard</Link>
+    <div className="max-w-2xl mx-auto p-6 text-center space-y-6 pt-20">
+      {loadError === "session" ? (
+        <>
+          <p className="text-gray-800 font-medium">Session non à jour</p>
+          <p className="text-sm text-gray-500">
+            Votre session ne contient pas encore l'identifiant de votre espace.
+            Déconnectez-vous et reconnectez-vous pour corriger ça.
+          </p>
+          <button
+            onClick={async () => { await supabase.auth.signOut(); router.push("/login"); }}
+            className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700"
+          >
+            Se reconnecter
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-gray-500">Aucun site trouvé pour votre compte.</p>
+          {loadError && <p className="text-red-500 text-sm">{loadError}</p>}
+          <button
+            onClick={createDefaultSite}
+            disabled={creating}
+            className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {creating ? "Création…" : "Créer mon site"}
+          </button>
+        </>
+      )}
+      <div>
+        <Link href="/dashboard" className="text-indigo-600 hover:underline text-sm">← Retour au dashboard</Link>
+      </div>
     </div>
   );
 

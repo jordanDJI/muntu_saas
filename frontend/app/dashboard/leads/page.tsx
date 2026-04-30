@@ -1,10 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
 
 const STATUSES = ["new", "contacted", "qualified", "scheduled", "closed_won", "closed_lost"];
 
 export default function LeadsPage() {
+  const router = useRouter();
   const [leads, setLeads] = useState<any[]>([]);
   const [filter, setFilter] = useState<string | undefined>(undefined);
 
@@ -21,7 +23,15 @@ export default function LeadsPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Demandes (leads)</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold">Demandes (leads)</h1>
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="text-sm text-gray-600 hover:text-gray-900"
+        >
+          ← Retour au dashboard
+        </button>
+      </div>
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap">

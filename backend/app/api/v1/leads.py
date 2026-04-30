@@ -17,7 +17,7 @@ async def list_leads(
     supabase = get_supabase_admin()
     query = (
         supabase.table("lead")
-        .select("*, contact(first_name, last_name, email, phone)")
+        .select("*, contact(id, first_name, last_name, email, phone)")
         .eq("tenant_id", tenant_id)
         .order("created_at", desc=True)
     )
@@ -56,14 +56,26 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
         "priority": "normal",
         "audience_type": body.audience_type,
         "request_type": body.request_type,
-        "notes": body.message,
     }
+    # `notes` existe dans le schéma cible, mais peut être absent si la migration n'a pas été appliquée.
+    # On l'ajoute de manière tolérante (fallback si PostgREST renvoie PGRST204).
+    if body.message:
+        lead_data["notes"] = body.message
     if stage:
         lead_data["pipeline_stage_id"] = stage["id"]
     if body.service_offer_id:
         lead_data["service_offer_id"] = str(body.service_offer_id)
 
-    lead = supabase.table("lead").insert(lead_data).execute().data[0]
+    try:
+        lead = supabase.table("lead").insert(lead_data).execute().data[0]
+    except Exception as exc:
+        # Compat: si la colonne `notes` n'existe pas dans la DB, on réessaie sans.
+        msg = str(exc)
+        if "PGRST204" in msg and "notes" in msg and "lead" in msg and "schema cache" in msg:
+            lead_data.pop("notes", None)
+            lead = supabase.table("lead").insert(lead_data).execute().data[0]
+        else:
+            raise
 
     owner = supabase.table("membership").select("app_user(email)").eq("tenant_id", tenant_id).eq("role", "owner").single().execute().data
     if owner:

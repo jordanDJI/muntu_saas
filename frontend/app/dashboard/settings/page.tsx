@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "../../../lib/api";
+import { api, supabase } from "../../../lib/api";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -12,6 +12,8 @@ export default function SettingsPage() {
   const [absenceMode, setAbsenceMode] = useState(false);
   const [absenceMessage, setAbsenceMessage] = useState("");
   const [msg, setMsg] = useState("");
+  const [tenantSlug, setTenantSlug] = useState<string>("");
+  const [origin, setOrigin] = useState<string>("");
 
   useEffect(() => {
     api.getSites()
@@ -26,6 +28,22 @@ export default function SettingsPage() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data, error } = await supabase
+        .from("membership")
+        .select("tenant:tenant_id(slug)")
+        .eq("user_id", user.id)
+        .single();
+      if (error) return;
+      const slug = (data?.tenant as any)?.slug ?? "";
+      setTenantSlug(slug);
+    })();
   }, []);
 
   async function handleSave() {
@@ -153,14 +171,18 @@ export default function SettingsPage() {
       {/* Lien vitrine */}
       <p className="text-sm text-gray-400">
         Vitrine :{" "}
-        <a
-          href={`http://localhost:3000/nkwax`}
-          target="_blank"
-          rel="noreferrer"
-          className="text-indigo-500 hover:underline"
-        >
-          localhost:3000/nkwax
-        </a>
+        {tenantSlug ? (
+          <a
+            href={`${origin}/${tenantSlug}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-indigo-500 hover:underline"
+          >
+            {origin.replace(/^https?:\/\//, "")}/{tenantSlug}
+          </a>
+        ) : (
+          <span className="text-gray-400">Indisponible</span>
+        )}
       </p>
     </div>
   );

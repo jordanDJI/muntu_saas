@@ -69,6 +69,9 @@ export default async function TenantSitePage({ params }: { params: Promise<{ ten
   const tracking = siteStyle.tracking ?? {};
   const photoUrls = siteStyle.photo_urls ?? {};
   const customCss: string = siteStyle.custom_css ?? "";
+  const pagesEnabled: string[] = siteStyle.pages_enabled ?? ["home", "about", "services", "contact"];
+  const showAbout = pagesEnabled.includes("about");
+  const showServices = pagesEnabled.includes("services");
 
   return (
     <main className="min-h-screen bg-white text-gray-900" style={{ fontFamily: font }}>
@@ -118,8 +121,8 @@ export default async function TenantSitePage({ params }: { params: Promise<{ ten
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <span className="font-bold text-lg" style={{ color: colors.hero }}>{site.title}</span>
           <div className="hidden sm:flex items-center gap-6 text-sm font-medium text-gray-600">
-            {site.service_offer?.length > 0 && <a href="#prestations" className="hover:opacity-80 transition-opacity" style={{ color: colors.accent }}>Prestations</a>}
-            {site.description && <a href="#a-propos" className="hover:opacity-80 transition-opacity" style={{ color: colors.accent }}>À propos</a>}
+            {showServices && site.service_offer?.length > 0 && <a href="#prestations" className="hover:opacity-80 transition-opacity" style={{ color: colors.accent }}>Prestations</a>}
+            {showAbout && site.description && <a href="#a-propos" className="hover:opacity-80 transition-opacity" style={{ color: colors.accent }}>À propos</a>}
             <a href="#contact" className="hover:opacity-80 transition-opacity" style={{ color: colors.accent }}>Contact</a>
           </div>
           <a
@@ -162,7 +165,7 @@ export default async function TenantSitePage({ params }: { params: Promise<{ ten
       </section>
 
       {/* À propos */}
-      {site.description && (
+      {showAbout && site.description && (
         <section id="a-propos" className="py-16 px-6">
           <div className={`max-w-3xl mx-auto text-center${photoUrls.about ? " sm:grid sm:grid-cols-2 sm:gap-10 sm:text-left sm:max-w-5xl sm:items-center" : ""}`}>
             {photoUrls.about && (
@@ -177,7 +180,7 @@ export default async function TenantSitePage({ params }: { params: Promise<{ ten
       )}
 
       {/* Prestations */}
-      {site.service_offer?.length > 0 && (
+      {showServices && site.service_offer?.length > 0 && (
         <section id="prestations" className="py-16 px-6 relative" style={photoUrls.services ? { backgroundImage: `url(${photoUrls.services})`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundColor: "#f9fafb" }}>
           {photoUrls.services && <div className="absolute inset-0 bg-white/80" />}
           <div className="relative z-10 max-w-5xl mx-auto">

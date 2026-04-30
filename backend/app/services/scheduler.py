@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -32,12 +33,16 @@ async def send_appointment_reminders() -> None:
         contact = appt.get("contact", {})
         if contact.get("email"):
             tenant_name = appt.get("calendar", {}).get("tenant", {}).get("name", "")
-            send_appointment_reminder(
-                contact_email=contact["email"],
-                contact_name=f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip(),
-                appointment=appt,
-                tenant_name=tenant_name,
-            )
+            try:
+                await asyncio.to_thread(
+                    send_appointment_reminder,
+                    contact_email=contact["email"],
+                    contact_name=f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip(),
+                    appointment=appt,
+                    tenant_name=tenant_name,
+                )
+            except Exception as exc:
+                logger.error("Reminder email failed for appt %s: %s", appt.get("id"), exc)
 
 
 # ── Worker de synthèse — Agent 4 ──────────────────────────────────────────────
@@ -106,7 +111,9 @@ async def run_synthesis_worker() -> None:
 
         raw_text = "\n".join(raw_lines)
         try:
-            summary = summarize_conversations(raw_text, model=config.get("model", "gemini-2.5-flash"))
+            summary = await asyncio.to_thread(
+                summarize_conversations, raw_text, config.get("model", "gemini-2.5-flash")
+            )
         except Exception as exc:
             logger.error("Synthesis LLM error for tenant %s: %s", tenant_id, exc)
             continue

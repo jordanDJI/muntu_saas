@@ -3,6 +3,7 @@ Agent 1 — Chatbot vitrine (endpoint public, sans auth)
 Périmètre : FAQ tenant-specific + consultation/création de RDV.
 Aucun accès aux données personnelles d'autres contacts.
 """
+import asyncio
 import uuid
 import logging
 from fastapi import APIRouter, HTTPException, status
@@ -83,7 +84,7 @@ async def chat(tenant_slug: str, body: ChatRequest) -> ChatResponse:
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
 
     try:
-        reply = chat_completion(messages=messages, model=model, system_prompt=system_prompt)
+        reply = await asyncio.to_thread(chat_completion, messages=messages, model=model, system_prompt=system_prompt)
     except Exception as exc:
         logger.error("Chatbot LLM error for tenant %s: %s", tenant_slug, exc)
         raise HTTPException(status_code=502, detail="Service IA temporairement indisponible")
