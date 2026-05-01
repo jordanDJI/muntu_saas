@@ -18,13 +18,20 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = await getAuthHeaders();
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...headers, ...(options.headers ?? {}) },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: { "Content-Type": "application/json", ...headers, ...(options.headers ?? {}) },
+    });
+  } catch {
+    throw new Error(`Serveur inaccessible (${API_URL}). Vérifiez votre connexion ou la configuration du backend.`);
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? `HTTP ${res.status}`);
+    const detail = err.detail;
+    const msg = typeof detail === "string" ? detail : `HTTP ${res.status}`;
+    throw new Error(msg);
   }
   return res.json();
 }

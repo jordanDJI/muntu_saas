@@ -108,11 +108,14 @@ async def get_offers(site_id: UUID, tenant_id: str = Depends(get_current_tenant)
 async def replace_offers(site_id: UUID, offers: list[ServiceOfferIn], tenant_id: str = Depends(get_current_tenant)):
     sb = get_supabase()
     _assert_owner(sb, str(site_id), tenant_id)
-    sb.table("service_offer").delete().eq("site_id", str(site_id)).execute()
-    if offers:
-        sb.table("service_offer").insert(
-            [_offer_to_db(str(site_id), o) for o in offers]
-        ).execute()
+    try:
+        sb.table("service_offer").delete().eq("site_id", str(site_id)).execute()
+        if offers:
+            sb.table("service_offer").insert(
+                [_offer_to_db(str(site_id), o) for o in offers]
+            ).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur sauvegarde prestations : {str(e)}")
     return {"replaced": len(offers)}
 
 

@@ -7,12 +7,20 @@ import { api, supabase } from "../../../lib/api";
 // ── Constantes ────────────────────────────────────────────────────────────────
 
 const COLOR_PALETTES = [
-  { key: "indigo", label: "Indigo & Blanc",       hex: "#4338ca" },
-  { key: "blue",   label: "Bleu marine & Blanc",  hex: "#1e3a8a" },
-  { key: "green",  label: "Vert nature & Blanc",  hex: "#15803d" },
-  { key: "red",    label: "Rouge & Blanc",         hex: "#b91c1c" },
-  { key: "purple", label: "Violet & Blanc",        hex: "#7e22ce" },
-  { key: "slate",  label: "Gris ardoise & Blanc",  hex: "#475569" },
+  { key: "indigo",   label: "Indigo",          hex: "#4338ca" },
+  { key: "blue",     label: "Bleu marine",     hex: "#1e3a8a" },
+  { key: "purple",   label: "Violet",          hex: "#7e22ce" },
+  { key: "highlight",label: "Violet clair",    hex: "#a855f7" },
+  { key: "teal",     label: "Sarcelle",        hex: "#0f766e" },
+  { key: "cyan",     label: "Cyan",            hex: "#155e75" },
+  { key: "green",    label: "Vert nature",     hex: "#15803d" },
+  { key: "emerald",  label: "Émeraude",        hex: "#166534" },
+  { key: "amber",    label: "Ambre",           hex: "#b45309" },
+  { key: "orange",   label: "Orange",          hex: "#c2410c" },
+  { key: "red",      label: "Rouge",           hex: "#b91c1c" },
+  { key: "rose",     label: "Rose",            hex: "#be123c" },
+  { key: "slate",    label: "Gris ardoise",    hex: "#475569" },
+  { key: "neutral",  label: "Gris neutre",     hex: "#334155" },
 ];
 
 const FONT_STYLES = [
@@ -534,15 +542,15 @@ export default function SiteBuilderPage() {
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
             <h2 className="font-semibold text-gray-800">Couleurs de votre site</h2>
             <p className="text-sm text-gray-500">Choisissez la palette qui correspond à votre image.</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {COLOR_PALETTES.map((c) => (
                 <button
                   key={c.key}
                   onClick={() => setPrimaryColor(c.key)}
-                  className={`flex items-center gap-3 p-3 border rounded-xl text-left transition-all ${primaryColor === c.key ? "border-indigo-500 ring-2 ring-indigo-200" : "border-gray-200 hover:border-gray-300"}`}
+                  className={`flex items-center gap-2.5 p-2.5 border rounded-xl text-left transition-all ${primaryColor === c.key ? "border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50" : "border-gray-200 hover:border-gray-300"}`}
                 >
-                  <span className="w-8 h-8 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: c.hex }} />
-                  <span className="text-sm font-medium text-gray-700">{c.label}</span>
+                  <span className="w-7 h-7 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: c.hex }} />
+                  <span className="text-xs font-medium text-gray-700 leading-tight">{c.label}</span>
                 </button>
               ))}
             </div>
