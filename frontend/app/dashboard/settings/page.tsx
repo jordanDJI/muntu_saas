@@ -736,20 +736,40 @@ export default function SettingsPage() {
   const router = useRouter();
   const [active, setActive] = useState<Section>("profil");
   const ActiveSection = SECTION_MAP[active];
+  const activeItem = NAV.find(n => n.key === active)!;
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b px-6 py-4 flex items-center gap-3">
-        <button onClick={() => router.push("/dashboard")} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors">
+      <div className="bg-white border-b px-4 py-3 flex items-center gap-3 sticky top-0 z-20">
+        <button onClick={() => router.push("/dashboard")} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          Retour au dashboard
+          <span className="hidden sm:inline">Retour au dashboard</span>
+          <span className="sm:hidden">Retour</span>
         </button>
-        <h1 className="text-xl font-bold text-gray-900">Paramètres</h1>
+        <h1 className="text-lg font-bold text-gray-900 truncate">
+          <span className="hidden sm:inline">Paramètres</span>
+          <span className="sm:hidden">{activeItem.icon} {activeItem.label}</span>
+        </h1>
       </div>
 
-      <div className="max-w-6xl mx-auto flex gap-0">
-        {/* Sidebar */}
+      {/* Mobile — sélecteur déroulant */}
+      <div className="md:hidden bg-white border-b px-4 py-3">
+        <select
+          value={active}
+          onChange={e => setActive(e.target.value as Section)}
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        >
+          {NAV.map(item => (
+            <option key={item.key} value={item.key}>
+              {item.icon}  {item.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="max-w-6xl mx-auto flex">
+        {/* Sidebar desktop */}
         <aside className="w-56 shrink-0 py-6 px-3 hidden md:block">
           <nav className="space-y-0.5">
             {NAV.map(item => (
@@ -769,24 +789,8 @@ export default function SettingsPage() {
           </nav>
         </aside>
 
-        {/* Mobile tabs */}
-        <div className="md:hidden flex overflow-x-auto gap-1 px-4 py-3 border-b bg-white w-full">
-          {NAV.map(item => (
-            <button
-              key={item.key}
-              onClick={() => setActive(item.key)}
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                active === item.key ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              <span>{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
-        </div>
-
         {/* Contenu */}
-        <main className="flex-1 py-6 px-6 max-w-2xl space-y-4">
+        <main className="flex-1 py-6 px-4 sm:px-6 min-w-0 space-y-4">
           <ActiveSection />
         </main>
       </div>

@@ -86,13 +86,37 @@ export default function DashboardPage() {
       </div>
 
       {/* Nav */}
-      <nav className="flex gap-4 flex-wrap">
-        <Link href="/dashboard/site-builder" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">🌐 Mon site</Link>
-        <Link href="/dashboard/embed" className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">🔗 Intégrer</Link>
-        <Link href="/dashboard/leads" className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">Demandes</Link>
-        <Link href="/dashboard/appointments" className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">Rendez-vous</Link>
-        <Link href="/dashboard/agents" className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">Agents IA</Link>
-        <Link href="/dashboard/settings" className="px-4 py-2 bg-white border rounded-lg hover:bg-gray-50">Paramètres</Link>
+      <nav className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <Link href="/dashboard/site-builder"
+          className="flex flex-col items-center gap-2 p-5 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 active:scale-95 transition-all shadow-sm text-center">
+          <span className="text-2xl leading-none">🌐</span>
+          <span className="text-sm font-semibold">Mon site</span>
+        </Link>
+        <Link href="/dashboard/embed"
+          className="flex flex-col items-center gap-2 p-5 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 active:scale-95 transition-all shadow-sm text-center text-gray-700">
+          <span className="text-2xl leading-none">🔗</span>
+          <span className="text-sm font-semibold">Intégrer</span>
+        </Link>
+        <Link href="/dashboard/leads"
+          className="flex flex-col items-center gap-2 p-5 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 active:scale-95 transition-all shadow-sm text-center text-gray-700">
+          <span className="text-2xl leading-none">📥</span>
+          <span className="text-sm font-semibold">Demandes</span>
+        </Link>
+        <Link href="/dashboard/appointments"
+          className="flex flex-col items-center gap-2 p-5 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 active:scale-95 transition-all shadow-sm text-center text-gray-700">
+          <span className="text-2xl leading-none">📅</span>
+          <span className="text-sm font-semibold">Rendez-vous</span>
+        </Link>
+        <Link href="/dashboard/agents"
+          className="flex flex-col items-center gap-2 p-5 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 active:scale-95 transition-all shadow-sm text-center text-gray-700">
+          <span className="text-2xl leading-none">🤖</span>
+          <span className="text-sm font-semibold">Agents IA</span>
+        </Link>
+        <Link href="/dashboard/settings"
+          className="flex flex-col items-center gap-2 p-5 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 active:scale-95 transition-all shadow-sm text-center text-gray-700">
+          <span className="text-2xl leading-none">⚙️</span>
+          <span className="text-sm font-semibold">Paramètres</span>
+        </Link>
       </nav>
     </div>
   );
