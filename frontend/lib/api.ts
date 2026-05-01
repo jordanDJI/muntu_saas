@@ -88,4 +88,50 @@ export const api = {
 
   // Agents IA — synthèses (Worker 4)
   getAgentSyntheses: (limit = 10) => apiFetch<any[]>(`/api/v1/agents/synthesis?limit=${limit}`),
+
+  // Calendrier — disponibilités
+  getAvailability: () => apiFetch<any[]>("/api/v1/calendar/availability"),
+  replaceAvailability: (slots: object[]) =>
+    apiFetch("/api/v1/calendar/availability", { method: "PUT", body: JSON.stringify(slots) }),
+
+  // Calendrier — blocages
+  getBlocked: () => apiFetch<any[]>("/api/v1/calendar/blocked"),
+  createBlocked: (body: object) =>
+    apiFetch("/api/v1/calendar/blocked", { method: "POST", body: JSON.stringify(body) }),
+  deleteBlocked: (id: string) =>
+    apiFetch(`/api/v1/calendar/blocked/${id}`, { method: "DELETE" }),
+
+  // Calendrier — contacts (recherche inline)
+  searchContacts: (q: string) => apiFetch<any[]>(`/api/v1/calendar/contacts?q=${encodeURIComponent(q)}`),
+
+  // Calendrier — rendez-vous (vue calendrier)
+  getCalendarAppointments: (params?: { start?: string; end?: string }) => {
+    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+    return apiFetch<any[]>(`/api/v1/calendar/appointments${qs}`);
+  },
+  createCalendarAppointment: (body: object) =>
+    apiFetch("/api/v1/calendar/appointments", { method: "POST", body: JSON.stringify(body) }),
+
+  // Booking public (sans auth)
+  getPublicAvailableDays: (tenantSlug: string, year: number, month: number) => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    return fetch(`${apiUrl}/api/v1/booking/${tenantSlug}/available-days?year=${year}&month=${month}`)
+      .then((r) => r.json()) as Promise<number[]>;
+  },
+  getPublicSlots: (tenantSlug: string, date: string) => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    return fetch(`${apiUrl}/api/v1/booking/${tenantSlug}/slots?date=${date}`)
+      .then((r) => r.json()) as Promise<any[]>;
+  },
+  publicBook: (tenantSlug: string, body: object) => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    return fetch(`${apiUrl}/api/v1/booking/${tenantSlug}/book`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(async (r) => {
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail ?? `HTTP ${r.status}`); }
+      return r.json();
+    });
+  },
 };

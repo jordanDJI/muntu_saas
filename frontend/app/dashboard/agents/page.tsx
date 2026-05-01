@@ -62,7 +62,10 @@ export default function AgentsPage() {
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Agents IA</h1>
-        <Link href="/dashboard" className="text-sm text-gray-500 hover:text-indigo-600">← Tableau de bord</Link>
+        <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          Retour au dashboard
+        </Link>
       </div>
 
       {error && (

@@ -450,7 +450,10 @@ export default function SiteBuilderPage() {
         </>
       )}
       <div>
-        <Link href="/dashboard" className="text-indigo-600 hover:underline text-sm">← Retour au dashboard</Link>
+        <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          Retour au dashboard
+        </Link>
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
 # Dossier Projet — SaaS de gestion de présence digitale pour indépendants et structures locales
 
-**Version :** 2.3 — Mise à jour complète  
-**Date :** Avril 2026  
+**Version :** 2.4 — Mise à jour complète  
+**Date :** Mai 2026  
 **Auteur :** Jordan (porteur du projet)  
-**Statut :** En développement actif — MVP déployé, V1 en cours (agents IA + site builder)
+**Statut :** En développement actif — MVP déployé, V1 livré, V2 en cours (agents IA)
 
 ---
 
@@ -129,12 +129,16 @@ L'indépendant voit tout depuis un tableau de bord simple, sans jongler entre pl
 
 ### 5.3 Prise de rendez-vous
 
-- L'indépendant définit ses créneaux disponibles (jours, heures)
-- Le client voit les créneaux libres et réserve directement en ligne
-- Rappel automatique envoyé par WhatsApp ou email 24h avant et 1h avant
-- Gestion des annulations et reports
-- Mode "absence" : l'indépendant active un interrupteur "en congé", le site se met à jour automatiquement et le calendrier se bloque
+- L'indépendant définit ses **disponibilités récurrentes** par jour de la semaine (lundi à dimanche), avec heure de début/fin et durée de créneau en minutes
+- Il peut **bloquer des périodes ponctuelles** (congés, absences, événements) via le tableau de bord
+- Le client accède à un **calendrier public** sur le site vitrine : seuls les jours ayant des disponibilités configurées sont sélectionnables — les autres sont grisés
+- Les créneaux libres s'affichent automatiquement après sélection du jour, en déduisant les rendez-vous existants et les blocages
+- Rappel automatique envoyé par email 24h avant
+- **Dashboard calendrier** style Outlook (vue jour/semaine/mois) : les cellules sont directement cliquables pour créer un rendez-vous à l'heure et au jour voulus
+- Gestion des annulations depuis la vue détail du rendez-vous
+- Mode "absence" : l'indépendant active un interrupteur "en congé", le site se met à jour automatiquement
 - Distinction entre rendez-vous avec un patient (B2C) et une coordination avec un partenaire (B2B)
+- **Formulaire public en 2 modes** : "message simple" (→ lead) ou "prendre rendez-vous" (→ sélecteur date/créneau → booking)
 
 ### 5.4 Chatbot intelligent
 
@@ -297,7 +301,7 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 | 5 | Back-office minimal (leads + RDV) | ✅ Déployé |
 | 6 | Abonnement Stripe | ✅ Déployé |
 
-### V1 — ✅ En production (Avril 2026)
+### V1 — ✅ Livré (Mai 2026)
 
 | Fonctionnalité | Agent concerné | Statut |
 |---|---|---|
@@ -308,6 +312,9 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 | **Personnalisation CSS premium** | — | ✅ Livré — éditeur CSS libre à l'étape 9 (plan Business) |
 | **Agent 1 — Chatbot vitrine LLM (Gemini)** | Agent 1 | ✅ Livré — widget flottant, FAQ + RDV, retry 429/503 |
 | **Page de configuration des agents** | Dashboard | ✅ Livré — toggle actif/inactif, modèle LLM, prompt système |
+| **Calendrier dashboard (Outlook-style)** | — | ✅ Livré — vue jour/semaine/mois, cellules cliquables, création inline, panneaux disponibilités + blocages |
+| **Prise de RDV publique** | — | ✅ Livré — formulaire 2 modes (message/RDV), sélecteur date/créneau temps réel, jours sans dispo grisés |
+| **Page paramètres complète** | — | ✅ Livré — 10 sections : Profil, Sécurité, Mon site, Abonnement, Notifications, Préférences, Équipe, Intégrations, Export/RGPD, Activité |
 | CRM léger (liste contacts + historique) | — | ✅ Livré |
 | Mode absence | — | ✅ Livré |
 
@@ -315,9 +322,12 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 
 | Fonctionnalité | Agent concerné | Statut |
 |---|---|---|
-| **Agent 3 — Assistant tenant (Dashboard)** | Agent 3 | 🔄 Backend livré — configuration dashboard opérationnelle |
+| **Agent 3 — Assistant tenant (Dashboard)** | Agent 3 | 🔄 Backend livré — configuration dashboard opérationnelle — processus Agent 3 non encore défini |
 | **Worker 4 — Synthèse conversations** | Worker 4 | 🔄 Backend livré (APScheduler, toutes les 30 min par défaut) |
 | WhatsApp Business API | Agents 2 & 3 | ⏳ Bloqué — approbation Meta en attente |
+| Journaux d'activité complets | — | ⏳ Planifié — UI prête (section Paramètres), table `activity_log` à créer |
+| Notifications temps réel | — | ⏳ Planifié — UI prête (section Paramètres), backend à implémenter |
+| Invitation membres d'équipe | — | ⏳ Planifié — UI prête, backend à implémenter |
 | ROI estimé simple | — | ⏳ Planifié |
 | Comptes partenaires B2B | — | ⏳ Planifié |
 
@@ -1081,7 +1091,11 @@ PAGE_KNOWLEDGE_DOCUMENT(page_id FK->PAGE.id, knowledge_document_id FK->KNOWLEDGE
 
 CALENDAR(id PK, tenant_id FK->TENANT.id, name, timezone, external_calendar_id, last_synced_at)
 
-AVAILABILITY_SLOT(id PK, calendar_id FK->CALENDAR.id, start_at, end_at, status)
+AVAILABILITY_SLOT(id PK, calendar_id FK->CALENDAR.id, day_of_week SMALLINT(0=Lun…6=Dim), start_time TIME, end_time TIME, slot_duration_min INT DEFAULT 30, is_active BOOLEAN, created_at)
+-- Disponibilités récurrentes hebdomadaires (pas des créneaux individuels)
+
+BLOCKED_PERIOD(id PK, calendar_id FK->CALENDAR.id, start_at TIMESTAMPTZ, end_at TIMESTAMPTZ, reason TEXT, created_by VARCHAR DEFAULT 'user', created_at)
+-- Blocages ponctuels (congés, absences, événements)
 
 APPOINTMENT(id PK, calendar_id FK->CALENDAR.id, contact_id FK->CONTACT.id, partner_account_id FK->PARTNER_ACCOUNT.id NULL, lead_id FK->LEAD.id NULL, service_offer_id FK->SERVICE_OFFER.id NULL, availability_slot_id FK->AVAILABILITY_SLOT.id NULL, type, audience_type, status, scheduled_at, end_at, created_at, updated_at)
 
@@ -1465,17 +1479,31 @@ CREATE TABLE calendar (
 
 CREATE INDEX idx_calendar_tenant ON calendar(tenant_id);
 
+-- Disponibilités récurrentes hebdomadaires (0=Lun … 6=Dim)
 CREATE TABLE availability_slot (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  calendar_id UUID NOT NULL REFERENCES calendar(id) ON DELETE CASCADE,
-  start_at    TIMESTAMP NOT NULL,
-  end_at      TIMESTAMP NOT NULL,
-  status      VARCHAR(30) NOT NULL DEFAULT 'free',
-  CONSTRAINT chk_slot_dates CHECK (end_at > start_at)
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  calendar_id       UUID NOT NULL REFERENCES calendar(id) ON DELETE CASCADE,
+  day_of_week       SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  start_time        TIME NOT NULL,
+  end_time          TIME NOT NULL,
+  slot_duration_min INT NOT NULL DEFAULT 30,
+  is_active         BOOLEAN NOT NULL DEFAULT true,
+  created_at        TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_availability_slot_calendar ON availability_slot(calendar_id);
-CREATE INDEX idx_availability_slot_start    ON availability_slot(start_at);
+-- Blocages ponctuels (congés, absences, événements)
+CREATE TABLE blocked_period (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  calendar_id UUID NOT NULL REFERENCES calendar(id) ON DELETE CASCADE,
+  start_at    TIMESTAMPTZ NOT NULL,
+  end_at      TIMESTAMPTZ NOT NULL,
+  reason      TEXT,
+  created_by  VARCHAR(20) DEFAULT 'user',
+  created_at  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_availability_slot_calendar ON availability_slot(calendar_id, day_of_week);
+CREATE INDEX idx_blocked_period_calendar    ON blocked_period(calendar_id, start_at, end_at);
 
 CREATE TABLE appointment (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1796,25 +1824,41 @@ Backend Python (FastAPI)     ←→     Frontend Next.js (React)
 ```
 backend/
 ├── app/
-│   ├── main.py              # Point d'entrée FastAPI
+│   ├── main.py              # Point d'entrée FastAPI — tous les routers enregistrés
 │   ├── core/
 │   │   ├── config.py        # Variables d'env (Supabase URL, clés)
 │   │   └── supabase.py      # Client Supabase singleton
-│   ├── api/
+│   ├── api/v1/
 │   │   ├── auth.py          # Login, register, JWT
-│   │   ├── sites.py         # Générateur de site
-│   │   ├── leads.py         # Formulaires de contact → leads
-│   │   ├── appointments.py  # Gestion des rendez-vous
-│   │   └── subscriptions.py # Stripe webhooks
+│   │   ├── sites.py         # Générateur de site + prestations + témoignages
+│   │   ├── leads.py         # Formulaires de contact → leads (+ endpoint public /leads/public/{slug})
+│   │   ├── appointments.py  # Gestion simple des rendez-vous (vue liste)
+│   │   ├── calendar.py      # Calendrier dashboard : disponibilités, blocages, contacts, RDV
+│   │   ├── booking.py       # Booking public (sans auth) : jours dispo, créneaux, réservation
+│   │   ├── agents.py        # Agents IA : config, liens, OCR, synthèses
+│   │   ├── subscriptions.py # Stripe checkout + portal
+│   │   └── onboarding.py    # Onboarding tenant
 │   ├── models/              # Pydantic schemas (request/response)
 │   ├── services/
 │   │   ├── email.py         # Resend
-│   │   └── scheduler.py     # APScheduler (rappels email)
+│   │   └── scheduler.py     # APScheduler (rappels email + synthèses Worker 4)
 │   └── middleware/
 │       └── tenant.py        # Injection tenant_id dans chaque requête
+├── supabase/migrations/     # Migrations SQL versionnées (001 → 005)
 ├── requirements.txt
 └── Dockerfile
 ```
+
+**Endpoints publics (sans authentification) — router `booking` :**
+- `GET /api/v1/booking/{slug}/available-days?year=&month=` — jours du mois ayant des disponibilités
+- `GET /api/v1/booking/{slug}/slots?date=YYYY-MM-DD` — créneaux libres pour une date
+- `POST /api/v1/booking/{slug}/book` — réserve un créneau (crée contact + lead ou appointment)
+
+**Endpoints calendrier (authentifiés) — router `calendar` :**
+- `GET/PUT /api/v1/calendar/availability` — disponibilités récurrentes
+- `GET/POST/DELETE /api/v1/calendar/blocked` — blocages ponctuels
+- `GET /api/v1/calendar/contacts?q=` — recherche contact inline
+- `GET/POST /api/v1/calendar/appointments` — rendez-vous vue calendrier
 
 #### Exemple de route FastAPI avec isolation tenant
 

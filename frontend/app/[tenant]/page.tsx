@@ -316,7 +316,11 @@ export default async function TenantSitePage({ params }: { params: Promise<{ ten
                 </div>
               )}
             </div>
-            <ContactForm tenantSlug={tenantSlug} accentColor={colors.accent} />
+            <ContactForm
+              tenantSlug={tenantSlug}
+              accentColor={colors.accent}
+              offers={(site.service_offer ?? []).map((o: any) => ({ id: o.id, name: o.name }))}
+            />
           </div>
         </div>
       </section>
