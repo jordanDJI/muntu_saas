@@ -8,6 +8,7 @@ class ServiceOfferIn(BaseModel):
     description: Optional[str] = None
     duration_min: Optional[int] = None
     price_eur: Optional[float] = None
+    image_url: Optional[str] = None
 
 
 class ServiceAreaIn(BaseModel):

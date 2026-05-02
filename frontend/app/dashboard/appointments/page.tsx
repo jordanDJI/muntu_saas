@@ -24,20 +24,30 @@ type AvailSlot = {
 
 type BlockedPeriod = { id: string; start_at: string; end_at: string; reason?: string };
 type Contact = { id: string; first_name: string; last_name: string; email: string; phone?: string };
+type NewClientData = { first_name: string; last_name: string; email?: string; phone?: string; source?: string };
 type View = "week" | "month" | "day";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DAYS_FR   = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const DAYS_FULL = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
-const HOUR_START   = 7;
-const HOUR_END     = 20;
-const SLOT_H       = 64; // px / heure
+const HOUR_START = 7;
+const HOUR_END   = 20;
+const SLOT_H     = 64;
 const STATUS_COLOR: Record<string, string> = {
   confirmed: "bg-indigo-500 text-white",
   cancelled: "bg-gray-300 text-gray-500",
   pending:   "bg-yellow-400 text-white",
 };
+const SOURCES = [
+  "Bouche à oreille",
+  "Google / Recherche en ligne",
+  "Réseaux sociaux",
+  "Site internet",
+  "Recommandation",
+  "Flyer / Affiche",
+  "Autre",
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,14 +64,15 @@ const hhmm      = (h: number, m: number) => `${String(h).padStart(2,"0")}:${Stri
 const topPx     = (iso: string) => { const d=new Date(iso); return (d.getHours()+d.getMinutes()/60-HOUR_START)*SLOT_H; };
 const heightPx  = (s: string, e: string) => Math.max(((new Date(e).getTime()-new Date(s).getTime())/3600000)*SLOT_H, 24);
 
-// ── ContactSearch (standalone, hors parent pour stabilité des hooks) ──────────
+// ── ContactSearch ─────────────────────────────────────────────────────────────
 
-function ContactSearch({ onSelect }: { onSelect: (c: Contact | null, name?: string) => void }) {
+function ContactSearch({ onSelect, onCreateNew }: {
+  onSelect: (c: Contact) => void;
+  onCreateNew: (name: string) => void;
+}) {
   const [q, setQ]             = useState("");
   const [results, setResults] = useState<Contact[]>([]);
   const [open, setOpen]       = useState(false);
-  const [mode, setMode]       = useState<"search"|"new">("search");
-  const [fn, setFn]           = useState(""); const [ln, setLn] = useState(""); const [em, setEm] = useState("");
   const timer = useRef<any>(null);
 
   const search = (val: string) => {
@@ -73,87 +84,156 @@ function ContactSearch({ onSelect }: { onSelect: (c: Contact | null, name?: stri
     }, 280);
   };
 
-  if (mode === "new") return (
-    <div className="space-y-1.5">
-      <div className="grid grid-cols-2 gap-1.5">
-        <input placeholder="Prénom" value={fn} onChange={e=>setFn(e.target.value)} className="border rounded px-2 py-1 text-xs" />
-        <input placeholder="Nom"    value={ln} onChange={e=>setLn(e.target.value)} className="border rounded px-2 py-1 text-xs" />
-      </div>
-      <input type="email" placeholder="Email" value={em} onChange={e=>setEm(e.target.value)} className="w-full border rounded px-2 py-1 text-xs" />
-      <div className="flex gap-1.5">
-        <button onClick={()=>{ onSelect(null, `${fn} ${ln}`.trim()); }} className="flex-1 bg-indigo-600 text-white rounded px-2 py-1 text-xs">
-          Utiliser
-        </button>
-        <button onClick={()=>setMode("search")} className="text-xs text-gray-400 hover:text-gray-700 px-2">← Rechercher</button>
-      </div>
-    </div>
-  );
-
   return (
     <div className="relative">
       <input
         placeholder="Rechercher un contact…"
         value={q}
         onChange={e => search(e.target.value)}
-        onFocus={()=> q.length>=2 && setOpen(true)}
-        className="w-full border rounded px-2 py-1 text-xs"
+        onFocus={() => q.length >= 2 && setOpen(true)}
+        className="w-full border rounded-lg px-3 py-2 text-sm"
       />
       {open && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 bg-white border rounded shadow-lg z-20 max-h-36 overflow-auto">
+        <div className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow-lg z-20 max-h-40 overflow-auto">
           {results.map(c => (
-            <button key={c.id} onClick={()=>{ setQ(`${c.first_name} ${c.last_name}`); setOpen(false); onSelect(c); }}
-              className="w-full text-left px-2 py-1.5 text-xs hover:bg-indigo-50 border-b last:border-0">
+            <button key={c.id}
+              onClick={() => { setQ(`${c.first_name} ${c.last_name}`); setOpen(false); onSelect(c); }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 border-b last:border-0">
               <span className="font-medium">{c.first_name} {c.last_name}</span>
-              {c.email && <span className="text-gray-400 ml-1">{c.email}</span>}
+              {c.email && <span className="text-gray-400 ml-2 text-xs">{c.email}</span>}
             </button>
           ))}
         </div>
       )}
       {q.length >= 2 && results.length === 0 && (
-        <button onClick={()=>{ setFn(q.split(" ")[0]); setLn(q.split(" ").slice(1).join(" ")); setMode("new"); setOpen(false); }}
-          className="absolute top-full left-0 right-0 bg-white border rounded shadow px-2 py-1.5 text-xs text-indigo-600 hover:bg-indigo-50 z-20 text-left">
-          + Créer "{q}"
+        <button
+          onClick={() => { setOpen(false); onCreateNew(q); }}
+          className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 z-20 text-left">
+          + Nouveau client "{q}"
         </button>
       )}
     </div>
   );
 }
 
-// ── NewApptCard (création inline style Outlook) ───────────────────────────────
+// ── NewClientModal ────────────────────────────────────────────────────────────
 
-function NewApptCard({
-  day, startH, startM, durationMin, offers, onSave, onClose,
-}: {
+function NewClientModal({ initialName, onConfirm, onClose }: {
+  initialName: string;
+  onConfirm: (data: NewClientData) => void;
+  onClose: () => void;
+}) {
+  const parts = initialName.trim().split(" ");
+  const [fn, setFn]         = useState(parts[0] ?? "");
+  const [ln, setLn]         = useState(parts.slice(1).join(" "));
+  const [em, setEm]         = useState("");
+  const [ph, setPh]         = useState("");
+  const [source, setSource] = useState("");
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b">
+          <h3 className="font-bold text-base">Nouveau client</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium text-gray-600">Prénom *</label>
+              <input value={fn} onChange={e => setFn(e.target.value)} placeholder="Marie"
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1"/>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Nom</label>
+              <input value={ln} onChange={e => setLn(e.target.value)} placeholder="Dupont"
+                className="w-full border rounded-lg px-3 py-2 text-sm mt-1"/>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Email</label>
+            <input type="email" value={em} onChange={e => setEm(e.target.value)}
+              placeholder="marie@exemple.com"
+              className="w-full border rounded-lg px-3 py-2 text-sm mt-1"/>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Téléphone</label>
+            <input type="tel" value={ph} onChange={e => setPh(e.target.value)}
+              placeholder="+32 4xx xxx xxx"
+              className="w-full border rounded-lg px-3 py-2 text-sm mt-1"/>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Canal d'entrée</label>
+            <select value={source} onChange={e => setSource(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm mt-1 text-gray-700 bg-white">
+              <option value="">-- Comment vous a-t-il trouvé ? --</option>
+              {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="px-5 pb-5">
+          <button
+            onClick={() => fn.trim() && onConfirm({
+              first_name: fn.trim(),
+              last_name:  ln.trim() || "-",
+              email:  em  || undefined,
+              phone:  ph  || undefined,
+              source: source || undefined,
+            })}
+            disabled={!fn.trim()}
+            className="w-full bg-indigo-600 text-white rounded-xl py-2.5 font-semibold hover:bg-indigo-700 disabled:opacity-50 text-sm">
+            Ajouter ce client au rendez-vous
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── NewApptCard (modal centrée) ───────────────────────────────────────────────
+
+function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose }: {
   day: Date; startH: number; startM: number; durationMin: number;
   offers: { id: string; name: string }[];
   onSave: () => void; onClose: () => void;
 }) {
-  const [dur, setDur]           = useState(durationMin);
-  const [serviceId, setService] = useState("");
-  const [contact, setContact]   = useState<Contact | null>(null);
-  const [newName, setNewName]   = useState("");
-  const [saving, setSaving]     = useState(false);
-  const [err, setErr]           = useState("");
+  const [dur, setDur]               = useState(durationMin);
+  const [serviceId, setService]     = useState("");
+  const [contact, setContact]       = useState<Contact | null>(null);
+  const [newClient, setNewClient]   = useState<NewClientData | null>(null);
+  const [showNewClient, setShowNew] = useState(false);
+  const [newClientName, setNewName] = useState("");
+  const [saving, setSaving]         = useState(false);
+  const [err, setErr]               = useState("");
 
-  const top = (startH + startM/60 - HOUR_START) * SLOT_H;
-  const h   = Math.max((dur/60) * SLOT_H, 56);
+  const endTime = () => {
+    const e = new Date(); e.setHours(startH, startM + dur, 0, 0);
+    return hhmm(e.getHours(), e.getMinutes());
+  };
+
+  const clientLabel = contact
+    ? `${contact.first_name} ${contact.last_name}`
+    : newClient ? `${newClient.first_name} ${newClient.last_name} (nouveau)` : null;
 
   const save = async () => {
-    if (!contact && !newName) { setErr("Sélectionner un contact"); return; }
+    if (!contact && !newClient) { setErr("Sélectionner ou créer un contact"); return; }
     setSaving(true); setErr("");
     try {
-      const base = new Date(day);
-      base.setHours(startH, startM, 0, 0);
-      const end = new Date(base.getTime() + dur * 60000);
+      const base = new Date(day); base.setHours(startH, startM, 0, 0);
+      const end  = new Date(base.getTime() + dur * 60000);
       const body: any = {
         scheduled_at: base.toISOString(),
         end_at: end.toISOString(),
         service_offer_id: serviceId || undefined,
       };
-      if (contact) { body.contact_id = contact.id; }
-      else {
-        const [fn, ...rest] = newName.trim().split(" ");
-        body.first_name = fn; body.last_name = rest.join(" ") || "-";
+      if (contact) {
+        body.contact_id = contact.id;
+      } else if (newClient) {
+        body.first_name = newClient.first_name;
+        body.last_name  = newClient.last_name;
+        body.email      = newClient.email;
+        body.phone      = newClient.phone;
+        body.source     = newClient.source;
       }
       await api.createCalendarAppointment(body);
       onSave();
@@ -162,41 +242,63 @@ function NewApptCard({
   };
 
   return (
-    <div
-      className="absolute left-0.5 right-0.5 bg-indigo-100 border-2 border-indigo-400 rounded-lg z-20 overflow-visible shadow-xl"
-      style={{ top, height: h }}
-      onClick={e => e.stopPropagation()}
-    >
-      {/* Header temps */}
-      <div className="bg-indigo-500 text-white rounded-t px-2 py-0.5 text-xs font-semibold flex justify-between items-center">
-        <span>{hhmm(startH, startM)} – {(() => { const e=new Date(); e.setHours(startH,startM+dur,0,0); return hhmm(e.getHours(),e.getMinutes()); })()}</span>
-        <button onClick={onClose} className="hover:opacity-70 leading-none">✕</button>
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          {/* Header */}
+          <div className="bg-indigo-600 text-white rounded-t-2xl px-4 py-3 flex justify-between items-start">
+            <div>
+              <p className="text-xs opacity-75 capitalize">
+                {day.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+              <p className="font-semibold text-lg">{hhmm(startH, startM)} – {endTime()}</p>
+            </div>
+            <button onClick={onClose} className="hover:opacity-70 text-xl mt-0.5 leading-none">✕</button>
+          </div>
+          {/* Body */}
+          <div className="p-4 space-y-3">
+            {clientLabel ? (
+              <div className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-indigo-50">
+                <span className="text-sm font-medium text-indigo-800">{clientLabel}</span>
+                <button onClick={() => { setContact(null); setNewClient(null); }}
+                  className="text-xs text-gray-400 hover:text-red-500 ml-2">✕</button>
+              </div>
+            ) : (
+              <ContactSearch
+                onSelect={c => setContact(c)}
+                onCreateNew={name => { setNewName(name); setShowNew(true); }}
+              />
+            )}
+            {offers.length > 0 && (
+              <select value={serviceId} onChange={e => setService(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm text-gray-700 bg-white">
+                <option value="">Prestation (optionnel)</option>
+                {offers.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            )}
+            <select value={dur} onChange={e => setDur(Number(e.target.value))}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+              {[15,30,45,60,90,120].map(d => (
+                <option key={d} value={d}>{d < 60 ? `${d} min` : `${d/60}h`}</option>
+              ))}
+            </select>
+            {err && <p className="text-red-500 text-sm">{err}</p>}
+            <button onClick={save} disabled={saving || (!contact && !newClient)}
+              className="w-full bg-indigo-600 text-white rounded-xl py-2.5 font-semibold hover:bg-indigo-700 disabled:opacity-50 text-sm">
+              {saving ? "Création…" : "Créer le rendez-vous"}
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Body */}
-      <div className="p-1.5 space-y-1.5 bg-white rounded-b shadow">
-        <ContactSearch onSelect={(c, name) => { setContact(c); if (name) setNewName(name); }} />
-
-        {offers.length > 0 && (
-          <select value={serviceId} onChange={e=>setService(e.target.value)}
-            className="w-full border rounded px-2 py-1 text-xs text-gray-700">
-            <option value="">Prestation (optionnel)</option>
-            {offers.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
-        )}
-
-        <select value={dur} onChange={e=>setDur(Number(e.target.value))} className="w-full border rounded px-2 py-1 text-xs">
-          {[15,30,45,60,90,120].map(d=><option key={d} value={d}>{d<60?`${d} min`:`${d/60}h`}</option>)}
-        </select>
-
-        {err && <p className="text-red-500 text-xs">{err}</p>}
-
-        <button onClick={save} disabled={saving}
-          className="w-full bg-indigo-600 text-white rounded py-1 text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50">
-          {saving ? "…" : "Créer le rendez-vous"}
-        </button>
-      </div>
-    </div>
+      {showNewClient && (
+        <NewClientModal
+          initialName={newClientName}
+          onConfirm={data => { setNewClient(data); setShowNew(false); }}
+          onClose={() => setShowNew(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -220,7 +322,7 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
 
   const save = async () => {
     setSaving(true);
-    try { await api.replaceAvailability(slots.filter(s=>s.is_active)); onSave(); }
+    try { await api.replaceAvailability(slots.filter(s => s.is_active)); onSave(); }
     finally { setSaving(false); }
   };
 
@@ -236,17 +338,20 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
             <div key={i} className={`rounded-lg border p-3 ${s.is_active ? "border-indigo-300 bg-indigo-50" : "border-gray-200"}`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="font-medium text-sm">{DAYS_FULL[i]}</span>
-                <button onClick={()=>toggle(i)}
+                <button onClick={() => toggle(i)}
                   className={`w-10 h-5 rounded-full transition-colors relative ${s.is_active?"bg-indigo-600":"bg-gray-300"}`}>
                   <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${s.is_active?"left-5":"left-0.5"}`}/>
                 </button>
               </div>
               {s.is_active && (
-                <div className="flex gap-2 items-center">
-                  <input type="time" value={s.start_time} onChange={e=>upd(i,"start_time",e.target.value)} className="border rounded px-2 py-1 text-sm flex-1"/>
+                <div className="flex gap-2 items-center flex-wrap">
+                  <input type="time" value={s.start_time} onChange={e=>upd(i,"start_time",e.target.value)}
+                    className="border rounded px-2 py-1 text-sm flex-1 min-w-0"/>
                   <span className="text-gray-400 text-sm">→</span>
-                  <input type="time" value={s.end_time} onChange={e=>upd(i,"end_time",e.target.value)} className="border rounded px-2 py-1 text-sm flex-1"/>
-                  <select value={s.slot_duration_min} onChange={e=>upd(i,"slot_duration_min",Number(e.target.value))} className="border rounded px-2 py-1 text-sm">
+                  <input type="time" value={s.end_time} onChange={e=>upd(i,"end_time",e.target.value)}
+                    className="border rounded px-2 py-1 text-sm flex-1 min-w-0"/>
+                  <select value={s.slot_duration_min} onChange={e=>upd(i,"slot_duration_min",Number(e.target.value))}
+                    className="border rounded px-2 py-1 text-sm">
                     {[15,30,45,60,90].map(d=><option key={d} value={d}>{d<60?`${d} min`:`${d/60}h`}</option>)}
                   </select>
                 </div>
@@ -278,8 +383,10 @@ function BlockPanel({ blocked, onSave, onClose }: {
   const add = async () => {
     if (!startAt || !endAt) return;
     setSaving(true);
-    try { await api.createBlocked({start_at:startAt,end_at:endAt,reason:reason||undefined}); onSave(); setStartAt(""); setEndAt(""); setReason(""); }
-    finally { setSaving(false); }
+    try {
+      await api.createBlocked({start_at:startAt,end_at:endAt,reason:reason||undefined});
+      onSave(); setStartAt(""); setEndAt(""); setReason("");
+    } finally { setSaving(false); }
   };
 
   return (
@@ -292,13 +399,16 @@ function BlockPanel({ blocked, onSave, onClose }: {
         <div className="flex-1 overflow-auto p-4 space-y-4">
           <div className="border rounded-lg p-3 space-y-2 bg-gray-50">
             <p className="text-sm font-medium text-gray-700">Ajouter un blocage</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div><label className="text-xs text-gray-500">Début</label>
-                <input type="datetime-local" value={startAt} onChange={e=>setStartAt(e.target.value)} className="w-full border rounded px-2 py-1 text-sm mt-0.5"/></div>
+                <input type="datetime-local" value={startAt} onChange={e=>setStartAt(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm mt-0.5"/></div>
               <div><label className="text-xs text-gray-500">Fin</label>
-                <input type="datetime-local" value={endAt} onChange={e=>setEndAt(e.target.value)} className="w-full border rounded px-2 py-1 text-sm mt-0.5"/></div>
+                <input type="datetime-local" value={endAt} onChange={e=>setEndAt(e.target.value)}
+                  className="w-full border rounded px-2 py-1 text-sm mt-0.5"/></div>
             </div>
-            <input type="text" placeholder="Motif (optionnel)" value={reason} onChange={e=>setReason(e.target.value)} className="w-full border rounded px-2 py-1 text-sm"/>
+            <input type="text" placeholder="Motif (optionnel)" value={reason} onChange={e=>setReason(e.target.value)}
+              className="w-full border rounded px-2 py-1 text-sm"/>
             <button onClick={add} disabled={saving||!startAt||!endAt}
               className="w-full bg-red-500 text-white py-1.5 rounded font-medium text-sm hover:bg-red-600 disabled:opacity-50">
               {saving?"…":"Bloquer cette période"}
@@ -360,17 +470,17 @@ function ApptModal({ appt, onCancel, onClose }: {
 
 export default function AppointmentsPage() {
   const router = useRouter();
-  const [view, setView]               = useState<View>("week");
-  const [anchor, setAnchor]           = useState<Date>(() => { const d=new Date(); d.setHours(0,0,0,0); return d; });
+  const [view, setView]                 = useState<View>("week");
+  const [anchor, setAnchor]             = useState<Date>(() => { const d=new Date(); d.setHours(0,0,0,0); return d; });
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [availability, setAvailability] = useState<AvailSlot[]>([]);
-  const [blocked, setBlocked]         = useState<BlockedPeriod[]>([]);
-  const [offers, setOffers]           = useState<{id:string;name:string}[]>([]);
-  const [showAvail, setShowAvail]     = useState(false);
-  const [showBlock, setShowBlock]     = useState(false);
+  const [blocked, setBlocked]           = useState<BlockedPeriod[]>([]);
+  const [offers, setOffers]             = useState<{id:string;name:string}[]>([]);
+  const [showAvail, setShowAvail]       = useState(false);
+  const [showBlock, setShowBlock]       = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<Appointment|null>(null);
-  const [creating, setCreating]       = useState<{day:Date;startH:number;startM:number;colIdx:number}|null>(null);
-  const [loading, setLoading]         = useState(true);
+  const [creating, setCreating]         = useState<{day:Date;startH:number;startM:number}|null>(null);
+  const [loading, setLoading]           = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -381,19 +491,16 @@ export default function AppointmentsPage() {
         api.getBlocked(),
       ]);
       setAppointments(appts); setAvailability(avail); setBlocked(blk);
-      // Récupère les offres de service depuis le premier site
       const sites = await api.getSites();
       if (sites[0]) {
         const off = await api.getSiteOffers(sites[0].id);
-        setOffers(off.map((o:any)=>({id:o.id,name:o.name})));
+        setOffers(off.map((o:any) => ({id:o.id,name:o.name})));
       }
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
-  // ── Navigation ────────────────────────────────────────────────────────────
 
   const navigate = (dir: -1|1) => {
     const d = new Date(anchor);
@@ -406,7 +513,7 @@ export default function AppointmentsPage() {
   const headerLabel = () => {
     if (view==="week") { const ws=startOfWeek(anchor),we=addDays(ws,6); return `${fmtDate(ws)} – ${fmtDate(we)} ${ws.getFullYear()}`; }
     if (view==="month") return anchor.toLocaleDateString("fr-BE",{month:"long",year:"numeric"});
-    return anchor.toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+    return anchor.toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long"});
   };
 
   const cancelAppt = async (id: string) => {
@@ -414,36 +521,35 @@ export default function AppointmentsPage() {
     setSelectedAppt(null); load();
   };
 
-  const weekDays = Array.from({length:7}, (_,i) => addDays(startOfWeek(anchor), i));
-  const hours    = Array.from({length:HOUR_END-HOUR_START}, (_,i) => HOUR_START+i);
+  const weekDays    = Array.from({length:7}, (_,i) => addDays(startOfWeek(anchor), i));
+  const hours       = Array.from({length:HOUR_END-HOUR_START}, (_,i) => HOUR_START+i);
   const apptsForDay = (d: Date) => appointments.filter(a => isSameDay(new Date(a.scheduled_at), d));
 
-  // ── Clic sur cellule (Outlook-style) ─────────────────────────────────────
-
-  const handleGridClick = (day: Date, colIdx: number, e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest("[data-appt],[data-card]")) return;
+  const handleGridClick = (day: Date, e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("[data-appt]")) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const relY = e.clientY - rect.top;
-    const totalMins = (relY / SLOT_H) * 60;
-    const snapped = Math.round(totalMins / 30) * 30;
+    const relY  = e.clientY - rect.top;
+    const snapped = Math.round((relY / SLOT_H) * 2) * 30;
     const startH  = Math.min(Math.floor(HOUR_START + snapped / 60), HOUR_END - 1);
     const startM  = snapped % 60;
-    setCreating({ day, startH, startM, colIdx });
+    setCreating({ day, startH, startM });
     setSelectedAppt(null);
   };
 
-  // ── Vue semaine / jour ────────────────────────────────────────────────────
+  // ── Vue semaine / jour ──────────────────────────────────────────────────────
 
   function TimeGrid({ days }: { days: Date[] }) {
+    const multi = days.length > 1;
+    const minW  = multi ? "min-w-[560px]" : "";
     return (
       <div className="flex-1 overflow-auto">
         {/* En-têtes */}
-        <div className="flex border-b sticky top-0 bg-white z-10">
-          <div className="w-14 shrink-0"/>
+        <div className={`flex border-b sticky top-0 bg-white z-10 ${minW}`}>
+          <div className="w-12 shrink-0"/>
           {days.map((d,i) => (
             <div key={i} className={`flex-1 text-center py-2 border-l text-sm font-medium ${isSameDay(d,new Date())?"text-indigo-600":"text-gray-600"}`}>
               <div className="text-xs uppercase">{DAYS_FR[d.getDay()===0?6:d.getDay()-1]}</div>
-              <div className={`text-lg font-bold mx-auto w-8 h-8 flex items-center justify-center rounded-full ${isSameDay(d,new Date())?"bg-indigo-600 text-white":""}`}>
+              <div className={`text-base font-bold mx-auto w-8 h-8 flex items-center justify-center rounded-full ${isSameDay(d,new Date())?"bg-indigo-600 text-white":""}`}>
                 {d.getDate()}
               </div>
             </div>
@@ -451,11 +557,11 @@ export default function AppointmentsPage() {
         </div>
 
         {/* Grille */}
-        <div className="flex relative" style={{height:(HOUR_END-HOUR_START)*SLOT_H}}>
+        <div className={`flex relative ${minW}`} style={{height:(HOUR_END-HOUR_START)*SLOT_H}}>
           {/* Heures */}
-          <div className="w-14 shrink-0 relative">
+          <div className="w-12 shrink-0 relative">
             {hours.map(h => (
-              <div key={h} className="absolute w-full text-right pr-2 text-xs text-gray-400" style={{top:(h-HOUR_START)*SLOT_H-7}}>{h}:00</div>
+              <div key={h} className="absolute w-full text-right pr-1.5 text-xs text-gray-400" style={{top:(h-HOUR_START)*SLOT_H-7}}>{h}h</div>
             ))}
           </div>
 
@@ -464,9 +570,8 @@ export default function AppointmentsPage() {
             <div
               key={di}
               className="flex-1 border-l relative cursor-cell select-none"
-              onClick={e => handleGridClick(d, di, e)}
+              onClick={e => handleGridClick(d, e)}
             >
-              {/* Lignes heure */}
               {hours.map(h => (
                 <div key={h} className="absolute w-full border-t border-gray-100" style={{top:(h-HOUR_START)*SLOT_H}}/>
               ))}
@@ -474,7 +579,6 @@ export default function AppointmentsPage() {
                 <div key={`h${h}`} className="absolute w-full border-t border-gray-50" style={{top:(h-HOUR_START)*SLOT_H+SLOT_H/2}}/>
               ))}
 
-              {/* Rendez-vous existants */}
               {apptsForDay(d).map(a => (
                 <button
                   key={a.id}
@@ -488,21 +592,6 @@ export default function AppointmentsPage() {
                   {a.service_offer?.name && <span className="block truncate opacity-75">{a.service_offer.name}</span>}
                 </button>
               ))}
-
-              {/* Carte de création inline */}
-              {creating && isSameDay(creating.day, d) && creating.colIdx === di && (
-                <div data-card="1">
-                  <NewApptCard
-                    day={creating.day}
-                    startH={creating.startH}
-                    startM={creating.startM}
-                    durationMin={30}
-                    offers={offers}
-                    onSave={() => { setCreating(null); load(); }}
-                    onClose={() => setCreating(null)}
-                  />
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -510,7 +599,7 @@ export default function AppointmentsPage() {
     );
   }
 
-  // ── Vue mois ──────────────────────────────────────────────────────────────
+  // ── Vue mois ────────────────────────────────────────────────────────────────
 
   function MonthGrid() {
     const year = anchor.getFullYear(), month = anchor.getMonth();
@@ -520,24 +609,27 @@ export default function AppointmentsPage() {
         <div className="grid grid-cols-7 border-b">
           {DAYS_FR.map(d=><div key={d} className="text-center text-xs font-semibold text-gray-500 py-2">{d}</div>)}
         </div>
-        <div className="grid grid-cols-7" style={{gridAutoRows:"minmax(80px,1fr)"}}>
+        <div className="grid grid-cols-7" style={{gridAutoRows:"minmax(64px,1fr)"}}>
           {cells.map((d,i) => {
-            const inMonth = d.getMonth()===month;
-            const today   = isSameDay(d,new Date());
+            const inMonth  = d.getMonth()===month;
+            const today    = isSameDay(d,new Date());
             const dayAppts = apptsForDay(d).filter(a=>a.status!=="cancelled");
             return (
-              <div key={i} className={`border-b border-r p-1 ${!inMonth?"bg-gray-50":""}`}>
-                <div className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full mb-1 ${today?"bg-indigo-600 text-white":inMonth?"text-gray-800":"text-gray-300"}`}>
+              <div key={i}
+                className={`border-b border-r p-1 cursor-pointer hover:bg-gray-50 ${!inMonth?"bg-gray-50":""}`}
+                onClick={() => { setAnchor(d); setView("day"); }}>
+                <div className={`text-xs sm:text-sm font-medium w-6 h-6 flex items-center justify-center rounded-full mb-0.5 ${today?"bg-indigo-600 text-white":inMonth?"text-gray-800":"text-gray-300"}`}>
                   {d.getDate()}
                 </div>
                 <div className="space-y-0.5">
-                  {dayAppts.slice(0,3).map(a=>(
-                    <button key={a.id} onClick={()=>setSelectedAppt(a)}
+                  {dayAppts.slice(0,2).map(a=>(
+                    <button key={a.id}
+                      onClick={e => { e.stopPropagation(); setSelectedAppt(a); }}
                       className="w-full text-left text-xs px-1 rounded bg-indigo-100 text-indigo-800 truncate">
                       {fmtTime(a.scheduled_at)} {a.contact?.first_name}
                     </button>
                   ))}
-                  {dayAppts.length>3 && <p className="text-xs text-gray-400 pl-1">+{dayAppts.length-3}</p>}
+                  {dayAppts.length>2 && <p className="text-xs text-gray-400 pl-1">+{dayAppts.length-2}</p>}
                 </div>
               </div>
             );
@@ -547,43 +639,55 @@ export default function AppointmentsPage() {
     );
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Barre top */}
-      <div className="bg-white border-b px-4 py-3 flex items-center gap-3 flex-wrap">
-        <button onClick={()=>router.push("/dashboard")} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors shrink-0">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          Retour
+      <div className="bg-white border-b px-3 sm:px-4 py-2 sm:py-3 flex flex-wrap items-center gap-2">
+        {/* Ligne 1 : retour + titre + boutons action */}
+        <button onClick={()=>router.push("/dashboard")}
+          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 shrink-0">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+          </svg>
+          <span className="hidden sm:inline">Retour</span>
         </button>
-        <h1 className="text-xl font-bold text-gray-900 flex-1">Rendez-vous</h1>
 
-        <div className="flex bg-gray-100 rounded-lg p-0.5 text-sm">
-          {(["day","week","month"] as View[]).map(v=>(
-            <button key={v} onClick={()=>{ setView(v); setCreating(null); }}
-              className={`px-3 py-1 rounded-md font-medium transition-colors ${view===v?"bg-white shadow text-indigo-600":"text-gray-600 hover:text-gray-800"}`}>
-              {v==="day"?"Jour":v==="week"?"Semaine":"Mois"}
+        <h1 className="text-lg sm:text-xl font-bold text-gray-900 flex-1 min-w-0">Rendez-vous</h1>
+
+        <button onClick={()=>setShowAvail(true)}
+          className="text-xs sm:text-sm px-2.5 py-1.5 border border-indigo-300 text-indigo-600 rounded-lg hover:bg-indigo-50 shrink-0">
+          ⚙ <span className="hidden sm:inline">Disponibilités</span>
+        </button>
+        <button onClick={()=>setShowBlock(true)}
+          className="text-xs sm:text-sm px-2.5 py-1.5 border border-red-300 text-red-500 rounded-lg hover:bg-red-50 shrink-0">
+          🚫 <span className="hidden sm:inline">Bloquer</span>
+        </button>
+
+        {/* Ligne 2 : vue + navigation */}
+        <div className="w-full flex items-center gap-2 flex-wrap">
+          <div className="flex bg-gray-100 rounded-lg p-0.5 text-sm">
+            {(["day","week","month"] as View[]).map(v=>(
+              <button key={v} onClick={()=>{ setView(v); setCreating(null); }}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors text-xs sm:text-sm ${view===v?"bg-white shadow text-indigo-600":"text-gray-600 hover:text-gray-800"}`}>
+                {v==="day"?"Jour":v==="week"?"Semaine":"Mois"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 text-sm flex-1 justify-center">
+            <button onClick={()=>navigate(-1)} className="p-1.5 rounded hover:bg-gray-100 text-gray-600">◀</button>
+            <span className="font-medium text-center capitalize text-xs sm:text-sm px-1 truncate max-w-[180px] sm:max-w-none">
+              {headerLabel()}
+            </span>
+            <button onClick={()=>navigate(1)} className="p-1.5 rounded hover:bg-gray-100 text-gray-600">▶</button>
+            <button onClick={()=>{ const d=new Date(); d.setHours(0,0,0,0); setAnchor(d); setCreating(null); }}
+              className="px-2 py-1 text-xs border rounded hover:bg-gray-50">
+              Auj.
             </button>
-          ))}
+          </div>
         </div>
-
-        <div className="flex items-center gap-1 text-sm">
-          <button onClick={()=>navigate(-1)} className="p-1.5 rounded hover:bg-gray-100 text-gray-600">◀</button>
-          <span className="font-medium min-w-44 text-center capitalize text-sm">{headerLabel()}</span>
-          <button onClick={()=>navigate(1)} className="p-1.5 rounded hover:bg-gray-100 text-gray-600">▶</button>
-          <button onClick={()=>{ const d=new Date(); d.setHours(0,0,0,0); setAnchor(d); setCreating(null); }}
-            className="px-2 py-1 text-xs border rounded hover:bg-gray-50 ml-1">
-            Aujourd'hui
-          </button>
-        </div>
-
-        <button onClick={()=>setShowAvail(true)} className="text-sm px-3 py-1.5 border border-indigo-300 text-indigo-600 rounded-lg hover:bg-indigo-50">
-          ⚙ Disponibilités
-        </button>
-        <button onClick={()=>setShowBlock(true)} className="text-sm px-3 py-1.5 border border-red-300 text-red-500 rounded-lg hover:bg-red-50">
-          🚫 Bloquer
-        </button>
       </div>
 
       {loading ? (
@@ -608,6 +712,17 @@ export default function AppointmentsPage() {
           blocked={blocked}
           onSave={async () => { await load(); }}
           onClose={() => setShowBlock(false)}
+        />
+      )}
+      {creating && (
+        <NewApptCard
+          day={creating.day}
+          startH={creating.startH}
+          startM={creating.startM}
+          durationMin={30}
+          offers={offers}
+          onSave={() => { setCreating(null); load(); }}
+          onClose={() => setCreating(null)}
         />
       )}
       {selectedAppt && (

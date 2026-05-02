@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, supabase } from "../../../lib/api";
@@ -24,9 +24,13 @@ const COLOR_PALETTES = [
 ];
 
 const FONT_STYLES = [
-  { key: "modern",      label: "Moderne et épuré",          hint: "Très lisible, professionnel" },
-  { key: "classic",     label: "Classique et élégant",      hint: "Traditionnel, raffiné" },
-  { key: "handwritten", label: "Manuscrit / Artisanal",     hint: "Plus humain, chaleureux" },
+  { key: "modern",      label: "Moderne et épuré",          hint: "Très lisible, professionnel",     preview: "system-ui, sans-serif" },
+  { key: "classic",     label: "Classique et élégant",      hint: "Traditionnel, raffiné",           preview: "Georgia, serif" },
+  { key: "handwritten", label: "Manuscrit / Artisanal",     hint: "Plus humain, chaleureux",         preview: "cursive" },
+  { key: "rounded",     label: "Arrondi & Accessible",      hint: "Doux, inclusif, accessible",     preview: "ui-rounded, sans-serif" },
+  { key: "bold",        label: "Gras & Impactant",          hint: "Fort, affirmé, mémorable",        preview: "Impact, sans-serif" },
+  { key: "humanist",    label: "Humaniste & Chaleureux",    hint: "Convivial, proche des gens",      preview: "Gill Sans, sans-serif" },
+  { key: "tech",        label: "Technique & Précis",        hint: "Consulting, IT, industrie",       preview: "Consolas, monospace" },
 ];
 
 const PAGES = [
@@ -160,11 +164,11 @@ const STEPS = [
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Offer = { name: string; description: string; duration_min: string; price_eur: string };
+type Offer = { name: string; description: string; duration_min: string; price_eur: string; image_url: string };
 type Value = { icon: string; title: string; description: string };
 type Testimonial = { author_name: string; author_role: string; content: string; rating: number };
 
-const EMPTY_OFFER = (): Offer => ({ name: "", description: "", duration_min: "", price_eur: "" });
+const EMPTY_OFFER = (): Offer => ({ name: "", description: "", duration_min: "", price_eur: "", image_url: "" });
 const EMPTY_VALUE = (): Value => ({ icon: "⭐", title: "", description: "" });
 const EMPTY_TESTIMONIAL = (): Testimonial => ({ author_name: "", author_role: "", content: "", rating: 5 });
 
@@ -206,8 +210,22 @@ export default function SiteBuilderPage() {
   // Step 5 — Prestations
   const [offers, setOffers] = useState<Offer[]>([EMPTY_OFFER()]);
 
+  // Step 0 — Logo URL + modales
+  const [logoUrl, setLogoUrl] = useState("");
+  const [showLogoUrlHelp, setShowLogoUrlHelp] = useState(false);
+  const [showLogoServiceModal, setShowLogoServiceModal] = useState(false);
+
+  // Step 3 — 2e téléphone (stocké dans social_links)
+  const [phone2, setPhone2] = useState("");
+
+  // Step 4 — Zones autocomplete
+  const [zoneSuggestions, setZoneSuggestions] = useState<{ idx: number; items: string[] } | null>(null);
+  const zoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Step 6 — Valeurs
   const [values, setValues] = useState<Value[]>([EMPTY_VALUE()]);
+  const [showAtoutsHelp, setShowAtoutsHelp] = useState(false);
+  const [emojiPickerIdx, setEmojiPickerIdx] = useState<number | null>(null);
 
   // Step 7 — Témoignages
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
@@ -264,6 +282,7 @@ export default function SiteBuilderPage() {
       // Style
       const style = s.site_style ?? {};
       setLogoOption(style.logo_option ?? "text_only");
+      setLogoUrl(style.logo_url ?? "");
       setPrimaryColor(style.primary_color ?? "indigo");
       setFontStyle(style.font_style ?? "modern");
       setPagesEnabled(style.pages_enabled ?? ["home", "about", "services", "contact"]);
@@ -286,6 +305,7 @@ export default function SiteBuilderPage() {
       setFacebook(s.social_links?.facebook ?? "");
       setInstagram(s.social_links?.instagram ?? "");
       setLinkedin(s.social_links?.linkedin ?? "");
+      setPhone2(s.social_links?.phone2 ?? "");
 
       // Zones
       setZones(s.coverage_zones?.length ? s.coverage_zones : [""]);
@@ -305,6 +325,7 @@ export default function SiteBuilderPage() {
               description: o.description ?? "",
               duration_min: o.duration_min?.toString() ?? "",
               price_eur: o.price_eur?.toString() ?? "",
+              image_url: o.image_url ?? "",
             }))
           : [EMPTY_OFFER()]
       );
@@ -322,6 +343,7 @@ export default function SiteBuilderPage() {
 
   const buildSiteStyle = () => ({
     logo_option: logoOption,
+    ...(logoUrl ? { logo_url: logoUrl } : {}),
     primary_color: primaryColor,
     font_style: fontStyle,
     pages_enabled: pagesEnabled,
@@ -349,7 +371,7 @@ export default function SiteBuilderPage() {
         case 3:
           await api.updateSite(siteId, {
             phone, email_contact: emailContact, address,
-            social_links: { facebook, instagram, linkedin },
+            social_links: { facebook, instagram, linkedin, ...(phone2 ? { phone2 } : {}) },
           });
           break;
         case 4:
@@ -363,6 +385,7 @@ export default function SiteBuilderPage() {
               description: o.description || undefined,
               duration_min: o.duration_min ? parseInt(o.duration_min) : undefined,
               price_eur: o.price_eur ? parseFloat(o.price_eur) : undefined,
+              image_url: o.image_url || undefined,
             })));
           break;
         case 6:
@@ -385,6 +408,12 @@ export default function SiteBuilderPage() {
 
   const next = async () => { const ok = await saveStep(); if (ok && step < STEPS.length - 1) setStep(step + 1); };
   const prev = () => setStep(step - 1);
+
+  const previewSite = async () => {
+    if (!tenantSlug) return;
+    await saveStep();
+    window.open(`/${tenantSlug}?preview=1`, "_blank");
+  };
 
   const publish = async () => {
     if (!siteId) return;
@@ -518,22 +547,80 @@ export default function SiteBuilderPage() {
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
             <h2 className="font-semibold text-gray-800">Votre logo</h2>
             {[
-              { key: "has_logo",       label: "J'en ai un",           hint: "Envoyez-le par email ou WhatsApp après la configuration" },
-              { key: "needs_creation", label: "Je n'en ai pas",       hint: "Nous créerons un logo ou utiliserons votre nom en texte" },
-              { key: "text_only",      label: "Texte simple suffit",  hint: "Votre nom s'affiche en beau typographie" },
+              { key: "has_logo",       label: "J'en ai un",           hint: "Renseignez l'URL de votre logo" },
+              { key: "needs_creation", label: "Je n'en ai pas",       hint: "Découvrez notre service de création de logo" },
+              { key: "text_only",      label: "Texte simple suffit",  hint: "Votre nom s'affiche en belle typographie" },
             ].map((opt) => (
               <label key={opt.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${logoOption === opt.key ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}>
                 <input type="radio" name="logo" value={opt.key} checked={logoOption === opt.key}
-                  onChange={() => setLogoOption(opt.key as any)} className="mt-1 accent-indigo-600" />
+                  onChange={() => {
+                    setLogoOption(opt.key as any);
+                    if (opt.key === "needs_creation") setShowLogoServiceModal(true);
+                  }} className="mt-1 accent-indigo-600" />
                 <div>
                   <p className="font-medium text-sm text-gray-800">{opt.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{opt.hint}</p>
                 </div>
               </label>
             ))}
+
+            {/* Champ URL logo */}
             {logoOption === "has_logo" && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
-                📧 Envoyez votre logo à <strong>votre contact</strong> par email ou WhatsApp après avoir terminé ce formulaire.
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="lbl mb-0">URL de votre logo</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowLogoUrlHelp((v) => !v)}
+                    className="w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 border transition-colors border-gray-300 text-gray-400 hover:border-indigo-400 hover:text-indigo-500"
+                  >?</button>
+                </div>
+                {showLogoUrlHelp && (
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm space-y-2">
+                    <p className="font-semibold text-indigo-800">Comment mettre mon logo en ligne ?</p>
+                    <ol className="list-decimal list-inside space-y-1 text-indigo-700 text-xs">
+                      <li>Uploadez votre logo sur <strong>Google Drive</strong>, <strong>Dropbox</strong> ou <strong>ImgBB</strong> (gratuit)</li>
+                      <li>Obtenez le lien direct de partage (doit se terminer par .png, .jpg ou .svg)</li>
+                      <li>Collez ce lien dans le champ ci-dessous</li>
+                    </ol>
+                    <p className="text-xs text-indigo-500">Astuce : ImgBB.com est le plus simple — glissez votre image et copiez le "Direct link".</p>
+                  </div>
+                )}
+                <input
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                  className="inp"
+                  placeholder="https://i.ibb.co/mon-logo.png"
+                />
+                {logoUrl && (
+                  <img src={logoUrl} alt="Aperçu logo" className="h-12 object-contain rounded border border-gray-200 p-1" onError={(e) => (e.currentTarget.style.display = "none")} />
+                )}
+              </div>
+            )}
+
+            {/* Modal service création logo */}
+            {showLogoServiceModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowLogoServiceModal(false)}>
+                <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">Création de logo</h3>
+                    <button onClick={() => setShowLogoServiceModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+                  </div>
+                  <div className="text-center py-2">
+                    <div className="text-5xl mb-3">🎨</div>
+                    <p className="text-sm text-gray-600">Pas de logo ? Pas de problème. Notre équipe peut vous créer un logo professionnel adapté à votre activité.</p>
+                  </div>
+                  <div className="bg-indigo-50 rounded-xl p-4 space-y-1 text-sm text-indigo-700">
+                    <p>✅ Logo vectoriel (PNG + SVG)</p>
+                    <p>✅ 3 propositions de design</p>
+                    <p>✅ Retouches illimitées</p>
+                    <p>✅ Livré sous 5 jours ouvrés</p>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center">Contactez-nous après avoir complété ce formulaire pour recevoir un devis.</p>
+                  <button onClick={() => setShowLogoServiceModal(false)} className="w-full bg-indigo-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-indigo-700 transition-colors">
+                    Compris, je continue
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -563,11 +650,10 @@ export default function SiteBuilderPage() {
               <label key={f.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${fontStyle === f.key ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}>
                 <input type="radio" name="font" value={f.key} checked={fontStyle === f.key}
                   onChange={() => setFontStyle(f.key)} className="mt-1 accent-indigo-600" />
-                <div>
-                  <p className={`font-medium text-sm text-gray-800 ${f.key === "classic" ? "font-serif" : f.key === "handwritten" ? "italic" : ""}`}>
-                    {f.label}
-                  </p>
+                <div className="flex-1">
+                  <p className="font-medium text-sm text-gray-800">{f.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{f.hint}</p>
+                  <p className="text-base text-gray-700 mt-1" style={{ fontFamily: f.preview }}>Aa — Bonjour, bienvenue</p>
                 </div>
               </label>
             ))}
@@ -723,8 +809,12 @@ export default function SiteBuilderPage() {
         <div className="bg-white rounded-xl shadow p-6 space-y-4">
           <h2 className="font-semibold text-gray-800">Coordonnées & réseaux sociaux</h2>
           <div>
-            <label className="lbl">Téléphone</label>
+            <label className="lbl">Téléphone principal</label>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} className="inp" placeholder="+32 (0)466 42 23 77" />
+          </div>
+          <div>
+            <label className="lbl">Téléphone secondaire <span className="text-gray-400 font-normal">(optionnel)</span></label>
+            <input value={phone2} onChange={(e) => setPhone2(e.target.value)} className="inp" placeholder="+32 (0)2 123 45 67" />
           </div>
           <div>
             <label className="lbl">Email de contact</label>
@@ -758,10 +848,50 @@ export default function SiteBuilderPage() {
           <h2 className="font-semibold text-gray-800">Zones d'intervention</h2>
           <p className="text-sm text-gray-500">Listez les villes, communes ou régions que vous couvrez.</p>
           {zones.map((z, i) => (
-            <div key={i} className="flex gap-2">
-              <input value={z}
-                onChange={(e) => { const v = e.target.value; setZones((prev) => prev.map((z2, idx) => idx === i ? v : z2)); }}
-                className="inp flex-1" placeholder="Ex : Bruxelles, Hal, Tubize, Brabant wallon…" />
+            <div key={i} className="relative flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  value={z}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setZones((prev) => prev.map((z2, idx) => idx === i ? v : z2));
+                    if (zoneTimerRef.current) clearTimeout(zoneTimerRef.current);
+                    if (v.length < 2) { setZoneSuggestions(null); return; }
+                    zoneTimerRef.current = setTimeout(async () => {
+                      try {
+                        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(v)}&format=json&limit=6&addressdetails=1`);
+                        const data = await res.json();
+                        const items: string[] = [];
+                        for (const d of data) {
+                          const a = d.address ?? {};
+                          const name = a.city || a.town || a.village || a.county || a.state || d.display_name.split(",")[0];
+                          if (name && !items.includes(name)) items.push(name);
+                        }
+                        setZoneSuggestions({ idx: i, items });
+                      } catch {}
+                    }, 350);
+                  }}
+                  onBlur={() => setTimeout(() => setZoneSuggestions(null), 150)}
+                  className="inp w-full"
+                  placeholder="Ex : Bruxelles, Hal, Brabant wallon…"
+                />
+                {zoneSuggestions?.idx === i && zoneSuggestions.items.length > 0 && (
+                  <ul className="absolute z-40 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden text-sm">
+                    {zoneSuggestions.items.map((s) => (
+                      <li key={s}>
+                        <button
+                          type="button"
+                          className="w-full text-left px-4 py-2 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                          onMouseDown={() => {
+                            setZones((prev) => prev.map((z2, idx) => idx === i ? s : z2));
+                            setZoneSuggestions(null);
+                          }}
+                        >{s}</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               {zones.length > 1 && (
                 <button onClick={() => listRemove(setZones, i)} className="text-red-400 hover:text-red-600 px-2">✕</button>
               )}
@@ -808,6 +938,15 @@ export default function SiteBuilderPage() {
                     className="inp" placeholder="50" />
                 </div>
               </div>
+              <div>
+                <label className="lbl">Image de la prestation <span className="text-gray-400 font-normal">(URL — optionnel)</span></label>
+                <input value={o.image_url} onChange={(e) => listUpdate(setOffers, i, { image_url: e.target.value })}
+                  className="inp" placeholder="https://i.ibb.co/ma-photo.jpg" />
+                {o.image_url && (
+                  <img src={o.image_url} alt="aperçu" className="mt-2 h-20 w-full object-cover rounded-lg border border-gray-200"
+                    onError={(e) => (e.currentTarget.style.display = "none")} />
+                )}
+              </div>
             </div>
           ))}
           <button onClick={() => listAdd(setOffers, EMPTY_OFFER)} className="text-sm text-indigo-600 hover:underline">
@@ -821,7 +960,51 @@ export default function SiteBuilderPage() {
       ────────────────────────────────────────────────────────────────────── */}
       {step === 6 && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">Ces atouts rassureront vos visiteurs et se retrouveront sur votre site. Maximum 6.</p>
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm text-gray-500">Ces atouts rassureront vos visiteurs et se retrouveront sur votre site. Maximum 6.</p>
+            <button
+              onClick={() => setShowAtoutsHelp(true)}
+              className="shrink-0 w-6 h-6 rounded-full border border-gray-300 text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors text-xs font-bold leading-none flex items-center justify-center"
+              title="Qu'est-ce qu'un atout ?"
+            >
+              ?
+            </button>
+          </div>
+
+          {showAtoutsHelp && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowAtoutsHelp(false)}>
+              <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900 text-base">C'est quoi un "Atout" ?</h3>
+                  <button onClick={() => setShowAtoutsHelp(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Un atout est une raison concrète pour laquelle un client devrait vous choisir plutôt qu'un autre. C'est ce qui vous différencie : votre expérience, votre méthode, votre disponibilité…
+                </p>
+                <div className="bg-indigo-50 rounded-xl p-4 space-y-3">
+                  <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Exemples</p>
+                  <div className="space-y-2">
+                    {[
+                      { icon: "🏅", title: "10 ans d'expérience", desc: "Une expertise acquise auprès de centaines de patients en cabinet libéral." },
+                      { icon: "📅", title: "Disponible 7j/7", desc: "Je m'adapte à votre emploi du temps, y compris le week-end." },
+                      { icon: "🏠", title: "Déplacements à domicile", desc: "Je me déplace chez vous dans un rayon de 20 km sans frais supplémentaires." },
+                    ].map((ex) => (
+                      <div key={ex.title} className="flex gap-3 items-start">
+                        <span className="text-xl">{ex.icon}</span>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{ex.title}</p>
+                          <p className="text-xs text-gray-500">{ex.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={() => setShowAtoutsHelp(false)} className="w-full bg-indigo-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-indigo-700 transition-colors">
+                  J'ai compris
+                </button>
+              </div>
+            </div>
+          )}
           {values.map((v, i) => (
             <div key={i} className="bg-white rounded-xl shadow p-5 space-y-3">
               <div className="flex justify-between items-center">
@@ -831,8 +1014,28 @@ export default function SiteBuilderPage() {
                 )}
               </div>
               <div className="flex gap-3">
-                <input value={v.icon} onChange={(e) => listUpdate(setValues, i, { icon: e.target.value })}
-                  className="inp w-16 text-center text-xl" placeholder="⭐" />
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setEmojiPickerIdx(emojiPickerIdx === i ? null : i)}
+                    className="inp w-14 text-center text-xl cursor-pointer hover:border-indigo-400 transition-colors"
+                  >{v.icon || "⭐"}</button>
+                  {emojiPickerIdx === i && (
+                    <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-2xl shadow-xl p-3 w-64">
+                      <p className="text-xs text-gray-400 mb-2 font-medium">Choisissez une icône</p>
+                      <div className="grid grid-cols-8 gap-1">
+                        {["⭐","🏅","🎯","💪","🌟","✅","🔑","💡","🚀","🤝","📋","🎓","🏆","💎","🔒","🌍","📱","💻","🕐","🏠","🚗","✈️","❤️","🌿","🛡️","📞","🗓️","🔧","📊","🎨","🏥","🌸","👑","💰","🔍","📍","🤗","😊","🎁","⚡","🌺","🦷","💊","🩺","🧘","🍃","🧡","🫶","🎪"].map((em) => (
+                          <button
+                            key={em}
+                            type="button"
+                            onClick={() => { listUpdate(setValues, i, { icon: em }); setEmojiPickerIdx(null); }}
+                            className={`text-xl p-1 rounded-lg hover:bg-indigo-50 transition-colors ${v.icon === em ? "bg-indigo-100" : ""}`}
+                          >{em}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <input value={v.title} onChange={(e) => listUpdate(setValues, i, { title: e.target.value })}
                   className="inp flex-1" placeholder="Titre de l'atout *" />
               </div>
@@ -948,6 +1151,12 @@ export default function SiteBuilderPage() {
           <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 space-y-3">
             <h2 className="font-semibold text-indigo-900">Tout est prêt ?</h2>
             <p className="text-sm text-indigo-700">Votre site sera visible publiquement. Vous pourrez toujours revenir modifier ces réglages.</p>
+            {tenantSlug && (
+              <button onClick={previewSite} disabled={saving}
+                className="w-full border border-indigo-400 text-indigo-700 bg-white font-semibold py-3 rounded-xl hover:bg-indigo-50 disabled:opacity-50 transition-colors">
+                {saving ? "Sauvegarde…" : "👁 Prévisualiser mon site"}
+              </button>
+            )}
             <button onClick={publish} disabled={saving}
               className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">
               {saving ? "Sauvegarde…" : "Sauvegarder & Publier mon site"}

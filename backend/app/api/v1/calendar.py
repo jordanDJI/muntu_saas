@@ -107,6 +107,7 @@ async def create_calendar_appointment(body: CalendarApptIn, tenant_id: str = Dep
             "last_name": body.last_name or "",
             "email": body.email or "",
             "phone": body.phone,
+            "source": body.source,
         }).execute().data[0]
         contact_id = new_c["id"]
 

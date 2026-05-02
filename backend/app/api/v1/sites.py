@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from uuid import UUID
+from datetime import datetime, timezone
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.site import SiteCreateIn, SiteUpdateIn, SiteOut, ServiceOfferIn, TestimonialIn
@@ -57,7 +58,22 @@ async def update_site(site_id: UUID, body: SiteUpdateIn, tenant_id: str = Depend
 @router.post("/{site_id}/publish")
 async def publish_site(site_id: UUID, tenant_id: str = Depends(get_current_tenant)):
     sb = get_supabase()
-    result = sb.table("site").update({"status": "published"}).eq("id", str(site_id)).eq("tenant_id", tenant_id).execute()
+    site_res = sb.table("site").select("*").eq("id", str(site_id)).eq("tenant_id", tenant_id).execute()
+    if not site_res.data:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+
+    site = site_res.data[0]
+    offers = sb.table("service_offer").select("*").eq("site_id", str(site_id)).execute().data
+    testimonials = sb.table("testimonial").select("*").eq("site_id", str(site_id)).execute().data
+
+    snapshot = {
+        **{k: v for k, v in site.items() if k != "published_snapshot"},
+        "service_offer": offers,
+        "testimonial": testimonials,
+        "published_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    result = sb.table("site").update({"status": "published", "published_snapshot": snapshot}).eq("id", str(site_id)).eq("tenant_id", tenant_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Site introuvable")
     return {"status": "published"}
@@ -93,6 +109,8 @@ def _offer_to_db(site_id: str, offer: ServiceOfferIn) -> dict:
         row["duration_min"] = offer.duration_min
     if offer.price_eur is not None:
         row["price_eur"] = offer.price_eur
+    if offer.image_url is not None:
+        row["image_url"] = offer.image_url
     return row
 
 

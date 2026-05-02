@@ -1,0 +1,1 @@
+ALTER TABLE service_offer ADD COLUMN IF NOT EXISTS image_url TEXT;

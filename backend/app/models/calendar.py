@@ -44,6 +44,7 @@ class CalendarApptIn(BaseModel):
     last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    source: Optional[str] = None
     service_offer_id: Optional[UUID] = None
     scheduled_at: datetime
     end_at: datetime

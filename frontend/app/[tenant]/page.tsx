@@ -27,9 +27,13 @@ const COLOR_HEX: Record<string, { hero: string; accent: string; light: string }>
 };
 
 const FONT_FAMILY: Record<string, string> = {
-  modern: "system-ui, -apple-system, sans-serif",
-  classic: "Georgia, 'Times New Roman', serif",
-  handwritten: "'Brush Script MT', 'Segoe Script', cursive",
+  modern:     "system-ui, -apple-system, sans-serif",
+  classic:    "Georgia, 'Times New Roman', serif",
+  handwritten:"'Brush Script MT', 'Segoe Script', cursive",
+  rounded:    "ui-rounded, 'Nunito', 'Varela Round', sans-serif",
+  bold:       "Impact, 'Arial Black', sans-serif",
+  humanist:   "'Gill Sans', 'Trebuchet MS', sans-serif",
+  tech:       "Consolas, 'Courier New', monospace",
 };
 
 const supabaseAdmin = createClient(
@@ -37,7 +41,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-async function getSiteData(slug: string) {
+async function getSiteData(slug: string, preview = false) {
   const { data: tenant } = await supabaseAdmin
     .from("tenant")
     .select("id, name")
@@ -46,19 +50,37 @@ async function getSiteData(slug: string) {
 
   if (!tenant) return null;
 
+  if (preview) {
+    const { data: site } = await supabaseAdmin
+      .from("site")
+      .select("*, service_offer(*), service_area(*), testimonial(*)")
+      .eq("tenant_id", tenant.id)
+      .single();
+    return site ? { ...site, tenant } : null;
+  }
+
   const { data: site } = await supabaseAdmin
     .from("site")
-    .select("*, service_offer(*), service_area(*), testimonial(*)")
+    .select("published_snapshot")
     .eq("tenant_id", tenant.id)
     .eq("status", "published")
     .single();
 
-  return site ? { ...site, tenant } : null;
+  if (!site?.published_snapshot) return null;
+  return { ...site.published_snapshot, tenant };
 }
 
-export default async function TenantSitePage({ params }: { params: Promise<{ tenant: string }> }) {
+export default async function TenantSitePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ tenant: string }>;
+  searchParams?: Promise<{ preview?: string }>;
+}) {
   const { tenant: tenantSlug } = await params;
-  const site = await getSiteData(tenantSlug);
+  const sp = searchParams ? await searchParams : {};
+  const isPreview = sp?.preview === "1";
+  const site = await getSiteData(tenantSlug, isPreview);
 
   if (!site) {
     return (
@@ -67,6 +89,12 @@ export default async function TenantSitePage({ params }: { params: Promise<{ ten
       </main>
     );
   }
+
+  const previewBanner = isPreview ? (
+    <div style={{ position: "sticky", top: 0, zIndex: 9999, background: "#f59e0b", color: "#1c1917", padding: "0.5rem 1rem", textAlign: "center", fontSize: "0.875rem", fontWeight: 600 }}>
+      👁 Mode Prévisualisation — ce site n'est pas encore publié
+    </div>
+  ) : null;
 
   const social = site.social_links ?? {};
   const zones: string[] = site.coverage_zones?.length
@@ -88,6 +116,7 @@ export default async function TenantSitePage({ params }: { params: Promise<{ ten
 
   return (
     <main className="min-h-screen bg-white text-gray-900" style={{ fontFamily: font }}>
+      {previewBanner}
 
       {/* ── Tracking scripts ──────────────────────────────────────────────── */}
       {tracking.gtm_id && (
@@ -130,7 +159,7 @@ export default async function TenantSitePage({ params }: { params: Promise<{ ten
       )}
 
       {/* Nav */}
-      <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-gray-100">
+      <nav className="sticky z-40 bg-white/90 backdrop-blur border-b border-gray-100" style={{ top: isPreview ? "40px" : "0" }}>
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <span className="font-bold text-lg" style={{ color: colors.hero }}>{site.title}</span>
           <div className="hidden sm:flex items-center gap-6 text-sm font-medium text-gray-600">
@@ -200,25 +229,30 @@ export default async function TenantSitePage({ params }: { params: Promise<{ ten
             <h2 className="text-2xl font-bold mb-8 text-center">Nos prestations</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {site.service_offer.map((offer: any) => (
-                <div key={offer.id} className="bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                  <h3 className="font-semibold text-lg">{offer.name}</h3>
-                  {offer.description && (
-                    <p className="text-gray-500 mt-2 text-sm leading-relaxed">{offer.description}</p>
+                <div key={offer.id} className="bg-white border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  {offer.image_url && (
+                    <img src={offer.image_url} alt={offer.name} className="w-full h-36 object-cover" />
                   )}
-                  {((offer.duration_min ?? offer.duration_minutes) || (offer.price_eur ?? offer.price_from)) && (
-                    <div className="flex gap-3 mt-4 text-sm flex-wrap">
-                      {(offer.duration_min ?? offer.duration_minutes) && (
-                        <span className="px-3 py-1 rounded-full text-white" style={{ backgroundColor: colors.accent }}>
-                          {offer.duration_min ?? offer.duration_minutes} min
-                        </span>
-                      )}
-                      {(offer.price_eur ?? offer.price_from) && (
-                        <span className="px-3 py-1 rounded-full font-medium" style={{ backgroundColor: colors.light, color: colors.hero }}>
-                          {offer.price_eur ?? offer.price_from} €
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  <div className="p-5">
+                    <h3 className="font-semibold text-lg">{offer.name}</h3>
+                    {offer.description && (
+                      <p className="text-gray-500 mt-2 text-sm leading-relaxed">{offer.description}</p>
+                    )}
+                    {((offer.duration_min ?? offer.duration_minutes) || (offer.price_eur ?? offer.price_from)) && (
+                      <div className="flex gap-3 mt-4 text-sm flex-wrap">
+                        {(offer.duration_min ?? offer.duration_minutes) && (
+                          <span className="px-3 py-1 rounded-full text-white" style={{ backgroundColor: colors.accent }}>
+                            {offer.duration_min ?? offer.duration_minutes} min
+                          </span>
+                        )}
+                        {(offer.price_eur ?? offer.price_from) && (
+                          <span className="px-3 py-1 rounded-full font-medium" style={{ backgroundColor: colors.light, color: colors.hero }}>
+                            {offer.price_eur ?? offer.price_from} €
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
