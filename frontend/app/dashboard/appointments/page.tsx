@@ -438,8 +438,17 @@ function BlockPanel({ blocked, onSave, onClose }: {
 
 // ── ApptModal ─────────────────────────────────────────────────────────────────
 
-function ApptModal({ appt, onCancel, onClose }: {
-  appt: Appointment; onCancel: (id: string) => void; onClose: () => void;
+const STATUS_LABELS_APPT: Record<string, string> = {
+  pending:   "En attente",
+  confirmed: "Confirmé",
+  cancelled: "Annulé",
+};
+
+function ApptModal({ appt, onConfirm, onCancel, onClose }: {
+  appt: Appointment;
+  onConfirm: (id: string) => void;
+  onCancel: (id: string) => void;
+  onClose: () => void;
 }) {
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -454,9 +463,23 @@ function ApptModal({ appt, onCancel, onClose }: {
           <p>{new Date(appt.scheduled_at).toLocaleString("fr-BE",{dateStyle:"full",timeStyle:"short"})}</p>
           <p className="text-gray-400 text-xs mt-1">→ {fmtTime(appt.end_at)}</p>
         </div>
-        <span className={`inline-block text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLOR[appt.status]??"bg-gray-100"}`}>{appt.status}</span>
-        {appt.status==="confirmed" && (
-          <button onClick={()=>onCancel(appt.id)}
+        <span className={`inline-block text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLOR[appt.status]??"bg-gray-100"}`}>
+          {STATUS_LABELS_APPT[appt.status] ?? appt.status}
+        </span>
+        {appt.status === "pending" && (
+          <div className="flex gap-2">
+            <button onClick={() => onConfirm(appt.id)}
+              className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-700">
+              Confirmer
+            </button>
+            <button onClick={() => onCancel(appt.id)}
+              className="flex-1 border border-red-300 text-red-500 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
+              Refuser
+            </button>
+          </div>
+        )}
+        {appt.status === "confirmed" && (
+          <button onClick={() => onCancel(appt.id)}
             className="w-full border border-red-300 text-red-500 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
             Annuler ce rendez-vous
           </button>
@@ -516,14 +539,19 @@ export default function AppointmentsPage() {
     return anchor.toLocaleDateString("fr-BE",{weekday:"long",day:"numeric",month:"long"});
   };
 
+  const confirmAppt = async (id: string) => {
+    await api.confirmAppointment(id);
+    setSelectedAppt(null); load();
+  };
+
   const cancelAppt = async (id: string) => {
-    await api.updateAppointment(id, {status:"cancelled"});
+    await api.cancelAppointment(id);
     setSelectedAppt(null); load();
   };
 
   const weekDays    = Array.from({length:7}, (_,i) => addDays(startOfWeek(anchor), i));
   const hours       = Array.from({length:HOUR_END-HOUR_START}, (_,i) => HOUR_START+i);
-  const apptsForDay = (d: Date) => appointments.filter(a => isSameDay(new Date(a.scheduled_at), d));
+  const apptsForDay = (d: Date) => appointments.filter(a => a.status !== "cancelled" && isSameDay(new Date(a.scheduled_at), d));
 
   const handleGridClick = (day: Date, e: React.MouseEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("[data-appt]")) return;
@@ -690,6 +718,39 @@ export default function AppointmentsPage() {
         </div>
       </div>
 
+      {/* Bannière RDVs en attente */}
+      {!loading && appointments.filter(a => a.status === "pending").length > 0 && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 space-y-1.5 shrink-0">
+          <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+            {appointments.filter(a => a.status === "pending").length} rendez-vous en attente de confirmation
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {appointments.filter(a => a.status === "pending").map(a => (
+              <div key={a.id} className="flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-xs shadow-sm">
+                <span className="font-medium text-gray-800">
+                  {a.contact?.first_name} {a.contact?.last_name}
+                </span>
+                <span className="text-gray-400">
+                  {new Date(a.scheduled_at).toLocaleString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                </span>
+                <button
+                  onClick={() => confirmAppt(a.id)}
+                  className="bg-green-600 text-white rounded px-2 py-0.5 hover:bg-green-700 font-medium"
+                >
+                  ✓
+                </button>
+                <button
+                  onClick={() => cancelAppt(a.id)}
+                  className="text-red-400 hover:text-red-600 font-medium"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Chargement…</div>
       ) : (
@@ -726,7 +787,7 @@ export default function AppointmentsPage() {
         />
       )}
       {selectedAppt && (
-        <ApptModal appt={selectedAppt} onCancel={cancelAppt} onClose={()=>setSelectedAppt(null)}/>
+        <ApptModal appt={selectedAppt} onConfirm={confirmAppt} onCancel={cancelAppt} onClose={()=>setSelectedAppt(null)}/>
       )}
     </div>
   );

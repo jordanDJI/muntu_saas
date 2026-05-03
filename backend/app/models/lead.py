@@ -20,6 +20,7 @@ class LeadUpdateIn(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
     pipeline_stage_id: Optional[UUID] = None
+    internal_note: Optional[str] = None
 
 
 class LeadOut(BaseModel):
@@ -30,5 +31,7 @@ class LeadOut(BaseModel):
     audience_type: str
     request_type: str
     source: str
+    notes: Optional[str] = None
+    internal_note: Optional[str] = None
     created_at: datetime
     contact: Optional[dict] = None

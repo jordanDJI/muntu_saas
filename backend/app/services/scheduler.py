@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime, timedelta, timezone
 from app.core.supabase import get_supabase_admin
@@ -11,38 +10,49 @@ scheduler = AsyncIOScheduler(timezone="Europe/Brussels")
 logger = logging.getLogger(__name__)
 
 
-# ── Rappels de rendez-vous (job existant) ─────────────────────────────────────
+# ── Rappels de rendez-vous 24h avant ─────────────────────────────────────────
 
 async def send_appointment_reminders() -> None:
+    """
+    Envoie les rappels 24h avant les RDV confirmés.
+    Utilise reminder_sent_at pour éviter les doublons si le job tourne plusieurs fois.
+    """
     supabase = get_supabase_admin()
-    tomorrow_start = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    tomorrow_end = tomorrow_start + timedelta(days=1)
+    now = datetime.now(timezone.utc)
+    window_start = (now + timedelta(hours=23)).isoformat()
+    window_end = (now + timedelta(hours=25)).isoformat()
 
     result = (
         supabase.table("appointment")
         .select("*, contact(first_name, last_name, email), calendar(tenant(name))")
         .eq("status", "confirmed")
-        .gte("scheduled_at", tomorrow_start.isoformat())
-        .lt("scheduled_at", tomorrow_end.isoformat())
+        .is_("reminder_sent_at", "null")
+        .gte("scheduled_at", window_start)
+        .lte("scheduled_at", window_end)
         .execute()
     )
 
     for appt in result.data or []:
-        contact = appt.get("contact", {})
-        if contact.get("email"):
-            tenant_name = appt.get("calendar", {}).get("tenant", {}).get("name", "")
-            try:
-                await asyncio.to_thread(
-                    send_appointment_reminder,
-                    contact_email=contact["email"],
-                    contact_name=f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip(),
-                    appointment=appt,
-                    tenant_name=tenant_name,
-                )
-            except Exception as exc:
-                logger.error("Reminder email failed for appt %s: %s", appt.get("id"), exc)
+        contact = appt.get("contact") or {}
+        email = contact.get("email")
+        if not email:
+            continue
+
+        tenant_name = (appt.get("calendar") or {}).get("tenant", {}).get("name", "")
+        try:
+            await asyncio.to_thread(
+                send_appointment_reminder,
+                contact_email=email,
+                contact_name=f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip(),
+                appointment=appt,
+                tenant_name=tenant_name,
+            )
+            supabase.table("appointment").update(
+                {"reminder_sent_at": now.isoformat()}
+            ).eq("id", appt["id"]).execute()
+            logger.info("Reminder sent for appointment %s", appt["id"])
+        except Exception as exc:
+            logger.error("Reminder email failed for appt %s: %s", appt.get("id"), exc)
 
 
 # ── Worker de synthèse — Agent 4 ──────────────────────────────────────────────
@@ -87,7 +97,6 @@ async def run_synthesis_worker() -> None:
         else:
             period_start = now - timedelta(minutes=schedule_min)
 
-        # Récupère les conversations non encore synthétisées sur la période
         convs_res = (
             sb.table("conversation")
             .select("id, started_at, message(sender_type, content, sent_at)")
@@ -132,13 +141,14 @@ async def run_synthesis_worker() -> None:
 # ── Démarrage / arrêt ─────────────────────────────────────────────────────────
 
 def start_scheduler() -> None:
+    # Rappels 24h : vérifie toutes les heures (fenêtre 23h-25h pour absorber les décalages)
     scheduler.add_job(
         send_appointment_reminders,
-        CronTrigger(hour=9, minute=0),
+        IntervalTrigger(hours=1),
         id="appointment_reminders",
         replace_existing=True,
     )
-    # Worker de synthèse : vérifie toutes les 30 min si un tenant doit être synthétisé
+    # Worker de synthèse : vérifie toutes les 30 min
     scheduler.add_job(
         run_synthesis_worker,
         IntervalTrigger(minutes=30),

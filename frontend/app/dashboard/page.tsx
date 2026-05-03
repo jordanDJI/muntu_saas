@@ -19,8 +19,13 @@ export default function DashboardPage() {
     api.getAppointments().then(setAppointments).catch(console.error);
   }, []);
 
+  const now = new Date();
+  const upcomingAppts = appointments
+    .filter((a) => a.status !== "cancelled" && new Date(a.scheduled_at) >= now)
+    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+
   const newLeads = leads.filter((l) => l.status === "new").length;
-  const confirmedAppts = appointments.filter((a) => a.status === "confirmed").length;
+  const confirmedAppts = upcomingAppts.filter((a) => a.status === "confirmed").length;
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-8">
@@ -49,8 +54,8 @@ export default function DashboardPage() {
           <h2 className="font-semibold text-lg">Dernières demandes</h2>
           <Link href="/dashboard/leads" className="text-sm text-indigo-600 hover:underline">Voir tout</Link>
         </div>
-        <ul className="divide-y">
-          {leads.slice(0, 5).map((lead) => (
+        <ul className="divide-y max-h-[240px] overflow-y-auto">
+          {leads.map((lead) => (
             <li key={lead.id} className="py-3 flex justify-between items-center">
               <span className="font-medium">
                 {lead.contact?.first_name} {lead.contact?.last_name}
@@ -70,8 +75,8 @@ export default function DashboardPage() {
           <h2 className="font-semibold text-lg">Prochains rendez-vous</h2>
           <Link href="/dashboard/appointments" className="text-sm text-indigo-600 hover:underline">Voir tout</Link>
         </div>
-        <ul className="divide-y">
-          {appointments.slice(0, 5).map((appt) => (
+        <ul className="divide-y max-h-[240px] overflow-y-auto">
+          {upcomingAppts.map((appt) => (
             <li key={appt.id} className="py-3 flex justify-between items-center">
               <span className="font-medium">
                 {appt.contact?.first_name} {appt.contact?.last_name}
@@ -81,7 +86,7 @@ export default function DashboardPage() {
               </span>
             </li>
           ))}
-          {appointments.length === 0 && <li className="py-3 text-gray-400 text-sm">Aucun rendez-vous</li>}
+          {upcomingAppts.length === 0 && <li className="py-3 text-gray-400 text-sm">Aucun rendez-vous à venir</li>}
         </ul>
       </div>
 

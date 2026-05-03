@@ -25,6 +25,53 @@ from app.services.ocr import extract_summary
 router = APIRouter(prefix="/agents", tags=["agents"])
 logger = logging.getLogger(__name__)
 
+
+# ── Setup Telegram webhook ────────────────────────────────────────────────────
+
+@router.get("/telegram/info")
+async def get_telegram_bot_info(tenant_id: str = Depends(get_current_tenant)):
+    """
+    Retourne le username du bot Telegram configuré pour ce tenant.
+    Utilisé par le dashboard pour construire les liens d'invitation et d'activation.
+    """
+    from app.services.telegram import get_bot_info
+
+    sb = get_supabase_admin()
+    cfg = _require_config(sb, tenant_id, "support_client")
+    bot_token = cfg.get("telegram_bot_token", "")
+    if not bot_token:
+        raise HTTPException(status_code=404, detail="Aucun bot token Telegram configuré")
+
+    info = get_bot_info(bot_token)
+    username = info.get("username", "")
+    activate_url = (
+        f"https://t.me/{username}?start=notify_{tenant_id}" if username else ""
+    )
+    return {"username": username, "activate_url": activate_url}
+
+
+@router.post("/telegram/setup")
+async def setup_telegram_webhook(tenant_id: str = Depends(get_current_tenant)):
+    """
+    Enregistre le webhook Telegram pour le bot configuré sur ce tenant.
+    Le token est lu depuis assistant_tenant (qui le synchronise vers support_client).
+    """
+    from app.services.telegram import register_webhook, get_bot_info
+
+    sb = get_supabase_admin()
+    cfg = _require_config(sb, tenant_id, "support_client")
+    bot_token = cfg.get("telegram_bot_token", "")
+    if not bot_token:
+        raise HTTPException(status_code=400, detail="Aucun bot token Telegram configuré")
+
+    webhook_url = f"{settings.app_url}/api/v1/webhook/telegram/{bot_token}"
+    ok = register_webhook(bot_token, webhook_url)
+    if not ok:
+        raise HTTPException(status_code=502, detail="Échec de l'enregistrement du webhook Telegram")
+
+    info = get_bot_info(bot_token)
+    return {"status": "ok", "webhook_url": webhook_url, "bot_username": info.get("username", "")}
+
 _AGENT_TYPES = {"vitrine", "support_client", "assistant_tenant"}
 
 
@@ -71,6 +118,16 @@ async def list_agent_configs(tenant_id: str = Depends(get_current_tenant)):
         created = sb.table("agent_config").insert(new_rows).execute()
         configs = configs + (created.data or [])
 
+    # Migration : si le token Telegram est dans support_client mais pas dans assistant_tenant,
+    # le copier automatiquement (avant le déplacement du champ vers Agent 3 dans l'UI)
+    sc = next((c for c in configs if c["agent_type"] == "support_client"), None)
+    at = next((c for c in configs if c["agent_type"] == "assistant_tenant"), None)
+    if sc and at and sc.get("telegram_bot_token") and not at.get("telegram_bot_token"):
+        sb.table("agent_config").update({"telegram_bot_token": sc["telegram_bot_token"]}).eq(
+            "tenant_id", tenant_id
+        ).eq("agent_type", "assistant_tenant").execute()
+        at["telegram_bot_token"] = sc["telegram_bot_token"]
+
     return configs
 
 
@@ -103,6 +160,15 @@ async def update_agent_config(
         .eq("agent_type", agent_type)
         .execute()
     )
+
+    # Le bot Telegram est configuré dans l'Agent 3 (assistant_tenant) mais utilisé
+    # aussi par l'Agent 2 (support_client). On synchronise le token dans les deux sens.
+    if agent_type == "assistant_tenant" and "telegram_bot_token" in patch:
+        sb.table("agent_config").update({
+            "telegram_bot_token": patch["telegram_bot_token"],
+            "updated_at": patch["updated_at"],
+        }).eq("tenant_id", tenant_id).eq("agent_type", "support_client").execute()
+
     return res.data[0]
 
 

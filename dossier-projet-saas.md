@@ -1,9 +1,9 @@
 # Dossier Projet — SaaS de gestion de présence digitale pour indépendants et structures locales
 
-**Version :** 2.4 — Mise à jour complète  
+**Version :** 2.6 — Mise à jour Mai 2026  
 **Date :** Mai 2026  
 **Auteur :** Jordan (porteur du projet)  
-**Statut :** En développement actif — MVP déployé, V1 livré, V2 en cours (agents IA)
+**Statut :** En développement actif — MVP déployé, V1 livré, V2 avancé (agents IA + équipe)
 
 ---
 
@@ -87,12 +87,12 @@ L'indépendant configure son site via un **wizard guidé en 9 étapes** accessib
 
 | Étape | Contenu |
 |---|---|
-| 1. Votre image & photos | Logo (a / n'a pas / texte simple), palette de couleurs (6 choix), style de police (moderne / classique / manuscrit), option photos (stock / propres). Si "propres photos" : champs URL pour 4 zones (héro, à propos, services, contact) avec guide visuel intégré (popover wireframe) |
+| 1. Votre image & photos | Logo (a / n'a pas / texte simple), palette de couleurs (16 choix), style de police (7 styles : moderne, classique, manuscrit, arrondi, gras, humaniste, tech), option photos (stock / propres). Si "propres photos" : champs URL pour 4 zones (héro, à propos, services, contact) avec guide visuel intégré (popover wireframe) |
 | 2. Votre contenu | Pages à inclure (Accueil, Présentation, Services, Contact) |
 | 3. Identité | Nom de l'activité, accroche (tagline), description |
 | 4. Contact & Réseaux | Téléphone, email, adresse, liens Facebook/Instagram/LinkedIn |
 | 5. Zones d'intervention | Liste des villes/régions couvertes |
-| 6. Prestations | Nom, description, durée en minutes (facultatif), prix en € (facultatif) |
+| 6. Prestations | Nom, description, durée en minutes (facultatif), prix en € (facultatif), URL image (facultatif) |
 | 7. Nos atouts | Jusqu'à 6 atouts avec icône emoji, titre et description |
 | 8. Témoignages | Avis clients (auteur, rôle, texte, note 1–5) |
 | 9. Suivi & Lancement | IDs de tracking analytics (GA4, Meta Pixel, GTM), CSS premium (plan Business), bouton de publication |
@@ -104,7 +104,7 @@ L'indépendant configure son site via un **wizard guidé en 9 étapes** accessib
 - Chatbot IA flottant (Agent 1)
 - Scripts tracking (GA4, Meta Pixel, GTM) injectés si configurés
 - CSS premium injecté si fourni (plan Business)
-- Styles appliqués dynamiquement via CSS inline (6 palettes × 3 polices = 18 combinaisons sans reconstruire le CSS)
+- Styles appliqués dynamiquement via CSS inline (16 palettes × 7 polices = 112 combinaisons sans reconstruire le CSS)
 
 **Intégration sur site existant (`/dashboard/embed`) :**
 - Un client qui a déjà son propre site (WordPress, Wix, Squarespace, etc.) peut y ajouter le chatbot IA via un snippet JavaScript et/ou le tracking via les snippets GA4/Meta/GTM — sans refaire son site. Voir [`docs/site-internet.md`](docs/site-internet.md) pour le guide complet.
@@ -198,22 +198,22 @@ La plateforme intègre **3 agents visibles** et **1 worker de synthèse** couvra
 
 | Attribut | Valeur |
 |---|---|
-| **Canal** | WhatsApp (lien unique signé / QR code remis post-conversion) |
+| **Canal** | Telegram (lien unique signé) · WhatsApp (bloqué Meta, prévu V3) |
 | **Utilisateur cible** | Client converti (patient, client B2C ou contact B2B) |
-| **Déclencheur** | Remise du lien signé après conversion du prospect |
+| **Déclencheur** | Remise du lien `/start?token=...` après conversion du prospect |
 
 **Capacités :**
-- Gestion complète des rendez-vous (création, modification, annulation)
+- **Flux de réservation guidé (state machine Telegram)** : l'agent propose les jours disponibles, les créneaux, confirme le RDV en 3 étapes conversationnelles
 - Lecture de documents envoyés par le client (ordonnances, dossiers médicaux, images)
   - Traitement OCR en mémoire uniquement — **le document original n'est jamais persisté en base**
   - Seul le **résumé structuré** extrait par OCR est conservé, lié au contact et au rendez-vous
-- Préparation du rendez-vous : enrichissement du contexte avant la séance
+- **Résumé automatique de la conversation** attaché au rendez-vous créé (champ `conversation_summary`)
 - Réponses aux questions opérationnelles post-conversion
 
 **Sécurité d'accès :**
-- Le lien/QR code embarque un **token JWT signé à usage unique**, lié au `contact_id`
-- Token expirant (durée configurable par le tenant)
-- Un numéro WhatsApp = un contact identifié — vérification à la première connexion
+- Le lien Telegram embarque un **token JWT signé à usage unique**, lié au `contact_id`
+- Token expirant (durée configurable par le tenant, défaut 90 jours)
+- Un `chat_id` Telegram = un contact identifié — lié à la première connexion `/start`
 
 **Contraintes RGPD :**
 - Les résumés OCR contiennent potentiellement des données de santé (Article 9) → chiffrés en base via `pgcrypto`
@@ -225,19 +225,21 @@ La plateforme intègre **3 agents visibles** et **1 worker de synthèse** couvra
 
 | Attribut | Valeur |
 |---|---|
-| **Canal** | WhatsApp + Dashboard back-office |
+| **Canal** | Telegram + Dashboard back-office · WhatsApp (bloqué Meta, prévu V3) |
 | **Utilisateur cible** | Le tenant (indépendant ou collaborateur autorisé) |
-| **Déclencheur** | Disponible en continu après activation |
+| **Déclencheur** | Disponible en continu après activation — accès Telegram via `/start?notify_{tenant_id}` |
 
 **Capacités :**
-- Notification en temps réel de tout événement RDV (création, modification, annulation, no-show)
-- Résumés périodiques des conversations tenues par les agents 1 et 2 avec les clients (fréquence configurable par le tenant, ex. : toutes les 3h)
-- Gestion du calendrier : ouverture et fermeture de créneaux de disponibilité
-- Assistant opérationnel, administratif et de secrétariat
+- **Notification Telegram** à chaque nouveau RDV en attente de confirmation (avec instructions de réponse directement dans le message)
+- **Confirmation/annulation de RDV par message** : l'agent détecte "confirme Prénom" / "annule Prénom" et met à jour la base + envoie l'email de confirmation au client
+- **Création de RDV par message** : "créer RDV Marie lundi à 14h" → détection NLP, création en base, réponse de confirmation
+- **Chat Dashboard** : interface de chat temps réel dans la page Agents, sans quitter le back-office
+- Résumés périodiques des conversations tenues par les agents 1 et 2 (Worker 4, fréquence configurable)
+- Contexte opérationnel enrichi dans chaque réponse LLM : RDV en attente, prochains RDV 7 jours, leads récents, dernière synthèse
 
 **Mémoire partagée :**
-- La session de l'agent est **canal-agnostique** : le contexte est identique que le tenant réponde via WhatsApp ou depuis le Dashboard
-- Une seule conversation active par tenant, synchronisée entre les deux canaux
+- La session de l'agent est **canal-agnostique** : le contexte est identique que le tenant réponde via Telegram ou depuis le Dashboard
+- Deux conversations actives distinctes : `channel=telegram` et `channel=dashboard` — même tenant, historiques séparés par canal
 
 ---
 
@@ -318,16 +320,20 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 | CRM léger (liste contacts + historique) | — | ✅ Livré |
 | Mode absence | — | ✅ Livré |
 
-### V2 — 🔄 En cours / Planifié
+### V2 — 🔄 En cours / Partiellement livré (Mai 2026)
 
 | Fonctionnalité | Agent concerné | Statut |
 |---|---|---|
-| **Agent 3 — Assistant tenant (Dashboard)** | Agent 3 | 🔄 Backend livré — configuration dashboard opérationnelle — processus Agent 3 non encore défini |
-| **Worker 4 — Synthèse conversations** | Worker 4 | 🔄 Backend livré (APScheduler, toutes les 30 min par défaut) |
+| **Agent 2 — Support & RDV Telegram** | Agent 2 | ✅ Livré — webhook Telegram, flux réservation guidé (state machine), OCR documents, résumé conversation attaché au RDV |
+| **Agent 3 — Assistant tenant Dashboard** | Agent 3 | ✅ Livré — chat inline page Agents, contexte opérationnel enrichi (RDV, leads, synthèses) |
+| **Agent 3 — Assistant tenant Telegram** | Agent 3 | ✅ Livré — routage par `chat_id`, confirm/annule/crée RDV par message, OCR documents |
+| **Worker 4 — Synthèse conversations** | Worker 4 | ✅ Livré — APScheduler toutes les 30 min, fréquence configurable par tenant |
+| **Rappels RDV 24h** | — | ✅ Livré — scheduler horaire, anti-doublon via `reminder_sent_at` |
+| **Invitation membres d'équipe** | — | ✅ Livré — table `team_invite`, token 7 jours, email Resend, page `/join`, gestion rôles (owner/admin/member) |
+| **Configuration agents enrichie** | Dashboard | ✅ Livré — token bot Telegram, webhook setup, activation chat personnel, fréquence synthèse, masquage champs selon rôle |
 | WhatsApp Business API | Agents 2 & 3 | ⏳ Bloqué — approbation Meta en attente |
 | Journaux d'activité complets | — | ⏳ Planifié — UI prête (section Paramètres), table `activity_log` à créer |
-| Notifications temps réel | — | ⏳ Planifié — UI prête (section Paramètres), backend à implémenter |
-| Invitation membres d'équipe | — | ⏳ Planifié — UI prête, backend à implémenter |
+| Notifications temps réel (push) | — | ⏳ Planifié — UI prête (section Paramètres), backend à implémenter |
 | ROI estimé simple | — | ⏳ Planifié |
 | Comptes partenaires B2B | — | ⏳ Planifié |
 
@@ -335,7 +341,7 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 
 | Fonctionnalité | Agent concerné | Prérequis |
 |---|---|---|
-| **Agent 2 — Support & RDV client (WhatsApp + OCR)** | Agent 2 | WhatsApp Business API approuvé |
+| **Agent 2 — Support & RDV client WhatsApp** | Agent 2 | WhatsApp Business API approuvé |
 | **Agent 3 — Assistant tenant sur WhatsApp** | Agent 3 | WhatsApp Business API approuvé |
 | Contenu SEO automatique | — | — |
 | Verticalisation sectorielle | — | — |
@@ -1051,23 +1057,25 @@ INVOICE(id PK, subscription_id FK->SUBSCRIPTION.id, number UNIQUE, amount, statu
 
 TEMPLATE(id PK, name, business_type, version, active)
 
-SITE(id PK, tenant_id FK->TENANT.id, template_id FK->TEMPLATE.id, domain, title, tagline, description, phone, email_contact, address, coverage_zones JSONB, values_list JSONB, social_links JSONB, site_style JSONB, status, audience_mode, default_language, absence_mode, absence_message, created_at, updated_at)
+SITE(id PK, tenant_id FK->TENANT.id, template_id FK->TEMPLATE.id, domain, title, tagline, description, phone, email_contact, address, coverage_zones JSONB, values_list JSONB, social_links JSONB, site_style JSONB, status, audience_mode, default_language, absence_mode, absence_message, published_snapshot JSONB, created_at, updated_at)
 -- site_style : { logo_option, primary_color, font_style, pages_enabled[], photos_option }
 -- coverage_zones : ["Bruxelles", "Hal", "Tubize", ...]
 -- values_list : [{ icon, title, description }, ...]
 -- social_links : { facebook, instagram, linkedin }
+-- published_snapshot : capture immuable de site + offres + témoignages au moment de la publication (la page publique lit ce snapshot, pas les tables live)
 
 TESTIMONIAL(id PK, site_id FK->SITE.id, author_name, author_role, content, rating SMALLINT, created_at)
 
 PAGE(id PK, site_id FK->SITE.id, title, slug, type, audience_type, seo_title, seo_description, status, updated_at, UNIQUE(site_id, slug))
 
-SERVICE_OFFER(id PK, site_id FK->SITE.id, name, description, target_audience, price_from, bookable, duration_minutes)
+SERVICE_OFFER(id PK, site_id FK->SITE.id, name, description, target_audience, price_from, bookable, duration_minutes, image_url TEXT)
 
 SERVICE_AREA(id PK, site_id FK->SITE.id, city, postal_code, region, country)
 
 PARTNER_ACCOUNT(id PK, tenant_id FK->TENANT.id, organization_name, type, status, relationship_type, created_at, updated_at, deleted_at)
 
-CONTACT(id PK, tenant_id FK->TENANT.id, partner_account_id FK->PARTNER_ACCOUNT.id NULL, first_name, last_name, email, phone, contact_type, company_name, created_at, updated_at, deleted_at)
+CONTACT(id PK, tenant_id FK->TENANT.id, partner_account_id FK->PARTNER_ACCOUNT.id NULL, first_name, last_name, email, phone, contact_type, company_name, source VARCHAR(50), created_at, updated_at, deleted_at)
+-- source : canal d'entrée du contact (ex. bouche_a_oreille, google, reseaux_sociaux, formulaire_site, etc.)
 
 PIPELINE_STAGE(id PK, tenant_id FK->TENANT.id, name, position, is_final)
 
@@ -1255,18 +1263,21 @@ CREATE TABLE template (
 );
 
 CREATE TABLE site (
-  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id        UUID NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
-  template_id      UUID REFERENCES template(id),
-  domain           VARCHAR(255),
-  title            VARCHAR(255) NOT NULL,
-  status           VARCHAR(30)  NOT NULL DEFAULT 'draft',
-  audience_mode    VARCHAR(30)  NOT NULL DEFAULT 'hybrid',
-  default_language VARCHAR(10)  NOT NULL DEFAULT 'fr',
-  absence_mode     BOOLEAN      NOT NULL DEFAULT FALSE,
-  absence_message  TEXT,
-  created_at       TIMESTAMP    NOT NULL DEFAULT NOW(),
-  updated_at       TIMESTAMP    NOT NULL DEFAULT NOW()
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id          UUID NOT NULL REFERENCES tenant(id) ON DELETE CASCADE,
+  template_id        UUID REFERENCES template(id),
+  domain             VARCHAR(255),
+  title              VARCHAR(255) NOT NULL,
+  status             VARCHAR(30)  NOT NULL DEFAULT 'draft',
+  audience_mode      VARCHAR(30)  NOT NULL DEFAULT 'hybrid',
+  default_language   VARCHAR(10)  NOT NULL DEFAULT 'fr',
+  absence_mode       BOOLEAN      NOT NULL DEFAULT FALSE,
+  absence_message    TEXT,
+  published_snapshot JSONB,
+  -- Capture immuable (site + offres + témoignages) prise au moment de la publication.
+  -- La page publique lit ce champ ; le builder/preview lisent les tables live.
+  created_at         TIMESTAMP    NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_site_tenant ON site(tenant_id);
@@ -1288,14 +1299,15 @@ CREATE TABLE page (
 CREATE INDEX idx_page_site ON page(site_id);
 
 CREATE TABLE service_offer (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  site_id         UUID NOT NULL REFERENCES site(id) ON DELETE CASCADE,
-  name            VARCHAR(255) NOT NULL,
-  description     TEXT,
-  target_audience VARCHAR(30)  NOT NULL DEFAULT 'all',
-  price_from      NUMERIC(10,2),
-  bookable        BOOLEAN      NOT NULL DEFAULT TRUE,
-  duration_minutes INT
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id          UUID NOT NULL REFERENCES site(id) ON DELETE CASCADE,
+  name             VARCHAR(255) NOT NULL,
+  description      TEXT,
+  target_audience  VARCHAR(30)  NOT NULL DEFAULT 'all',
+  price_from       NUMERIC(10,2),
+  bookable         BOOLEAN      NOT NULL DEFAULT TRUE,
+  duration_minutes INT,
+  image_url        TEXT
 );
 
 CREATE TABLE service_area (
@@ -1335,6 +1347,8 @@ CREATE TABLE contact (
   phone              VARCHAR(50),
   contact_type       VARCHAR(30)  NOT NULL DEFAULT 'individual',
   company_name       VARCHAR(255),
+  source             VARCHAR(50),
+  -- Canal d'entrée (ex. bouche_a_oreille, google, reseaux_sociaux, formulaire_site)
   created_at         TIMESTAMP    NOT NULL DEFAULT NOW(),
   updated_at         TIMESTAMP    NOT NULL DEFAULT NOW(),
   deleted_at         TIMESTAMP

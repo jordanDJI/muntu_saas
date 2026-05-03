@@ -68,6 +68,8 @@ export const api = {
   },
   createAppointment: (body: object) => apiFetch("/api/v1/appointments/", { method: "POST", body: JSON.stringify(body) }),
   updateAppointment: (id: string, body: object) => apiFetch(`/api/v1/appointments/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  confirmAppointment: (id: string) => apiFetch<any>(`/api/v1/appointments/${id}/confirm`, { method: "POST" }),
+  cancelAppointment: (id: string) => apiFetch<any>(`/api/v1/appointments/${id}/cancel`, { method: "POST" }),
 
   // Subscriptions
   createCheckout: (body: object) => apiFetch("/api/v1/subscriptions/checkout", { method: "POST", body: JSON.stringify(body) }),
@@ -96,6 +98,23 @@ export const api = {
   // Agents IA — synthèses (Worker 4)
   getAgentSyntheses: (limit = 10) => apiFetch<any[]>(`/api/v1/agents/synthesis?limit=${limit}`),
 
+  // Agent 3 — chat assistant dashboard
+  assistantChat: (body: { message: string; conversation_id?: string | null }) =>
+    apiFetch<{ reply: string; conversation_id: string }>("/api/v1/assistant/chat", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  // Telegram — infos bot (username pour les liens)
+  getTelegramBotInfo: () =>
+    apiFetch<{ username: string; activate_url: string }>("/api/v1/agents/telegram/info"),
+
+  // Telegram — enregistrement webhook
+  setupTelegramWebhook: () =>
+    apiFetch<{ status: string; webhook_url: string; bot_username: string }>("/api/v1/agents/telegram/setup", {
+      method: "POST",
+    }),
+
   // Calendrier — disponibilités
   getAvailability: () => apiFetch<any[]>("/api/v1/calendar/availability"),
   replaceAvailability: (slots: object[]) =>
@@ -118,6 +137,22 @@ export const api = {
   },
   createCalendarAppointment: (body: object) =>
     apiFetch("/api/v1/calendar/appointments", { method: "POST", body: JSON.stringify(body) }),
+
+  // Membres d'équipe
+  getMembers: () => apiFetch<{ members: any[]; pending: any[] }>("/api/v1/members/"),
+  getMyRole: () => apiFetch<{ role: string }>("/api/v1/members/me/role"),
+  inviteMember: (body: { email: string; role: string }) =>
+    apiFetch("/api/v1/members/invite", { method: "POST", body: JSON.stringify(body) }),
+  cancelInvite: (inviteId: string) =>
+    apiFetch(`/api/v1/members/invite/${inviteId}`, { method: "DELETE" }),
+  getInvite: (token: string) =>
+    apiFetch<{ email: string; role: string; tenant_name: string }>(`/api/v1/members/invite/${token}`),
+  acceptInvite: (token: string) =>
+    apiFetch<{ status: string; tenant_id: string }>(`/api/v1/members/invite/${token}/accept`, { method: "POST" }),
+  updateMemberRole: (userId: string, role: string) =>
+    apiFetch(`/api/v1/members/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  removeMember: (userId: string) =>
+    apiFetch(`/api/v1/members/${userId}`, { method: "DELETE" }),
 
   // Booking public (sans auth)
   getPublicAvailableDays: (tenantSlug: string, year: number, month: number) => {

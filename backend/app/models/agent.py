@@ -10,6 +10,9 @@ class AgentConfigUpdate(BaseModel):
     model: Optional[str] = None
     system_prompt: Optional[str] = None
     synthesis_schedule_minutes: Optional[int] = Field(None, ge=30, le=1440)
+    whatsapp_number: Optional[str] = None
+    telegram_bot_token: Optional[str] = None
+    telegram_notify_chat_id: Optional[int] = None
 
 
 class AgentConfigOut(BaseModel):
@@ -18,8 +21,11 @@ class AgentConfigOut(BaseModel):
     agent_type: str
     status: str
     model: str
-    system_prompt: Optional[str]
-    synthesis_schedule_minutes: int
+    system_prompt: Optional[str] = None
+    synthesis_schedule_minutes: int = 180
+    whatsapp_number: Optional[str] = None
+    telegram_bot_token: Optional[str] = None
+    telegram_notify_chat_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
@@ -79,3 +85,15 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     session_id: str
+
+
+# ── Assistant tenant (Agent 3) ────────────────────────────────────────────────
+
+class AssistantChatRequest(BaseModel):
+    message: str
+    conversation_id: Optional[str] = None
+
+
+class AssistantChatResponse(BaseModel):
+    reply: str
+    conversation_id: str

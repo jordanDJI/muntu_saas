@@ -5,6 +5,7 @@ from uuid import UUID
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.calendar import AvailabilitySlotIn, BlockedPeriodIn, CalendarApptIn
+from app.services.lead import ensure_lead
 
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
 
@@ -111,6 +112,8 @@ async def create_calendar_appointment(body: CalendarApptIn, tenant_id: str = Dep
         }).execute().data[0]
         contact_id = new_c["id"]
 
+    ensure_lead(sb, tenant_id, contact_id, body.source or "dashboard")
+
     res = sb.table("appointment").insert({
         "calendar_id": cal_id,
         "contact_id": contact_id,
@@ -136,6 +139,7 @@ async def get_calendar_appointments(
         sb.table("appointment")
         .select("id, status, scheduled_at, end_at, contact(first_name, last_name, email), service_offer(name)")
         .eq("calendar_id", cal_id)
+        .neq("status", "cancelled")
     )
     if start:
         q = q.gte("scheduled_at", start)

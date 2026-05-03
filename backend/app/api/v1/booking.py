@@ -3,14 +3,13 @@ Endpoint public de réservation (sans auth).
 GET  /api/v1/booking/{tenant_slug}/slots?date=YYYY-MM-DD  → créneaux disponibles
 POST /api/v1/booking/{tenant_slug}/book                   → créer contact + RDV ou lead
 """
-import asyncio
 import logging
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone, time as dtime, date
 from fastapi import APIRouter, HTTPException, status
 from app.core.supabase import get_supabase_admin
 from app.models.calendar import PublicBookIn
-from app.services.email import send_appointment_confirmation
+from app.services.lead import ensure_lead
 
 router = APIRouter(prefix="/booking", tags=["Booking"])
 logger = logging.getLogger(__name__)
@@ -223,28 +222,60 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
     if not body.scheduled_at:
         raise HTTPException(status_code=400, detail="scheduled_at requis pour un rendez-vous")
 
+    ensure_lead(sb, tenant["id"], contact_id, "website")
+
     end_at = body.scheduled_at + timedelta(minutes=body.slot_duration_min)
 
+    # Le RDV est créé en attente — la confirmation (et l'email client) sont déclenchés
+    # manuellement par le tenant depuis son dashboard ou via l'Agent 3.
     appt = sb.table("appointment").insert({
         "calendar_id": cal_id,
         "contact_id": contact_id,
         "service_offer_id": str(body.service_offer_id) if body.service_offer_id else None,
         "scheduled_at": body.scheduled_at.isoformat(),
         "end_at": end_at.isoformat(),
-        "status": "confirmed",
+        "status": "pending",
         "type": "b2c_appointment",
         "audience_type": "b2c",
     }).execute().data[0]
 
-    try:
-        await asyncio.to_thread(
-            send_appointment_confirmation,
-            contact_email=body.email,
-            contact_name=f"{body.first_name} {body.last_name}",
-            appointment=appt,
-            tenant_name=tenant["name"],
-        )
-    except Exception as exc:
-        logger.warning("Email confirmation failed for booking %s: %s", appt["id"], exc)
+    # Notifier le tenant (Telegram + WhatsApp) qu'un nouveau RDV est en attente
+    _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name, body.scheduled_at.isoformat())
 
     return {"type": "appointment", "id": appt["id"]}
+
+
+def _notify_tenant_pending(sb, tenant_id: str, first_name: str, last_name: str, scheduled_at: str) -> None:
+    """Notifie le tenant via Telegram/WhatsApp qu'un nouveau RDV est en attente de confirmation."""
+    cfg_res = (
+        sb.table("agent_config")
+        .select("whatsapp_number, telegram_bot_token, telegram_notify_chat_id, status")
+        .eq("tenant_id", tenant_id)
+        .eq("agent_type", "assistant_tenant")
+        .eq("status", "active")
+        .execute()
+    )
+    if not cfg_res.data:
+        return
+
+    cfg = cfg_res.data[0]
+    try:
+        dt = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+        date_str = dt.strftime("%A %d/%m/%Y à %H:%M")
+    except Exception:
+        date_str = scheduled_at
+
+    contact_name = f"{first_name} {last_name}".strip() or "Prospect"
+    msg = (
+        f"Nouveau RDV en attente de confirmation :\n"
+        f"{contact_name} — {date_str}\n"
+        f"Répondez 'confirme {first_name}' ou 'annule {first_name}' pour traiter ce RDV."
+    )
+
+    if cfg.get("whatsapp_number"):
+        from app.services.whatsapp import send_text
+        send_text(cfg["whatsapp_number"], msg)
+
+    if cfg.get("telegram_bot_token") and cfg.get("telegram_notify_chat_id"):
+        from app.services.telegram import send_message
+        send_message(cfg["telegram_bot_token"], cfg["telegram_notify_chat_id"], msg)

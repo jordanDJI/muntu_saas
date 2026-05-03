@@ -19,6 +19,8 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [honeypot, setHoneypot] = useState("");
+
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -35,6 +37,7 @@ export default function OnboardingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (honeypot) return;
     setError("");
     setLoading(true);
 
@@ -127,6 +130,17 @@ export default function OnboardingPage() {
 
           {step === 1 && (
             <>
+              {/* honeypot anti-bot — invisible aux humains */}
+              <div style={{ position: "absolute", opacity: 0, height: 0, overflow: "hidden", pointerEvents: "none" }} aria-hidden="true">
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <input placeholder="Prénom" value={form.first_name} onChange={(e) => set("first_name", e.target.value)} required className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 <input placeholder="Nom" value={form.last_name} onChange={(e) => set("last_name", e.target.value)} required className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />

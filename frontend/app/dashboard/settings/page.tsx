@@ -518,68 +518,204 @@ function SectionPreferences() {
 
 // ── Section Membres ───────────────────────────────────────────────────────────
 
-function SectionMembres() {
-  const [members, setMembers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [email, setEmail]     = useState("");
-  const [invited, setInvited] = useState(false);
+const ROLE_LABEL: Record<string, string> = { owner: "Propriétaire", admin: "Admin", member: "Membre" };
+const ROLE_OPTIONS = [{ value: "admin", label: "Admin" }, { value: "member", label: "Membre" }];
 
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data: mem } = await supabase.from("membership").select("tenant_id").eq("user_id", user.id).single();
-      if (!mem) return;
-      const { data } = await supabase
-        .from("membership")
-        .select("id, role, user_id, created_at")
-        .eq("tenant_id", mem.tenant_id);
-      setMembers(data ?? []);
-    }).finally(() => setLoading(false));
+function SectionMembres() {
+  const [members, setMembers]   = useState<any[]>([]);
+  const [pending, setPending]   = useState<any[]>([]);
+  const [myRole, setMyRole]     = useState<string>("member");
+  const [loading, setLoading]   = useState(true);
+  const [email, setEmail]       = useState("");
+  const [role, setRole]         = useState("member");
+  const [inviting, setInviting] = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const [success, setSuccess]   = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [{ members: m, pending: p }, { role: r }] = await Promise.all([
+        api.getMembers(),
+        api.getMyRole(),
+      ]);
+      setMembers(m);
+      setPending(p);
+      setMyRole(r);
+    } catch { /* ignore */ }
+    setLoading(false);
   }, []);
 
-  const ROLE_LABEL: Record<string, string> = { owner: "Propriétaire", admin: "Admin", member: "Membre" };
+  useEffect(() => { load(); }, [load]);
+
+  const handleInvite = async () => {
+    if (!email.trim()) return;
+    setInviting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await api.inviteMember({ email: email.trim(), role }) as any;
+      if (res.email_sent) {
+        setSuccess(`Invitation envoyée à ${email.trim()}`);
+      } else {
+        setSuccess(`Invitation créée. Copiez ce lien et envoyez-le manuellement :\n${res.invite_url}`);
+      }
+      setEmail("");
+      load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleCancelInvite = async (inviteId: string) => {
+    try {
+      await api.cancelInvite(inviteId);
+      load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      await api.updateMemberRole(userId, newRole);
+      load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  const handleRemove = async (userId: string) => {
+    if (!confirm("Retirer ce membre de l'équipe ?")) return;
+    try {
+      await api.removeMember(userId);
+      load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  const canManage = myRole === "owner" || myRole === "admin";
 
   return (
     <>
       <SectionTitle title="Équipe" subtitle="Gérez les membres qui ont accès à votre espace." />
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>
+      )}
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 whitespace-pre-wrap break-all">
+          {success}
+        </div>
+      )}
+
       <Card>
-        <h3 className="font-semibold text-sm text-gray-700">Membres actuels</h3>
+        <h3 className="font-semibold text-sm text-gray-700">Membres actifs</h3>
         {loading ? <p className="text-sm text-gray-400">Chargement…</p> : (
-          <div className="space-y-2">
-            {members.map(m => (
-              <div key={m.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-600">
-                    {m.user_id?.slice(0, 2).toUpperCase()}
+          <div className="space-y-1">
+            {members.map(m => {
+              const initials = [m.first_name, m.last_name].filter(Boolean).map((s: string) => s[0]).join("").toUpperCase() || m.email?.slice(0, 2).toUpperCase() || "?";
+              const displayName = [m.first_name, m.last_name].filter(Boolean).join(" ") || m.email;
+              return (
+                <div key={m.id} className="flex items-center justify-between py-2.5 border-b last:border-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">
+                      {initials}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{displayName}</p>
+                      <p className="text-xs text-gray-400">{m.email}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">{m.user_id}</p>
-                    <p className="text-xs text-gray-400">Membre depuis {new Date(m.created_at).toLocaleDateString("fr-BE")}</p>
+                  <div className="flex items-center gap-2">
+                    {canManage && m.role !== "owner" ? (
+                      <select
+                        value={m.role}
+                        onChange={e => handleRoleChange(m.user_id, e.target.value)}
+                        className="text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      >
+                        {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                    ) : (
+                      <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                        {ROLE_LABEL[m.role] ?? m.role}
+                      </span>
+                    )}
+                    {canManage && m.role !== "owner" && (
+                      <button
+                        onClick={() => handleRemove(m.user_id)}
+                        className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                        title="Retirer"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
-                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                  {ROLE_LABEL[m.role] ?? m.role}
-                </span>
-              </div>
-            ))}
+              );
+            })}
             {members.length === 0 && <p className="text-sm text-gray-400">Aucun membre pour l'instant.</p>}
           </div>
         )}
+
+        {pending.length > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Invitations en attente</h4>
+            <div className="space-y-1">
+              {pending.map(p => (
+                <div key={p.id} className="flex items-center justify-between py-2">
+                  <div>
+                    <p className="text-sm text-gray-700">{p.email}</p>
+                    <p className="text-xs text-gray-400">{ROLE_LABEL[p.role] ?? p.role} · Expire le {new Date(p.expires_at).toLocaleDateString("fr-BE")}</p>
+                  </div>
+                  {canManage && (
+                    <button
+                      onClick={() => handleCancelInvite(p.id)}
+                      className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                    >
+                      Annuler
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
-      <Card>
-        <h3 className="font-semibold text-sm text-gray-700">Inviter un membre</h3>
-        <p className="text-sm text-gray-500">L'invitation sera envoyée par email. <span className="text-amber-600 font-medium">(Fonctionnalité à venir)</span></p>
-        <div className="flex gap-2">
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-            placeholder="email@exemple.com"
-            className="border rounded-lg px-3 py-2 text-sm flex-1" />
-          <button onClick={() => { setInvited(true); setEmail(""); }}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700">
-            Inviter
-          </button>
-        </div>
-        {invited && <p className="text-green-600 text-sm">Invitation envoyée (simulation).</p>}
-      </Card>
+
+      {canManage && (
+        <Card>
+          <h3 className="font-semibold text-sm text-gray-700">Inviter un membre</h3>
+          <p className="text-sm text-gray-500">Un email d'invitation sera envoyé à l'adresse saisie.</p>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={email}
+              onChange={e => { setEmail(e.target.value); setError(null); setSuccess(null); }}
+              onKeyDown={e => e.key === "Enter" && handleInvite()}
+              placeholder="email@exemple.com"
+              className="border rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+            <select
+              value={role}
+              onChange={e => setRole(e.target.value)}
+              className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <button
+              onClick={handleInvite}
+              disabled={inviting || !email.trim()}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+            >
+              {inviting ? "Envoi…" : "Inviter"}
+            </button>
+          </div>
+        </Card>
+      )}
     </>
   );
 }

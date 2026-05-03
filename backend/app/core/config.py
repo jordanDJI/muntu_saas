@@ -27,11 +27,16 @@ class Settings(BaseSettings):
     frontend_url_prod: str = ""
     secret_key: str
 
-    # Agents IA
+    # Agents IA — Gemini
     gemini_api_key: str = ""
     agent_link_secret: str = ""          # clé HMAC pour signer les tokens JWT agent_link
     agent_link_expiry_days: int = 90     # durée de validité des liens client converti
     agent_ocr_max_size_mb: int = 10      # taille max des fichiers envoyés pour OCR
+
+    # Agents IA — 360dialog WhatsApp
+    dialog360_api_key: str = ""          # clé API 360dialog (D360-API-KEY)
+    dialog360_webhook_secret: str = ""   # secret HMAC pour vérifier les webhooks
+    dialog360_verify_token: str = ""     # token de vérification webhook Meta
 
 
 settings = Settings()
