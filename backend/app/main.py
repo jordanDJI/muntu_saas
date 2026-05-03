@@ -26,9 +26,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_cors_origins = [settings.frontend_url]
-if settings.app_env == "production" and hasattr(settings, "frontend_url_prod"):
-    _cors_origins.append(settings.frontend_url_prod)
+_cors_origins = [o for o in [settings.frontend_url, settings.frontend_url_prod] if o]
 
 app.add_middleware(
     CORSMiddleware,

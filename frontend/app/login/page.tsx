@@ -1,33 +1,41 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/api";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Rediriger vers le dashboard si déjà connecté
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) router.replace("/dashboard");
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) window.location.replace("/dashboard");
     });
-  }, [router]);
+  }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setError(error.message);
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Délai dépassé. Vérifiez votre connexion internet.")), 12000)
+    );
+    try {
+      const { error } = await Promise.race([
+        supabase.auth.signInWithPassword({ email, password }),
+        timeout,
+      ]) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
+      if (error) {
+        setError(error.message);
+      } else {
+        window.location.replace("/dashboard");
+      }
+    } catch (err: any) {
+      setError(err?.message ?? "Erreur de connexion. Vérifiez votre réseau.");
+    } finally {
       setLoading(false);
-    } else {
-      router.push("/dashboard");
     }
   };
 

@@ -5,7 +5,7 @@ export function proxy(request: NextRequest) {
 
   // Cherche le cookie de session Supabase (sb-<ref>-auth-token)
   const hasSession = [...request.cookies.getAll()].some(
-    (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token")
+    (c) => c.name.startsWith("sb-") && c.name.includes("-auth-token")
   );
 
   if (!hasSession && pathname.startsWith("/dashboard")) {
