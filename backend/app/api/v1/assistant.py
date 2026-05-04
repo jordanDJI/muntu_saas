@@ -124,7 +124,9 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     if config.get("system_prompt"):
         return config["system_prompt"]
 
-    now = datetime.now(timezone.utc)
+    _days_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    now = datetime.now(timezone.utc) + timedelta(hours=2)  # Europe/Brussels (CEST UTC+2)
+    date_str = f"{_days_fr[now.weekday()].capitalize()} {now.strftime('%d/%m/%Y')} à {now.strftime('%H:%M')}"
     lines: list[str] = []
 
     # Identité du tenant
@@ -136,7 +138,8 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
         "Tu l'aides à gérer son activité : rendez-vous, clients, planning, leads. "
         "Tu peux confirmer ou annuler des rendez-vous à la demande du professionnel. "
         "Réponds en français, sois concis et direct. "
-        "Ne fournis jamais de conseils médicaux."
+        f"Date et heure actuelles : {date_str} (heure de Bruxelles). "
+        "Utilise toujours cette date comme référence absolue."
     )
 
     cals = sb.table("calendar").select("id").eq("tenant_id", tenant_id).execute().data or []

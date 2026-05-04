@@ -27,7 +27,20 @@ logger = logging.getLogger(__name__)
 _BOOKING_RE = re.compile(
     r"\b(prendre.*rendez|r[eé]server.*rdv|r[eé]server.*rendez|fixer.*rendez|nouveau.*rdv|"
     r"prendre.*rdv|booker|book.*appointment|schedule.*appointment|je veux.*rdv|"
-    r"prendre.*rendez.vous|prendre.*cr[eé]neau)\b",
+    r"prendre.*rendez.vous|prendre.*cr[eé]neau|"
+    r"un\s+rendez.?vous|un\s+rdv|une\s+consultation|"
+    r"rendez.?vous.*pour|rdv.*pour|consultation.*pour|"
+    r"voudrais.*rdv|voudrais.*rendez|souhaite.*rdv|souhaite.*rendez|"
+    r"avoir.*rdv|avoir.*rendez|fixer.*cr[eé]neau|prendre.*consultation|"
+    r"cr[eé]neau.*disponible|disponibilit[eé]s?|quand.*disponible|"
+    r"rendez.?vous.*demain|rdv.*demain|rdv.*lundi|rdv.*mardi|rdv.*mercredi|"
+    r"rdv.*jeudi|rdv.*vendredi|rdv.*samedi|rendez.?vous.*le\s+\d)\b",
+    re.IGNORECASE,
+)
+
+_BOOKING_CONTEXT_RE = re.compile(
+    r"\b(rendez.?vous|rdv|cr[eé]neau|consultation|disponib|r[eé]server|"
+    r"planifier|demain|matin|apr[eè]s.?midi|horaire|calendrier)\b",
     re.IGNORECASE,
 )
 
@@ -150,14 +163,16 @@ async def _process_telegram_message(msg: dict, bot_token: str) -> None:
 
     _save_message(sb, conv_id, "user", user_text + ocr_ctx, {"telegram_chat_id": chat_id})
 
+    # Charger l'historique une seule fois — partagé entre la state machine et le LLM
+    history = _load_history(sb, conv_id, limit=20)
+
     # 5. Flux de réservation interactif (state machine)
     if await _handle_telegram_booking_flow(
-        sb, tenant_id, contact_id, conv_id, user_text, bot_token, chat_id
+        sb, tenant_id, contact_id, conv_id, user_text, bot_token, chat_id, history
     ):
         return
 
-    # 6. Réponse LLM normale
-    history = _load_history(sb, conv_id, limit=20)
+    # 6. Réponse LLM normale (questions hors booking)
     system_prompt = _build_system_prompt(sb, tenant_id, config)
     if ocr_ctx:
         system_prompt += f"\n\nDocument reçu — résumé extrait :\n{ocr_ctx}"
@@ -173,9 +188,24 @@ async def _process_telegram_message(msg: dict, bot_token: str) -> None:
 
 # ── Flux de réservation interactif (Agent 2 Telegram) ────────────────────────
 
+def _should_enter_booking_flow(text: str, history: list[dict]) -> bool:
+    """
+    Retourne True si ce message doit déclencher la state machine de réservation.
+    Vérifie d'abord _BOOKING_RE (intent explicite), puis _BOOKING_CONTEXT_RE
+    combiné à un contexte booking dans les messages récents.
+    """
+    if _BOOKING_RE.search(text):
+        return True
+    if _BOOKING_CONTEXT_RE.search(text) and history:
+        recent = " ".join(m.get("content", "") for m in history[-6:])
+        return bool(_BOOKING_CONTEXT_RE.search(recent))
+    return False
+
+
 async def _handle_telegram_booking_flow(
     sb, tenant_id: str, contact_id: str, conv_id: str,
     text: str, bot_token: str, chat_id: int,
+    history: list[dict] | None = None,
 ) -> bool:
     """
     Gère la réservation de RDV en conversation guidée.
@@ -187,8 +217,8 @@ async def _handle_telegram_booking_flow(
     metadata = (conv_res.data or {}).get("metadata") or {}
     flow = metadata.get("booking_flow")
 
-    # Entrée dans le flux si BOOKING_RE matche et pas de flux actif
-    if not flow and _BOOKING_RE.search(text):
+    # ── Entrée dans le flux ──────────────────────────────────────────────────
+    if not flow and _should_enter_booking_flow(text, history or []):
         available = _get_next_available_dates(sb, tenant_id)
         if not available:
             send_message(bot_token, chat_id,
@@ -196,16 +226,42 @@ async def _handle_telegram_booking_flow(
                 "Contactez directement le professionnel.")
             return True
 
+        available_iso = [d.isoformat() for d in available]
+
+        # Fast-forward : si une date est déjà mentionnée dans le message ou l'historique,
+        # on saute pick_date et on va directement aux créneaux
+        user_ctx = text + " " + " ".join(
+            m.get("content", "") for m in (history or []) if m.get("role") == "user"
+        )
+        chosen_date = _parse_date_from_flow_text(user_ctx, available_iso)
+
+        if chosen_date:
+            slots = _get_slots_for_date(sb, tenant_id, chosen_date)
+            if slots:
+                slots_text = "\n".join(f"{i+1}. {s['label']}" for i, s in enumerate(slots))
+                send_message(bot_token, chat_id,
+                    f"Créneaux disponibles le {_fmt_date_fr(chosen_date)} :\n\n"
+                    f"{slots_text}\n\n"
+                    f"Répondez avec le numéro du créneau.")
+                _update_conv_metadata(sb, conv_id, {
+                    "booking_flow": {
+                        "step": "pick_slot",
+                        "chosen_date": chosen_date.isoformat(),
+                        "slots": slots,
+                    }
+                })
+                return True
+
+        # Pas de date détectée → étape 1 normale
         days_text = "\n".join(f"• {_fmt_date_fr(d)}" for d in available)
         send_message(bot_token, chat_id,
             f"Je vais vous aider à prendre rendez-vous.\n\n"
             f"Prochains jours disponibles :\n{days_text}\n\n"
             f"Quel jour vous convient ?")
-
         _update_conv_metadata(sb, conv_id, {
             "booking_flow": {
                 "step": "pick_date",
-                "available_dates": [d.isoformat() for d in available],
+                "available_dates": available_iso,
             }
         })
         return True
@@ -338,7 +394,9 @@ async def _handle_telegram_booking_flow(
                 except Exception:
                     pass
 
-                # Notifier le tenant
+                dt = datetime.fromisoformat(chosen_slot["start"].replace("Z", "+00:00"))
+
+                # Notifier le tenant via le canal existant (email / WhatsApp / Telegram)
                 from app.api.v1.booking import _notify_tenant_pending
                 _notify_tenant_pending(
                     sb, tenant_id,
@@ -347,9 +405,33 @@ async def _handle_telegram_booking_flow(
                     chosen_slot["start"],
                 )
 
-                dt = datetime.fromisoformat(chosen_slot["start"].replace("Z", "+00:00"))
+                # Passer le relais à Agent 3 — notif Telegram au professionnel
+                try:
+                    a3_res = (
+                        sb.table("agent_config")
+                        .select("telegram_notify_chat_id, status")
+                        .eq("tenant_id", tenant_id)
+                        .eq("agent_type", "assistant_tenant")
+                        .eq("status", "active")
+                        .execute()
+                    )
+                    notify_chat_id = (a3_res.data or [{}])[0].get("telegram_notify_chat_id")
+                    if notify_chat_id:
+                        full_name = (
+                            f"{contact_info.get('first_name', '')} {contact_info.get('last_name', '')}".strip()
+                            or "Client"
+                        )
+                        send_message(bot_token, notify_chat_id,
+                            f"Nouvelle demande de RDV (Telegram)\n"
+                            f"Client : {full_name}\n"
+                            f"Date : {_DAYS_FR_LONG[dt.weekday()].capitalize()} {dt.strftime('%d/%m à %H:%M')}\n"
+                            f"Statut : en attente de confirmation\n"
+                            f"Dites 'confirme {contact_info.get('first_name', full_name)}' pour valider.")
+                except Exception as exc:
+                    logger.warning("Notification Agent 3 après RDV échouée : %s", exc)
+
                 send_message(bot_token, chat_id,
-                    f"✅ Votre demande de rendez-vous est enregistrée pour le "
+                    f"Votre demande de rendez-vous est enregistrée pour le "
                     f"{_DAYS_FR_LONG[dt.weekday()].capitalize()} {dt.strftime('%d/%m à %H:%M')}.\n"
                     f"Vous recevrez une confirmation dès validation par le professionnel.")
             except Exception as exc:
@@ -376,7 +458,7 @@ def _generate_booking_summary_sync(history: list[dict], model: str) -> str:
         return chat_completion(
             messages=history + [{"role": "user", "content": prompt}],
             model=model,
-            system_prompt="Tu résumes des conversations clients pour aider un professionnel de santé.",
+            system_prompt="Tu résumes des conversations clients pour aider un professionnel indépendant.",
         )
     except Exception:
         return ""
@@ -1152,18 +1234,127 @@ def _save_message(
 
 
 def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
-    if config.get("system_prompt"):
-        return config["system_prompt"]
-    tenant_res = sb.table("tenant").select("name").eq("id", tenant_id).single().execute()
-    name = tenant_res.data.get("name", "le professionnel") if tenant_res.data else "le professionnel"
-    return (
-        f"Tu es l'assistant WhatsApp/Telegram de {name}. "
-        "Tu aides les clients : tu réponds à leurs questions sur les services, "
-        "lis et résumes leurs documents médicaux. "
-        "Réponds en français, sois chaleureux et professionnel. "
-        "Ne fournis jamais de conseils médicaux. "
-        "IMPORTANT : réponds en texte simple, sans markdown ni astérisques."
+    now = datetime.now(timezone.utc) + timedelta(hours=2)  # Europe/Brussels (CEST UTC+2)
+    date_ctx = (
+        f"\n\nDate et heure actuelles : {_DAYS_FR_LONG[now.weekday()].capitalize()} "
+        f"{now.strftime('%d/%m/%Y')} à {now.strftime('%H:%M')} (heure de Bruxelles). "
+        "Utilise toujours cette date comme référence absolue."
     )
+
+    # Prompt personnalisé saisi manuellement → priorité absolue
+    if config.get("system_prompt"):
+        return config["system_prompt"] + date_ctx
+
+    # ── Récupération des données ──────────────────────────────────────────────
+
+    tenant_res = sb.table("tenant").select("name").eq("id", tenant_id).single().execute()
+    tenant_name = (tenant_res.data or {}).get("name", "ce professionnel")
+
+    site_res = sb.table("site").select(
+        "id, title, tagline, description, phone, email_contact, address, "
+        "coverage_zones, values_list, social_links, audience_mode, "
+        "default_language, absence_mode, absence_message"
+    ).eq("tenant_id", tenant_id).limit(1).execute()
+    site = (site_res.data or [{}])[0]
+
+    # ── Mode absence ──────────────────────────────────────────────────────────
+    if site.get("absence_mode"):
+        msg = site.get("absence_message") or "Le professionnel est actuellement indisponible."
+        return (
+            f"Tu es l'assistant de {site.get('title') or tenant_name}. "
+            f"Le professionnel est absent. Communique ce message au client : « {msg} » "
+            "Sois courtois, ne prends aucun engagement, invite à recontacter plus tard. "
+            "Texte simple, sans mise en forme."
+            + date_ctx
+        )
+
+    # ── Construction du prompt dynamique ─────────────────────────────────────
+
+    display_name = site.get("title") or tenant_name
+    lang = site.get("default_language") or "fr"
+    lang_label = {"fr": "français", "en": "anglais", "nl": "néerlandais"}.get(lang, "français")
+
+    lines: list[str] = []
+
+    # Identité
+    intro = f"Tu es l'assistant de {display_name}"
+    if site.get("tagline"):
+        intro += f" — {site['tagline']}"
+    intro += f". Tu réponds aux clients par messagerie (WhatsApp ou Telegram) au nom de ce professionnel."
+    if site.get("description"):
+        intro += f"\n\nDescription de l'activité :\n{site['description']}"
+    lines.append(intro)
+
+    # Prestations / services
+    site_id = site.get("id")
+    if site_id:
+        offers = (
+            sb.table("service_offer")
+            .select("name, description, duration_min, price_eur")
+            .eq("site_id", site_id)
+            .execute()
+        ).data or []
+        if offers:
+            lines.append("\nSERVICES ET PRESTATIONS :")
+            for o in offers:
+                parts = [o["name"]]
+                if o.get("duration_min"):
+                    parts.append(f"{o['duration_min']} min")
+                if o.get("price_eur") is not None:
+                    parts.append(f"{float(o['price_eur']):.2f} €".rstrip("0").rstrip(".") + " €"
+                                 if "." in f"{float(o['price_eur']):.2f}" else f"{float(o['price_eur']):.0f} €")
+                line = "- " + " · ".join(parts)
+                if o.get("description"):
+                    line += f"\n  {o['description'][:200]}"
+                lines.append(line)
+
+    # Atouts / valeurs différenciantes
+    values = site.get("values_list") or []
+    if values:
+        lines.append("\nPOINTS FORTS ET VALEURS :")
+        for v in values:
+            if not v.get("title"):
+                continue
+            val_line = f"- {v['title']}"
+            if v.get("description"):
+                val_line += f" : {v['description']}"
+            lines.append(val_line)
+
+    # Zones d'intervention
+    zones = site.get("coverage_zones") or []
+    if zones:
+        lines.append(f"\nZONES D'INTERVENTION : {', '.join(zones)}")
+
+    # Coordonnées
+    social = site.get("social_links") or {}
+    contact_lines: list[str] = []
+    if site.get("phone"):
+        contact_lines.append(f"Téléphone : {site['phone']}")
+    if social.get("phone2"):
+        contact_lines.append(f"Téléphone secondaire : {social['phone2']}")
+    if site.get("email_contact"):
+        contact_lines.append(f"Email : {site['email_contact']}")
+    if site.get("address"):
+        contact_lines.append(f"Adresse : {site['address']}")
+    for net in ("facebook", "instagram", "linkedin"):
+        if social.get(net):
+            contact_lines.append(f"{net.capitalize()} : {social[net]}")
+    if contact_lines:
+        lines.append("\nCOORDONNÉES :\n" + "\n".join(f"- {c}" for c in contact_lines))
+
+    # Règles de comportement — 100 % génériques, aucune référence sectorielle
+    lines.append(
+        f"\nRÈGLES DE COMPORTEMENT :\n"
+        f"- Réponds exclusivement en {lang_label}, avec un ton chaleureux et professionnel\n"
+        "- Utilise uniquement du texte brut — aucun markdown, aucun astérisque, aucun #\n"
+        "- Base-toi uniquement sur les informations fournies ci-dessus ; "
+        "ne suppose rien qui ne soit pas écrit ici\n"
+        "- Si une information est absente, oriente le client vers le professionnel directement\n"
+        "- Pour toute demande de rendez-vous, guide le client étape par étape\n"
+        "- Ne prends jamais d'engagement au nom du professionnel sans validation explicite"
+    )
+
+    return "\n".join(lines) + date_ctx
 
 
 async def _booking_redirect_reply(sb, tenant_id: str) -> str:
