@@ -65,9 +65,10 @@ async def setup_telegram_webhook(tenant_id: str = Depends(get_current_tenant)):
         raise HTTPException(status_code=400, detail="Aucun bot token Telegram configuré")
 
     webhook_url = f"{settings.app_url}/api/v1/webhook/telegram/{bot_token}"
-    ok = register_webhook(bot_token, webhook_url)
+    ok, err = register_webhook(bot_token, webhook_url)
     if not ok:
-        raise HTTPException(status_code=502, detail="Échec de l'enregistrement du webhook Telegram")
+        detail = f"Échec Telegram : {err}" if err else "Échec de l'enregistrement du webhook Telegram"
+        raise HTTPException(status_code=502, detail=detail)
 
     info = get_bot_info(bot_token)
     return {"status": "ok", "webhook_url": webhook_url, "bot_username": info.get("username", "")}

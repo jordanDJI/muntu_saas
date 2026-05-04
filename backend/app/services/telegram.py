@@ -47,19 +47,34 @@ def download_file(bot_token: str, file_id: str) -> tuple[bytes, str]:
     return dl_res.content, mime_map.get(ext, "application/octet-stream")
 
 
-def register_webhook(bot_token: str, webhook_url: str) -> bool:
-    """Enregistre l'URL de webhook auprès de Telegram pour ce bot."""
+def register_webhook(bot_token: str, webhook_url: str) -> tuple[bool, str]:
+    """
+    Enregistre l'URL de webhook auprès de Telegram.
+    Retourne (True, "") en cas de succès, (False, description) en cas d'échec.
+    """
     try:
         r = requests.post(
             f"{_BASE}/bot{bot_token}/setWebhook",
             json={"url": webhook_url, "allowed_updates": ["message"]},
             timeout=10,
         )
-        r.raise_for_status()
-        return r.json().get("ok", False)
+        data = r.json()
+        if r.status_code == 401:
+            desc = data.get("description", "Token invalide (401)")
+            logger.error("Telegram setWebhook 401 pour token ...%s : %s", bot_token[-6:], desc)
+            return False, desc
+        if not r.ok:
+            desc = data.get("description", f"HTTP {r.status_code}")
+            logger.error("Telegram setWebhook %s pour token ...%s : %s", r.status_code, bot_token[-6:], desc)
+            return False, desc
+        if not data.get("ok"):
+            desc = data.get("description", "Réponse ok=false")
+            logger.error("Telegram setWebhook ok=false pour token ...%s : %s", bot_token[-6:], desc)
+            return False, desc
+        return True, ""
     except Exception as exc:
-        logger.error("Telegram setWebhook échoué pour token ...%s : %s", bot_token[-6:], exc)
-        return False
+        logger.error("Telegram setWebhook exception pour token ...%s : %s", bot_token[-6:], exc)
+        return False, str(exc)
 
 
 def delete_webhook(bot_token: str) -> bool:
