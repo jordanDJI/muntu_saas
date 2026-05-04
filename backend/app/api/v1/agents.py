@@ -54,7 +54,8 @@ async def get_telegram_bot_info(tenant_id: str = Depends(get_current_tenant)):
 async def setup_telegram_webhook(tenant_id: str = Depends(get_current_tenant)):
     """
     Enregistre le webhook Telegram pour le bot configuré sur ce tenant.
-    Le token est lu depuis assistant_tenant (qui le synchronise vers support_client).
+    En local : APP_URL doit pointer vers le tunnel ngrok (https://…ngrok-free.app).
+    En prod   : APP_URL est l'URL publique du backend, posée via les env vars de la plateforme.
     """
     from app.services.telegram import register_webhook, get_bot_info
 
@@ -64,7 +65,19 @@ async def setup_telegram_webhook(tenant_id: str = Depends(get_current_tenant)):
     if not bot_token:
         raise HTTPException(status_code=400, detail="Aucun bot token Telegram configuré")
 
+    if not settings.app_url.startswith("https://"):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"APP_URL doit être une URL HTTPS publique (valeur actuelle : '{settings.app_url}'). "
+                "En local, lancez ngrok (`ngrok http 8000`) et mettez l'URL ngrok dans APP_URL du .env, "
+                "puis redémarrez le backend."
+            ),
+        )
+
     webhook_url = f"{settings.app_url}/api/v1/webhook/telegram/{bot_token}"
+    logger.info("Telegram webhook setup — URL : %s", webhook_url)
+
     ok, err = register_webhook(bot_token, webhook_url)
     if not ok:
         detail = f"Échec Telegram : {err}" if err else "Échec de l'enregistrement du webhook Telegram"
