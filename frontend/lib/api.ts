@@ -55,8 +55,9 @@ export const api = {
     apiFetch(`/api/v1/sites/${siteId}/testimonials`, { method: "PUT", body: JSON.stringify(testimonials) }),
 
   // Leads
-  getLeads: (params?: { status?: string; audience_type?: string }) => {
-    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+  getLeads: (params?: { status?: string; audience_type?: string; limit?: number; offset?: number }) => {
+    const filtered = Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined));
+    const qs = Object.keys(filtered).length ? "?" + new URLSearchParams(filtered as any).toString() : "";
     return apiFetch<any[]>(`/api/v1/leads/${qs}`);
   },
   updateLead: (id: string, body: object) => apiFetch(`/api/v1/leads/${id}`, { method: "PATCH", body: JSON.stringify(body) }),

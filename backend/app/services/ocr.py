@@ -7,16 +7,28 @@ logger = logging.getLogger(__name__)
 
 _ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 
+# Pro pour l'OCR : meilleure précision sur les documents médicaux complexes (PDF multi-pages, ordonnances manuscrites)
+_OCR_MODEL = "gemini-2.5-pro"
+
 _OCR_SYSTEM = (
-    "Tu es un assistant médical administratif. "
-    "Extrais les informations clés du document (type de document, médicaments, "
-    "dosages, dates, prescripteur, pathologie mentionnée). "
-    "Produis un résumé structuré en français. "
-    "N'invente aucune information absente du document."
+    "Tu es un assistant administratif polyvalent au service d'indépendants et de TPE. "
+    "Ton rôle est d'analyser tout type de document professionnel : facture, devis, contrat, "
+    "ordonnance, bon de commande, fiche technique, relevé bancaire, document d'identité, "
+    "rapport, courrier administratif, ou tout autre document métier. "
+    "Pour chaque document, identifie et extrais : "
+    "le type de document, les parties impliquées (noms, entreprises, contacts), "
+    "les dates clés (émission, échéance, rendez-vous, validité), "
+    "les montants ou quantités si présents, "
+    "l'objet ou le motif principal, "
+    "et toute information spécifique au domaine (références, numéros de dossier, "
+    "conditions, termes importants, données cliniques si document médical). "
+    "Produis un résumé structuré en français, organisé par sections claires. "
+    "Sois exhaustif sur les données présentes, précis dans les chiffres et dates, "
+    "et n'invente aucune information absente du document."
 )
 
 
-def extract_summary(file_bytes: bytes, mime_type: str, model: str = "gemini-2.0-flash") -> str:
+def extract_summary(file_bytes: bytes, mime_type: str, model: str = _OCR_MODEL) -> str:
     """
     Traite un document médical via Gemini Vision et renvoie un résumé textuel.
     Le fichier source n'est jamais persisté — uniquement le résumé retourné ici.

@@ -144,6 +144,8 @@ async def confirm_appointment(
     result = supabase.table("appointment").update({"status": "confirmed"}).eq("id", str(appointment_id)).execute()
     appt = result.data[0]
 
+    supabase.table("lead").update({"status": "scheduled"}).eq("contact_id", appt["contact_id"]).eq("tenant_id", tenant_id).execute()
+
     contact = supabase.table("contact").select("first_name, last_name, email").eq("id", appt["contact_id"]).single().execute().data
     tenant = supabase.table("tenant").select("name").eq("id", tenant_id).single().execute().data
 
@@ -175,6 +177,8 @@ async def cancel_appointment(
     was_confirmed = appt["status"] == "confirmed"
     result = supabase.table("appointment").update({"status": "cancelled"}).eq("id", str(appointment_id)).execute()
     appt = result.data[0]
+
+    supabase.table("lead").update({"status": "closed_lost"}).eq("contact_id", appt["contact_id"]).eq("tenant_id", tenant_id).execute()
 
     if was_confirmed:
         contact = supabase.table("contact").select("first_name, last_name, email").eq("id", appt["contact_id"]).single().execute().data

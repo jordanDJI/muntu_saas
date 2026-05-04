@@ -1,7 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
+
+const PAGE_SIZE = 10;
 
 const STATUSES = ["new", "contacted", "qualified", "scheduled", "closed_won", "closed_lost"];
 
@@ -32,28 +34,63 @@ export default function LeadsPage() {
   const router = useRouter();
   const [leads, setLeads] = useState<any[]>([]);
   const [filter, setFilter] = useState<string | undefined>(undefined);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [botUsername, setBotUsername] = useState<string>("");
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
   const [linkModal, setLinkModal] = useState<LinkModal | null>(null);
   const [copied, setCopied] = useState(false);
   const [noteSaving, setNoteSaving] = useState<string | null>(null);
 
-  const load = (status?: string) => {
-    api.getLeads(status ? { status } : undefined).then(setLeads).catch(console.error);
-  };
+  const offsetRef = useRef(0);
+  const loadingRef = useRef(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const loadPage = useCallback(async (offset: number, currentFilter?: string) => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setLoading(true);
+    try {
+      const params: Record<string, any> = { limit: PAGE_SIZE, offset };
+      if (currentFilter) params.status = currentFilter;
+      const data = await api.getLeads(params);
+      setLeads((prev) => (offset === 0 ? data : [...prev, ...data]));
+      setHasMore(data.length === PAGE_SIZE);
+      offsetRef.current = offset + data.length;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    load(filter);
     api.getTelegramBotInfo()
       .then((info) => setBotUsername(info.username))
       .catch(() => {});
   }, []);
 
-  useEffect(() => { load(filter); }, [filter]);
+  useEffect(() => {
+    offsetRef.current = 0;
+    setHasMore(true);
+    setLeads([]);
+    loadPage(0, filter);
+  }, [filter, loadPage]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMore) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) loadPage(offsetRef.current, filter);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, filter, loadPage]);
 
   const updateStatus = async (id: string, newStatus: string) => {
     await api.updateLead(id, { status: newStatus });
-    load(filter);
+    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status: newStatus } : l)));
   };
 
   const saveNote = async (id: string, note: string) => {
@@ -196,7 +233,6 @@ export default function LeadsPage() {
                     disabled={generatingFor === lead.id}
                     className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 disabled:opacity-50 transition-colors"
                   >
-                    {/* Icône Telegram */}
                     <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.17 14.46l-2.945-.92c-.64-.203-.654-.64.136-.954l11.498-4.43c.534-.194 1.001.13.835.965z"/>
                     </svg>
@@ -211,8 +247,22 @@ export default function LeadsPage() {
             </div>
           );
         })}
-        {leads.length === 0 && (
+
+        {!loading && leads.length === 0 && (
           <p className="text-gray-400 text-sm text-center py-8">Aucune demande trouvée.</p>
+        )}
+
+        {/* Sentinel infinite scroll */}
+        {hasMore && (
+          <div ref={sentinelRef} className="h-10 flex items-center justify-center">
+            {loading && (
+              <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            )}
+          </div>
+        )}
+
+        {!hasMore && leads.length > 0 && (
+          <p className="text-center text-xs text-gray-400 py-2">Tous les leads sont affichés.</p>
         )}
       </div>
 
@@ -228,7 +278,6 @@ export default function LeadsPage() {
               </p>
             </div>
 
-            {/* Lien */}
             <div className="space-y-2">
               <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
                 <span className="flex-1 text-xs font-mono text-gray-700 break-all select-all">

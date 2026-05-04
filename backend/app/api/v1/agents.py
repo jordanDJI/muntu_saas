@@ -112,7 +112,7 @@ async def list_agent_configs(tenant_id: str = Depends(get_current_tenant)):
     missing = [t for t in _DEFAULT_AGENT_TYPES if t not in existing_types]
     if missing:
         new_rows = [
-            {"tenant_id": tenant_id, "agent_type": t, "status": "active", "model": "gemini-2.0-flash"}
+            {"tenant_id": tenant_id, "agent_type": t, "status": "active", "model": "gemini-2.5-flash"}
             for t in missing
         ]
         created = sb.table("agent_config").insert(new_rows).execute()

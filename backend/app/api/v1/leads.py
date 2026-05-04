@@ -12,6 +12,8 @@ router = APIRouter(prefix="/leads", tags=["Leads"])
 async def list_leads(
     status: str | None = None,
     audience_type: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
     tenant_id: str = Depends(get_current_tenant),
 ):
     supabase = get_supabase_admin()
@@ -20,6 +22,7 @@ async def list_leads(
         .select("*, contact(id, first_name, last_name, email, phone)")
         .eq("tenant_id", tenant_id)
         .order("created_at", desc=True)
+        .range(offset, offset + limit - 1)
     )
     if status:
         query = query.eq("status", status)
