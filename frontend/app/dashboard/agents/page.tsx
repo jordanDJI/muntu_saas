@@ -204,7 +204,7 @@ export default function AgentsPage() {
                   }
                 }}
                 placeholder={`Ex : Tu es l'assistant de ${userName || "votre prénom"}, professionnel de santé. Réponds en français, sois bienveillant…`}
-                className="border rounded-lg px-3 py-2 text-sm w-full resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="border rounded-lg px-3 py-2 text-sm w-full resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
             </div>
 

@@ -8,7 +8,7 @@ const PAGE_SIZE = 10;
 const STATUSES = ["new", "contacted", "qualified", "scheduled", "closed_won", "closed_lost"];
 
 const STATUS_LABELS: Record<string, string> = {
-  new: "Nouvelle",
+  new: "Nouveau",
   contacted: "Contacté",
   qualified: "Qualifié",
   scheduled: "RDV planifié",
@@ -23,6 +23,23 @@ const STATUS_COLORS: Record<string, string> = {
   scheduled: "bg-indigo-100 text-indigo-700",
   closed_won: "bg-green-100 text-green-700",
   closed_lost: "bg-gray-100 text-gray-500",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  website:  "Site web",
+  chatbot:  "Chatbot",
+  whatsapp: "WhatsApp",
+  telegram: "Telegram",
+  phone:    "Téléphone",
+  manual:   "Manuel",
+  referral: "Recommandation",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  b2c_appointment: "Prise de RDV",
+  b2b_appointment: "Prise de RDV (B2B)",
+  contact:         "Prise de contact",
+  information:     "Demande d'info",
 };
 
 type LinkModal = {
@@ -41,6 +58,7 @@ export default function LeadsPage() {
   const [linkModal, setLinkModal] = useState<LinkModal | null>(null);
   const [copied, setCopied] = useState(false);
   const [noteSaving, setNoteSaving] = useState<string | null>(null);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
 
   const offsetRef = useRef(0);
   const loadingRef = useRef(false);
@@ -68,6 +86,16 @@ export default function LeadsPage() {
   useEffect(() => {
     api.getTelegramBotInfo()
       .then((info) => setBotUsername(info.username))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.getLeads({ limit: 500, offset: 0 })
+      .then((all: any[]) => {
+        const counts: Record<string, number> = {};
+        for (const l of all) counts[l.status] = (counts[l.status] ?? 0) + 1;
+        setStatusCounts(counts);
+      })
       .catch(() => {});
   }, []);
 
@@ -147,17 +175,27 @@ export default function LeadsPage() {
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setFilter(undefined)}
-          className={`px-3 py-1 rounded-full text-sm border transition-colors ${!filter ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm border transition-colors ${!filter ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 hover:bg-gray-50"}`}
         >
           Tous
+          {Object.values(statusCounts).reduce((a, b) => a + b, 0) > 0 && (
+            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none ${!filter ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
+              {Object.values(statusCounts).reduce((a, b) => a + b, 0)}
+            </span>
+          )}
         </button>
         {STATUSES.map((s) => (
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={`px-3 py-1 rounded-full text-sm border transition-colors ${filter === s ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm border transition-colors ${filter === s ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 hover:bg-gray-50"}`}
           >
             {STATUS_LABELS[s]}
+            {statusCounts[s] ? (
+              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none ${filter === s ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
+                {statusCounts[s]}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -175,8 +213,20 @@ export default function LeadsPage() {
                     {lead.contact?.email}
                     {lead.contact?.phone ? ` · ${lead.contact.phone}` : ""}
                   </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {lead.request_type} — {lead.source}
+                  <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span>{TYPE_LABELS[lead.request_type] ?? lead.request_type}</span>
+                    {lead.source && (
+                      <>
+                        <span className="text-gray-300">·</span>
+                        <span>{SOURCE_LABELS[lead.source] ?? lead.source}</span>
+                      </>
+                    )}
+                    {lead.created_at && (
+                      <>
+                        <span className="text-gray-300">·</span>
+                        <span>{new Date(lead.created_at).toLocaleDateString("fr-BE", { day: "numeric", month: "short" })}</span>
+                      </>
+                    )}
                   </p>
                 </div>
 
@@ -220,7 +270,7 @@ export default function LeadsPage() {
                       }
                     }}
                     placeholder="Rappel mémo, contexte de la qualification, prochaine étape…"
-                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-yellow-50 placeholder-gray-400"
+                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-yellow-50 placeholder-gray-400"
                   />
                 </div>
               )}

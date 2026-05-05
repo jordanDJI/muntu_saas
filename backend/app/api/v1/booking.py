@@ -239,10 +239,38 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
         "audience_type": "b2c",
     }).execute().data[0]
 
-    # Notifier le tenant (Telegram + WhatsApp) qu'un nouveau RDV est en attente
+    # Notifier le tenant via Telegram/WhatsApp + email
     _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name, body.scheduled_at.isoformat())
+    _email_tenant_pending(sb, tenant, {"first_name": body.first_name, "last_name": body.last_name,
+                                        "email": body.email, "phone": body.phone}, appt)
 
     return {"type": "appointment", "id": appt["id"]}
+
+
+def _email_tenant_pending(sb, tenant: dict, contact: dict, appointment: dict) -> None:
+    """Envoie un email au professionnel pour lui signaler le nouveau RDV en attente."""
+    try:
+        site_res = (
+            sb.table("site")
+            .select("email_contact")
+            .eq("tenant_id", tenant["id"])
+            .execute()
+        )
+        tenant_email = (site_res.data or [{}])[0].get("email_contact") if site_res.data else None
+        if not tenant_email:
+            return
+        from app.services.email import send_appointment_pending_tenant
+        from app.core.config import settings
+        dashboard_url = f"{settings.frontend_url}/dashboard/appointments"
+        send_appointment_pending_tenant(
+            tenant_email=tenant_email,
+            tenant_name=tenant.get("name", ""),
+            contact=contact,
+            appointment=appointment,
+            dashboard_url=dashboard_url,
+        )
+    except Exception as exc:
+        logger.error("Email tenant pending failed: %s", exc)
 
 
 def _notify_tenant_pending(sb, tenant_id: str, first_name: str, last_name: str, scheduled_at: str) -> None:

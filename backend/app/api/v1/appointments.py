@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from uuid import UUID
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
+from app.core.config import settings
 from app.models.appointment import AppointmentCreateIn, AppointmentUpdateIn, AppointmentOut
 from app.services.email import send_appointment_confirmation, send_appointment_cancellation
 
@@ -175,21 +176,25 @@ async def cancel_appointment(
         return appt
 
     was_confirmed = appt["status"] == "confirmed"
+    was_pending = appt["status"] == "pending"
     result = supabase.table("appointment").update({"status": "cancelled"}).eq("id", str(appointment_id)).execute()
     appt = result.data[0]
 
     supabase.table("lead").update({"status": "closed_lost"}).eq("contact_id", appt["contact_id"]).eq("tenant_id", tenant_id).execute()
 
-    if was_confirmed:
+    if was_confirmed or was_pending:
         contact = supabase.table("contact").select("first_name, last_name, email").eq("id", appt["contact_id"]).single().execute().data
-        tenant = supabase.table("tenant").select("name").eq("id", tenant_id).single().execute().data
+        tenant = supabase.table("tenant").select("name, slug").eq("id", tenant_id).single().execute().data
         if contact and contact.get("email") and tenant:
+            booking_url = f"{settings.frontend_url}/{tenant.get('slug', '')}"
             background_tasks.add_task(
                 send_appointment_cancellation,
                 contact_email=contact["email"],
                 contact_name=f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip(),
                 appointment=appt,
                 tenant_name=tenant.get("name", ""),
+                booking_url=booking_url,
+                was_pending=was_pending,
             )
 
     return appt
@@ -230,6 +235,9 @@ async def update_appointment(
         updates["scheduled_at"] = updates["scheduled_at"].isoformat()
     if "end_at" in updates:
         updates["end_at"] = updates["end_at"].isoformat()
+
+    # Vérifie que le RDV appartient bien au tenant avant de modifier
+    _get_tenant_appointment(supabase, appointment_id, tenant_id)
 
     result = (
         supabase.table("appointment")

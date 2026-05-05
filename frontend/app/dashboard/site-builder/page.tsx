@@ -89,6 +89,45 @@ const PHOTO_SECTIONS = [
 
 type PhotoHighlight = "hero" | "about" | "services" | "contact";
 
+// ── Icônes Atouts ─────────────────────────────────────────────────────────────
+
+const ATOUT_ICONS: { key: string; label: string; paths: string[] }[] = [
+  { key: "star",      label: "Étoile",         paths: ["M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"] },
+  { key: "shield",    label: "Protection",      paths: ["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"] },
+  { key: "award",     label: "Excellence",      paths: ["M12 15a7 7 0 100-14 7 7 0 000 14z", "M8.21 13.89L7 23l5-3 5 3-1.21-9.12"] },
+  { key: "heart",     label: "Bienveillance",   paths: ["M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"] },
+  { key: "clock",     label: "Disponibilité",   paths: ["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z", "M12 6v6l4 2"] },
+  { key: "home",      label: "Domicile",        paths: ["M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z", "M9 22V12h6v10"] },
+  { key: "users",     label: "Équipe",          paths: ["M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2", "M9 7a4 4 0 100 8 4 4 0 000-8", "M23 21v-2a4 4 0 00-3-3.87", "M16 3.13a4 4 0 010 7.75"] },
+  { key: "map-pin",   label: "Localisation",    paths: ["M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z", "M12 10a2 2 0 100-4 2 2 0 000 4"] },
+  { key: "check",     label: "Fiabilité",       paths: ["M22 11.08V12a10 10 0 11-5.93-9.14", "M22 4L12 14.01l-3-3"] },
+  { key: "briefcase", label: "Expertise",       paths: ["M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z", "M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"] },
+  { key: "leaf",      label: "Nature",          paths: ["M17 8C8 10 5.9 16.17 3.82 19c2.14-4.14 5.11-7 8.18-8", "M17 8c0 0-2 5-7 8"] },
+  { key: "lightbulb", label: "Innovation",      paths: ["M9 21h6", "M12 3a6 6 0 016 6c0 2.22-1.21 4.16-3 5.2V17H9v-2.8C7.21 13.16 6 11.22 6 9a6 6 0 016-6z"] },
+  { key: "phone",     label: "Joignable",       paths: ["M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"] },
+  { key: "calendar",  label: "Agenda",          paths: ["M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2z", "M16 2v4", "M8 2v4", "M3 10h18"] },
+  { key: "thumbs-up", label: "Satisfaction",    paths: ["M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z", "M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"] },
+  { key: "globe",     label: "International",   paths: ["M12 22a10 10 0 100-20 10 10 0 000 20z", "M2 12h20", "M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"] },
+  { key: "lock",      label: "Confidentialité", paths: ["M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z", "M17 11V7a5 5 0 00-10 0v4"] },
+  { key: "zap",       label: "Rapidité",        paths: ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"] },
+  { key: "trending",  label: "Performance",     paths: ["M23 6l-9.5 9.5-5-5L1 18", "M17 6h6v6"] },
+  { key: "smile",     label: "Convivialité",    paths: ["M12 22a10 10 0 100-20 10 10 0 000 20z", "M8 14s1.5 2 4 2 4-2 4-2", "M9 9h.01", "M15 9h.01"] },
+];
+
+function AtoutIconSVG({ icon, className = "w-5 h-5" }: { icon: string; className?: string }) {
+  const found = ATOUT_ICONS.find((ic) => ic.key === icon);
+  if (found) {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+           className={className}>
+        {found.paths.map((d, idx) => <path key={idx} d={d} />)}
+      </svg>
+    );
+  }
+  return <span className="text-xl leading-none">{icon}</span>;
+}
+
 function SiteWireframe({ highlight }: { highlight: PhotoHighlight }) {
   const ring = "ring-2 ring-indigo-500";
   return (
@@ -169,7 +208,7 @@ type Value = { icon: string; title: string; description: string };
 type Testimonial = { author_name: string; author_role: string; content: string; rating: number };
 
 const EMPTY_OFFER = (): Offer => ({ name: "", description: "", duration_min: "", price_eur: "", image_url: "" });
-const EMPTY_VALUE = (): Value => ({ icon: "⭐", title: "", description: "" });
+const EMPTY_VALUE = (): Value => ({ icon: "star", title: "", description: "" });
 const EMPTY_TESTIMONIAL = (): Testimonial => ({ author_name: "", author_role: "", content: "", rating: 5 });
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -199,7 +238,9 @@ export default function SiteBuilderPage() {
   // Step 3 — Contact & Réseaux
   const [phone, setPhone] = useState("");
   const [emailContact, setEmailContact] = useState("");
-  const [address, setAddress] = useState("");
+  const [addressStreet, setAddressStreet] = useState("");
+  const [addressPostal, setAddressPostal] = useState("");
+  const [addressCity, setAddressCity] = useState("");
   const [facebook, setFacebook] = useState("");
   const [instagram, setInstagram] = useState("");
   const [linkedin, setLinkedin] = useState("");
@@ -225,7 +266,10 @@ export default function SiteBuilderPage() {
   // Step 6 — Valeurs
   const [values, setValues] = useState<Value[]>([EMPTY_VALUE()]);
   const [showAtoutsHelp, setShowAtoutsHelp] = useState(false);
-  const [emojiPickerIdx, setEmojiPickerIdx] = useState<number | null>(null);
+  const [iconPickerIdx, setIconPickerIdx] = useState<number | null>(null);
+
+  // Step validation errors
+  const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
 
   // Step 7 — Témoignages
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
@@ -301,7 +345,10 @@ export default function SiteBuilderPage() {
       // Contact
       setPhone(s.phone ?? "");
       setEmailContact(s.email_contact ?? "");
-      setAddress(s.address ?? "");
+      const ap = style.address_parts ?? {};
+      setAddressStreet(ap.street ?? ((!ap.city && s.address) ? s.address : ""));
+      setAddressPostal(ap.postal_code ?? "");
+      setAddressCity(ap.city ?? "");
       setFacebook(s.social_links?.facebook ?? "");
       setInstagram(s.social_links?.instagram ?? "");
       setLinkedin(s.social_links?.linkedin ?? "");
@@ -368,12 +415,16 @@ export default function SiteBuilderPage() {
         case 2:
           await api.updateSite(siteId, { title, tagline, description });
           break;
-        case 3:
+        case 3: {
+          const addrParts = { street: addressStreet, postal_code: addressPostal, city: addressCity };
+          const fullAddress = [addressStreet, addressPostal, addressCity].filter(Boolean).join(", ");
           await api.updateSite(siteId, {
-            phone, email_contact: emailContact, address,
+            phone, email_contact: emailContact, address: fullAddress,
             social_links: { facebook, instagram, linkedin, ...(phone2 ? { phone2 } : {}) },
+            site_style: { ...buildSiteStyle(), address_parts: addrParts },
           });
           break;
+        }
         case 4:
           await api.updateSite(siteId, { coverage_zones: zones.filter((z) => z.trim()) });
           break;
@@ -406,8 +457,68 @@ export default function SiteBuilderPage() {
     }
   };
 
-  const next = async () => { const ok = await saveStep(); if (ok && step < STEPS.length - 1) setStep(step + 1); };
-  const prev = () => setStep(step - 1);
+  const validateStep = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (step === 2) {
+      if (!title.trim()) errors.title = "Le nom de l'activité est obligatoire";
+    }
+
+    if (step === 3) {
+      if (!phone.trim() && !emailContact.trim()) {
+        errors.contactRequired = "Au moins un téléphone ou un email de contact est requis";
+      }
+      if (emailContact && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailContact)) {
+        errors.emailContact = "Adresse email invalide";
+      }
+    }
+
+    if (step === 4) {
+      if (!zones.some((z) => z.trim())) {
+        errors.zones = "Ajoutez au moins une zone d'intervention";
+      }
+    }
+
+    if (step === 5) {
+      if (pagesEnabled.includes("services") && !offers.some((o) => o.name.trim())) {
+        errors.offers = "Vous avez activé la page Services — ajoutez au moins une prestation";
+      }
+      offers.forEach((o, i) => {
+        if ((o.description || o.duration_min || o.price_eur || o.image_url) && !o.name.trim()) {
+          errors[`offer_${i}_name`] = "Le nom de la prestation est obligatoire";
+        }
+      });
+    }
+
+    if (step === 6) {
+      values.forEach((v, i) => {
+        if (v.description && !v.title.trim()) {
+          errors[`value_${i}_title`] = "Le titre de l'atout est obligatoire";
+        }
+      });
+    }
+
+    if (step === 7) {
+      testimonials.forEach((t, i) => {
+        if ((t.content || t.author_role) && !t.author_name.trim()) {
+          errors[`testimonial_${i}_name`] = "Le nom de l'auteur est obligatoire";
+        }
+        if ((t.author_name || t.author_role) && !t.content.trim()) {
+          errors[`testimonial_${i}_content`] = "Le contenu du témoignage est obligatoire";
+        }
+      });
+    }
+
+    setStepErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const next = async () => {
+    if (!validateStep()) return;
+    const ok = await saveStep();
+    if (ok && step < STEPS.length - 1) setStep(step + 1);
+  };
+  const prev = () => { setStepErrors({}); setStep(step - 1); };
 
   const previewSite = async () => {
     if (!tenantSlug) return;
@@ -520,8 +631,9 @@ export default function SiteBuilderPage() {
       <div className="space-y-2">
         <div className="flex gap-1">
           {STEPS.map((_s, i) => (
-            <button key={i} onClick={() => setStep(i)}
-              className={`flex-1 h-1.5 rounded-full transition-colors ${i <= step ? "bg-indigo-600" : "bg-gray-200"}`} />
+            <button key={i}
+              onClick={() => { if (i < step) { setStepErrors({}); setStep(i); } }}
+              className={`flex-1 h-1.5 rounded-full transition-colors ${i <= step ? "bg-indigo-600" : "bg-gray-200"} ${i < step ? "cursor-pointer" : "cursor-default"}`} />
           ))}
         </div>
         <p className="text-sm text-gray-500">
@@ -787,7 +899,10 @@ export default function SiteBuilderPage() {
           <h2 className="font-semibold text-gray-800">Identité de votre activité</h2>
           <div>
             <label className="lbl">Nom de l'activité *</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} className="inp" placeholder="Ex : EvaCare, Muntu Cura, Cabinet Dubois…" />
+            <input value={title} onChange={(e) => { setTitle(e.target.value); if (stepErrors.title) setStepErrors((p) => ({ ...p, title: "" })); }}
+              className={`inp ${stepErrors.title ? "border-red-400 focus:border-red-400" : ""}`}
+              placeholder="Ex : EvaCare, Muntu Cura, Cabinet Dubois…" />
+            {stepErrors.title && <p className="text-red-500 text-xs mt-1">{stepErrors.title}</p>}
           </div>
           <div>
             <label className="lbl">Accroche principale <span className="text-gray-400 font-normal">(tagline)</span></label>
@@ -796,7 +911,7 @@ export default function SiteBuilderPage() {
           <div>
             <label className="lbl">Description de votre activité</label>
             <textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)}
-              className="inp resize-none"
+              className="inp resize-y"
               placeholder="Présentez votre activité, votre expérience, votre approche, ce qui vous distingue…" />
           </div>
         </div>
@@ -808,21 +923,44 @@ export default function SiteBuilderPage() {
       {step === 3 && (
         <div className="bg-white rounded-xl shadow p-6 space-y-4">
           <h2 className="font-semibold text-gray-800">Coordonnées & réseaux sociaux</h2>
+          <p className="text-xs text-gray-400">Au moins un numéro de téléphone ou un email est obligatoire *</p>
+          {stepErrors.contactRequired && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600">
+              {stepErrors.contactRequired}
+            </div>
+          )}
           <div>
-            <label className="lbl">Téléphone principal</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="inp" placeholder="+32 (0)466 42 23 77" />
+            <label className="lbl">Téléphone principal *</label>
+            <input value={phone}
+              onChange={(e) => { setPhone(e.target.value); if (stepErrors.contactRequired) setStepErrors((p) => ({ ...p, contactRequired: "" })); }}
+              className={`inp ${stepErrors.contactRequired && !emailContact.trim() ? "border-red-400" : ""}`}
+              placeholder="+32 (0)466 42 23 77" />
           </div>
           <div>
             <label className="lbl">Téléphone secondaire <span className="text-gray-400 font-normal">(optionnel)</span></label>
             <input value={phone2} onChange={(e) => setPhone2(e.target.value)} className="inp" placeholder="+32 (0)2 123 45 67" />
           </div>
           <div>
-            <label className="lbl">Email de contact</label>
-            <input type="email" value={emailContact} onChange={(e) => setEmailContact(e.target.value)} className="inp" placeholder="contact@monactivite.be" />
+            <label className="lbl">Email de contact *</label>
+            <input type="email" value={emailContact}
+              onChange={(e) => { setEmailContact(e.target.value); if (stepErrors.emailContact || stepErrors.contactRequired) setStepErrors((p) => ({ ...p, emailContact: "", contactRequired: "" })); }}
+              className={`inp ${(stepErrors.emailContact || (stepErrors.contactRequired && !phone.trim())) ? "border-red-400 focus:border-red-400" : ""}`}
+              placeholder="contact@monactivite.be" />
+            {stepErrors.emailContact && <p className="text-red-500 text-xs mt-1">{stepErrors.emailContact}</p>}
           </div>
           <div>
             <label className="lbl">Adresse</label>
-            <input value={address} onChange={(e) => setAddress(e.target.value)} className="inp" placeholder="Rue de l'Exemple 12, 1000 Bruxelles" />
+            <input value={addressStreet} onChange={(e) => setAddressStreet(e.target.value)} className="inp" placeholder="Rue de l'Exemple 12" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="lbl">Code postal</label>
+              <input value={addressPostal} onChange={(e) => setAddressPostal(e.target.value)} className="inp" placeholder="1000" />
+            </div>
+            <div>
+              <label className="lbl">Ville</label>
+              <input value={addressCity} onChange={(e) => setAddressCity(e.target.value)} className="inp" placeholder="Bruxelles" />
+            </div>
           </div>
           <div className="pt-3 border-t space-y-3">
             <p className="text-sm font-medium text-gray-700">Réseaux sociaux <span className="text-gray-400 font-normal">(optionnel)</span></p>
@@ -846,7 +984,12 @@ export default function SiteBuilderPage() {
       {step === 4 && (
         <div className="bg-white rounded-xl shadow p-6 space-y-4">
           <h2 className="font-semibold text-gray-800">Zones d'intervention</h2>
-          <p className="text-sm text-gray-500">Listez les villes, communes ou régions que vous couvrez.</p>
+          <p className="text-sm text-gray-500">Listez les villes, communes ou régions que vous couvrez. <span className="font-medium text-gray-700">Au moins une zone est requise.</span></p>
+          {stepErrors.zones && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600">
+              {stepErrors.zones}
+            </div>
+          )}
           {zones.map((z, i) => (
             <div key={i} className="relative flex gap-2">
               <div className="relative flex-1">
@@ -855,6 +998,7 @@ export default function SiteBuilderPage() {
                   onChange={(e) => {
                     const v = e.target.value;
                     setZones((prev) => prev.map((z2, idx) => idx === i ? v : z2));
+                    if (v.trim() && stepErrors.zones) setStepErrors((p) => ({ ...p, zones: "" }));
                     if (zoneTimerRef.current) clearTimeout(zoneTimerRef.current);
                     if (v.length < 2) { setZoneSuggestions(null); return; }
                     zoneTimerRef.current = setTimeout(async () => {
@@ -908,6 +1052,11 @@ export default function SiteBuilderPage() {
       ────────────────────────────────────────────────────────────────────── */}
       {step === 5 && (
         <div className="space-y-4">
+          {stepErrors.offers && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+              {stepErrors.offers}
+            </div>
+          )}
           <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">
             La durée et le prix sont <strong>facultatifs</strong>. Ne remplissez que ce que vous souhaitez afficher.
           </div>
@@ -919,11 +1068,14 @@ export default function SiteBuilderPage() {
                   <button onClick={() => listRemove(setOffers, i)} className="text-red-400 hover:text-red-600 text-sm">Supprimer</button>
                 )}
               </div>
-              <input value={o.name} onChange={(e) => listUpdate(setOffers, i, { name: e.target.value })}
-                className="inp" placeholder="Nom de la prestation *" />
+              <input value={o.name}
+                onChange={(e) => { listUpdate(setOffers, i, { name: e.target.value }); if (stepErrors[`offer_${i}_name`] || stepErrors.offers) setStepErrors((p) => ({ ...p, [`offer_${i}_name`]: "", offers: "" })); }}
+                className={`inp ${stepErrors[`offer_${i}_name`] ? "border-red-400" : ""}`}
+                placeholder="Nom de la prestation *" />
+              {stepErrors[`offer_${i}_name`] && <p className="text-red-500 text-xs">{stepErrors[`offer_${i}_name`]}</p>}
               <textarea rows={2} value={o.description}
                 onChange={(e) => listUpdate(setOffers, i, { description: e.target.value })}
-                className="inp resize-none" placeholder="Description (optionnel)" />
+                className="inp resize-y" placeholder="Description (optionnel)" />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="lbl">Durée (min) — facultatif</label>
@@ -1017,31 +1169,43 @@ export default function SiteBuilderPage() {
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setEmojiPickerIdx(emojiPickerIdx === i ? null : i)}
-                    className="inp w-14 text-center text-xl cursor-pointer hover:border-indigo-400 transition-colors"
-                  >{v.icon || "⭐"}</button>
-                  {emojiPickerIdx === i && (
-                    <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-2xl shadow-xl p-3 w-64">
+                    onClick={() => setIconPickerIdx(iconPickerIdx === i ? null : i)}
+                    className="inp w-14 h-10 flex items-center justify-center cursor-pointer hover:border-indigo-400 transition-colors text-indigo-600"
+                    title="Choisir une icône"
+                  >
+                    <AtoutIconSVG icon={v.icon || "star"} className="w-5 h-5" />
+                  </button>
+                  {iconPickerIdx === i && (
+                    <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-2xl shadow-xl p-3 w-80">
                       <p className="text-xs text-gray-400 mb-2 font-medium">Choisissez une icône</p>
-                      <div className="grid grid-cols-8 gap-1">
-                        {["⭐","🏅","🎯","💪","🌟","✅","🔑","💡","🚀","🤝","📋","🎓","🏆","💎","🔒","🌍","📱","💻","🕐","🏠","🚗","✈️","❤️","🌿","🛡️","📞","🗓️","🔧","📊","🎨","🏥","🌸","👑","💰","🔍","📍","🤗","😊","🎁","⚡","🌺","🦷","💊","🩺","🧘","🍃","🧡","🫶","🎪"].map((em) => (
+                      <div className="grid grid-cols-5 gap-1">
+                        {ATOUT_ICONS.map((ic) => (
                           <button
-                            key={em}
+                            key={ic.key}
                             type="button"
-                            onClick={() => { listUpdate(setValues, i, { icon: em }); setEmojiPickerIdx(null); }}
-                            className={`text-xl p-1 rounded-lg hover:bg-indigo-50 transition-colors ${v.icon === em ? "bg-indigo-100" : ""}`}
-                          >{em}</button>
+                            onClick={() => { listUpdate(setValues, i, { icon: ic.key }); setIconPickerIdx(null); }}
+                            className={`flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-indigo-50 transition-colors text-indigo-700 ${v.icon === ic.key ? "bg-indigo-100 ring-1 ring-indigo-400" : ""}`}
+                            title={ic.label}
+                          >
+                            <AtoutIconSVG icon={ic.key} className="w-5 h-5" />
+                            <span className="text-[9px] text-gray-500 leading-none text-center">{ic.label}</span>
+                          </button>
                         ))}
                       </div>
                     </div>
                   )}
                 </div>
-                <input value={v.title} onChange={(e) => listUpdate(setValues, i, { title: e.target.value })}
-                  className="inp flex-1" placeholder="Titre de l'atout *" />
+                <div className="flex-1">
+                  <input value={v.title}
+                    onChange={(e) => { listUpdate(setValues, i, { title: e.target.value }); if (stepErrors[`value_${i}_title`]) setStepErrors((p) => ({ ...p, [`value_${i}_title`]: "" })); }}
+                    className={`inp w-full ${stepErrors[`value_${i}_title`] ? "border-red-400" : ""}`}
+                    placeholder="Titre de l'atout *" />
+                  {stepErrors[`value_${i}_title`] && <p className="text-red-500 text-xs mt-1">{stepErrors[`value_${i}_title`]}</p>}
+                </div>
               </div>
               <textarea rows={2} value={v.description}
                 onChange={(e) => listUpdate(setValues, i, { description: e.target.value })}
-                className="inp resize-none" placeholder="Décrivez cet atout en 1-2 phrases…" />
+                className="inp resize-y" placeholder="Décrivez cet atout en 1-2 phrases…" />
             </div>
           ))}
           {values.length < 6 && (
@@ -1065,13 +1229,23 @@ export default function SiteBuilderPage() {
                 <button onClick={() => listRemove(setTestimonials, i)} className="text-red-400 hover:text-red-600 text-sm">Supprimer</button>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <input value={t.author_name} onChange={(e) => listUpdate(setTestimonials, i, { author_name: e.target.value })}
-                  className="inp" placeholder="Nom *" />
+                <div>
+                  <input value={t.author_name}
+                    onChange={(e) => { listUpdate(setTestimonials, i, { author_name: e.target.value }); if (stepErrors[`testimonial_${i}_name`]) setStepErrors((p) => ({ ...p, [`testimonial_${i}_name`]: "" })); }}
+                    className={`inp ${stepErrors[`testimonial_${i}_name`] ? "border-red-400" : ""}`}
+                    placeholder="Nom *" />
+                  {stepErrors[`testimonial_${i}_name`] && <p className="text-red-500 text-xs mt-1">{stepErrors[`testimonial_${i}_name`]}</p>}
+                </div>
                 <input value={t.author_role} onChange={(e) => listUpdate(setTestimonials, i, { author_role: e.target.value })}
                   className="inp" placeholder="Rôle (ex : WZC Brugge)" />
               </div>
-              <textarea rows={3} value={t.content} onChange={(e) => listUpdate(setTestimonials, i, { content: e.target.value })}
-                className="inp resize-none" placeholder="Ce que dit votre client…" />
+              <div>
+                <textarea rows={3} value={t.content}
+                  onChange={(e) => { listUpdate(setTestimonials, i, { content: e.target.value }); if (stepErrors[`testimonial_${i}_content`]) setStepErrors((p) => ({ ...p, [`testimonial_${i}_content`]: "" })); }}
+                  className={`inp resize-y ${stepErrors[`testimonial_${i}_content`] ? "border-red-400" : ""}`}
+                  placeholder="Ce que dit votre client…" />
+                {stepErrors[`testimonial_${i}_content`] && <p className="text-red-500 text-xs mt-1">{stepErrors[`testimonial_${i}_content`]}</p>}
+              </div>
               <div className="flex items-center gap-1">
                 <span className="text-sm text-gray-500 mr-1">Note :</span>
                 {[1, 2, 3, 4, 5].map((star) => (

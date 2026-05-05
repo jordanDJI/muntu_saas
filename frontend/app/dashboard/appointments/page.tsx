@@ -304,26 +304,56 @@ function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose
 
 // ── AvailabilityPanel ─────────────────────────────────────────────────────────
 
+type TimeRange = { start_time: string; end_time: string; slot_duration_min: number };
+type DaySlots  = { day_of_week: number; is_active: boolean; ranges: TimeRange[] };
+
+const DEFAULT_RANGE: TimeRange = { start_time: "09:00", end_time: "18:00", slot_duration_min: 30 };
+
 function AvailabilityPanel({ availability, onSave, onClose }: {
   availability: AvailSlot[]; onSave: () => void; onClose: () => void;
 }) {
-  const [slots, setSlots] = useState<AvailSlot[]>(() =>
+  const [days, setDays] = useState<DaySlots[]>(() =>
     DAYS_FR.map((_, i) => {
-      const ex = availability.find(s => s.day_of_week === i);
-      return ex ?? { day_of_week: i, start_time: "09:00", end_time: "18:00", slot_duration_min: 30, is_active: false };
+      const daySlots = availability.filter(s => s.day_of_week === i);
+      if (daySlots.length > 0) {
+        return {
+          day_of_week: i,
+          is_active: true,
+          ranges: daySlots.map(s => ({ start_time: s.start_time, end_time: s.end_time, slot_duration_min: s.slot_duration_min })),
+        };
+      }
+      return { day_of_week: i, is_active: false, ranges: [{ ...DEFAULT_RANGE }] };
     })
   );
   const [saving, setSaving] = useState(false);
 
-  const toggle = (i: number) =>
-    setSlots(p => p.map((s,idx) => idx===i ? {...s,is_active:!s.is_active} : s));
-  const upd = (i: number, f: keyof AvailSlot, v: any) =>
-    setSlots(p => p.map((s,idx) => idx===i ? {...s,[f]:v} : s));
+  const toggleDay = (i: number) =>
+    setDays(p => p.map((d, idx) => idx === i ? { ...d, is_active: !d.is_active } : d));
+
+  const updRange = (di: number, ri: number, patch: Partial<TimeRange>) =>
+    setDays(p => p.map((d, idx) => idx !== di ? d : {
+      ...d,
+      ranges: d.ranges.map((r, ridx) => ridx === ri ? { ...r, ...patch } : r),
+    }));
+
+  const addRange = (di: number) =>
+    setDays(p => p.map((d, idx) => idx !== di ? d : {
+      ...d,
+      ranges: [...d.ranges, { start_time: "14:00", end_time: "18:00", slot_duration_min: d.ranges[0]?.slot_duration_min ?? 30 }],
+    }));
+
+  const removeRange = (di: number, ri: number) =>
+    setDays(p => p.map((d, idx) => idx !== di ? d : { ...d, ranges: d.ranges.filter((_, ridx) => ridx !== ri) }));
 
   const save = async () => {
     setSaving(true);
-    try { await api.replaceAvailability(slots.filter(s => s.is_active)); onSave(); }
-    finally { setSaving(false); }
+    try {
+      const flat: AvailSlot[] = days
+        .filter(d => d.is_active && d.ranges.length > 0)
+        .flatMap(d => d.ranges.map(r => ({ day_of_week: d.day_of_week, is_active: true, ...r })));
+      await api.replaceAvailability(flat);
+      onSave();
+    } finally { setSaving(false); }
   };
 
   return (
@@ -334,27 +364,44 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
         <div className="flex-1 overflow-auto p-4 space-y-3">
-          {slots.map((s, i) => (
-            <div key={i} className={`rounded-lg border p-3 ${s.is_active ? "border-indigo-300 bg-indigo-50" : "border-gray-200"}`}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-medium text-sm">{DAYS_FULL[i]}</span>
-                <button onClick={() => toggle(i)}
-                  className={`w-10 h-5 rounded-full transition-colors relative ${s.is_active?"bg-indigo-600":"bg-gray-300"}`}>
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${s.is_active?"left-5":"left-0.5"}`}/>
+          {days.map((d, di) => (
+            <div key={di} className={`rounded-lg border p-3 space-y-2 ${d.is_active ? "border-indigo-300 bg-indigo-50" : "border-gray-200"}`}>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-sm">{DAYS_FULL[di]}</span>
+                <button onClick={() => toggleDay(di)}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${d.is_active ? "bg-indigo-600" : "bg-gray-300"}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${d.is_active ? "left-5" : "left-0.5"}`} />
                 </button>
               </div>
-              {s.is_active && (
-                <div className="flex gap-2 items-center flex-wrap">
-                  <input type="time" value={s.start_time} onChange={e=>upd(i,"start_time",e.target.value)}
-                    className="border rounded px-2 py-1 text-sm flex-1 min-w-0"/>
-                  <span className="text-gray-400 text-sm">→</span>
-                  <input type="time" value={s.end_time} onChange={e=>upd(i,"end_time",e.target.value)}
-                    className="border rounded px-2 py-1 text-sm flex-1 min-w-0"/>
-                  <select value={s.slot_duration_min} onChange={e=>upd(i,"slot_duration_min",Number(e.target.value))}
-                    className="border rounded px-2 py-1 text-sm">
-                    {[15,30,45,60,90].map(d=><option key={d} value={d}>{d<60?`${d} min`:`${d/60}h`}</option>)}
+
+              {d.is_active && d.ranges.map((r, ri) => (
+                <div key={ri} className="flex gap-2 items-center flex-wrap bg-white rounded-lg px-2 py-1.5 border border-indigo-100">
+                  {ri === 0
+                    ? <span className="text-xs text-gray-400 w-12 shrink-0">Matin</span>
+                    : ri === 1
+                    ? <span className="text-xs text-gray-400 w-12 shrink-0">Après-midi</span>
+                    : <span className="text-xs text-gray-400 w-12 shrink-0">Plage {ri + 1}</span>
+                  }
+                  <input type="time" value={r.start_time} onChange={e => updRange(di, ri, { start_time: e.target.value })}
+                    className="border rounded px-2 py-1 text-sm flex-1 min-w-[80px]" />
+                  <span className="text-gray-400 text-xs">→</span>
+                  <input type="time" value={r.end_time} onChange={e => updRange(di, ri, { end_time: e.target.value })}
+                    className="border rounded px-2 py-1 text-sm flex-1 min-w-[80px]" />
+                  <select value={r.slot_duration_min} onChange={e => updRange(di, ri, { slot_duration_min: Number(e.target.value) })}
+                    className="border rounded px-2 py-1 text-xs bg-white">
+                    {[15,30,45,60,90].map(v => <option key={v} value={v}>{v < 60 ? `${v} min` : `${v/60}h`}</option>)}
                   </select>
+                  {d.ranges.length > 1 && (
+                    <button onClick={() => removeRange(di, ri)} className="text-red-400 hover:text-red-600 text-xs px-1">✕</button>
+                  )}
                 </div>
+              ))}
+
+              {d.is_active && d.ranges.length < 3 && (
+                <button onClick={() => addRange(di)}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline pl-1">
+                  + Ajouter une plage (ex : après-midi)
+                </button>
               )}
             </div>
           ))}
@@ -362,7 +409,7 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
         <div className="p-4 border-t">
           <button onClick={save} disabled={saving}
             className="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50">
-            {saving?"Enregistrement…":"Enregistrer"}
+            {saving ? "Enregistrement…" : "Enregistrer"}
           </button>
         </div>
       </div>
