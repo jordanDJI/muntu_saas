@@ -86,6 +86,28 @@ export const api = {
     apiFetch<any>("/api/v1/agents/links", { method: "POST", body: JSON.stringify(body) }),
   getAgentLinks: () => apiFetch<any[]>("/api/v1/agents/links"),
 
+  // Upload photo site
+  uploadSitePhoto: async (file: File, section: string): Promise<{ url: string }> => {
+    const headers = await getAuthHeaders();
+    const form = new FormData();
+    form.append("file", file);
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/api/v1/uploads/photo?section=${encodeURIComponent(section)}`, {
+        method: "POST",
+        headers,
+        body: form,
+      });
+    } catch {
+      throw new Error(`Serveur inaccessible (${API_URL}).`);
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail ?? `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
   // Agents IA — OCR
   uploadOCRDocument: (contactId: string, file: File, appointmentId?: string) => {
     const form = new FormData();

@@ -211,6 +211,17 @@ const EMPTY_OFFER = (): Offer => ({ name: "", description: "", duration_min: "",
 const EMPTY_VALUE = (): Value => ({ icon: "star", title: "", description: "" });
 const EMPTY_TESTIMONIAL = (): Testimonial => ({ author_name: "", author_role: "", content: "", rating: 5 });
 
+function isUnsupportedPhotoUrl(url: string): string | null {
+  if (!url) return null;
+  if (/photos\.app\.goo\.gl|photos\.google\.com/i.test(url))
+    return "Les liens Google Photos ne peuvent pas être intégrés directement. Ouvrez la photo → ⋮ → « Partager » → copiez le lien de l'image (clic droit → « Ouvrir l'image »), ou utilisez Imgur / ibb.co.";
+  if (/drive\.google\.com\/file/i.test(url))
+    return "Les liens Google Drive ne s'affichent pas directement. Utilisez un hébergeur comme Imgur ou ibb.co.";
+  if (/instagram\.com|facebook\.com/i.test(url))
+    return "Les liens Instagram et Facebook ne peuvent pas être intégrés. Téléchargez l'image et hébergez-la sur Imgur ou ibb.co.";
+  return null;
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SiteBuilderPage() {
@@ -283,6 +294,28 @@ export default function SiteBuilderPage() {
   // Step 1 — Photos par section (conditionnel si has_photos)
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [openGuide, setOpenGuide] = useState<string | null>(null);
+
+  // Upload photos
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadCbRef = useRef<((file: File) => void) | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+
+  const triggerUpload = (cb: (file: File) => void) => {
+    uploadCbRef.current = cb;
+    fileInputRef.current?.click();
+  };
+
+  const uploadPhoto = async (file: File, section: string, onSuccess: (url: string) => void) => {
+    setUploading(section);
+    try {
+      const { url } = await api.uploadSitePhoto(file, section);
+      onSuccess(url);
+    } catch (e: any) {
+      alert(`Erreur upload : ${e.message}`);
+    } finally {
+      setUploading(null);
+    }
+  };
 
   const [noSite, setNoSite] = useState(false);
   const [loadError, setLoadError] = useState<"session" | string | null>(null);
@@ -609,6 +642,19 @@ export default function SiteBuilderPage() {
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-8 pb-16">
 
+      {/* Input file caché — partagé pour tous les uploads */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && uploadCbRef.current) uploadCbRef.current(file);
+          e.target.value = "";
+        }}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -698,14 +744,32 @@ export default function SiteBuilderPage() {
                     <p className="text-xs text-indigo-500">Astuce : ImgBB.com est le plus simple — glissez votre image et copiez le "Direct link".</p>
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={() => triggerUpload((file) => uploadPhoto(file, "logo", setLogoUrl))}
+                  disabled={uploading === "logo"}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                >
+                  {uploading === "logo" ? (
+                    <><div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />Envoi…</>
+                  ) : (
+                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>Choisir un logo</>
+                  )}
+                </button>
+                <div className="flex items-center gap-2 my-2">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-xs text-gray-400">ou entrez une URL</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
                 <input
                   value={logoUrl}
                   onChange={(e) => setLogoUrl(e.target.value)}
                   className="inp"
                   placeholder="https://i.ibb.co/mon-logo.png"
                 />
-                {logoUrl && (
-                  <img src={logoUrl} alt="Aperçu logo" className="h-12 object-contain rounded border border-gray-200 p-1" onError={(e) => (e.currentTarget.style.display = "none")} />
+                {logoUrl && (isUnsupportedPhotoUrl(logoUrl)
+                  ? <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">{isUnsupportedPhotoUrl(logoUrl)}</p>
+                  : <img src={logoUrl} alt="Aperçu logo" className="h-12 object-contain rounded border border-gray-200 p-1" onError={(e) => (e.currentTarget.style.display = "none")} />
                 )}
               </div>
             )}
@@ -825,7 +889,7 @@ export default function SiteBuilderPage() {
             {/* Champs photos par section — visibles uniquement si has_photos */}
             {photosOption === "has_photos" && (
               <div className="border-t pt-4 space-y-5">
-                <p className="text-sm font-medium text-gray-700">Renseignez l'URL de chaque photo <span className="font-normal text-gray-400">(hébergez-les sur Google Drive, Dropbox, ou votre serveur)</span></p>
+                <p className="text-sm font-medium text-gray-700">Ajoutez une photo par section — uploadez directement ou collez une URL.</p>
                 {PHOTO_SECTIONS.map((section) => (
                   <div key={section.key} className="relative">
 
@@ -876,6 +940,23 @@ export default function SiteBuilderPage() {
                       </div>
                     )}
 
+                    <button
+                      type="button"
+                      onClick={() => triggerUpload((file) => uploadPhoto(file, section.key, (url) => setPhotoUrls((p) => ({ ...p, [section.key]: url }))))}
+                      disabled={!!uploading}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                    >
+                      {uploading === section.key ? (
+                        <><div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />Envoi en cours…</>
+                      ) : (
+                        <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>Choisir une photo</>
+                      )}
+                    </button>
+                    <div className="flex items-center gap-2 my-2">
+                      <div className="flex-1 h-px bg-gray-200" />
+                      <span className="text-xs text-gray-400">ou entrez une URL</span>
+                      <div className="flex-1 h-px bg-gray-200" />
+                    </div>
                     <input
                       value={photoUrls[section.key] ?? ""}
                       onChange={(e) => setPhotoUrls((prev) => ({ ...prev, [section.key]: e.target.value }))}
@@ -883,6 +964,44 @@ export default function SiteBuilderPage() {
                       placeholder="https://exemple.com/ma-photo.jpg"
                     />
                     <p className="text-xs text-gray-400 mt-1">{section.hint}</p>
+                    {(() => {
+                      const url = photoUrls[section.key];
+                      const warn = isUnsupportedPhotoUrl(url ?? "");
+                      return (
+                        <>
+                          {warn && (
+                            <div className="mt-2 flex gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                              <svg className="w-3.5 h-3.5 mt-0.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                              </svg>
+                              <span>{warn}</span>
+                            </div>
+                          )}
+                          {url && !warn && (
+                            <img
+                              src={url}
+                              alt="Aperçu"
+                              className="mt-2 h-28 w-full object-cover rounded-lg border border-gray-200"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                const next = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                if (next) next.style.display = "flex";
+                              }}
+                            />
+                          )}
+                          {url && !warn && (
+                            <div
+                              className="mt-2 hidden items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700"
+                            >
+                              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              Image inaccessible — vérifiez que le lien est public et se termine par une extension (.jpg, .png…).
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -1091,13 +1210,32 @@ export default function SiteBuilderPage() {
                 </div>
               </div>
               <div>
-                <label className="lbl">Image de la prestation <span className="text-gray-400 font-normal">(URL — optionnel)</span></label>
-                <input value={o.image_url} onChange={(e) => listUpdate(setOffers, i, { image_url: e.target.value })}
-                  className="inp" placeholder="https://i.ibb.co/ma-photo.jpg" />
-                {o.image_url && (
-                  <img src={o.image_url} alt="aperçu" className="mt-2 h-20 w-full object-cover rounded-lg border border-gray-200"
-                    onError={(e) => (e.currentTarget.style.display = "none")} />
-                )}
+                <label className="lbl">Image de la prestation <span className="text-gray-400 font-normal">(optionnel)</span></label>
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => triggerUpload((file) => uploadPhoto(file, "offer", (url) => listUpdate(setOffers, i, { image_url: url })))}
+                    disabled={!!uploading}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                  >
+                    {uploading === `offer_${i}` ? (
+                      <><div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />Envoi…</>
+                    ) : (
+                      <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>Choisir</>
+                    )}
+                  </button>
+                  <input value={o.image_url} onChange={(e) => listUpdate(setOffers, i, { image_url: e.target.value })}
+                    className="inp flex-1" placeholder="ou entrez une URL" />
+                </div>
+                {(() => {
+                  const warn = isUnsupportedPhotoUrl(o.image_url);
+                  return o.image_url ? (
+                    warn
+                      ? <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">{warn}</p>
+                      : <img src={o.image_url} alt="aperçu" className="h-20 w-full object-cover rounded-lg border border-gray-200"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                  ) : null;
+                })()}
               </div>
             </div>
           ))}

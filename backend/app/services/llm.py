@@ -6,6 +6,14 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Modèles retirés → remplacés automatiquement
+_DEPRECATED_MODELS = {
+    "gemini-2.0-flash":      "gemini-2.5-flash",
+    "gemini-2.0-flash-lite": "gemini-2.5-flash",
+    "gemini-1.5-flash":      "gemini-2.5-flash",
+    "gemini-1.5-pro":        "gemini-2.5-pro",
+}
+
 _FALLBACK_SYSTEM = (
     "Tu es un assistant administratif. Réponds uniquement aux questions "
     "liées aux services, horaires et rendez-vous du professionnel. "
@@ -26,6 +34,7 @@ def chat_completion(
     system_prompt: str | None = None,
 ) -> str:
     """Appel LLM synchrone — renvoie le texte de la réponse avec gestion de retry."""
+    model = _DEPRECATED_MODELS.get(model, model)
     system = system_prompt or _FALLBACK_SYSTEM
 
     # Format dict simple — compatible avec toutes les versions du SDK google-genai

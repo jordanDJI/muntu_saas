@@ -16,21 +16,26 @@ async def send_appointment_reminders() -> None:
     """
     Envoie les rappels 24h avant les RDV confirmés.
     Utilise reminder_sent_at pour éviter les doublons si le job tourne plusieurs fois.
+    Migration requise : ALTER TABLE appointment ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
     """
     supabase = get_supabase_admin()
     now = datetime.now(timezone.utc)
     window_start = (now + timedelta(hours=23)).isoformat()
     window_end = (now + timedelta(hours=25)).isoformat()
 
-    result = (
-        supabase.table("appointment")
-        .select("*, contact(first_name, last_name, email), calendar(tenant(name))")
-        .eq("status", "confirmed")
-        .is_("reminder_sent_at", "null")
-        .gte("scheduled_at", window_start)
-        .lte("scheduled_at", window_end)
-        .execute()
-    )
+    try:
+        result = (
+            supabase.table("appointment")
+            .select("*, contact(first_name, last_name, email), calendar(tenant(name))")
+            .eq("status", "confirmed")
+            .is_("reminder_sent_at", "null")
+            .gte("scheduled_at", window_start)
+            .lte("scheduled_at", window_end)
+            .execute()
+        )
+    except Exception as exc:
+        logger.error("Reminder query failed (colonne reminder_sent_at manquante ?): %s", exc)
+        return
 
     for appt in result.data or []:
         contact = appt.get("contact") or {}
@@ -90,7 +95,10 @@ async def run_synthesis_worker() -> None:
         )
 
         if last_res.data:
-            last_end = datetime.fromisoformat(last_res.data[0]["period_end"].replace("Z", "+00:00"))
+            raw = last_res.data[0]["period_end"]
+            last_end = datetime.fromisoformat(raw)
+            if last_end.tzinfo is None:
+                last_end = last_end.replace(tzinfo=timezone.utc)
             if (now - last_end).total_seconds() < schedule_min * 60:
                 continue
             period_start = last_end
