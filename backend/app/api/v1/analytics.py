@@ -150,8 +150,11 @@ async def get_summary(days: int = 30, tenant_id: str = Depends(get_current_tenan
         pass  # table not yet created — degrade gracefully
 
     # ── Conversion rates ──────────────────────────────────────────────────────
+    # Sessions → leads (acquisition rate)
     conv_lead = round(len(leads) / pageviews * 100, 1) if pageviews > 0 else None
-    conv_appt = round(len(appts) / len(leads) * 100, 1) if leads else None
+    # Leads → confirmed appointments (capped at 100% — direct dashboard appts excluded)
+    confirmed_appts = sum(1 for a in appts if a.get("status") == "confirmed")
+    conv_appt = round(min(confirmed_appts / len(leads) * 100, 100.0), 1) if leads else None
 
     return {
         "period_days": days,
