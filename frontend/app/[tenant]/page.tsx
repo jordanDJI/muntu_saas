@@ -51,24 +51,18 @@ async function getSiteData(slug: string, preview = false) {
 
   if (!tenant) return null;
 
-  if (preview) {
-    const { data: site } = await supabaseAdmin
-      .from("site")
-      .select("*, service_offer(*), service_area(*), testimonial(*)")
-      .eq("tenant_id", tenant.id)
-      .single();
-    return site ? { ...site, tenant } : null;
+  let query = supabaseAdmin
+    .from("site")
+    .select("*, service_offer(*), service_area(*), testimonial(*)")
+    .eq("tenant_id", tenant.id);
+
+  if (!preview) {
+    query = query.eq("status", "published");
   }
 
-  const { data: site } = await supabaseAdmin
-    .from("site")
-    .select("published_snapshot")
-    .eq("tenant_id", tenant.id)
-    .eq("status", "published")
-    .single();
-
-  if (!site?.published_snapshot) return null;
-  return { ...site.published_snapshot, tenant };
+  const { data: site } = await query.single();
+  if (!site) return null;
+  return { ...site, tenant };
 }
 
 export default async function TenantSitePage({

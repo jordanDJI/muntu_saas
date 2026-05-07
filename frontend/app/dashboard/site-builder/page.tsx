@@ -533,10 +533,17 @@ export default function SiteBuilderPage() {
 
   const publish = async () => {
     if (!siteId) return;
-    await saveStep();
-    await api.publishSite(siteId);
-    flash("✓");
-    setTimeout(() => router.push("/dashboard/appointments"), 1800);
+    setSaving(true);
+    try {
+      await saveStep();
+      await api.publishSite(siteId);
+      flash("✓ Site publié !");
+      setTimeout(() => router.push("/dashboard/appointments"), 1800);
+    } catch (e: any) {
+      flash(e.message ?? "Erreur lors de la publication", false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ── Liste dynamique ─────────────────────────────────────────────────────────
