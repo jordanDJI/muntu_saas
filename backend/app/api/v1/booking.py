@@ -180,10 +180,37 @@ async def get_available_slots(tenant_slug: str, date: str):
     return slots
 
 
+def _get_team_emails(sb, tenant_id: str) -> set[str]:
+    """Retourne les emails de l'équipe du tenant pour bloquer les auto-réservations."""
+    emails: set[str] = set()
+    for s in (sb.table("site").select("email_contact").eq("tenant_id", tenant_id).execute().data or []):
+        if s.get("email_contact"):
+            emails.add(s["email_contact"].strip().lower())
+    for m in (sb.table("membership").select("user_id").eq("tenant_id", tenant_id).execute().data or []):
+        try:
+            u = sb.auth.admin.get_user_by_id(m["user_id"])
+            if u and u.user and u.user.email:
+                emails.add(u.user.email.strip().lower())
+        except Exception:
+            pass
+    return emails
+
+
+_TEAM_EMAIL_ERROR = (
+    "Cette adresse email appartient à l'équipe du professionnel. "
+    "Vous ne pouvez pas effectuer une réservation ou envoyer un message public avec cet email. "
+    "Contactez directement le professionnel pour toute question interne."
+)
+
+
 @router.post("/{tenant_slug}/book", status_code=status.HTTP_201_CREATED)
 async def book_appointment(tenant_slug: str, body: PublicBookIn):
     sb = get_supabase_admin()
     tenant, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
+
+    # Bloquer les emails de l'équipe
+    if body.email and body.email.strip().lower() in _get_team_emails(sb, tenant["id"]):
+        raise HTTPException(status_code=403, detail=_TEAM_EMAIL_ERROR)
 
     # Trouver ou créer le contact
     contact_res = (
@@ -202,6 +229,7 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
             "last_name": body.last_name,
             "email": body.email,
             "phone": body.phone,
+            "contact_type": body.contact_type,
         }).execute().data[0]
         contact_id = new_contact["id"]
 
@@ -216,13 +244,19 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
             "audience_type": "b2c",
             "notes": body.message,
         }).execute().data[0]
+        try:
+            from app.services.email import send_lead_acknowledgement
+            contact_name = f"{body.first_name} {body.last_name}".strip()
+            send_lead_acknowledgement(body.email, contact_name, tenant.get("name", ""))
+        except Exception as exc:
+            logger.error("Email client lead ack failed: %s", exc)
         return {"type": "lead", "id": lead["id"]}
 
     # Prise de rendez-vous
     if not body.scheduled_at:
         raise HTTPException(status_code=400, detail="scheduled_at requis pour un rendez-vous")
 
-    ensure_lead(sb, tenant["id"], contact_id, "website")
+    ensure_lead(sb, tenant["id"], contact_id, "website", status="scheduled", request_type="b2c_appointment")
 
     end_at = body.scheduled_at + timedelta(minutes=body.slot_duration_min)
 
@@ -243,6 +277,9 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
     _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name, body.scheduled_at.isoformat())
     _email_tenant_pending(sb, tenant, {"first_name": body.first_name, "last_name": body.last_name,
                                         "email": body.email, "phone": body.phone}, appt)
+
+    # Accusé de réception au client
+    _email_client_booking_received(tenant, body.first_name, body.last_name, body.email, appt)
 
     return {"type": "appointment", "id": appt["id"]}
 
@@ -271,6 +308,21 @@ def _email_tenant_pending(sb, tenant: dict, contact: dict, appointment: dict) ->
         )
     except Exception as exc:
         logger.error("Email tenant pending failed: %s", exc)
+
+
+def _email_client_booking_received(tenant: dict, first_name: str, last_name: str, email: str, appointment: dict) -> None:
+    """Envoie un accusé de réception au client après sa demande de rendez-vous."""
+    try:
+        from app.services.email import send_booking_request_received
+        contact_name = f"{first_name} {last_name}".strip()
+        send_booking_request_received(
+            contact_email=email,
+            contact_name=contact_name,
+            appointment=appointment,
+            tenant_name=tenant.get("name", ""),
+        )
+    except Exception as exc:
+        logger.error("Email client booking received failed: %s", exc)
 
 
 def _notify_tenant_pending(sb, tenant_id: str, first_name: str, last_name: str, scheduled_at: str) -> None:

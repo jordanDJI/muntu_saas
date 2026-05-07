@@ -14,6 +14,7 @@ class LeadCreateIn(BaseModel):
     audience_type: str = "b2c"
     request_type: str = "appointment"
     source: str = "site_form"
+    contact_type: str = "individual"  # individual | company
 
 
 class LeadUpdateIn(BaseModel):

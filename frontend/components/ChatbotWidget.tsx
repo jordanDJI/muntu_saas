@@ -8,6 +8,18 @@ interface Message {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+function _track(slug: string, type: string) {
+  try {
+    const sid = sessionStorage.getItem("_pp_sid") ?? "unknown";
+    fetch(`${API_URL}/api/v1/analytics/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenant_slug: slug, session_id: sid, event_type: type, section: null, data: null }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+}
+
 export default function ChatbotWidget({ tenantSlug }: { tenantSlug: string }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -16,8 +28,13 @@ export default function ChatbotWidget({ tenantSlug }: { tenantSlug: string }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const openFired = useRef(false);
 
   useEffect(() => {
+    if (open && !openFired.current) {
+      openFired.current = true;
+      _track(tenantSlug, "chatbot_open");
+    }
     if (open && messages.length === 0) {
       setMessages([
         {
@@ -61,6 +78,7 @@ export default function ChatbotWidget({ tenantSlug }: { tenantSlug: string }) {
       const data = await res.json();
       setSessionId(data.session_id);
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      _track(tenantSlug, "chatbot_message");
     } catch (err: any) {
       setError(err.message ?? "Erreur de connexion");
     } finally {

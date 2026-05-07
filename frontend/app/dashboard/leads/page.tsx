@@ -2,44 +2,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
+import { useLanguage } from "../../../contexts/LanguageContext";
 
 const PAGE_SIZE = 10;
 
 const STATUSES = ["new", "contacted", "qualified", "scheduled", "closed_won", "closed_lost"];
-
-const STATUS_LABELS: Record<string, string> = {
-  new: "Nouveau",
-  contacted: "Contacté",
-  qualified: "Qualifié",
-  scheduled: "RDV planifié",
-  closed_won: "Gagné",
-  closed_lost: "Perdu",
-};
+const APPT_STATUSES = ["scheduled", "closed_won", "closed_lost"];
 
 const STATUS_COLORS: Record<string, string> = {
-  new: "bg-blue-100 text-blue-700",
-  contacted: "bg-yellow-100 text-yellow-700",
-  qualified: "bg-purple-100 text-purple-700",
-  scheduled: "bg-indigo-100 text-indigo-700",
-  closed_won: "bg-green-100 text-green-700",
+  new:         "bg-blue-100 text-blue-700",
+  contacted:   "bg-yellow-100 text-yellow-700",
+  qualified:   "bg-purple-100 text-purple-700",
+  scheduled:   "bg-indigo-100 text-indigo-700",
+  closed_won:  "bg-green-100 text-green-700",
   closed_lost: "bg-gray-100 text-gray-500",
-};
-
-const SOURCE_LABELS: Record<string, string> = {
-  website:  "Site web",
-  chatbot:  "Chatbot",
-  whatsapp: "WhatsApp",
-  telegram: "Telegram",
-  phone:    "Téléphone",
-  manual:   "Manuel",
-  referral: "Recommandation",
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  b2c_appointment: "Prise de RDV",
-  b2b_appointment: "Prise de RDV (B2B)",
-  contact:         "Prise de contact",
-  information:     "Demande d'info",
 };
 
 type LinkModal = {
@@ -48,7 +24,28 @@ type LinkModal = {
 };
 
 export default function LeadsPage() {
+  const { t } = useLanguage();
   const router = useRouter();
+
+  const STATUS_LABELS: Record<string, string> = {
+    new:         t.lead_status_new,
+    contacted:   t.lead_status_contacted,
+    qualified:   t.lead_status_qualified,
+    scheduled:   t.lead_status_scheduled,
+    closed_won:  t.lead_status_won,
+    closed_lost: t.lead_status_lost,
+  };
+
+  const SOURCE_LABELS: Record<string, string> = {
+    website:   "Site web",   chatbot:   "Chatbot",    whatsapp: "WhatsApp",
+    telegram:  "Telegram",  phone:     "Téléphone",  manual:   "Manuel",
+    referral:  "Recommandation",       dashboard: "Dashboard",
+  };
+
+  const TYPE_LABELS: Record<string, string> = {
+    b2c_appointment: "Prise de RDV", b2b_appointment: "Prise de RDV (B2B)",
+    contact: "Prise de contact", information: "Demande d'info",
+  };
   const [leads, setLeads] = useState<any[]>([]);
   const [filter, setFilter] = useState<string | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
@@ -159,7 +156,7 @@ export default function LeadsPage() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">Demandes (leads)</h1>
+        <h1 className="text-2xl font-bold">{t.lead_title}</h1>
         <button
           onClick={() => router.push("/dashboard")}
           className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors"
@@ -167,7 +164,7 @@ export default function LeadsPage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
-          Retour au dashboard
+          {t.sett_back}
         </button>
       </div>
 
@@ -177,7 +174,7 @@ export default function LeadsPage() {
           onClick={() => setFilter(undefined)}
           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm border transition-colors ${!filter ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 hover:bg-gray-50"}`}
         >
-          Tous
+          {t.lead_all}
           {Object.values(statusCounts).reduce((a, b) => a + b, 0) > 0 && (
             <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none ${!filter ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
               {Object.values(statusCounts).reduce((a, b) => a + b, 0)}
@@ -204,11 +201,23 @@ export default function LeadsPage() {
       <div className="space-y-3">
         {leads.map((lead) => {
           const contactName = [lead.contact?.first_name, lead.contact?.last_name].filter(Boolean).join(" ") || "—";
+          const isApptLead = lead.request_type === "b2c_appointment" || lead.request_type === "b2b_appointment";
+          const availableStatuses = isApptLead ? APPT_STATUSES : STATUSES;
           return (
-            <div key={lead.id} className="bg-white rounded-xl shadow p-4 space-y-3">
+          <div key={lead.id} className="bg-white rounded-xl shadow p-4 space-y-3">
               <div className="flex justify-between items-start gap-4">
                 <div className="min-w-0">
-                  <p className="font-semibold truncate">{contactName}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold truncate">{contactName}</p>
+                    {isApptLead && (
+                      <span className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-full px-2 py-0.5 font-medium shrink-0">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <rect x="3" y="4" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M16 2v4M8 2v4M3 10h18"/>
+                        </svg>
+                        RDV
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500 truncate">
                     {lead.contact?.email}
                     {lead.contact?.phone ? ` · ${lead.contact.phone}` : ""}
@@ -239,7 +248,7 @@ export default function LeadsPage() {
                     onChange={(e) => updateStatus(lead.id, e.target.value)}
                     className="text-sm border rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
                   >
-                    {STATUSES.map((s) => (
+                    {availableStatuses.map((s) => (
                       <option key={s} value={s}>{STATUS_LABELS[s]}</option>
                     ))}
                   </select>
@@ -299,7 +308,7 @@ export default function LeadsPage() {
         })}
 
         {!loading && leads.length === 0 && (
-          <p className="text-gray-400 text-sm text-center py-8">Aucune demande trouvée.</p>
+          <p className="text-gray-400 text-sm text-center py-8">{t.lead_none}.</p>
         )}
 
         {/* Sentinel infinite scroll */}

@@ -26,6 +26,7 @@ class BlockedPeriodIn(BaseModel):
     start_at: datetime
     end_at: datetime
     reason: Optional[str] = None
+    color: Optional[str] = None
 
 
 class BlockedPeriodOut(BaseModel):
@@ -34,6 +35,7 @@ class BlockedPeriodOut(BaseModel):
     start_at: datetime
     end_at: datetime
     reason: Optional[str]
+    color: Optional[str]
     created_by: str
 
 
@@ -60,3 +62,4 @@ class PublicBookIn(BaseModel):
     scheduled_at: Optional[datetime] = None   # None si request_type == "contact"
     slot_duration_min: int = 30
     request_type: str = "appointment"          # "contact" ou "appointment"
+    contact_type: str = "individual"           # individual | company

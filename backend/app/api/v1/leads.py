@@ -3,9 +3,17 @@ from uuid import UUID
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin
 from app.models.lead import LeadCreateIn, LeadUpdateIn, LeadOut
-from app.services.email import send_lead_notification
+from app.services.email import send_lead_notification, send_lead_acknowledgement
+from app.api.v1.booking import _get_team_emails, _TEAM_EMAIL_ERROR
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
+
+
+@router.get("/contacts/count")
+async def get_contacts_count(tenant_id: str = Depends(get_current_tenant)):
+    supabase = get_supabase_admin()
+    result = supabase.table("contact").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+    return {"count": result.count or 0}
 
 
 @router.get("/", response_model=list[LeadOut])
@@ -41,13 +49,17 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
         raise HTTPException(status_code=404, detail="Tenant introuvable")
     tenant_id = tenant["id"]
 
+    # Bloquer les emails de l'équipe du tenant
+    if body.email and str(body.email).strip().lower() in _get_team_emails(supabase, tenant_id):
+        raise HTTPException(status_code=403, detail=_TEAM_EMAIL_ERROR)
+
     contact = supabase.table("contact").insert({
         "tenant_id": tenant_id,
         "first_name": body.first_name,
         "last_name": body.last_name,
         "email": str(body.email) if body.email else None,
         "phone": body.phone,
-        "contact_type": "individual",
+        "contact_type": body.contact_type,
     }).execute().data[0]
 
     stage = supabase.table("pipeline_stage").select("id").eq("tenant_id", tenant_id).eq("position", 1).single().execute().data
@@ -83,6 +95,11 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
     owner = supabase.table("membership").select("app_user(email)").eq("tenant_id", tenant_id).eq("role", "owner").single().execute().data
     if owner:
         background_tasks.add_task(send_lead_notification, owner["app_user"]["email"], lead, contact)
+
+    # Accusé de réception au prospect
+    if contact.get("email"):
+        contact_name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip()
+        background_tasks.add_task(send_lead_acknowledgement, contact["email"], contact_name, tenant["name"])
 
     return {"id": lead["id"], "status": "created"}
 

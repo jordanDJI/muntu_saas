@@ -44,15 +44,19 @@ SaaS/
 | Route | Description |
 |-------|-------------|
 | `GET/POST /api/v1/appointments/` | CRUD RDV (tenant) |
+| `PATCH /api/v1/appointments/{id}` | Modifie un RDV existant (tenant) |
 | `POST /api/v1/appointments/{id}/confirm` | Confirme + email client |
 | `POST /api/v1/appointments/{id}/cancel` | Annule + email client (avec lien rebooking si RDV était pending) |
 | `GET /api/v1/booking/{slug}/slots` | Créneaux libres (public) |
 | `POST /api/v1/booking/{slug}/book` | Réservation publique → RDV pending + email tenant |
 | `GET /api/v1/booking/{slug}/available-days` | Jours disponibles dans le mois (calendrier public) |
+| `PATCH /api/v1/calendar/blocked/{period_id}` | Modifie une période bloquée existante |
 | `GET/PATCH /api/v1/agents/config/{type}` | Config agents IA |
 | `POST /api/v1/agents/telegram/setup` | Enregistre webhook Telegram |
 | `GET /api/v1/sites/` | Sites du tenant |
 | `PATCH /api/v1/sites/{id}` | Met à jour le site |
+| `POST /api/v1/analytics/event` | Enregistre un événement comportemental (public, via slug) |
+| `GET /api/v1/analytics/summary?days=30` | Résumé analytics agrégé (tenant authentifié) |
 
 ---
 
@@ -71,6 +75,7 @@ SaaS/
 | `blocked_period` | Périodes bloquées (congés, fermeture) |
 | `agent_config` | Config agents IA (vitrine, support_client, assistant_tenant) |
 | `membership` | Lien user ↔ tenant (owner/admin/member) |
+| `site_event` | Événements comportementaux du site public (session_id, event_type, section, data JSONB) |
 
 ### Champ `site_style` (JSONB)
 
@@ -111,6 +116,11 @@ L'adresse est stockée à la fois dans `site.address` (string consolidée, pour 
 
 ---
 
+## Dashboard principal (`/dashboard`)
+
+- Lien vers le site public du tenant en bas de page : `/{tenantSlug}` (target `_blank`)
+- Affiche "Site non configuré" (grisé) si le slug n'est pas encore défini
+
 ## Site-builder (`/dashboard/site-builder`)
 
 Wizard 9 étapes :
@@ -135,8 +145,56 @@ Les icônes des atouts sont des SVG inline (20 icônes disponibles dans `ATOUT_I
 
 - Vues : Jour / Semaine / Mois
 - `AvailabilityPanel` : supporte **plusieurs plages horaires par jour** (jusqu'à 3) — permet de gérer les pauses déjeuner. Chaque plage est une ligne `availability_slot` distincte avec le même `day_of_week`.
-- `BlockPanel` : périodes bloquées (congés, fermeture exceptionnelle)
+- `BlockPanel` : périodes bloquées (congés, fermeture exceptionnelle) — modifiables via `PATCH /calendar/blocked/{period_id}`
 - Bannière en haut listant les RDV en attente (confirm/refus rapide)
+- **Édition RDV** : clic sur un RDV existant ouvre `ApptModal` en mode édition (`PATCH /appointments/{id}`)
+- **Override période bloquée** : si le tenant clique sur une cellule pendant une période bloquée, `BlockedOverrideModal` s'affiche avec un avertissement ; il peut tout de même créer le RDV
+
+## Leads (`/dashboard/leads`)
+
+- **Multi-lead par client** : un même contact peut générer plusieurs leads (plusieurs RDV, plusieurs demandes). `ensure_lead()` insère toujours une nouvelle ligne — pas de contrainte d'unicité par contact.
+- Les RDV en attente (pending) ont un pipeline restreint : uniquement `new → confirmed / refused`. Les autres sources ont le pipeline complet.
+- Source `booking` = réservation publique ; source `contact_form` = formulaire de contact du site vitrine.
+
+## Analytics comportementaux (`/dashboard/analytics`)
+
+Moteur de tracking propriétaire pour le site vitrine — **ne duplique pas GA4/GTM** (déjà configurés par tenant dans le site-builder).
+
+### Tracking côté client (site public `app/[slug]/page.tsx`)
+
+Script injecté via `<Script strategy="afterInteractive">` :
+- **Session** : `sessionStorage._pp_sid` = UUID généré à la première visite par onglet
+- **`pageview`** : fire immédiat au chargement
+- **`section_view`** : IntersectionObserver sur `['hero','a-propos','prestations','contact']`
+- **`cta_click`** : délégation sur `[data-track]` (tel, email, réseaux sociaux)
+- **`form_open`** / **`form_submit`** : depuis `contact-form.tsx` (helper `_track()` + `data-track-form`)
+- **`chatbot_open`** / **`chatbot_message`** : depuis `ChatbotWidget.tsx` (helper `_track()`, `openFired` ref pour unicité)
+
+### Table `site_event`
+
+```sql
+create table site_event (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid references tenant(id) on delete cascade,
+  session_id text,
+  event_type text not null,
+  section text,
+  data jsonb,
+  created_at timestamptz default now()
+);
+create index on site_event (tenant_id, created_at desc);
+create index on site_event (tenant_id, event_type);
+```
+
+### Endpoint `GET /api/v1/analytics/summary`
+
+Retourne pour la période choisie (`?days=30`) :
+- CRM : `contacts_total`, `leads_total`, `leads_by_source`, `leads_by_status`
+- RDV : `appointments_total`, `appointments_by_status`
+- Comportemental : `pageviews`, `unique_sessions`, `sections_viewed`, `cta_clicks`, `form_opens`, `form_submits`, `chatbot_conversations`, `chatbot_messages`
+- Calculé : `conversion_lead_rate` (leads / sessions), `conversion_appt_rate` (RDV / leads)
+
+Dégrade gracieusement si la table `site_event` n'existe pas encore (retourne zéros).
 
 ---
 

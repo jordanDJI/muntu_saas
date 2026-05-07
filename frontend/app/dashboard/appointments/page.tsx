@@ -10,6 +10,7 @@ type Appointment = {
   status: string;
   scheduled_at: string;
   end_at: string;
+  service_offer_id?: string;
   contact?: { first_name: string; last_name: string; email: string };
   service_offer?: { name: string };
 };
@@ -22,7 +23,7 @@ type AvailSlot = {
   is_active: boolean;
 };
 
-type BlockedPeriod = { id: string; start_at: string; end_at: string; reason?: string };
+type BlockedPeriod = { id: string; start_at: string; end_at: string; reason?: string; color?: string };
 type Contact = { id: string; first_name: string; last_name: string; email: string; phone?: string };
 type NewClientData = { first_name: string; last_name: string; email?: string; phone?: string; source?: string };
 type View = "week" | "month" | "day";
@@ -419,20 +420,60 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
 
 // ── BlockPanel ────────────────────────────────────────────────────────────────
 
+const BLOCK_COLORS = [
+  { key: "#ef4444", label: "Rouge" },
+  { key: "#f97316", label: "Orange" },
+  { key: "#eab308", label: "Jaune" },
+  { key: "#8b5cf6", label: "Violet" },
+  { key: "#06b6d4", label: "Cyan" },
+  { key: "#64748b", label: "Gris" },
+];
+
 function BlockPanel({ blocked, onSave, onClose }: {
   blocked: BlockedPeriod[]; onSave: () => void; onClose: () => void;
 }) {
-  const [startAt, setStartAt] = useState("");
-  const [endAt, setEndAt]     = useState("");
-  const [reason, setReason]   = useState("");
-  const [saving, setSaving]   = useState(false);
+  const [editTarget, setEditTarget] = useState<BlockedPeriod | null>(null);
+  const [startAt, setStartAt]       = useState("");
+  const [endAt, setEndAt]           = useState("");
+  const [reason, setReason]         = useState("");
+  const [color, setColor]           = useState(BLOCK_COLORS[0].key);
+  const [saving, setSaving]         = useState(false);
+  const [err, setErr]               = useState("");
 
-  const add = async () => {
+  const startEdit = (b: BlockedPeriod) => {
+    setEditTarget(b);
+    // Format to datetime-local string: "YYYY-MM-DDThh:mm"
+    const fmt = (iso: string) => {
+      const d = new Date(iso);
+      const pad = (n: number) => String(n).padStart(2,"0");
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    setStartAt(fmt(b.start_at));
+    setEndAt(fmt(b.end_at));
+    setReason(b.reason ?? "");
+    setColor(b.color ?? BLOCK_COLORS[0].key);
+    setErr("");
+  };
+
+  const resetForm = () => {
+    setEditTarget(null); setStartAt(""); setEndAt("");
+    setReason(""); setColor(BLOCK_COLORS[0].key); setErr("");
+  };
+
+  const save = async () => {
     if (!startAt || !endAt) return;
-    setSaving(true);
+    if (!editTarget && new Date(startAt) < new Date()) { setErr("La date de début ne peut pas être dans le passé."); return; }
+    if (new Date(endAt) <= new Date(startAt)) { setErr("La date de fin doit être après la date de début."); return; }
+    setErr(""); setSaving(true);
     try {
-      await api.createBlocked({start_at:startAt,end_at:endAt,reason:reason||undefined});
-      onSave(); setStartAt(""); setEndAt(""); setReason("");
+      if (editTarget) {
+        await api.updateBlocked(editTarget.id, { start_at: startAt, end_at: endAt, reason: reason || undefined, color });
+      } else {
+        await api.createBlocked({ start_at: startAt, end_at: endAt, reason: reason || undefined, color });
+      }
+      onSave(); resetForm();
+    } catch (e: any) {
+      setErr(e?.message ?? "Erreur lors de l'enregistrement.");
     } finally { setSaving(false); }
   };
 
@@ -445,27 +486,50 @@ function BlockPanel({ blocked, onSave, onClose }: {
         </div>
         <div className="flex-1 overflow-auto p-4 space-y-4">
           <div className="border rounded-lg p-3 space-y-2 bg-gray-50">
-            <p className="text-sm font-medium text-gray-700">Ajouter un blocage</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-gray-700">
+                {editTarget ? "Modifier le blocage" : "Ajouter un blocage"}
+              </p>
+              {editTarget && (
+                <button onClick={resetForm} className="text-xs text-gray-400 hover:text-gray-600">
+                  ✕ Annuler
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div><label className="text-xs text-gray-500">Début</label>
-                <input type="datetime-local" value={startAt} onChange={e=>setStartAt(e.target.value)}
+                <input type="datetime-local" value={startAt} onChange={e=>{setStartAt(e.target.value);setErr("");}}
                   className="w-full border rounded px-2 py-1 text-sm mt-0.5"/></div>
               <div><label className="text-xs text-gray-500">Fin</label>
-                <input type="datetime-local" value={endAt} onChange={e=>setEndAt(e.target.value)}
+                <input type="datetime-local" value={endAt} onChange={e=>{setEndAt(e.target.value);setErr("");}}
                   className="w-full border rounded px-2 py-1 text-sm mt-0.5"/></div>
             </div>
             <input type="text" placeholder="Motif (optionnel)" value={reason} onChange={e=>setReason(e.target.value)}
               className="w-full border rounded px-2 py-1 text-sm"/>
-            <button onClick={add} disabled={saving||!startAt||!endAt}
-              className="w-full bg-red-500 text-white py-1.5 rounded font-medium text-sm hover:bg-red-600 disabled:opacity-50">
-              {saving?"…":"Bloquer cette période"}
+            <div>
+              <p className="text-xs text-gray-500 mb-1.5">Couleur</p>
+              <div className="flex gap-2">
+                {BLOCK_COLORS.map(c => (
+                  <button key={c.key} type="button" title={c.label} onClick={() => setColor(c.key)}
+                    className="w-6 h-6 rounded-full border-2 transition-all"
+                    style={{ background: c.key, borderColor: color === c.key ? "#1e293b" : "transparent" }} />
+                ))}
+              </div>
+            </div>
+            {err && <p className="text-xs text-red-500">{err}</p>}
+            <button onClick={save} disabled={saving||!startAt||!endAt}
+              className="w-full text-white py-1.5 rounded font-medium text-sm disabled:opacity-50"
+              style={{ background: color }}>
+              {saving ? "…" : editTarget ? "Mettre à jour" : "Bloquer cette période"}
             </button>
           </div>
           <div className="space-y-2">
             {blocked.length===0 && <p className="text-sm text-gray-400">Aucune période bloquée.</p>}
             {blocked.map(b=>(
-              <div key={b.id} className="border rounded-lg p-3 flex justify-between items-start">
-                <div>
+              <div key={b.id}
+                className={`border rounded-lg p-3 flex justify-between items-start transition-colors ${editTarget?.id===b.id?"ring-2 ring-indigo-400 bg-indigo-50":""}`}
+                style={{ borderLeftWidth: 4, borderLeftColor: b.color ?? "#ef4444" }}>
+                <div className="min-w-0">
                   <p className="text-sm font-medium">
                     {new Date(b.start_at).toLocaleString("fr-BE",{dateStyle:"medium",timeStyle:"short"})}
                     {" → "}
@@ -473,7 +537,18 @@ function BlockPanel({ blocked, onSave, onClose }: {
                   </p>
                   {b.reason && <p className="text-xs text-gray-400 mt-0.5">{b.reason}</p>}
                 </div>
-                <button onClick={()=>api.deleteBlocked(b.id).then(onSave)} className="text-red-400 hover:text-red-600 ml-2">✕</button>
+                <div className="flex gap-2 ml-2 shrink-0">
+                  <button onClick={() => startEdit(b)}
+                    title="Modifier"
+                    className="text-indigo-400 hover:text-indigo-600">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                  </button>
+                  <button onClick={() => api.deleteBlocked(b.id).then(onSave)}
+                    title="Supprimer"
+                    className="text-red-400 hover:text-red-600">✕</button>
+                </div>
               </div>
             ))}
           </div>
@@ -483,6 +558,49 @@ function BlockPanel({ blocked, onSave, onClose }: {
   );
 }
 
+// ── BlockedOverrideModal ──────────────────────────────────────────────────────
+
+function BlockedOverrideModal({ period, onConfirm, onClose }: {
+  period: BlockedPeriod;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+            <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-bold text-base">Plage bloquée</h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {period.reason ? `Motif : "${period.reason}"` : "Période actuellement bloquée"}
+            </p>
+          </div>
+        </div>
+        <p className="text-sm text-gray-700">
+          Vous êtes sur le point d'insérer un rendez-vous sur une plage de dates bloquées.
+          Voulez-vous continuer quand même ?
+        </p>
+        <div className="flex gap-2">
+          <button onClick={onClose}
+            className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm hover:bg-gray-50 font-medium">
+            Annuler
+          </button>
+          <button onClick={onConfirm}
+            className="flex-1 bg-amber-500 text-white py-2 rounded-xl text-sm font-semibold hover:bg-amber-600">
+            Continuer quand même
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 // ── ApptModal ─────────────────────────────────────────────────────────────────
 
 const STATUS_LABELS_APPT: Record<string, string> = {
@@ -491,12 +609,42 @@ const STATUS_LABELS_APPT: Record<string, string> = {
   cancelled: "Annulé",
 };
 
-function ApptModal({ appt, onConfirm, onCancel, onClose }: {
+function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
   appt: Appointment;
+  offers: { id: string; name: string }[];
   onConfirm: (id: string) => void;
   onCancel: (id: string) => void;
+  onUpdate: () => void;
   onClose: () => void;
 }) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const initDt = new Date(appt.scheduled_at);
+  const [editing, setEditing]         = useState(false);
+  const [editDate, setEditDate]       = useState(`${initDt.getFullYear()}-${pad(initDt.getMonth()+1)}-${pad(initDt.getDate())}`);
+  const [editTime, setEditTime]       = useState(`${pad(initDt.getHours())}:${pad(initDt.getMinutes())}`);
+  const [editDur, setEditDur]         = useState(() => Math.round((new Date(appt.end_at).getTime()-initDt.getTime())/60000) || 30);
+  const [editService, setEditService] = useState(appt.service_offer_id ?? "");
+  const [saving, setSaving]           = useState(false);
+  const [err, setErr]                 = useState("");
+
+  const saveEdit = async () => {
+    if (!editDate || !editTime) return;
+    setSaving(true); setErr("");
+    try {
+      const [y, mo, d] = editDate.split("-").map(Number);
+      const [h, m]     = editTime.split(":").map(Number);
+      const base = new Date(y, mo - 1, d, h, m, 0, 0);
+      const end  = new Date(base.getTime() + editDur * 60000);
+      const body: any = { scheduled_at: base.toISOString(), end_at: end.toISOString() };
+      if (editService !== (appt.service_offer_id ?? "")) {
+        body.service_offer_id = editService || null;
+      }
+      await api.updateAppointment(appt.id, body);
+      onUpdate(); onClose();
+    } catch (e: any) { setErr(e.message); }
+    finally { setSaving(false); }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm space-y-4">
@@ -505,31 +653,93 @@ function ApptModal({ appt, onConfirm, onCancel, onClose }: {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 leading-none">✕</button>
         </div>
         {appt.contact?.email && <p className="text-sm text-gray-500">{appt.contact.email}</p>}
-        {appt.service_offer?.name && <p className="text-sm font-medium text-indigo-600">{appt.service_offer.name}</p>}
-        <div className="bg-gray-50 rounded-lg p-3 text-sm">
-          <p>{new Date(appt.scheduled_at).toLocaleString("fr-BE",{dateStyle:"full",timeStyle:"short"})}</p>
-          <p className="text-gray-400 text-xs mt-1">→ {fmtTime(appt.end_at)}</p>
-        </div>
-        <span className={`inline-block text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLOR[appt.status]??"bg-gray-100"}`}>
-          {STATUS_LABELS_APPT[appt.status] ?? appt.status}
-        </span>
-        {appt.status === "pending" && (
-          <div className="flex gap-2">
-            <button onClick={() => onConfirm(appt.id)}
-              className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-700">
-              Confirmer
-            </button>
-            <button onClick={() => onCancel(appt.id)}
-              className="flex-1 border border-red-300 text-red-500 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
-              Refuser
-            </button>
-          </div>
-        )}
-        {appt.status === "confirmed" && (
-          <button onClick={() => onCancel(appt.id)}
-            className="w-full border border-red-300 text-red-500 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
-            Annuler ce rendez-vous
-          </button>
+
+        {!editing ? (
+          <>
+            {appt.service_offer?.name && <p className="text-sm font-medium text-indigo-600">{appt.service_offer.name}</p>}
+            <div className="bg-gray-50 rounded-lg p-3 text-sm">
+              <p>{new Date(appt.scheduled_at).toLocaleString("fr-BE",{dateStyle:"full",timeStyle:"short"})}</p>
+              <p className="text-gray-400 text-xs mt-1">→ {fmtTime(appt.end_at)}</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className={`inline-block text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLOR[appt.status]??"bg-gray-100"}`}>
+                {STATUS_LABELS_APPT[appt.status] ?? appt.status}
+              </span>
+              {appt.status !== "cancelled" && (
+                <button onClick={() => setEditing(true)}
+                  className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg px-2.5 py-1 hover:bg-indigo-50">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                  </svg>
+                  Modifier
+                </button>
+              )}
+            </div>
+            {appt.status === "pending" && (
+              <div className="flex gap-2">
+                <button onClick={() => onConfirm(appt.id)}
+                  className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-700">
+                  Confirmer
+                </button>
+                <button onClick={() => onCancel(appt.id)}
+                  className="flex-1 border border-red-300 text-red-500 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
+                  Refuser
+                </button>
+              </div>
+            )}
+            {appt.status === "confirmed" && (
+              <button onClick={() => onCancel(appt.id)}
+                className="w-full border border-red-300 text-red-500 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
+                Annuler ce rendez-vous
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">Modifier le rendez-vous</p>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs font-medium text-gray-500">Date</label>
+                <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2 text-sm mt-0.5"/>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500">Heure</label>
+                <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2 text-sm mt-0.5"/>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500">Durée</label>
+                <select value={editDur} onChange={e => setEditDur(Number(e.target.value))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm mt-0.5 bg-white">
+                  {[15,30,45,60,90,120].map(d => (
+                    <option key={d} value={d}>{d < 60 ? `${d} min` : `${d/60}h`}</option>
+                  ))}
+                </select>
+              </div>
+              {offers.length > 0 && (
+                <div>
+                  <label className="text-xs font-medium text-gray-500">Prestation</label>
+                  <select value={editService} onChange={e => setEditService(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 text-sm mt-0.5 bg-white text-gray-700">
+                    <option value="">Aucune prestation</option>
+                    {offers.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {err && <p className="text-red-500 text-sm">{err}</p>}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => { setEditing(false); setErr(""); }}
+                className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm hover:bg-gray-50">
+                Annuler
+              </button>
+              <button onClick={saveEdit} disabled={saving}
+                className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                {saving ? "Enregistrement…" : "Enregistrer"}
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -550,25 +760,48 @@ export default function AppointmentsPage() {
   const [showBlock, setShowBlock]       = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<Appointment|null>(null);
   const [creating, setCreating]         = useState<{day:Date;startH:number;startM:number}|null>(null);
+  const [allowPast, setAllowPast]       = useState(false);
   const [loading, setLoading]           = useState(true);
+  const [blockedOverride, setBlockedOverride] = useState<{day:Date;startH:number;startM:number;period:BlockedPeriod}|null>(null);
 
+  // Static data (availability, blocked periods, offers) — loaded once on mount
+  useEffect(() => {
+    Promise.all([api.getAvailability(), api.getBlocked(), api.getSites()]).then(async ([avail, blk, sites]) => {
+      setAvailability(avail); setBlocked(blk);
+      if (sites[0]) {
+        const off = await api.getSiteOffers(sites[0].id);
+        setOffers(off.map((o: any) => ({ id: o.id, name: o.name })));
+      }
+    }).catch(console.error);
+  }, []);
+
+  // Appointments — loaded for the current view's date range + a 60-day future window
+  // so that all pending appointments appear in the banner regardless of navigation position
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [appts, avail, blk] = await Promise.all([
-        api.getCalendarAppointments(),
-        api.getAvailability(),
-        api.getBlocked(),
-      ]);
-      setAppointments(appts); setAvailability(avail); setBlocked(blk);
-      const sites = await api.getSites();
-      if (sites[0]) {
-        const off = await api.getSiteOffers(sites[0].id);
-        setOffers(off.map((o:any) => ({id:o.id,name:o.name})));
+      let viewStart: Date, viewEnd: Date;
+      if (view === "day") {
+        viewStart = new Date(anchor); viewStart.setHours(0, 0, 0, 0);
+        viewEnd   = addDays(viewStart, 1);
+      } else if (view === "week") {
+        viewStart = startOfWeek(anchor);
+        viewEnd   = addDays(viewStart, 7);
+      } else {
+        viewStart = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+        viewEnd   = addDays(viewStart, 42);
       }
+      // Expand range: from 30 days before view start to 60 days after anchor (captures future pending)
+      const rangeStart = addDays(viewStart, -30);
+      const rangeEnd   = addDays(anchor, 60);
+      const appts = await api.getCalendarAppointments({
+        start: rangeStart.toISOString(),
+        end:   rangeEnd.toISOString(),
+      });
+      setAppointments(appts);
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
-  }, []);
+  }, [view, anchor]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -607,8 +840,15 @@ export default function AppointmentsPage() {
     const snapped = Math.round((relY / SLOT_H) * 2) * 30;
     const startH  = Math.min(Math.floor(HOUR_START + snapped / 60), HOUR_END - 1);
     const startM  = snapped % 60;
-    setCreating({ day, startH, startM });
+    const clickedAt = new Date(day); clickedAt.setHours(startH, startM, 0, 0);
+    if (!allowPast && clickedAt < new Date()) return;
     setSelectedAppt(null);
+    const overlapping = blocked.find(b => clickedAt >= new Date(b.start_at) && clickedAt < new Date(b.end_at));
+    if (overlapping) {
+      setBlockedOverride({ day, startH, startM, period: overlapping });
+    } else {
+      setCreating({ day, startH, startM });
+    }
   };
 
   // ── Vue semaine / jour ──────────────────────────────────────────────────────
@@ -653,6 +893,28 @@ export default function AppointmentsPage() {
               {hours.map(h => (
                 <div key={`h${h}`} className="absolute w-full border-t border-gray-50" style={{top:(h-HOUR_START)*SLOT_H+SLOT_H/2}}/>
               ))}
+
+              {blocked.filter(b => {
+                const bs = new Date(b.start_at), be = new Date(b.end_at);
+                const dayStart = new Date(d); dayStart.setHours(HOUR_START, 0, 0, 0);
+                const dayEnd   = new Date(d); dayEnd.setHours(HOUR_END, 0, 0, 0);
+                return bs < dayEnd && be > dayStart;
+              }).map(b => {
+                const bs = new Date(b.start_at), be = new Date(b.end_at);
+                const dayStart = new Date(d); dayStart.setHours(HOUR_START, 0, 0, 0);
+                const dayEnd   = new Date(d); dayEnd.setHours(HOUR_END, 0, 0, 0);
+                const clampS = bs < dayStart ? dayStart : bs;
+                const clampE = be > dayEnd   ? dayEnd   : be;
+                const top    = (clampS.getHours() + clampS.getMinutes()/60 - HOUR_START) * SLOT_H;
+                const height = Math.max(((clampE.getTime()-clampS.getTime())/3600000)*SLOT_H, 8);
+                return (
+                  <div key={b.id}
+                    className="absolute left-0 right-0 opacity-30 pointer-events-none overflow-hidden"
+                    style={{ top, height, background: b.color ?? "#ef4444" }}>
+                    {b.reason && <span className="text-[10px] text-white font-medium px-1 truncate block leading-tight mt-0.5">{b.reason}</span>}
+                  </div>
+                );
+              })}
 
               {apptsForDay(d).map(a => (
                 <button
@@ -762,6 +1024,12 @@ export default function AppointmentsPage() {
               Auj.
             </button>
           </div>
+
+          <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none ml-auto">
+            <input type="checkbox" checked={allowPast} onChange={e => setAllowPast(e.target.checked)}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+            Événements passés
+          </label>
         </div>
       </div>
 
@@ -811,14 +1079,21 @@ export default function AppointmentsPage() {
       {showAvail && (
         <AvailabilityPanel
           availability={availability}
-          onSave={async () => { await load(); setShowAvail(false); }}
+          onSave={async () => {
+            const avail = await api.getAvailability();
+            setAvailability(avail);
+            setShowAvail(false);
+          }}
           onClose={() => setShowAvail(false)}
         />
       )}
       {showBlock && (
         <BlockPanel
           blocked={blocked}
-          onSave={async () => { await load(); }}
+          onSave={async () => {
+            const blk = await api.getBlocked();
+            setBlocked(blk);
+          }}
           onClose={() => setShowBlock(false)}
         />
       )}
@@ -833,8 +1108,26 @@ export default function AppointmentsPage() {
           onClose={() => setCreating(null)}
         />
       )}
+      {blockedOverride && (
+        <BlockedOverrideModal
+          period={blockedOverride.period}
+          onConfirm={() => {
+            const { day, startH, startM } = blockedOverride;
+            setBlockedOverride(null);
+            setCreating({ day, startH, startM });
+          }}
+          onClose={() => setBlockedOverride(null)}
+        />
+      )}
       {selectedAppt && (
-        <ApptModal appt={selectedAppt} onConfirm={confirmAppt} onCancel={cancelAppt} onClose={()=>setSelectedAppt(null)}/>
+        <ApptModal
+          appt={selectedAppt}
+          offers={offers}
+          onConfirm={confirmAppt}
+          onCancel={cancelAppt}
+          onUpdate={load}
+          onClose={() => setSelectedAppt(null)}
+        />
       )}
     </div>
   );

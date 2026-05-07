@@ -19,6 +19,7 @@ class AppointmentUpdateIn(BaseModel):
     status: Optional[str] = None
     scheduled_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
+    service_offer_id: Optional[UUID] = None
 
 
 class AppointmentOut(BaseModel):

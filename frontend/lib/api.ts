@@ -8,12 +8,8 @@ export const supabase = createBrowserClient(
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  // getUser() valide la session côté serveur Supabase et rafraîchit si nécessaire
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return {};
   const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -55,6 +51,7 @@ export const api = {
     apiFetch(`/api/v1/sites/${siteId}/testimonials`, { method: "PUT", body: JSON.stringify(testimonials) }),
 
   // Leads
+  getContactsCount: () => apiFetch<{ count: number }>("/api/v1/leads/contacts/count"),
   getLeads: (params?: { status?: string; audience_type?: string; limit?: number; offset?: number }) => {
     const filtered = Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined));
     const qs = Object.keys(filtered).length ? "?" + new URLSearchParams(filtered as any).toString() : "";
@@ -122,6 +119,8 @@ export const api = {
   getAgentSyntheses: (limit = 10) => apiFetch<any[]>(`/api/v1/agents/synthesis?limit=${limit}`),
 
   // Agent 3 — chat assistant dashboard
+  assistantHistory: () =>
+    apiFetch<{ conversation_id: string | null; messages: { role: string; content: string }[] }>("/api/v1/assistant/history"),
   assistantChat: (body: { message: string; conversation_id?: string | null }) =>
     apiFetch<{ reply: string; conversation_id: string }>("/api/v1/assistant/chat", {
       method: "POST",
@@ -147,6 +146,8 @@ export const api = {
   getBlocked: () => apiFetch<any[]>("/api/v1/calendar/blocked"),
   createBlocked: (body: object) =>
     apiFetch("/api/v1/calendar/blocked", { method: "POST", body: JSON.stringify(body) }),
+  updateBlocked: (id: string, body: object) =>
+    apiFetch(`/api/v1/calendar/blocked/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteBlocked: (id: string) =>
     apiFetch(`/api/v1/calendar/blocked/${id}`, { method: "DELETE" }),
 
@@ -176,6 +177,9 @@ export const api = {
     apiFetch(`/api/v1/members/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }),
   removeMember: (userId: string) =>
     apiFetch(`/api/v1/members/${userId}`, { method: "DELETE" }),
+
+  // Analytics
+  getAnalyticsSummary: (days = 30) => apiFetch<any>(`/api/v1/analytics/summary?days=${days}`),
 
   // Booking public (sans auth)
   getPublicAvailableDays: (tenantSlug: string, year: number, month: number) => {

@@ -66,6 +66,45 @@ def chat_completion(
             raise
 
 
+# Modèles en ordre de préférence : le fallback n'intervient qu'en cas d'erreur réelle
+_SMART_FALLBACK_MODELS = [
+    "gemini-2.0-flash-lite",  # rapide et léger
+    "gemini-2.5-flash",       # équilibré
+    "gemini-2.5-pro",         # puissant, dernier recours
+]
+
+
+def smart_chat_completion(
+    messages: list[dict],
+    system_prompt: str | None = None,
+) -> str:
+    """Essaie les modèles dans l'ordre (rapide → puissant).
+    Passe au suivant uniquement sur erreur réelle (404, 429, 503…), pas sur lenteur."""
+    system = system_prompt or _FALLBACK_SYSTEM
+    contents = []
+    for msg in messages:
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
+    last_exc: Exception | None = None
+    for model in _SMART_FALLBACK_MODELS:
+        try:
+            resp = _client().models.generate_content(
+                model=model,
+                contents=contents,
+                config={"system_instruction": system},
+            )
+            return resp.text.strip()
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("smart_chat: %s a échoué (%s) — essai modèle suivant", model, str(exc)[:100])
+            continue
+
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Tous les modèles LLM ont échoué.")
+
+
 def summarize_conversations(raw_text: str, model: str = "gemini-2.5-flash") -> str:
     """Produit un résumé structuré d'un bloc de conversations pour le Worker 4."""
     system = "Tu es l'assistant de synthèse opérationnelle d'un professionnel de santé."

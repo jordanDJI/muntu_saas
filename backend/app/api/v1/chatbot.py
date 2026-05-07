@@ -14,22 +14,96 @@ from app.services.llm import chat_completion
 router = APIRouter(prefix="/chatbot", tags=["chatbot"])
 logger = logging.getLogger(__name__)
 
+# Rate limiting : 15 messages max par session (en mémoire, reset au redémarrage)
+_RATE_LIMIT = 15
+_session_counts: dict[str, int] = {}
+
+_RATE_LIMIT_REPLY = (
+    "Vous avez atteint la limite de 15 questions pour cette session. "
+    "Pour plus d'informations ou prendre rendez-vous, utilisez le formulaire de contact "
+    "disponible sur cette page — nous vous répondrons rapidement."
+)
+
+
+def _build_context_block(site: dict) -> str:
+    """Construit un bloc de contexte factuel à injecter dans tout prompt système."""
+    lines: list[str] = []
+
+    # Prestations
+    offers = site.get("service_offer") or []
+    if offers:
+        lines.append("Prestations proposées :")
+        for o in offers:
+            name = o.get("name", "")
+            parts = []
+            if o.get("duration_min"):
+                parts.append(f"{o['duration_min']} min")
+            if o.get("price_eur"):
+                parts.append(f"{o['price_eur']}€")
+            desc = o.get("description", "")
+            line = f"- {name}"
+            if parts:
+                line += f" ({', '.join(parts)})"
+            if desc:
+                line += f" : {desc}"
+            lines.append(line)
+    else:
+        lines.append("Aucune prestation listée — inviter à contacter directement pour en savoir plus.")
+
+    # Zones d'intervention
+    zones = site.get("coverage_zones") or []
+    if zones:
+        lines.append(f"Zones d'intervention : {', '.join(zones)}")
+
+    # Contact
+    contact_parts = []
+    if site.get("phone"):
+        contact_parts.append(site["phone"])
+    if site.get("email_contact"):
+        contact_parts.append(site["email_contact"])
+    if contact_parts:
+        lines.append(f"Contact : {' | '.join(contact_parts)}")
+
+    if site.get("address"):
+        lines.append(f"Adresse : {site['address']}")
+
+    return "\n".join(lines)
+
 
 def _build_system_prompt(tenant_slug: str, site: dict, config: dict | None) -> str:
     """Construit le prompt système à partir des données publiques du tenant."""
-    if config and config.get("system_prompt"):
-        return config["system_prompt"]
-
     title = site.get("title", "ce professionnel")
+    description = site.get("description", "")
+    context_block = _build_context_block(site)
+
+    base = config.get("system_prompt") if config and config.get("system_prompt") else None
+
+    if base:
+        # Prompt personnalisé : on y ajoute le contexte factuel pour ancrer le bot
+        return (
+            f"{base}\n\n"
+            "--- INFORMATIONS SUR LES PRESTATIONS ET CONTACTS (utilise ces données pour répondre) ---\n"
+            f"{context_block}\n"
+            "--- FIN ---"
+        )
+
+    # Prompt auto-généré
+    intro = f"Tu es l'assistant virtuel de {title}."
+    if description:
+        intro += f" {description}"
+
     return (
-        f"Tu es l'assistant virtuel de {title}. "
+        f"{intro}\n\n"
         "Tu réponds uniquement aux questions relatives aux services proposés, "
         "aux horaires, aux zones d'intervention et à la prise de rendez-vous. "
         "Tu ne fournis aucune information médicale, personnelle ou hors de ce domaine. "
         "Sois concis, professionnel et bienveillant. "
         "IMPORTANT : réponds en texte simple, sans markdown, sans astérisques, sans puces avec *. "
         "Utilise des phrases courtes et claires. "
-        "Si une question dépasse ton périmètre, invite l'utilisateur à contacter directement le professionnel."
+        "Si une question dépasse ton périmètre, invite l'utilisateur à contacter directement le professionnel.\n\n"
+        "--- PRESTATIONS ET INFORMATIONS DE CONTACT ---\n"
+        f"{context_block}\n"
+        "--- FIN ---"
     )
 
 
@@ -44,7 +118,7 @@ def _get_public_context(tenant_slug: str) -> tuple[dict, dict | None]:
 
     site_res = (
         sb.table("site")
-        .select("id, title, absence_mode, service_offer(name, description)")
+        .select("id, title, tagline, description, phone, email_contact, address, coverage_zones, absence_mode, service_offer(name, description, duration_min, price_eur)")
         .eq("tenant_id", tenant["id"])
         .eq("status", "published")
         .single()
@@ -67,6 +141,13 @@ def _get_public_context(tenant_slug: str) -> tuple[dict, dict | None]:
 
 @router.post("/{tenant_slug}", response_model=ChatResponse)
 async def chat(tenant_slug: str, body: ChatRequest) -> ChatResponse:
+    session_id = body.session_id or str(uuid.uuid4())
+
+    # Rate limiting
+    _session_counts[session_id] = _session_counts.get(session_id, 0) + 1
+    if _session_counts[session_id] > _RATE_LIMIT:
+        return ChatResponse(reply=_RATE_LIMIT_REPLY, session_id=session_id)
+
     site, config = _get_public_context(tenant_slug)
 
     if config and config.get("status") == "inactive":
@@ -75,7 +156,7 @@ async def chat(tenant_slug: str, body: ChatRequest) -> ChatResponse:
     if site.get("absence_mode"):
         return ChatResponse(
             reply="Le professionnel est actuellement absent. Merci de rééssayer ultérieurement ou de laisser un message via le formulaire de contact.",
-            session_id=body.session_id or str(uuid.uuid4()),
+            session_id=session_id,
         )
 
     system_prompt = _build_system_prompt(tenant_slug, site, config)
@@ -89,7 +170,4 @@ async def chat(tenant_slug: str, body: ChatRequest) -> ChatResponse:
         logger.error("Chatbot LLM error for tenant %s: %s", tenant_slug, exc)
         raise HTTPException(status_code=502, detail="Service IA temporairement indisponible")
 
-    return ChatResponse(
-        reply=reply,
-        session_id=body.session_id or str(uuid.uuid4()),
-    )
+    return ChatResponse(reply=reply, session_id=session_id)

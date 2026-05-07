@@ -3,88 +3,54 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api, supabase } from "../../../lib/api";
+import { useLanguage } from "../../../contexts/LanguageContext";
+import type { T as TranslationT } from "../../../lib/i18n";
 
-// ── Constantes ────────────────────────────────────────────────────────────────
+// ── Constantes statiques (sans texte) ────────────────────────────────────────
 
-const COLOR_PALETTES = [
-  { key: "indigo",   label: "Indigo",          hex: "#4338ca" },
-  { key: "blue",     label: "Bleu marine",     hex: "#1e3a8a" },
-  { key: "purple",   label: "Violet",          hex: "#7e22ce" },
-  { key: "highlight",label: "Violet clair",    hex: "#a855f7" },
-  { key: "teal",     label: "Sarcelle",        hex: "#0f766e" },
-  { key: "cyan",     label: "Cyan",            hex: "#155e75" },
-  { key: "green",    label: "Vert nature",     hex: "#15803d" },
-  { key: "emerald",  label: "Émeraude",        hex: "#166534" },
-  { key: "amber",    label: "Ambre",           hex: "#b45309" },
-  { key: "orange",   label: "Orange",          hex: "#c2410c" },
-  { key: "red",      label: "Rouge",           hex: "#b91c1c" },
-  { key: "rose",     label: "Rose",            hex: "#be123c" },
-  { key: "slate",    label: "Gris ardoise",    hex: "#475569" },
-  { key: "neutral",  label: "Gris neutre",     hex: "#334155" },
+const COLOR_PALETTE_DEFS: { key: string; tKey: keyof TranslationT; hex: string }[] = [
+  { key: "indigo",    tKey: "sb_col_indigo",         hex: "#4338ca" },
+  { key: "blue",      tKey: "sb_col_bleu",           hex: "#1e3a8a" },
+  { key: "purple",    tKey: "sb_col_violet",         hex: "#7e22ce" },
+  { key: "highlight", tKey: "sb_col_violet_clair",   hex: "#a855f7" },
+  { key: "teal",      tKey: "sb_col_sarcelle",       hex: "#0f766e" },
+  { key: "cyan",      tKey: "sb_col_cyan",           hex: "#155e75" },
+  { key: "green",     tKey: "sb_col_vert",           hex: "#15803d" },
+  { key: "emerald",   tKey: "sb_col_emeraude",       hex: "#166534" },
+  { key: "amber",     tKey: "sb_col_ambre",          hex: "#b45309" },
+  { key: "orange",    tKey: "sb_col_orange",         hex: "#c2410c" },
+  { key: "red",       tKey: "sb_col_rouge",          hex: "#b91c1c" },
+  { key: "rose",      tKey: "sb_col_rose",           hex: "#be123c" },
+  { key: "slate",     tKey: "sb_col_gris_ardoise",   hex: "#475569" },
+  { key: "neutral",   tKey: "sb_col_gris_neutre",    hex: "#334155" },
 ];
 
-const FONT_STYLES = [
-  { key: "modern",      label: "Moderne et épuré",          hint: "Très lisible, professionnel",     preview: "system-ui, sans-serif" },
-  { key: "classic",     label: "Classique et élégant",      hint: "Traditionnel, raffiné",           preview: "Georgia, serif" },
-  { key: "handwritten", label: "Manuscrit / Artisanal",     hint: "Plus humain, chaleureux",         preview: "cursive" },
-  { key: "rounded",     label: "Arrondi & Accessible",      hint: "Doux, inclusif, accessible",     preview: "ui-rounded, sans-serif" },
-  { key: "bold",        label: "Gras & Impactant",          hint: "Fort, affirmé, mémorable",        preview: "Impact, sans-serif" },
-  { key: "humanist",    label: "Humaniste & Chaleureux",    hint: "Convivial, proche des gens",      preview: "Gill Sans, sans-serif" },
-  { key: "tech",        label: "Technique & Précis",        hint: "Consulting, IT, industrie",       preview: "Consolas, monospace" },
+const FONT_STYLE_DEFS = [
+  { key: "modern",      lKey: "sb_font_modern_lbl" as const,  hKey: "sb_font_modern_hint" as const,  preview: "system-ui, sans-serif" },
+  { key: "classic",     lKey: "sb_font_classic_lbl" as const, hKey: "sb_font_classic_hint" as const, preview: "Georgia, serif" },
+  { key: "handwritten", lKey: "sb_font_hand_lbl" as const,    hKey: "sb_font_hand_hint" as const,    preview: "cursive" },
+  { key: "rounded",     lKey: "sb_font_round_lbl" as const,   hKey: "sb_font_round_hint" as const,   preview: "ui-rounded, sans-serif" },
+  { key: "bold",        lKey: "sb_font_bold_lbl" as const,    hKey: "sb_font_bold_hint" as const,    preview: "Impact, sans-serif" },
+  { key: "humanist",    lKey: "sb_font_human_lbl" as const,   hKey: "sb_font_human_hint" as const,   preview: "Gill Sans, sans-serif" },
+  { key: "tech",        lKey: "sb_font_tech_lbl" as const,    hKey: "sb_font_tech_hint" as const,    preview: "Consolas, monospace" },
 ];
 
-const PAGES = [
-  { key: "home",     label: "Accueil",                    desc: "La vitrine principale",             locked: true },
-  { key: "about",    label: "Présentation",               desc: "Qui vous êtes, votre parcours" },
-  { key: "services", label: "Services / Prestations",     desc: "Ce que vous proposez exactement" },
-  { key: "contact",  label: "Contact",                    desc: "Plan, téléphone, adresse email",    locked: true },
+const PAGE_DEFS = [
+  { key: "home",     lKey: "sb_page_home" as const,     dKey: "sb_page_home_desc" as const,     locked: true },
+  { key: "about",    lKey: "sb_page_about" as const,    dKey: "sb_page_about_desc" as const },
+  { key: "services", lKey: "sb_page_services" as const, dKey: "sb_page_services_desc" as const },
+  { key: "contact",  lKey: "sb_page_contact" as const,  dKey: "sb_page_contact_desc" as const,  locked: true },
 ];
 
-const PHOTO_SECTIONS = [
-  {
-    key: "hero",
-    label: "Photo principale (héro)",
-    hint: "Format paysage (16:9) · min. 1200 × 600 px",
-    guide: {
-      desc: "Occupe toute la largeur tout en haut de votre site. C'est la première image que voient vos visiteurs — elle sert de fond derrière votre titre et votre slogan.",
-      format: "Format paysage (16:9) • min. 1200 × 600 px",
-      examples: "Salle de soins, bureau professionnel, équipe au travail, ambiance de votre activité",
-      highlight: "hero" as const,
-    },
-  },
-  {
-    key: "about",
-    label: "Photo « À propos »",
-    hint: "Format portrait ou carré · min. 600 × 700 px",
-    guide: {
-      desc: "S'affiche côte à côte avec votre texte de présentation dans la section « À propos ». Elle humanise votre page et inspire confiance.",
-      format: "Format portrait ou carré • min. 600 × 700 px",
-      examples: "Votre portrait professionnel, vous en action, photo de votre équipe ou cabinet",
-      highlight: "about" as const,
-    },
-  },
-  {
-    key: "services",
-    label: "Fond section Prestations",
-    hint: "Format paysage large · min. 1400 × 600 px",
-    guide: {
-      desc: "Utilisée comme arrière-plan décoratif derrière vos cartes de prestations. Un voile blanc semi-transparent est appliqué automatiquement pour que les cartes restent lisibles.",
-      format: "Format paysage large • min. 1400 × 600 px • préférez une image peu chargée",
-      examples: "Texture douce, photo floue/atmosphérique de votre environnement, motif discret",
-      highlight: "services" as const,
-    },
-  },
-  {
-    key: "contact",
-    label: "Photo section Contact",
-    hint: "Format portrait ou carré · min. 400 × 500 px",
-    guide: {
-      desc: "S'affiche à gauche du formulaire de contact pour rassurer et humaniser la prise de contact. Elle doit inspirer la bienveillance.",
-      format: "Format portrait ou carré • min. 400 × 500 px",
-      examples: "Votre espace d'accueil, votre bureau ou cabinet, un portrait souriant",
-      highlight: "contact" as const,
-    },
-  },
+const PHOTO_SECTION_DEFS = [
+  { key: "hero",     lKey: "sb_photo_hero_lbl" as const,     hKey: "sb_photo_hero_hint" as const,
+    guide: { dKey: "sb_guide_hero_desc" as const, fKey: "sb_guide_hero_format" as const, eKey: "sb_guide_hero_ex" as const, highlight: "hero" as const } },
+  { key: "about",    lKey: "sb_photo_about_lbl" as const,    hKey: "sb_photo_about_hint" as const,
+    guide: { dKey: "sb_guide_about_desc" as const, fKey: "sb_guide_about_format" as const, eKey: "sb_guide_about_ex" as const, highlight: "about" as const } },
+  { key: "services", lKey: "sb_photo_services_lbl" as const, hKey: "sb_photo_services_hint" as const,
+    guide: { dKey: "sb_guide_services_desc" as const, fKey: "sb_guide_services_format" as const, eKey: "sb_guide_services_ex" as const, highlight: "services" as const } },
+  { key: "contact",  lKey: "sb_photo_contact_lbl" as const,  hKey: "sb_photo_contact_hint" as const,
+    guide: { dKey: "sb_guide_contact_desc" as const, fKey: "sb_guide_contact_format" as const, eKey: "sb_guide_contact_ex" as const, highlight: "contact" as const } },
 ];
 
 type PhotoHighlight = "hero" | "about" | "services" | "contact";
@@ -189,17 +155,10 @@ function SiteWireframe({ highlight }: { highlight: PhotoHighlight }) {
   );
 }
 
-const STEPS = [
-  { label: "Votre image" },
-  { label: "Votre contenu" },
-  { label: "Identité" },
-  { label: "Contact & Réseaux" },
-  { label: "Zones" },
-  { label: "Prestations" },
-  { label: "Atouts" },
-  { label: "Témoignages" },
-  { label: "Suivi & Lancement" },
-];
+const STEP_KEYS = [
+  "sb_step0", "sb_step1", "sb_step2", "sb_step3", "sb_step4",
+  "sb_step5", "sb_step6", "sb_step7", "sb_step8",
+] as const;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -226,6 +185,19 @@ function isUnsupportedPhotoUrl(url: string): string | null {
 
 export default function SiteBuilderPage() {
   const router = useRouter();
+  const { t } = useLanguage();
+
+  const STEPS = STEP_KEYS.map((k) => ({ label: t[k] }));
+  const COLOR_PALETTES = COLOR_PALETTE_DEFS.map((c) => ({ ...c, label: t[c.tKey] as string }));
+  const FONT_STYLES = FONT_STYLE_DEFS.map((f) => ({ ...f, label: t[f.lKey], hint: t[f.hKey] }));
+  const PAGES = PAGE_DEFS.map((p) => ({ ...p, label: t[p.lKey], desc: t[p.dKey] }));
+  const PHOTO_SECTIONS = PHOTO_SECTION_DEFS.map((s) => ({
+    ...s,
+    label: t[s.lKey],
+    hint: t[s.hKey],
+    guide: { ...s.guide, desc: t[s.guide.dKey], format: t[s.guide.fKey], examples: t[s.guide.eKey] },
+  }));
+
   const [step, setStep] = useState(0);
   const [siteId, setSiteId] = useState<string | null>(null);
   const [tenantSlug, setTenantSlug] = useState<string>("");
@@ -311,7 +283,7 @@ export default function SiteBuilderPage() {
       const { url } = await api.uploadSitePhoto(file, section);
       onSuccess(url);
     } catch (e: any) {
-      alert(`Erreur upload : ${e.message}`);
+      alert(`${t.sb_uploading} ${e.message}`);
     } finally {
       setUploading(null);
     }
@@ -436,7 +408,7 @@ export default function SiteBuilderPage() {
   // ── Sauvegarde par étape ────────────────────────────────────────────────────
 
   const saveStep = async (): Promise<boolean> => {
-    if (!siteId) { flash("Aucun site trouvé", false); return false; }
+    if (!siteId) { flash(t.sb_no_site, false); return false; }
     setSaving(true);
     try {
       switch (step) {
@@ -480,7 +452,7 @@ export default function SiteBuilderPage() {
             testimonials.filter((t) => t.author_name.trim() && t.content.trim()));
           break;
       }
-      flash("Sauvegardé ✓");
+      flash("✓");
       return true;
     } catch (e: any) {
       flash(e.message ?? "Erreur", false);
@@ -494,31 +466,31 @@ export default function SiteBuilderPage() {
     const errors: Record<string, string> = {};
 
     if (step === 2) {
-      if (!title.trim()) errors.title = "Le nom de l'activité est obligatoire";
+      if (!title.trim()) errors.title = t.sb_err_title_req;
     }
 
     if (step === 3) {
       if (!phone.trim() && !emailContact.trim()) {
-        errors.contactRequired = "Au moins un téléphone ou un email de contact est requis";
+        errors.contactRequired = t.sb_err_contact_req;
       }
       if (emailContact && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailContact)) {
-        errors.emailContact = "Adresse email invalide";
+        errors.emailContact = t.sb_err_email_inv;
       }
     }
 
     if (step === 4) {
       if (!zones.some((z) => z.trim())) {
-        errors.zones = "Ajoutez au moins une zone d'intervention";
+        errors.zones = t.sb_err_zones_req;
       }
     }
 
     if (step === 5) {
       if (pagesEnabled.includes("services") && !offers.some((o) => o.name.trim())) {
-        errors.offers = "Vous avez activé la page Services — ajoutez au moins une prestation";
+        errors.offers = t.sb_err_offers_req;
       }
       offers.forEach((o, i) => {
         if ((o.description || o.duration_min || o.price_eur || o.image_url) && !o.name.trim()) {
-          errors[`offer_${i}_name`] = "Le nom de la prestation est obligatoire";
+          errors[`offer_${i}_name`] = t.sb_err_offer_name;
         }
       });
     }
@@ -526,18 +498,18 @@ export default function SiteBuilderPage() {
     if (step === 6) {
       values.forEach((v, i) => {
         if (v.description && !v.title.trim()) {
-          errors[`value_${i}_title`] = "Le titre de l'atout est obligatoire";
+          errors[`value_${i}_title`] = t.sb_err_value_title;
         }
       });
     }
 
     if (step === 7) {
-      testimonials.forEach((t, i) => {
-        if ((t.content || t.author_role) && !t.author_name.trim()) {
-          errors[`testimonial_${i}_name`] = "Le nom de l'auteur est obligatoire";
+      testimonials.forEach((testimonial, i) => {
+        if ((testimonial.content || testimonial.author_role) && !testimonial.author_name.trim()) {
+          errors[`testimonial_${i}_name`] = t.sb_err_testi_name;
         }
-        if ((t.author_name || t.author_role) && !t.content.trim()) {
-          errors[`testimonial_${i}_content`] = "Le contenu du témoignage est obligatoire";
+        if ((testimonial.author_name || testimonial.author_role) && !testimonial.content.trim()) {
+          errors[`testimonial_${i}_content`] = t.sb_err_testi_content;
         }
       });
     }
@@ -563,8 +535,8 @@ export default function SiteBuilderPage() {
     if (!siteId) return;
     await saveStep();
     await api.publishSite(siteId);
-    flash("Site publié ! Redirection…");
-    setTimeout(() => router.push("/dashboard"), 1800);
+    flash("✓");
+    setTimeout(() => router.push("/dashboard/appointments"), 1800);
   };
 
   // ── Liste dynamique ─────────────────────────────────────────────────────────
@@ -605,35 +577,32 @@ export default function SiteBuilderPage() {
     <div className="max-w-2xl mx-auto p-6 text-center space-y-6 pt-20">
       {loadError === "session" ? (
         <>
-          <p className="text-gray-800 font-medium">Session non à jour</p>
-          <p className="text-sm text-gray-500">
-            Votre session ne contient pas encore l'identifiant de votre espace.
-            Déconnectez-vous et reconnectez-vous pour corriger ça.
-          </p>
+          <p className="text-gray-800 font-medium">{t.sb_session_err}</p>
+          <p className="text-sm text-gray-500">{t.sb_session_desc}</p>
           <button
             onClick={async () => { await supabase.auth.signOut(); router.push("/login"); }}
             className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700"
           >
-            Se reconnecter
+            {t.sb_reconnect}
           </button>
         </>
       ) : (
         <>
-          <p className="text-gray-500">Aucun site trouvé pour votre compte.</p>
+          <p className="text-gray-500">{t.sb_no_site}</p>
           {loadError && <p className="text-red-500 text-sm">{loadError}</p>}
           <button
             onClick={createDefaultSite}
             disabled={creating}
             className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50"
           >
-            {creating ? "Création…" : "Créer mon site"}
+            {creating ? t.sb_creating_site : t.sb_create_site}
           </button>
         </>
       )}
       <div>
         <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          Retour au dashboard
+          {t.sb_back_db}
         </Link>
       </div>
     </div>
@@ -659,17 +628,30 @@ export default function SiteBuilderPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/dashboard" className="text-gray-400 hover:text-gray-600 text-lg">←</Link>
-          <h1 className="text-2xl font-bold">Configurer mon site</h1>
+          <h1 className="text-2xl font-bold">{t.sb_title}</h1>
         </div>
         {tenantSlug && (
-          <a
-            href={`/${tenantSlug}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-indigo-600 hover:underline border border-indigo-200 px-3 py-1.5 rounded-lg"
-          >
-            Voir mon site ↗
-          </a>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={previewSite}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-lg font-medium disabled:opacity-50 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+              {t.sb_preview}
+            </button>
+            <a
+              href={`/${tenantSlug}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-indigo-600 hover:underline border border-indigo-200 px-3 py-1.5 rounded-lg"
+            >
+              {t.sb_view_site}
+            </a>
+          </div>
         )}
       </div>
 
@@ -683,7 +665,7 @@ export default function SiteBuilderPage() {
           ))}
         </div>
         <p className="text-sm text-gray-500">
-          Étape {step + 1} / {STEPS.length} —{" "}
+          {t.ob_step} {step + 1} {t.ob_of} {STEPS.length} —{" "}
           <span className="font-medium text-gray-700">{STEPS[step].label}</span>
         </p>
       </div>
@@ -703,11 +685,11 @@ export default function SiteBuilderPage() {
 
           {/* Logo */}
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
-            <h2 className="font-semibold text-gray-800">Votre logo</h2>
+            <h2 className="font-semibold text-gray-800">{t.sb_logo_title}</h2>
             {[
-              { key: "has_logo",       label: "J'en ai un",           hint: "Renseignez l'URL de votre logo" },
-              { key: "needs_creation", label: "Je n'en ai pas",       hint: "Découvrez notre service de création de logo" },
-              { key: "text_only",      label: "Texte simple suffit",  hint: "Votre nom s'affiche en belle typographie" },
+              { key: "has_logo",       label: t.sb_logo_has,   hint: t.sb_logo_has_hint },
+              { key: "needs_creation", label: t.sb_logo_none,  hint: t.sb_logo_none_hint },
+              { key: "text_only",      label: t.sb_logo_text,  hint: t.sb_logo_text_hint },
             ].map((opt) => (
               <label key={opt.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${logoOption === opt.key ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}>
                 <input type="radio" name="logo" value={opt.key} checked={logoOption === opt.key}
@@ -726,7 +708,7 @@ export default function SiteBuilderPage() {
             {logoOption === "has_logo" && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <label className="lbl mb-0">URL de votre logo</label>
+                  <label className="lbl mb-0">{t.sb_logo_url_label}</label>
                   <button
                     type="button"
                     onClick={() => setShowLogoUrlHelp((v) => !v)}
@@ -735,13 +717,12 @@ export default function SiteBuilderPage() {
                 </div>
                 {showLogoUrlHelp && (
                   <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm space-y-2">
-                    <p className="font-semibold text-indigo-800">Comment mettre mon logo en ligne ?</p>
+                    <p className="font-semibold text-indigo-800">{t.sb_logo_how_title}</p>
                     <ol className="list-decimal list-inside space-y-1 text-indigo-700 text-xs">
                       <li>Uploadez votre logo sur <strong>Google Drive</strong>, <strong>Dropbox</strong> ou <strong>ImgBB</strong> (gratuit)</li>
                       <li>Obtenez le lien direct de partage (doit se terminer par .png, .jpg ou .svg)</li>
                       <li>Collez ce lien dans le champ ci-dessous</li>
                     </ol>
-                    <p className="text-xs text-indigo-500">Astuce : ImgBB.com est le plus simple — glissez votre image et copiez le "Direct link".</p>
                   </div>
                 )}
                 <button
@@ -753,12 +734,12 @@ export default function SiteBuilderPage() {
                   {uploading === "logo" ? (
                     <><div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />Envoi…</>
                   ) : (
-                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>Choisir un logo</>
+                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>{t.sb_logo_upload_btn}</>
                   )}
                 </button>
                 <div className="flex items-center gap-2 my-2">
                   <div className="flex-1 h-px bg-gray-200" />
-                  <span className="text-xs text-gray-400">ou entrez une URL</span>
+                  <span className="text-xs text-gray-400">{t.sb_or_url}</span>
                   <div className="flex-1 h-px bg-gray-200" />
                 </div>
                 <input
@@ -779,7 +760,7 @@ export default function SiteBuilderPage() {
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowLogoServiceModal(false)}>
                 <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-gray-900">Création de logo</h3>
+                    <h3 className="font-semibold text-gray-900">{t.sb_logo_modal_title}</h3>
                     <button onClick={() => setShowLogoServiceModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
                   </div>
                   <div className="text-center py-2">
@@ -794,7 +775,7 @@ export default function SiteBuilderPage() {
                   </div>
                   <p className="text-xs text-gray-400 text-center">Contactez-nous après avoir complété ce formulaire pour recevoir un devis.</p>
                   <button onClick={() => setShowLogoServiceModal(false)} className="w-full bg-indigo-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-indigo-700 transition-colors">
-                    Compris, je continue
+                    {t.sb_logo_modal_ok}
                   </button>
                 </div>
               </div>
@@ -803,8 +784,8 @@ export default function SiteBuilderPage() {
 
           {/* Couleurs */}
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
-            <h2 className="font-semibold text-gray-800">Couleurs de votre site</h2>
-            <p className="text-sm text-gray-500">Choisissez la palette qui correspond à votre image.</p>
+            <h2 className="font-semibold text-gray-800">{t.sb_colors_title}</h2>
+            <p className="text-sm text-gray-500">{t.sb_colors_desc}</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {COLOR_PALETTES.map((c) => (
                 <button
@@ -821,7 +802,7 @@ export default function SiteBuilderPage() {
 
           {/* Police */}
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
-            <h2 className="font-semibold text-gray-800">Style d'écriture (police)</h2>
+            <h2 className="font-semibold text-gray-800">{t.sb_font_title}</h2>
             {FONT_STYLES.map((f) => (
               <label key={f.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${fontStyle === f.key ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}>
                 <input type="radio" name="font" value={f.key} checked={fontStyle === f.key}
@@ -829,7 +810,7 @@ export default function SiteBuilderPage() {
                 <div className="flex-1">
                   <p className="font-medium text-sm text-gray-800">{f.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{f.hint}</p>
-                  <p className="text-base text-gray-700 mt-1" style={{ fontFamily: f.preview }}>Aa — Bonjour, bienvenue</p>
+                  <p className="text-base text-gray-700 mt-1" style={{ fontFamily: f.preview }}>Aa — Hello</p>
                 </div>
               </label>
             ))}
@@ -845,8 +826,8 @@ export default function SiteBuilderPage() {
 
           {/* Pages */}
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
-            <h2 className="font-semibold text-gray-800">Pages de votre site</h2>
-            <p className="text-sm text-gray-500">Cochez les pages utiles pour votre activité. Accueil et Contact sont obligatoires.</p>
+            <h2 className="font-semibold text-gray-800">{t.sb_pages_title}</h2>
+            <p className="text-sm text-gray-500">{t.sb_pages_desc}</p>
             <div className="space-y-3">
               {PAGES.map((page) => (
                 <label key={page.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${pagesEnabled.includes(page.key) ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"} ${page.locked ? "opacity-80" : ""}`}>
@@ -860,7 +841,7 @@ export default function SiteBuilderPage() {
                   <div>
                     <p className="font-medium text-sm text-gray-800">
                       {page.label}
-                      {page.locked && <span className="ml-2 text-xs text-gray-400">(obligatoire)</span>}
+                      {page.locked && <span className="ml-2 text-xs text-gray-400">{t.sb_obligatoire}</span>}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">{page.desc}</p>
                   </div>
@@ -871,10 +852,10 @@ export default function SiteBuilderPage() {
 
           {/* Photos */}
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
-            <h2 className="font-semibold text-gray-800">Photos</h2>
+            <h2 className="font-semibold text-gray-800">{t.sb_photos_title}</h2>
             {[
-              { key: "has_photos",  label: "J'ai mes propres photos professionnelles", hint: "Renseignez les URLs ci-dessous pour chaque section de votre site" },
-              { key: "needs_stock", label: "Je n'ai pas de photos",                    hint: "Nous sélectionnerons de belles photos libres de droits adaptées à votre secteur" },
+              { key: "has_photos",  label: t.sb_photos_has,   hint: t.sb_photos_has_hint },
+              { key: "needs_stock", label: t.sb_photos_stock, hint: t.sb_photos_stock_hint },
             ].map((opt) => (
               <label key={opt.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${photosOption === opt.key ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}>
                 <input type="radio" name="photos" value={opt.key} checked={photosOption === opt.key}
@@ -889,7 +870,7 @@ export default function SiteBuilderPage() {
             {/* Champs photos par section — visibles uniquement si has_photos */}
             {photosOption === "has_photos" && (
               <div className="border-t pt-4 space-y-5">
-                <p className="text-sm font-medium text-gray-700">Ajoutez une photo par section — uploadez directement ou collez une URL.</p>
+                <p className="text-sm font-medium text-gray-700">{t.sb_photos_add_desc}</p>
                 {PHOTO_SECTIONS.map((section) => (
                   <div key={section.key} className="relative">
 
@@ -918,7 +899,7 @@ export default function SiteBuilderPage() {
 
                         {/* Mini wireframe */}
                         <div className="bg-gray-50 rounded-xl p-3">
-                          <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Emplacement sur votre site</p>
+                          <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">{t.sb_guide_loc}</p>
                           <SiteWireframe highlight={section.guide.highlight} />
                         </div>
 
@@ -926,8 +907,8 @@ export default function SiteBuilderPage() {
                         <p className="text-sm text-gray-700 leading-relaxed">{section.guide.desc}</p>
 
                         <div className="space-y-1.5 text-xs text-gray-500">
-                          <p><span className="font-semibold text-gray-600">Format recommandé :</span> {section.guide.format}</p>
-                          <p><span className="font-semibold text-gray-600">Idées de photos :</span> {section.guide.examples}</p>
+                          <p><span className="font-semibold text-gray-600">{t.sb_guide_format_lbl}</span> {section.guide.format}</p>
+                          <p><span className="font-semibold text-gray-600">{t.sb_guide_ideas_lbl}</span> {section.guide.examples}</p>
                         </div>
 
                         <button
@@ -935,7 +916,7 @@ export default function SiteBuilderPage() {
                           onClick={() => setOpenGuide(null)}
                           className="w-full text-xs text-center text-indigo-600 hover:underline pt-1"
                         >
-                          Fermer
+                          {t.sb_guide_close}
                         </button>
                       </div>
                     )}
@@ -947,14 +928,14 @@ export default function SiteBuilderPage() {
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
                     >
                       {uploading === section.key ? (
-                        <><div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />Envoi en cours…</>
+                        <><div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />{t.sb_photo_uploading}</>
                       ) : (
-                        <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>Choisir une photo</>
+                        <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>{t.sb_photo_choose}</>
                       )}
                     </button>
                     <div className="flex items-center gap-2 my-2">
                       <div className="flex-1 h-px bg-gray-200" />
-                      <span className="text-xs text-gray-400">ou entrez une URL</span>
+                      <span className="text-xs text-gray-400">{t.sb_or_url}</span>
                       <div className="flex-1 h-px bg-gray-200" />
                     </div>
                     <input
@@ -996,7 +977,7 @@ export default function SiteBuilderPage() {
                               <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                               </svg>
-                              Image inaccessible — vérifiez que le lien est public et se termine par une extension (.jpg, .png…).
+                              {t.sb_img_broken}
                             </div>
                           )}
                         </>
@@ -1015,20 +996,20 @@ export default function SiteBuilderPage() {
       ────────────────────────────────────────────────────────────────────── */}
       {step === 2 && (
         <div className="bg-white rounded-xl shadow p-6 space-y-4">
-          <h2 className="font-semibold text-gray-800">Identité de votre activité</h2>
+          <h2 className="font-semibold text-gray-800">{t.sb_identity_title}</h2>
           <div>
-            <label className="lbl">Nom de l'activité *</label>
+            <label className="lbl">{t.sb_identity_name_lbl}</label>
             <input value={title} onChange={(e) => { setTitle(e.target.value); if (stepErrors.title) setStepErrors((p) => ({ ...p, title: "" })); }}
               className={`inp ${stepErrors.title ? "border-red-400 focus:border-red-400" : ""}`}
               placeholder="Ex : EvaCare, Muntu Cura, Cabinet Dubois…" />
             {stepErrors.title && <p className="text-red-500 text-xs mt-1">{stepErrors.title}</p>}
           </div>
           <div>
-            <label className="lbl">Accroche principale <span className="text-gray-400 font-normal">(tagline)</span></label>
+            <label className="lbl">{t.sb_identity_tagline_lbl} <span className="text-gray-400 font-normal">{t.sb_identity_tagline_tag}</span></label>
             <input value={tagline} onChange={(e) => setTagline(e.target.value)} className="inp" placeholder="Ex : Nous prenons soin de vous · L'artisan de confiance" />
           </div>
           <div>
-            <label className="lbl">Description de votre activité</label>
+            <label className="lbl">{t.sb_identity_desc_lbl}</label>
             <textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)}
               className="inp resize-y"
               placeholder="Présentez votre activité, votre expérience, votre approche, ce qui vous distingue…" />
@@ -1041,26 +1022,26 @@ export default function SiteBuilderPage() {
       ────────────────────────────────────────────────────────────────────── */}
       {step === 3 && (
         <div className="bg-white rounded-xl shadow p-6 space-y-4">
-          <h2 className="font-semibold text-gray-800">Coordonnées & réseaux sociaux</h2>
-          <p className="text-xs text-gray-400">Au moins un numéro de téléphone ou un email est obligatoire *</p>
+          <h2 className="font-semibold text-gray-800">{t.sb_contact_title}</h2>
+          <p className="text-xs text-gray-400">{t.sb_contact_req_note}</p>
           {stepErrors.contactRequired && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600">
               {stepErrors.contactRequired}
             </div>
           )}
           <div>
-            <label className="lbl">Téléphone principal *</label>
+            <label className="lbl">{t.sb_contact_phone_lbl}</label>
             <input value={phone}
               onChange={(e) => { setPhone(e.target.value); if (stepErrors.contactRequired) setStepErrors((p) => ({ ...p, contactRequired: "" })); }}
               className={`inp ${stepErrors.contactRequired && !emailContact.trim() ? "border-red-400" : ""}`}
               placeholder="+32 (0)466 42 23 77" />
           </div>
           <div>
-            <label className="lbl">Téléphone secondaire <span className="text-gray-400 font-normal">(optionnel)</span></label>
+            <label className="lbl">{t.sb_contact_phone2_lbl} <span className="text-gray-400 font-normal">{t.sb_optional}</span></label>
             <input value={phone2} onChange={(e) => setPhone2(e.target.value)} className="inp" placeholder="+32 (0)2 123 45 67" />
           </div>
           <div>
-            <label className="lbl">Email de contact *</label>
+            <label className="lbl">{t.sb_contact_email_lbl}</label>
             <input type="email" value={emailContact}
               onChange={(e) => { setEmailContact(e.target.value); if (stepErrors.emailContact || stepErrors.contactRequired) setStepErrors((p) => ({ ...p, emailContact: "", contactRequired: "" })); }}
               className={`inp ${(stepErrors.emailContact || (stepErrors.contactRequired && !phone.trim())) ? "border-red-400 focus:border-red-400" : ""}`}
@@ -1068,21 +1049,21 @@ export default function SiteBuilderPage() {
             {stepErrors.emailContact && <p className="text-red-500 text-xs mt-1">{stepErrors.emailContact}</p>}
           </div>
           <div>
-            <label className="lbl">Adresse</label>
+            <label className="lbl">{t.sb_contact_addr_lbl}</label>
             <input value={addressStreet} onChange={(e) => setAddressStreet(e.target.value)} className="inp" placeholder="Rue de l'Exemple 12" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="lbl">Code postal</label>
+              <label className="lbl">{t.sb_contact_postal_lbl}</label>
               <input value={addressPostal} onChange={(e) => setAddressPostal(e.target.value)} className="inp" placeholder="1000" />
             </div>
             <div>
-              <label className="lbl">Ville</label>
+              <label className="lbl">{t.sb_contact_city_lbl}</label>
               <input value={addressCity} onChange={(e) => setAddressCity(e.target.value)} className="inp" placeholder="Bruxelles" />
             </div>
           </div>
           <div className="pt-3 border-t space-y-3">
-            <p className="text-sm font-medium text-gray-700">Réseaux sociaux <span className="text-gray-400 font-normal">(optionnel)</span></p>
+            <p className="text-sm font-medium text-gray-700">{t.sb_contact_social_lbl} <span className="text-gray-400 font-normal">{t.sb_optional}</span></p>
             {[
               { label: "Facebook",  value: facebook,  set: setFacebook,  ph: "https://facebook.com/…" },
               { label: "Instagram", value: instagram, set: setInstagram, ph: "https://instagram.com/…" },
@@ -1102,8 +1083,8 @@ export default function SiteBuilderPage() {
       ────────────────────────────────────────────────────────────────────── */}
       {step === 4 && (
         <div className="bg-white rounded-xl shadow p-6 space-y-4">
-          <h2 className="font-semibold text-gray-800">Zones d'intervention</h2>
-          <p className="text-sm text-gray-500">Listez les villes, communes ou régions que vous couvrez. <span className="font-medium text-gray-700">Au moins une zone est requise.</span></p>
+          <h2 className="font-semibold text-gray-800">{t.sb_zones_title}</h2>
+          <p className="text-sm text-gray-500">{t.sb_zones_desc} <span className="font-medium text-gray-700">{t.sb_err_zones_req}.</span></p>
           {stepErrors.zones && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600">
               {stepErrors.zones}
@@ -1161,7 +1142,7 @@ export default function SiteBuilderPage() {
             </div>
           ))}
           <button onClick={() => listAdd(setZones, () => "")} className="text-sm text-indigo-600 hover:underline">
-            + Ajouter une zone
+            {t.sb_zones_add}
           </button>
         </div>
       )}
@@ -1177,40 +1158,40 @@ export default function SiteBuilderPage() {
             </div>
           )}
           <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">
-            La durée et le prix sont <strong>facultatifs</strong>. Ne remplissez que ce que vous souhaitez afficher.
+            {t.sb_offer_opt_note}
           </div>
           {offers.map((o, i) => (
             <div key={i} className="bg-white rounded-xl shadow p-5 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-600">Prestation {i + 1}</span>
+                <span className="text-sm font-medium text-gray-600">{t.sb_offer_lbl} {i + 1}</span>
                 {offers.length > 1 && (
-                  <button onClick={() => listRemove(setOffers, i)} className="text-red-400 hover:text-red-600 text-sm">Supprimer</button>
+                  <button onClick={() => listRemove(setOffers, i)} className="text-red-400 hover:text-red-600 text-sm">{t.sb_remove}</button>
                 )}
               </div>
               <input value={o.name}
                 onChange={(e) => { listUpdate(setOffers, i, { name: e.target.value }); if (stepErrors[`offer_${i}_name`] || stepErrors.offers) setStepErrors((p) => ({ ...p, [`offer_${i}_name`]: "", offers: "" })); }}
                 className={`inp ${stepErrors[`offer_${i}_name`] ? "border-red-400" : ""}`}
-                placeholder="Nom de la prestation *" />
+                placeholder={t.sb_offer_name_ph} />
               {stepErrors[`offer_${i}_name`] && <p className="text-red-500 text-xs">{stepErrors[`offer_${i}_name`]}</p>}
               <textarea rows={2} value={o.description}
                 onChange={(e) => listUpdate(setOffers, i, { description: e.target.value })}
-                className="inp resize-y" placeholder="Description (optionnel)" />
+                className="inp resize-y" placeholder={t.sb_offer_desc_ph} />
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="lbl">Durée (min) — facultatif</label>
+                  <label className="lbl">{t.sb_offer_duration_lbl}</label>
                   <input type="number" value={o.duration_min}
                     onChange={(e) => listUpdate(setOffers, i, { duration_min: e.target.value })}
                     className="inp" placeholder="60" />
                 </div>
                 <div>
-                  <label className="lbl">Prix (€) — facultatif</label>
+                  <label className="lbl">{t.sb_offer_price_lbl}</label>
                   <input type="number" value={o.price_eur}
                     onChange={(e) => listUpdate(setOffers, i, { price_eur: e.target.value })}
                     className="inp" placeholder="50" />
                 </div>
               </div>
               <div>
-                <label className="lbl">Image de la prestation <span className="text-gray-400 font-normal">(optionnel)</span></label>
+                <label className="lbl">{t.sb_offer_image_lbl} <span className="text-gray-400 font-normal">{t.sb_optional}</span></label>
                 <div className="flex items-center gap-2 mb-2">
                   <button
                     type="button"
@@ -1219,13 +1200,13 @@ export default function SiteBuilderPage() {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
                   >
                     {uploading === `offer_${i}` ? (
-                      <><div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />Envoi…</>
+                      <><div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />{t.sb_uploading}</>
                     ) : (
-                      <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>Choisir</>
+                      <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>{t.sb_offer_choose}</>
                     )}
                   </button>
                   <input value={o.image_url} onChange={(e) => listUpdate(setOffers, i, { image_url: e.target.value })}
-                    className="inp flex-1" placeholder="ou entrez une URL" />
+                    className="inp flex-1" placeholder={t.sb_or_url} />
                 </div>
                 {(() => {
                   const warn = isUnsupportedPhotoUrl(o.image_url);
@@ -1240,7 +1221,7 @@ export default function SiteBuilderPage() {
             </div>
           ))}
           <button onClick={() => listAdd(setOffers, EMPTY_OFFER)} className="text-sm text-indigo-600 hover:underline">
-            + Ajouter une prestation
+            {t.sb_offer_add}
           </button>
         </div>
       )}
@@ -1251,7 +1232,7 @@ export default function SiteBuilderPage() {
       {step === 6 && (
         <div className="space-y-4">
           <div className="flex items-start justify-between gap-3">
-            <p className="text-sm text-gray-500">Ces atouts rassureront vos visiteurs et se retrouveront sur votre site. Maximum 6.</p>
+            <p className="text-sm text-gray-500">{t.sb_values_hint}</p>
             <button
               onClick={() => setShowAtoutsHelp(true)}
               className="shrink-0 w-6 h-6 rounded-full border border-gray-300 text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors text-xs font-bold leading-none flex items-center justify-center"
@@ -1265,14 +1246,12 @@ export default function SiteBuilderPage() {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowAtoutsHelp(false)}>
               <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900 text-base">C'est quoi un "Atout" ?</h3>
+                  <h3 className="font-semibold text-gray-900 text-base">{t.sb_atouts_what}</h3>
                   <button onClick={() => setShowAtoutsHelp(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
                 </div>
-                <p className="text-sm text-gray-600">
-                  Un atout est une raison concrète pour laquelle un client devrait vous choisir plutôt qu'un autre. C'est ce qui vous différencie : votre expérience, votre méthode, votre disponibilité…
-                </p>
+                <p className="text-sm text-gray-600">{t.sb_atouts_help_desc}</p>
                 <div className="bg-indigo-50 rounded-xl p-4 space-y-3">
-                  <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Exemples</p>
+                  <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">{t.sb_atouts_examples_lbl}</p>
                   <div className="space-y-2">
                     {[
                       { icon: "🏅", title: "10 ans d'expérience", desc: "Une expertise acquise auprès de centaines de patients en cabinet libéral." },
@@ -1290,7 +1269,7 @@ export default function SiteBuilderPage() {
                   </div>
                 </div>
                 <button onClick={() => setShowAtoutsHelp(false)} className="w-full bg-indigo-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-indigo-700 transition-colors">
-                  J'ai compris
+                  {t.sb_atouts_ok}
                 </button>
               </div>
             </div>
@@ -1298,9 +1277,9 @@ export default function SiteBuilderPage() {
           {values.map((v, i) => (
             <div key={i} className="bg-white rounded-xl shadow p-5 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-600">Atout {i + 1}</span>
+                <span className="text-sm font-medium text-gray-600">{t.sb_value_lbl} {i + 1}</span>
                 {values.length > 1 && (
-                  <button onClick={() => listRemove(setValues, i)} className="text-red-400 hover:text-red-600 text-sm">Supprimer</button>
+                  <button onClick={() => listRemove(setValues, i)} className="text-red-400 hover:text-red-600 text-sm">{t.sb_remove}</button>
                 )}
               </div>
               <div className="flex gap-3">
@@ -1309,13 +1288,13 @@ export default function SiteBuilderPage() {
                     type="button"
                     onClick={() => setIconPickerIdx(iconPickerIdx === i ? null : i)}
                     className="inp w-14 h-10 flex items-center justify-center cursor-pointer hover:border-indigo-400 transition-colors text-indigo-600"
-                    title="Choisir une icône"
+                    title={t.sb_icon_pick_lbl}
                   >
                     <AtoutIconSVG icon={v.icon || "star"} className="w-5 h-5" />
                   </button>
                   {iconPickerIdx === i && (
                     <div className="absolute left-0 top-full mt-1 z-40 bg-white border border-gray-200 rounded-2xl shadow-xl p-3 w-80">
-                      <p className="text-xs text-gray-400 mb-2 font-medium">Choisissez une icône</p>
+                      <p className="text-xs text-gray-400 mb-2 font-medium">{t.sb_icon_pick_lbl}</p>
                       <div className="grid grid-cols-5 gap-1">
                         {ATOUT_ICONS.map((ic) => (
                           <button
@@ -1337,18 +1316,18 @@ export default function SiteBuilderPage() {
                   <input value={v.title}
                     onChange={(e) => { listUpdate(setValues, i, { title: e.target.value }); if (stepErrors[`value_${i}_title`]) setStepErrors((p) => ({ ...p, [`value_${i}_title`]: "" })); }}
                     className={`inp w-full ${stepErrors[`value_${i}_title`] ? "border-red-400" : ""}`}
-                    placeholder="Titre de l'atout *" />
+                    placeholder={t.sb_value_title_ph} />
                   {stepErrors[`value_${i}_title`] && <p className="text-red-500 text-xs mt-1">{stepErrors[`value_${i}_title`]}</p>}
                 </div>
               </div>
               <textarea rows={2} value={v.description}
                 onChange={(e) => listUpdate(setValues, i, { description: e.target.value })}
-                className="inp resize-y" placeholder="Décrivez cet atout en 1-2 phrases…" />
+                className="inp resize-y" placeholder={t.sb_value_desc_ph} />
             </div>
           ))}
           {values.length < 6 && (
             <button onClick={() => listAdd(setValues, EMPTY_VALUE)} className="text-sm text-indigo-600 hover:underline">
-              + Ajouter un atout
+              {t.sb_value_add}
             </button>
           )}
         </div>
@@ -1359,42 +1338,42 @@ export default function SiteBuilderPage() {
       ────────────────────────────────────────────────────────────────────── */}
       {step === 7 && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">Ajoutez des avis de clients ou partenaires. Laissez vide si vous n'en avez pas encore.</p>
-          {testimonials.map((t, i) => (
+          <p className="text-sm text-gray-500">{t.sb_testi_hint}</p>
+          {testimonials.map((testi, i) => (
             <div key={i} className="bg-white rounded-xl shadow p-5 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-600">Témoignage {i + 1}</span>
-                <button onClick={() => listRemove(setTestimonials, i)} className="text-red-400 hover:text-red-600 text-sm">Supprimer</button>
+                <span className="text-sm font-medium text-gray-600">{t.sb_testi_lbl} {i + 1}</span>
+                <button onClick={() => listRemove(setTestimonials, i)} className="text-red-400 hover:text-red-600 text-sm">{t.sb_remove}</button>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <input value={t.author_name}
+                  <input value={testi.author_name}
                     onChange={(e) => { listUpdate(setTestimonials, i, { author_name: e.target.value }); if (stepErrors[`testimonial_${i}_name`]) setStepErrors((p) => ({ ...p, [`testimonial_${i}_name`]: "" })); }}
                     className={`inp ${stepErrors[`testimonial_${i}_name`] ? "border-red-400" : ""}`}
-                    placeholder="Nom *" />
+                    placeholder={t.sb_testi_name_ph} />
                   {stepErrors[`testimonial_${i}_name`] && <p className="text-red-500 text-xs mt-1">{stepErrors[`testimonial_${i}_name`]}</p>}
                 </div>
-                <input value={t.author_role} onChange={(e) => listUpdate(setTestimonials, i, { author_role: e.target.value })}
-                  className="inp" placeholder="Rôle (ex : WZC Brugge)" />
+                <input value={testi.author_role} onChange={(e) => listUpdate(setTestimonials, i, { author_role: e.target.value })}
+                  className="inp" placeholder={t.sb_testi_role_ph} />
               </div>
               <div>
-                <textarea rows={3} value={t.content}
+                <textarea rows={3} value={testi.content}
                   onChange={(e) => { listUpdate(setTestimonials, i, { content: e.target.value }); if (stepErrors[`testimonial_${i}_content`]) setStepErrors((p) => ({ ...p, [`testimonial_${i}_content`]: "" })); }}
                   className={`inp resize-y ${stepErrors[`testimonial_${i}_content`] ? "border-red-400" : ""}`}
-                  placeholder="Ce que dit votre client…" />
+                  placeholder={t.sb_testi_content_ph} />
                 {stepErrors[`testimonial_${i}_content`] && <p className="text-red-500 text-xs mt-1">{stepErrors[`testimonial_${i}_content`]}</p>}
               </div>
               <div className="flex items-center gap-1">
-                <span className="text-sm text-gray-500 mr-1">Note :</span>
+                <span className="text-sm text-gray-500 mr-1">{t.sb_testi_rating_lbl}</span>
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button key={star} onClick={() => listUpdate(setTestimonials, i, { rating: star })}
-                    className={`text-xl transition-colors ${star <= t.rating ? "text-yellow-400" : "text-gray-200"}`}>★</button>
+                    className={`text-xl transition-colors ${star <= testi.rating ? "text-yellow-400" : "text-gray-200"}`}>★</button>
                 ))}
               </div>
             </div>
           ))}
           <button onClick={() => listAdd(setTestimonials, EMPTY_TESTIMONIAL)} className="text-sm text-indigo-600 hover:underline">
-            + Ajouter un témoignage
+            {t.sb_testi_add}
           </button>
         </div>
       )}
@@ -1408,8 +1387,8 @@ export default function SiteBuilderPage() {
           {/* Tracking */}
           <div className="bg-white rounded-xl shadow p-6 space-y-5">
             <div>
-              <h2 className="font-semibold text-gray-800">Suivi & Analytics</h2>
-              <p className="text-sm text-gray-500 mt-1">Collez vos identifiants pour mesurer les visites de votre site. Laissez vide si vous n'avez pas encore de compte Analytics.</p>
+              <h2 className="font-semibold text-gray-800">{t.sb_tracking_title}</h2>
+              <p className="text-sm text-gray-500 mt-1">{t.sb_tracking_desc}</p>
             </div>
 
             <div>
@@ -1419,7 +1398,7 @@ export default function SiteBuilderPage() {
               </label>
               <input value={ga4Id} onChange={(e) => setGa4Id(e.target.value)} className="inp"
                 placeholder="G-XXXXXXXXXX" />
-              <p className="text-xs text-gray-400 mt-1">Trouvez votre ID dans Google Analytics → Admin → Flux de données</p>
+              <p className="text-xs text-gray-400 mt-1">{t.sb_ga4_hint}</p>
             </div>
 
             <div>
@@ -1429,7 +1408,7 @@ export default function SiteBuilderPage() {
               </label>
               <input value={metaPixelId} onChange={(e) => setMetaPixelId(e.target.value)} className="inp"
                 placeholder="123456789012345" />
-              <p className="text-xs text-gray-400 mt-1">Trouvez votre Pixel ID dans Meta Business Suite → Gestionnaire d'événements</p>
+              <p className="text-xs text-gray-400 mt-1">{t.sb_meta_hint}</p>
             </div>
 
             <div>
@@ -1439,17 +1418,17 @@ export default function SiteBuilderPage() {
               </label>
               <input value={gtmId} onChange={(e) => setGtmId(e.target.value)} className="inp"
                 placeholder="GTM-XXXXXXX" />
-              <p className="text-xs text-gray-400 mt-1">Format : GTM-XXXXXXX — trouvez-le dans votre conteneur GTM</p>
+              <p className="text-xs text-gray-400 mt-1">{t.sb_gtm_hint}</p>
             </div>
           </div>
 
           {/* CSS personnalisé — premium */}
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800">CSS personnalisé</h2>
-              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Premium</span>
+              <h2 className="font-semibold text-gray-800">{t.sb_css_title}</h2>
+              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">{t.sb_css_premium}</span>
             </div>
-            <p className="text-sm text-gray-500">Ajoutez du CSS pour personnaliser l'apparence de votre site de façon avancée.</p>
+            <p className="text-sm text-gray-500">{t.sb_css_desc}</p>
             <textarea
               rows={8}
               value={customCss}
@@ -1461,17 +1440,15 @@ export default function SiteBuilderPage() {
 
           {/* Publication */}
           <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 space-y-3">
-            <h2 className="font-semibold text-indigo-900">Tout est prêt ?</h2>
-            <p className="text-sm text-indigo-700">Votre site sera visible publiquement. Vous pourrez toujours revenir modifier ces réglages.</p>
-            {tenantSlug && (
-              <button onClick={previewSite} disabled={saving}
-                className="w-full border border-indigo-400 text-indigo-700 bg-white font-semibold py-3 rounded-xl hover:bg-indigo-50 disabled:opacity-50 transition-colors">
-                {saving ? "Sauvegarde…" : "👁 Prévisualiser mon site"}
-              </button>
-            )}
+            <h2 className="font-semibold text-indigo-900">{t.sb_ready_title}</h2>
+            <p className="text-sm text-indigo-700">{t.sb_ready_desc}</p>
+            <button onClick={previewSite} disabled={saving || !tenantSlug}
+              className="w-full border border-indigo-400 text-indigo-700 bg-white font-semibold py-3 rounded-xl hover:bg-indigo-50 disabled:opacity-50 transition-colors">
+              {saving ? t.sb_saving : t.sb_preview}
+            </button>
             <button onClick={publish} disabled={saving}
               className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-              {saving ? "Sauvegarde…" : "Sauvegarder & Publier mon site"}
+              {saving ? t.sb_saving : t.sb_publish}
             </button>
           </div>
         </div>
@@ -1481,13 +1458,13 @@ export default function SiteBuilderPage() {
       <div className="flex gap-3">
         {step > 0 && (
           <button onClick={prev} className="flex-1 border rounded-xl py-2.5 text-gray-600 hover:bg-gray-50 font-medium">
-            ← Retour
+            {t.sb_prev}
           </button>
         )}
         {step < STEPS.length - 1 && (
           <button onClick={next} disabled={saving}
             className="flex-1 bg-indigo-600 text-white font-semibold py-2.5 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-            {saving ? "Sauvegarde…" : "Sauvegarder & Continuer →"}
+            {saving ? t.sb_saving : t.sb_save_continue}
           </button>
         )}
       </div>

@@ -63,13 +63,34 @@ async def get_blocked(tenant_id: str = Depends(get_current_tenant)):
 async def create_blocked(body: BlockedPeriodIn, tenant_id: str = Depends(get_current_tenant)):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)
-    res = sb.table("blocked_period").insert({
+    row: dict = {
         "calendar_id": cal_id,
         "start_at": body.start_at.isoformat(),
         "end_at": body.end_at.isoformat(),
         "reason": body.reason,
         "created_by": "user",
-    }).execute()
+    }
+    if body.color:
+        row["color"] = body.color
+    res = sb.table("blocked_period").insert(row).execute()
+    return res.data[0]
+
+
+@router.patch("/blocked/{period_id}")
+async def update_blocked(body: BlockedPeriodIn, period_id: UUID, tenant_id: str = Depends(get_current_tenant)):
+    sb = get_supabase()
+    cal_id = _ensure_calendar(sb, tenant_id)
+    row: dict = {
+        "start_at": body.start_at.isoformat(),
+        "end_at": body.end_at.isoformat(),
+        "reason": body.reason,
+    }
+    if body.color:
+        row["color"] = body.color
+    res = sb.table("blocked_period").update(row).eq("id", str(period_id)).eq("calendar_id", cal_id).execute()
+    if not res.data:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Blocage introuvable")
     return res.data[0]
 
 
@@ -112,7 +133,7 @@ async def create_calendar_appointment(body: CalendarApptIn, tenant_id: str = Dep
         }).execute().data[0]
         contact_id = new_c["id"]
 
-    ensure_lead(sb, tenant_id, contact_id, body.source or "dashboard")
+    ensure_lead(sb, tenant_id, contact_id, body.source or "dashboard", status="scheduled", request_type="b2c_appointment")
 
     res = sb.table("appointment").insert({
         "calendar_id": cal_id,
@@ -137,7 +158,7 @@ async def get_calendar_appointments(
     cal_id = _ensure_calendar(sb, tenant_id)
     q = (
         sb.table("appointment")
-        .select("id, status, scheduled_at, end_at, contact(first_name, last_name, email), service_offer(name)")
+        .select("id, status, scheduled_at, end_at, service_offer_id, contact(first_name, last_name, email), service_offer(name)")
         .eq("calendar_id", cal_id)
         .neq("status", "cancelled")
     )

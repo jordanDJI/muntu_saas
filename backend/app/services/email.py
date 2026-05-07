@@ -163,6 +163,54 @@ def send_team_invite(email: str, tenant_name: str, invite_url: str, role: str) -
     })
 
 
+def send_lead_acknowledgement(contact_email: str, contact_name: str, tenant_name: str) -> None:
+    """Accuse de réception au prospect après soumission du formulaire de contact."""
+    resend.Emails.send({
+        "from": f"{tenant_name} <{settings.email_from}>",
+        "to": [contact_email],
+        "subject": f"{tenant_name} — Votre message a bien été reçu",
+        "html": f"""
+        <h2>Merci, {contact_name} !</h2>
+        <p>Votre message a bien été reçu par <strong>{tenant_name}</strong>.</p>
+        <p>Nous examinerons votre demande et vous recontacterons dans les meilleurs délais.</p>
+        <p style="color:#6b7280;font-size:13px">
+          Si vous avez une urgence, n'hésitez pas à nous appeler directement.
+        </p>
+        """,
+    })
+
+
+def send_booking_request_received(
+    contact_email: str,
+    contact_name: str,
+    appointment: dict,
+    tenant_name: str,
+) -> None:
+    """Accuse de réception au client après une demande de rendez-vous (statut pending)."""
+    from datetime import datetime
+    try:
+        dt = datetime.fromisoformat(appointment.get("scheduled_at", "").replace("Z", "+00:00"))
+        date_str = dt.strftime("%A %d/%m/%Y à %H:%M")
+    except Exception:
+        date_str = appointment.get("scheduled_at", "—")
+
+    resend.Emails.send({
+        "from": f"{tenant_name} <{settings.email_from}>",
+        "to": [contact_email],
+        "subject": f"{tenant_name} — Votre demande de rendez-vous a été reçue",
+        "html": f"""
+        <h2>Demande de rendez-vous reçue ✓</h2>
+        <p>Bonjour {contact_name},</p>
+        <p>Votre demande de rendez-vous avec <strong>{tenant_name}</strong>
+        pour le <strong>{date_str}</strong> a bien été enregistrée.</p>
+        <p>Le professionnel va examiner votre demande et vous enverra une confirmation par email.</p>
+        <p style="color:#6b7280;font-size:13px">
+          Si vous ne pouvez finalement pas vous déplacer, merci de nous le signaler dès que possible.
+        </p>
+        """,
+    })
+
+
 def send_appointment_reminder(contact_email: str, contact_name: str, appointment: dict, tenant_name: str) -> None:
     from datetime import datetime
     try:

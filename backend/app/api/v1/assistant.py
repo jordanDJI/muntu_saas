@@ -21,10 +21,31 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant
 from app.models.agent import AssistantChatRequest, AssistantChatResponse
-from app.services.llm import chat_completion
+from app.services.llm import smart_chat_completion
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 logger = logging.getLogger(__name__)
+
+
+@router.get("/history")
+async def get_history(tenant_id: str = Depends(get_current_tenant)):
+    """Retourne la conversation assistant_tenant la plus récente avec ses messages."""
+    sb = get_supabase_admin()
+    conv = (
+        sb.table("conversation")
+        .select("id")
+        .eq("tenant_id", tenant_id)
+        .eq("agent_type", "assistant_tenant")
+        .eq("channel", "dashboard")
+        .order("started_at", desc=True)
+        .limit(1)
+        .execute()
+    ).data
+    if not conv:
+        return {"conversation_id": None, "messages": []}
+    conv_id = conv[0]["id"]
+    messages = await asyncio.to_thread(_load_history, sb, conv_id, limit=50)
+    return {"conversation_id": conv_id, "messages": messages}
 
 
 @router.post("/chat", response_model=AssistantChatResponse)
@@ -59,9 +80,8 @@ async def assistant_chat(
     # Appel LLM
     try:
         reply = await asyncio.to_thread(
-            chat_completion,
+            smart_chat_completion,
             messages=history,
-            model=config.get("model", "gemini-2.5-flash"),
             system_prompt=system_prompt,
         )
     except Exception as exc:
@@ -119,28 +139,136 @@ def _load_history(sb, conv_id: str, limit: int = 20) -> list[dict]:
     ]
 
 
+_PROMPT_I18N: dict[str, dict] = {
+    "fr": {
+        "days": ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"],
+        "at": "à",
+        "unknown_pro": "le professionnel",
+        "identity": (
+            "Tu es l'assistant opérationnel de {name}. "
+            "Tu l'aides à gérer son activité : rendez-vous, clients, planning, leads. "
+            "Tu peux confirmer ou annuler des rendez-vous à la demande du professionnel. "
+            "Réponds en français, sois concis et direct. "
+            "Date et heure actuelles : {date_str} (heure de Bruxelles). "
+            "Utilise toujours cette date comme référence absolue."
+        ),
+        "pending_header": "## Rendez-vous EN ATTENTE de confirmation",
+        "pending_hint": "  → Pour confirmer : dites 'confirme [prénom]'. Pour annuler : 'annule [prénom]'.",
+        "unknown_contact": "Contact inconnu",
+        "confirmed_header": "## Prochains rendez-vous confirmés (7 jours)",
+        "leads_header": "## Leads récents",
+        "unknown": "Inconnu",
+        "status_label": "statut",
+        "convs_header": "## Conversations récentes Agent 2 (support client)",
+        "unknown_client": "Client inconnu",
+        "client_label": "Client",
+        "agent_label": "Agent",
+        "synth_header": "## Dernière synthèse opérationnelle",
+    },
+    "en": {
+        "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        "at": "at",
+        "unknown_pro": "the professional",
+        "identity": (
+            "You are the operational assistant for {name}. "
+            "You help manage their business: appointments, contacts, schedule, and leads. "
+            "You can confirm or cancel appointments on the professional's request. "
+            "Reply in English, be concise and direct. "
+            "Current date and time: {date_str} (Brussels time). "
+            "Always use this as your absolute reference."
+        ),
+        "pending_header": "## Appointments AWAITING confirmation",
+        "pending_hint": "  → To confirm: say 'confirm [first name]'. To cancel: 'cancel [first name]'.",
+        "unknown_contact": "Unknown contact",
+        "confirmed_header": "## Upcoming confirmed appointments (7 days)",
+        "leads_header": "## Recent leads",
+        "unknown": "Unknown",
+        "status_label": "status",
+        "convs_header": "## Recent Agent 2 conversations (customer support)",
+        "unknown_client": "Unknown client",
+        "client_label": "Client",
+        "agent_label": "Agent",
+        "synth_header": "## Latest operational summary",
+    },
+    "nl": {
+        "days": ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"],
+        "at": "om",
+        "unknown_pro": "de professional",
+        "identity": (
+            "U bent de operationele assistent van {name}. "
+            "U helpt bij het beheren van hun activiteit: afspraken, klanten, planning en leads. "
+            "U kunt afspraken bevestigen of annuleren op verzoek van de professional. "
+            "Antwoord in het Nederlands, wees beknopt en direct. "
+            "Huidige datum en tijd: {date_str} (Brusselse tijd). "
+            "Gebruik dit altijd als absolute referentie."
+        ),
+        "pending_header": "## Afspraken IN AFWACHTING van bevestiging",
+        "pending_hint": "  → Om te bevestigen: zeg 'bevestig [voornaam]'. Om te annuleren: 'annuleer [voornaam]'.",
+        "unknown_contact": "Onbekend contact",
+        "confirmed_header": "## Komende bevestigde afspraken (7 dagen)",
+        "leads_header": "## Recente leads",
+        "unknown": "Onbekend",
+        "status_label": "status",
+        "convs_header": "## Recente Agent 2-gesprekken (klantenondersteuning)",
+        "unknown_client": "Onbekende klant",
+        "client_label": "Klant",
+        "agent_label": "Agent",
+        "synth_header": "## Laatste operationeel overzicht",
+    },
+    "de": {
+        "days": ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"],
+        "at": "um",
+        "unknown_pro": "der Fachmann",
+        "identity": (
+            "Sie sind der operative Assistent von {name}. "
+            "Sie helfen beim Verwalten der Aktivität: Termine, Kunden, Planung und Leads. "
+            "Sie können Termine auf Anfrage des Fachmanns bestätigen oder absagen. "
+            "Antworten Sie auf Deutsch, knapp und direkt. "
+            "Aktuelles Datum und Uhrzeit: {date_str} (Brüsseler Zeit). "
+            "Verwenden Sie dies immer als absolute Referenz."
+        ),
+        "pending_header": "## Termine WARTEN auf Bestätigung",
+        "pending_hint": "  → Zum Bestätigen: sagen Sie 'bestätige [Vorname]'. Zum Absagen: 'absage [Vorname]'.",
+        "unknown_contact": "Unbekannter Kontakt",
+        "confirmed_header": "## Bevorstehende bestätigte Termine (7 Tage)",
+        "leads_header": "## Aktuelle Leads",
+        "unknown": "Unbekannt",
+        "status_label": "Status",
+        "convs_header": "## Aktuelle Agent-2-Gespräche (Kundensupport)",
+        "unknown_client": "Unbekannter Kunde",
+        "client_label": "Kunde",
+        "agent_label": "Agent",
+        "synth_header": "## Letzte operative Zusammenfassung",
+    },
+}
+
+
 def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     """Construit le prompt système enrichi avec le contexte métier du tenant."""
     if config.get("system_prompt"):
         return config["system_prompt"]
 
-    _days_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    # Langue configurée sur le site du tenant
+    site_res = (
+        sb.table("site")
+        .select("default_language")
+        .eq("tenant_id", tenant_id)
+        .limit(1)
+        .execute()
+    )
+    lang = (site_res.data or [{}])[0].get("default_language") or "fr"
+    tr = _PROMPT_I18N.get(lang, _PROMPT_I18N["fr"])
+
     now = datetime.now(timezone.utc) + timedelta(hours=2)  # Europe/Brussels (CEST UTC+2)
-    date_str = f"{_days_fr[now.weekday()].capitalize()} {now.strftime('%d/%m/%Y')} à {now.strftime('%H:%M')}"
+    day_name = tr["days"][now.weekday()].capitalize()
+    date_str = f"{day_name} {now.strftime('%d/%m/%Y')} {tr['at']} {now.strftime('%H:%M')}"
     lines: list[str] = []
 
     # Identité du tenant
     tenant_res = sb.table("tenant").select("name, slug").eq("id", tenant_id).single().execute()
-    tenant_name = tenant_res.data.get("name", "le professionnel") if tenant_res.data else "le professionnel"
+    tenant_name = tenant_res.data.get("name", tr["unknown_pro"]) if tenant_res.data else tr["unknown_pro"]
 
-    lines.append(
-        f"Tu es l'assistant opérationnel de {tenant_name}. "
-        "Tu l'aides à gérer son activité : rendez-vous, clients, planning, leads. "
-        "Tu peux confirmer ou annuler des rendez-vous à la demande du professionnel. "
-        "Réponds en français, sois concis et direct. "
-        f"Date et heure actuelles : {date_str} (heure de Bruxelles). "
-        "Utilise toujours cette date comme référence absolue."
-    )
+    lines.append(tr["identity"].format(name=tenant_name, date_str=date_str))
 
     cals = sb.table("calendar").select("id").eq("tenant_id", tenant_id).execute().data or []
     cal_ids = [c["id"] for c in cals]
@@ -158,13 +286,13 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
         ).data or []
 
         if pending:
-            lines.append("\n## Rendez-vous EN ATTENTE de confirmation")
+            lines.append(f"\n{tr['pending_header']}")
             for a in pending:
                 dt = datetime.fromisoformat(a["scheduled_at"].replace("Z", "+00:00"))
                 contact = a.get("contact") or {}
-                name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or "Contact inconnu"
+                name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or tr["unknown_contact"]
                 lines.append(f"- [ID:{a['id'][:8]}] {dt.strftime('%a %d/%m %H:%M')} — {name}")
-            lines.append("  → Pour confirmer : dites 'confirme [prénom]'. Pour annuler : 'annule [prénom]'.")
+            lines.append(tr["pending_hint"])
 
     # Prochains RDVs confirmés (7 jours)
     if cal_ids:
@@ -182,11 +310,11 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
         ).data or []
 
         if appts:
-            lines.append("\n## Prochains rendez-vous confirmés (7 jours)")
+            lines.append(f"\n{tr['confirmed_header']}")
             for a in appts:
                 dt = datetime.fromisoformat(a["scheduled_at"].replace("Z", "+00:00"))
                 contact = a.get("contact") or {}
-                name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or "Contact inconnu"
+                name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or tr["unknown_contact"]
                 lines.append(f"- {dt.strftime('%a %d/%m %H:%M')} — {name}")
 
     # Leads récents (5 derniers)
@@ -200,11 +328,11 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     ).data or []
 
     if leads:
-        lines.append("\n## Leads récents")
+        lines.append(f"\n{tr['leads_header']}")
         for ld in leads:
             contact = ld.get("contact") or {}
-            name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or "Inconnu"
-            lines.append(f"- {name} (statut : {ld.get('status', '?')})")
+            name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or tr["unknown"]
+            lines.append(f"- {name} ({tr['status_label']} : {ld.get('status', '?')})")
 
     # Conversations récentes Agent 2 avec les clients (5 dernières)
     convs = (
@@ -219,10 +347,10 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     ).data or []
 
     if convs:
-        lines.append("\n## Conversations récentes Agent 2 (support client)")
+        lines.append(f"\n{tr['convs_header']}")
         for conv in convs:
             contact = conv.get("contact") or {}
-            name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or "Client inconnu"
+            name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or tr["unknown_client"]
             msgs = (
                 sb.table("message")
                 .select("sender_type, content")
@@ -232,9 +360,9 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
                 .execute()
             ).data or []
             if msgs:
-                lines.append(f"\n  Client : {name}")
+                lines.append(f"\n  {tr['client_label']} : {name}")
                 for m in reversed(msgs):
-                    role = "Client" if m["sender_type"] == "user" else "Agent"
+                    role = tr["client_label"] if m["sender_type"] == "user" else tr["agent_label"]
                     lines.append(f"    {role}: {m['content'][:200]}")
 
     # Dernière synthèse Worker 4
@@ -248,6 +376,6 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     ).data
 
     if synth:
-        lines.append(f"\n## Dernière synthèse opérationnelle\n{synth[0]['content'][:600]}")
+        lines.append(f"\n{tr['synth_header']}\n{synth[0]['content'][:600]}")
 
     return "\n".join(lines)

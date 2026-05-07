@@ -2,11 +2,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api, supabase } from "../../../lib/api";
+import { useLanguage, LangSelector, LANGUAGES } from "../../../contexts/LanguageContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Section =
-  | "profil" | "securite" | "site"
+  | "profil" | "securite" | "site" | "metriques"
   | "abonnement" | "notifications" | "preferences"
   | "membres" | "integrations" | "export" | "activite";
 
@@ -14,6 +15,7 @@ const NAV: { key: Section; label: string; icon: string }[] = [
   { key: "profil",        label: "Profil",          icon: "👤" },
   { key: "securite",      label: "Sécurité",        icon: "🔐" },
   { key: "site",          label: "Mon site",        icon: "🌐" },
+  { key: "metriques",     label: "Métriques",       icon: "📊" },
   { key: "abonnement",    label: "Abonnement",      icon: "💳" },
   { key: "notifications", label: "Notifications",   icon: "🔔" },
   { key: "preferences",  label: "Préférences",     icon: "⚙️" },
@@ -68,31 +70,38 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 // ── Section Profil ────────────────────────────────────────────────────────────
 
 function SectionProfil() {
+  const { lang: ctxLang, setLang: ctxSetLang, t } = useLanguage();
   const [user, setUser]     = useState<any>(null);
   const [name, setName]     = useState("");
-  const [lang, setLang]     = useState("fr");
   const [tz, setTz]         = useState("Europe/Brussels");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg]       = useState("");
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      setUser(user);
-      setName(user.user_metadata?.full_name ?? "");
-      setLang(user.user_metadata?.lang ?? "fr");
-      setTz(user.user_metadata?.timezone ?? "Europe/Brussels");
-    });
+    const load = async () => {
+      // Try server-validated user first, fall back to session (localStorage)
+      const { data: { user: u } } = await supabase.auth.getUser();
+      const sessionUser = u ?? (await supabase.auth.getSession()).data.session?.user;
+      if (!sessionUser) return;
+      setUser(sessionUser);
+      const m = sessionUser.user_metadata ?? {};
+      const fullName = m.full_name ?? [m.first_name, m.last_name].filter(Boolean).join(" ");
+      setName(fullName);
+      setTz(m.timezone ?? "Europe/Brussels");
+    };
+    load();
   }, []);
 
-  const save = async (e: React.FormEvent) => {
+  const save = async (e: React.SyntheticEvent) => {
     e.preventDefault(); setSaving(true); setMsg("");
     try {
-      await supabase.auth.updateUser({ data: { full_name: name, lang, timezone: tz } });
-      setMsg("Profil mis à jour.");
+      await supabase.auth.updateUser({ data: { full_name: name, lang: ctxLang, timezone: tz } });
+      setMsg(t.sett_saved);
     } catch { setMsg("Erreur lors de la sauvegarde."); }
     finally { setSaving(false); }
   };
+
+  const initials = name ? name[0].toUpperCase() : (user?.email?.[0]?.toUpperCase() ?? "?");
 
   return (
     <>
@@ -101,36 +110,42 @@ function SectionProfil() {
         <form onSubmit={save} className="space-y-4">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center text-2xl font-bold text-indigo-600 shrink-0">
-              {name ? name[0].toUpperCase() : user?.email?.[0].toUpperCase() ?? "?"}
+              {initials}
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700">{user?.email}</p>
-              <p className="text-xs text-gray-400 mt-0.5">Compte créé le {user?.created_at ? new Date(user.created_at).toLocaleDateString("fr-BE") : "—"}</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Compte créé le {user?.created_at ? new Date(user.created_at).toLocaleDateString("fr-BE") : "—"}
+              </p>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Nom complet</label>
+            <label className="block text-sm font-medium mb-1">{t.sett_fullname}</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Jean Dupont"
-              className="border rounded-lg px-3 py-2 w-full text-sm" />
+              className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
+            <label className="block text-sm font-medium mb-1">{t.sett_email_label}</label>
             <input value={user?.email ?? ""} disabled
               className="border rounded-lg px-3 py-2 w-full text-sm bg-gray-50 text-gray-400" />
-            <p className="text-xs text-gray-400 mt-1">La modification de l'email n'est pas disponible pour le moment.</p>
+            <p className="text-xs text-gray-400 mt-1">{t.sett_email_no_change}</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Langue</label>
-              <select value={lang} onChange={e => setLang(e.target.value)} className="border rounded-lg px-3 py-2 w-full text-sm">
-                <option value="fr">Français</option>
-                <option value="en">English</option>
-                <option value="nl">Nederlands</option>
+              <label className="block text-sm font-medium mb-1">{t.sett_lang_label}</label>
+              <select
+                value={ctxLang}
+                onChange={e => ctxSetLang(e.target.value as any)}
+                className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                {LANGUAGES.map(l => (
+                  <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Fuseau horaire</label>
-              <select value={tz} onChange={e => setTz(e.target.value)} className="border rounded-lg px-3 py-2 w-full text-sm">
+              <label className="block text-sm font-medium mb-1">{t.sett_tz_label}</label>
+              <select value={tz} onChange={e => setTz(e.target.value)} className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
                 <option value="Europe/Brussels">Europe/Brussels (UTC+1/+2)</option>
                 <option value="Europe/Paris">Europe/Paris (UTC+1/+2)</option>
                 <option value="Europe/London">Europe/London (UTC+0/+1)</option>
@@ -139,7 +154,7 @@ function SectionProfil() {
             </div>
           </div>
           <Feedback msg={msg} />
-          <SaveBtn loading={saving} />
+          <SaveBtn loading={saving} label={saving ? t.sett_saving : t.sett_save} />
         </form>
       </Card>
     </>
@@ -303,11 +318,118 @@ function SectionSite() {
               </a>
             )}
           </div>
-          <button onClick={togglePublish}
-            className={`px-4 py-2 rounded-lg font-medium text-sm ${site?.status === "published" ? "bg-gray-100 text-gray-700 hover:bg-gray-200" : "bg-green-600 text-white hover:bg-green-700"}`}>
-            {site?.status === "published" ? "Dépublier" : "Publier"}
-          </button>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {tenantSlug && (
+              <a href={`${origin}/${tenantSlug}?preview=1`} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-sm bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                Prévisualiser
+              </a>
+            )}
+            <button onClick={togglePublish}
+              className={`px-4 py-2 rounded-lg font-medium text-sm ${site?.status === "published" ? "bg-gray-100 text-gray-700 hover:bg-gray-200" : "bg-green-600 text-white hover:bg-green-700"}`}>
+              {site?.status === "published" ? "Dépublier" : "Publier"}
+            </button>
+          </div>
         </div>
+      </Card>
+    </>
+  );
+}
+
+// ── Section Métriques ─────────────────────────────────────────────────────────
+
+const METRIC_DEFS = [
+  { id: "new_leads",  label: "Nouvelles demandes",    desc: "Leads non traités en attente de réponse",               icon: "📨" },
+  { id: "pending",    label: "RDV en attente",         desc: "Rendez-vous à confirmer ou refuser",                    icon: "⏳" },
+  { id: "confirmed",  label: "RDV confirmés à venir",  desc: "Prochains rendez-vous confirmés dans votre agenda",     icon: "✅" },
+  { id: "contacts",   label: "Contacts distincts",     desc: "Nombre total de clients/prospects dans votre CRM",      icon: "👥" },
+  { id: "leads_30d",  label: "Demandes (30 jours)",    desc: "Nouvelles demandes reçues sur les 30 derniers jours",   icon: "📈" },
+  { id: "rdv_30d",    label: "RDV (30 jours)",         desc: "Rendez-vous créés ou confirmés ce mois",                icon: "📅" },
+  { id: "conv_rate",  label: "Taux de confirmation",   desc: "% de RDV confirmés parmi tous les RDV clôturés",        icon: "📊" },
+  { id: "activity",   label: "Activité hebdomadaire",  desc: "Graphique des demandes et RDV des 7 derniers jours",    icon: "📉" },
+];
+
+const ROI_DEFS = [
+  { label: "Revenu estimé (30j)",       desc: "Calculé à partir du prix de vos prestations configurées" },
+  { label: "Coût d'acquisition client", desc: "Basé sur vos dépenses marketing renseignées" },
+  { label: "Taux de fidélisation",      desc: "% de clients ayant pris un 2e rendez-vous" },
+];
+
+const ALL_METRIC_IDS = METRIC_DEFS.map((m) => m.id);
+
+function SectionMetriques() {
+  const [enabled, setEnabled] = useState<string[]>(ALL_METRIC_IDS);
+  const [saving, setSaving]   = useState(false);
+  const [msg, setMsg]         = useState("");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      const prefs = user.user_metadata?.dashboard_kpis;
+      if (Array.isArray(prefs)) setEnabled(prefs);
+    });
+  }, []);
+
+  const toggle = (id: string) =>
+    setEnabled((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  const save = async () => {
+    setSaving(true); setMsg("");
+    try {
+      await supabase.auth.updateUser({ data: { dashboard_kpis: enabled } });
+      setMsg("Préférences sauvegardées.");
+    } catch { setMsg("Erreur lors de la sauvegarde."); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <>
+      <SectionTitle title="Métriques" subtitle="Choisissez les indicateurs affichés sur votre tableau de bord." />
+      <Card>
+        <p className="text-sm font-semibold text-gray-700">Indicateurs du tableau de bord</p>
+        <p className="text-xs text-gray-400">Activez ou désactivez les métriques selon vos priorités.</p>
+        <div className="divide-y divide-gray-100 -mx-2">
+          {METRIC_DEFS.map((m) => (
+            <div key={m.id} className="flex items-center justify-between gap-4 px-2 py-2.5">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-xl shrink-0">{m.icon}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800 leading-tight">{m.label}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 leading-tight">{m.desc}</p>
+                </div>
+              </div>
+              <Toggle checked={enabled.includes(m.id)} onChange={() => toggle(m.id)} label="" />
+            </div>
+          ))}
+        </div>
+        <Feedback msg={msg} />
+        <button onClick={save} disabled={saving}
+          className="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium">
+          {saving ? "Sauvegarde…" : "Enregistrer"}
+        </button>
+      </Card>
+      <Card>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-gray-700">Métriques ROI</p>
+          <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Bientôt</span>
+        </div>
+        <p className="text-xs text-gray-400">Indicateurs financiers et de retour sur investissement.</p>
+        <div className="divide-y divide-gray-100 -mx-2 opacity-50 pointer-events-none">
+          {ROI_DEFS.map((m) => (
+            <div key={m.label} className="flex items-center justify-between gap-4 px-2 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-700 leading-tight">{m.label}</p>
+                <p className="text-xs text-gray-400 mt-0.5 leading-tight">{m.desc}</p>
+              </div>
+              <Toggle checked={false} onChange={() => {}} label="" />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 italic">Ces indicateurs seront disponibles dans une prochaine mise à jour.</p>
       </Card>
     </>
   );
@@ -859,6 +981,7 @@ const SECTION_MAP: Record<Section, React.FC> = {
   profil:        SectionProfil,
   securite:      SectionSecurite,
   site:          SectionSite,
+  metriques:     SectionMetriques,
   abonnement:    SectionAbonnement,
   notifications: SectionNotifications,
   preferences:   SectionPreferences,
@@ -870,6 +993,7 @@ const SECTION_MAP: Record<Section, React.FC> = {
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [active, setActive] = useState<Section>("profil");
   const ActiveSection = SECTION_MAP[active];
   const activeItem = NAV.find(n => n.key === active)!;
@@ -880,11 +1004,11 @@ export default function SettingsPage() {
       <div className="bg-white border-b px-4 py-3 flex items-center gap-3 sticky top-0 z-20">
         <button onClick={() => router.push("/dashboard")} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          <span className="hidden sm:inline">Retour au dashboard</span>
-          <span className="sm:hidden">Retour</span>
+          <span className="hidden sm:inline">{t.sett_back}</span>
+          <span className="sm:hidden">←</span>
         </button>
         <h1 className="text-lg font-bold text-gray-900 truncate">
-          <span className="hidden sm:inline">Paramètres</span>
+          <span className="hidden sm:inline">{t.nav_settings}</span>
           <span className="sm:hidden">{activeItem.icon} {activeItem.label}</span>
         </h1>
       </div>

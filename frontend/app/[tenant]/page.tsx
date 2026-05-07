@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import Script from "next/script";
 import ContactForm from "./contact-form";
 import ChatbotWidget from "../../components/ChatbotWidget";
+import PreviewBanner from "./preview-banner";
 
 // Palettes de couleurs applicables via CSS inline (évite les problèmes de purge Tailwind)
 const COLOR_HEX: Record<string, { hero: string; accent: string; light: string }> = {
@@ -90,11 +91,7 @@ export default async function TenantSitePage({
     );
   }
 
-  const previewBanner = isPreview ? (
-    <div style={{ position: "sticky", top: 0, zIndex: 9999, background: "#f59e0b", color: "#1c1917", padding: "0.5rem 1rem", textAlign: "center", fontSize: "0.875rem", fontWeight: 600 }}>
-      👁 Mode Prévisualisation — ce site n'est pas encore publié
-    </div>
-  ) : null;
+  const previewBanner = isPreview ? <PreviewBanner siteId={site.id} /> : null;
 
   const social = site.social_links ?? {};
   const zones: string[] = site.coverage_zones?.length
@@ -177,8 +174,43 @@ export default async function TenantSitePage({
         </div>
       </nav>
 
+      {/* ── Behaviour tracker ────────────────────────────────────────────── */}
+      <Script id="pp-tracker" strategy="afterInteractive">{`
+        (function(){
+          var SLUG='${tenantSlug}',API='${process.env.NEXT_PUBLIC_API_URL??'http://localhost:8000'}';
+          var sid=sessionStorage.getItem('_pp_sid');
+          if(!sid){sid=Math.random().toString(36).slice(2)+Date.now().toString(36);sessionStorage.setItem('_pp_sid',sid);}
+          function send(type,section,data){
+            fetch(API+'/api/v1/analytics/event',{method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({tenant_slug:SLUG,session_id:sid,event_type:type,section:section||null,data:data||null}),
+              keepalive:true}).catch(function(){});
+          }
+          send('pageview');
+          if(window.IntersectionObserver){
+            var seen={};
+            var obs=new IntersectionObserver(function(entries){
+              entries.forEach(function(e){
+                if(e.isIntersecting&&!seen[e.target.id]){seen[e.target.id]=1;send('section_view',e.target.id);}
+              });
+            },{threshold:0.3});
+            ['hero','a-propos','prestations','contact'].forEach(function(id){
+              var el=document.getElementById(id);if(el)obs.observe(el);
+            });
+          }
+          document.addEventListener('click',function(e){
+            var el=e.target.closest('[data-track]');
+            if(el)send('cta_click',null,{action:el.getAttribute('data-track')});
+          });
+          document.addEventListener('submit',function(e){
+            var f=e.target.closest('form[data-track-form]');
+            if(f)send('form_submit',f.getAttribute('data-track-form'));
+          });
+        })();
+      `}</Script>
+
       {/* Hero */}
       <section
+        id="hero"
         className="text-white py-24 px-6 text-center relative"
         style={photoUrls.hero
           ? { backgroundImage: `url(${photoUrls.hero})`, backgroundSize: "cover", backgroundPosition: "center" }
@@ -333,7 +365,7 @@ export default async function TenantSitePage({
                   <span className="text-xl">📞</span>
                   <div>
                     <p className="text-sm font-medium text-gray-700">Téléphone</p>
-                    <a href={`tel:${site.phone}`} className="hover:underline text-sm" style={{ color: colors.accent }}>{site.phone}</a>
+                    <a href={`tel:${site.phone}`} data-track="phone" className="hover:underline text-sm" style={{ color: colors.accent }}>{site.phone}</a>
                   </div>
                 </div>
               )}
@@ -342,7 +374,7 @@ export default async function TenantSitePage({
                   <span className="text-xl">✉️</span>
                   <div>
                     <p className="text-sm font-medium text-gray-700">Email</p>
-                    <a href={`mailto:${site.email_contact}`} className="hover:underline text-sm" style={{ color: colors.accent }}>{site.email_contact}</a>
+                    <a href={`mailto:${site.email_contact}`} data-track="email" className="hover:underline text-sm" style={{ color: colors.accent }}>{site.email_contact}</a>
                   </div>
                 </div>
               )}
@@ -357,9 +389,9 @@ export default async function TenantSitePage({
               )}
               {(social.facebook || social.instagram || social.linkedin) && (
                 <div className="flex gap-3 pt-2">
-                  {social.facebook && <a href={social.facebook} target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline" style={{ color: colors.accent }}>Facebook</a>}
-                  {social.instagram && <a href={social.instagram} target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline" style={{ color: colors.accent }}>Instagram</a>}
-                  {social.linkedin && <a href={social.linkedin} target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline" style={{ color: colors.accent }}>LinkedIn</a>}
+                  {social.facebook && <a href={social.facebook} data-track="social_facebook" target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline" style={{ color: colors.accent }}>Facebook</a>}
+                  {social.instagram && <a href={social.instagram} data-track="social_instagram" target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline" style={{ color: colors.accent }}>Instagram</a>}
+                  {social.linkedin && <a href={social.linkedin} data-track="social_linkedin" target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline" style={{ color: colors.accent }}>LinkedIn</a>}
                 </div>
               )}
             </div>

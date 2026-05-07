@@ -3,17 +3,20 @@ import { useState, use } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+const EMPTY_FORM = { first_name: "", last_name: "", email: "", phone: "", message: "", contact_type: "individual" };
+
 export default function ContactWidget({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", phone: "", message: "" });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
+  const isCompany = form.contact_type === "company";
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
     setError("");
@@ -21,7 +24,7 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
       const res = await fetch(`${API_URL}/api/v1/booking/${slug}/book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, request_type: "contact" }),
+        body: JSON.stringify({ ...form, request_type: "contact", audience_type: isCompany ? "b2b" : "b2c" }),
       });
       if (!res.ok) { const e2 = await res.json().catch(() => ({})); throw new Error(e2.detail ?? "Erreur"); }
       setDone(true);
@@ -50,7 +53,7 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
       <h2 style={{ margin: 0, fontSize: 18, color: "#111" }}>Message envoyé !</h2>
       <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>Nous vous répondrons dans les plus brefs délais.</p>
       <button
-        onClick={() => { setDone(false); setForm({ first_name: "", last_name: "", email: "", phone: "", message: "" }); }}
+        onClick={() => { setDone(false); setForm(EMPTY_FORM); }}
         style={{
           border: "none", borderRadius: 10, padding: "10px 20px", cursor: "pointer",
           background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff",
@@ -62,18 +65,35 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
     </div>
   );
 
+  const toggleStyle = (active: boolean): React.CSSProperties => ({
+    flex: 1, padding: "8px", fontSize: 13, fontWeight: 600, border: "none",
+    cursor: "pointer", background: active ? "#1f2937" : "#f9fafb",
+    color: active ? "#fff" : "#6b7280", transition: "all .15s",
+  });
+
   return (
     <div style={{ fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#fff", padding: 20, boxSizing: "border-box" }}>
       <h2 style={{ margin: "0 0 18px", fontSize: 17, color: "#111" }}>Nous contacter</h2>
       <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {/* Type toggle */}
+        <div style={{ display: "flex", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
+          <button type="button" style={toggleStyle(!isCompany)} onClick={() => setForm((f) => ({ ...f, contact_type: "individual" }))}>
+            Particulier
+          </button>
+          <button type="button" style={toggleStyle(isCompany)} onClick={() => setForm((f) => ({ ...f, contact_type: "company" }))}>
+            Entreprise
+          </button>
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <label style={labelStyle}>
-            <span style={{ color: "#374151", fontWeight: 500 }}>Prénom *</span>
+            <span style={{ color: "#374151", fontWeight: 500 }}>{isCompany ? "Nom de l'entreprise *" : "Prénom *"}</span>
             <input type="text" required value={form.first_name} onChange={set("first_name")} style={inputStyle} />
           </label>
           <label style={labelStyle}>
-            <span style={{ color: "#374151", fontWeight: 500 }}>Nom *</span>
-            <input type="text" required value={form.last_name} onChange={set("last_name")} style={inputStyle} />
+            <span style={{ color: "#374151", fontWeight: 500 }}>{isCompany ? "Contact" : "Nom *"}</span>
+            <input type="text" required={!isCompany} value={form.last_name} onChange={set("last_name")} style={inputStyle} />
           </label>
         </div>
 

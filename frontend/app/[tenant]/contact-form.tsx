@@ -1,5 +1,19 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+
+const _API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function _track(slug: string, type: string, section?: string, data?: object) {
+  try {
+    const sid = sessionStorage.getItem("_pp_sid") ?? "unknown";
+    fetch(`${_API}/api/v1/analytics/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenant_slug: slug, session_id: sid, event_type: type, section: section ?? null, data: data ?? null }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {}
+}
 
 type Slot = { start: string; end: string; label: string };
 type Mode = "contact" | "appointment";
@@ -141,6 +155,8 @@ function SlotGrid({
 
 // ── Formulaire contact ────────────────────────────────────────────────────────
 
+type ContactType = "individual" | "company";
+
 type ContactFields = {
   first_name: string;
   last_name: string;
@@ -148,6 +164,7 @@ type ContactFields = {
   phone: string;
   message: string;
   service_offer_id: string;
+  contact_type: ContactType;
 };
 
 function ContactFields({
@@ -161,19 +178,35 @@ function ContactFields({
   offers: { id: string; name: string }[];
   mode: Mode;
 }) {
+  const isCompany = fields.contact_type === "company";
   return (
     <div className="space-y-3">
+      {/* Type toggle */}
+      <div className="flex rounded-lg border overflow-hidden text-sm">
+        <button type="button"
+          onClick={() => onChange({ contact_type: "individual" })}
+          className={`flex-1 py-2 font-medium transition-colors ${!isCompany ? "bg-gray-800 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          Particulier
+        </button>
+        <button type="button"
+          onClick={() => onChange({ contact_type: "company" })}
+          className={`flex-1 py-2 font-medium transition-colors ${isCompany ? "bg-gray-800 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+        >
+          Entreprise
+        </button>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <input
-          placeholder="Prénom *"
+          placeholder={isCompany ? "Nom de l'entreprise *" : "Prénom *"}
           required
           value={fields.first_name}
           onChange={(e) => onChange({ first_name: e.target.value })}
           className="border rounded-lg px-3 py-2 text-sm w-full"
         />
         <input
-          placeholder="Nom *"
-          required
+          placeholder={isCompany ? "Contact (prénom nom)" : "Nom *"}
+          required={!isCompany}
           value={fields.last_name}
           onChange={(e) => onChange({ last_name: e.target.value })}
           className="border rounded-lg px-3 py-2 text-sm w-full"
@@ -238,11 +271,18 @@ export default function ContactForm({
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [fields, setFields] = useState<ContactFields>({
-    first_name: "", last_name: "", email: "", phone: "", message: "", service_offer_id: "",
+    first_name: "", last_name: "", email: "", phone: "", message: "", service_offer_id: "", contact_type: "individual",
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const openFired = useRef(false);
+
+  const trackOpen = () => {
+    if (openFired.current) return;
+    openFired.current = true;
+    _track(tenantSlug, "form_open", "contact");
+  };
 
   const handleDateSelect = async (d: Date) => {
     setSelectedDate(d);
@@ -275,7 +315,6 @@ export default function ContactForm({
       let body: any;
 
       if (mode === "contact") {
-        // Endpoint leads existant — éprouvé
         url = `${apiUrl}/api/v1/leads/public/${tenantSlug}`;
         body = {
           first_name: fields.first_name,
@@ -284,11 +323,11 @@ export default function ContactForm({
           phone: fields.phone || undefined,
           message: fields.message,
           source: "website",
-          audience_type: "b2c",
+          audience_type: fields.contact_type === "company" ? "b2b" : "b2c",
           request_type: "contact",
+          contact_type: fields.contact_type,
         };
       } else {
-        // Nouveau endpoint booking pour les RDV
         url = `${apiUrl}/api/v1/booking/${tenantSlug}/book`;
         body = {
           first_name: fields.first_name,
@@ -302,6 +341,7 @@ export default function ContactForm({
           slot_duration_min: Math.round(
             (new Date(selectedSlot!.end).getTime() - new Date(selectedSlot!.start).getTime()) / 60000
           ),
+          contact_type: fields.contact_type,
         };
       }
 
@@ -315,6 +355,7 @@ export default function ContactForm({
         throw new Error(err.detail ?? "Erreur lors de l'envoi");
       }
       setSubmitted(true);
+      _track(tenantSlug, "form_submit", "contact", { mode });
     } catch (err: any) {
       setError(err.message ?? "Une erreur est survenue");
     } finally {
@@ -343,14 +384,14 @@ export default function ContactForm({
       {/* Toggle mode */}
       <div className="flex rounded-xl border overflow-hidden">
         <button
-          onClick={() => { setMode("contact"); setStep("date"); }}
+          onClick={() => { setMode("contact"); setStep("date"); trackOpen(); }}
           className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mode === "contact" ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
           style={mode === "contact" ? { backgroundColor: accentColor } : {}}
         >
           Envoyer un message
         </button>
         <button
-          onClick={() => { setMode("appointment"); setStep("date"); }}
+          onClick={() => { setMode("appointment"); setStep("date"); trackOpen(); }}
           className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mode === "appointment" ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
           style={mode === "appointment" ? { backgroundColor: accentColor } : {}}
         >
@@ -360,7 +401,7 @@ export default function ContactForm({
 
       {/* Mode contact simple */}
       {mode === "contact" && (
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} onFocus={trackOpen} data-track-form="contact" className="space-y-3">
           <ContactFields fields={fields} onChange={(f) => setFields((p) => ({ ...p, ...f }))} offers={[]} mode="contact" />
           {error && <p className="text-red-500 text-sm">{error}</p>}
           <button
@@ -429,7 +470,7 @@ export default function ContactForm({
 
           {/* Étape 3 — Formulaire */}
           {step === "form" && selectedSlot && (
-            <form onSubmit={handleSubmit} className="space-y-3">
+            <form onSubmit={handleSubmit} onFocus={trackOpen} data-track-form="appointment" className="space-y-3">
               <div className="flex items-center gap-2 mb-1">
                 <button onClick={() => setStep("slot")} className="text-xs text-gray-400 hover:text-gray-600">← Créneaux</button>
                 <p className="text-sm font-medium text-gray-700">

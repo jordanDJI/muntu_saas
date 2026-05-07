@@ -1,440 +1,462 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { api, supabase } from "../../../lib/api";
 
-const AGENT_LABELS: Record<string, string> = {
-  vitrine: "Chatbot vitrine (Agent 1)",
-  support_client: "Support client WhatsApp (Agent 2)",
-  assistant_tenant: "Assistant professionnel (Agent 3)",
+
+const AGENT_ORDER = ["vitrine", "support_client", "assistant_tenant"] as const;
+type AgentType = typeof AGENT_ORDER[number];
+
+const SIDEBAR_LABELS: Record<AgentType, { name: string; role: string }> = {
+  vitrine:          { name: "Chatbot vitrine",  role: "Agent 1 · Site public" },
+  support_client:   { name: "Support client",   role: "Agent 2 · Telegram" },
+  assistant_tenant: { name: "Mon assistant",    role: "Agent 3 · Opérationnel" },
 };
 
-const AGENT_DESCRIPTIONS: Record<string, string> = {
-  vitrine: "Répond aux questions FAQ et gère les rendez-vous sur votre site public.",
-  support_client: "Accompagne vos clients convertis via WhatsApp — lecture de documents, gestion RDV.",
-  assistant_tenant: "Votre assistant opérationnel — notifications RDV, synthèses, gestion du calendrier.",
+const AGENT_DESCRIPTIONS: Record<AgentType, string> = {
+  vitrine:          "Répond aux questions FAQ et gère les prises de rendez-vous sur votre site public.",
+  support_client:   "Accompagne vos clients via Telegram — documents, RDV, questions fréquentes.",
+  assistant_tenant: "Votre assistant personnel — planning, leads, résumés de conversations.",
 };
-
-const MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"];
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
+type Panel = AgentType | "syntheses";
+
+function AgentIcon({ type }: { type: AgentType }) {
+  if (type === "vitrine")
+    return <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg>;
+  if (type === "support_client")
+    return <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.9 9.9 0 01-4-.8L3 20l1.4-4.2A7.8 7.8 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>;
+  return <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" d="M9.75 3.104A9 9 0 0112 3c4.97 0 9 4.03 9 9s-4.03 9-9 9-9-4.03-9-9c0-1.04.177-2.04.5-2.97"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/></svg>;
+}
 
 export default function AgentsPage() {
-  const [configs, setConfigs] = useState<any[]>([]);
-  const [syntheses, setSyntheses] = useState<any[]>([]);
-  const [saving, setSaving] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string>("");
-  const [myRole, setMyRole] = useState<string>("member");
+  const [configs, setConfigs]             = useState<any[]>([]);
+  const [syntheses, setSyntheses]         = useState<any[]>([]);
+  const [selected, setSelected]           = useState<Panel>("assistant_tenant");
+  const [activeTab, setActiveTab]         = useState<"chat" | "config">("chat");
+  const [saving, setSaving]               = useState<string | null>(null);
+  const [saveOk, setSaveOk]               = useState<string | null>(null);
+  const [error, setError]                 = useState<string | null>(null);
+  const [userName, setUserName]           = useState("");
+  const [myRole, setMyRole]               = useState("member");
 
-  // Agent 3 chat state
-  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatConvId, setChatConvId] = useState<string | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  // Chat
+  const [chatMessages, setChatMessages]   = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput]         = useState("");
+  const [inputHeight, setInputHeight]     = useState(42);
+  const [chatLoading, setChatLoading]     = useState(false);
+  const [chatConvId, setChatConvId]       = useState<string | null>(null);
+  const chatEndRef                        = useRef<HTMLDivElement>(null);
+  const inputRef                          = useRef<HTMLTextAreaElement>(null);
 
-  // Telegram setup state
-  const [telegramSetupLoading, setTelegramSetupLoading] = useState(false);
-  const [telegramSetupMsg, setTelegramSetupMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [botUsername, setBotUsername] = useState<string>("");
-  const [activateUrl, setActivateUrl] = useState<string>("");
+  // Telegram
+  const [tgLoading, setTgLoading]         = useState(false);
+  const [tgMsg, setTgMsg]                 = useState<{ ok: boolean; text: string } | null>(null);
+  const [botUsername, setBotUsername]     = useState("");
+  const [activateUrl, setActivateUrl]     = useState("");
 
   useEffect(() => {
     api.getAgentConfigs().then((cfgs) => {
       setConfigs(cfgs);
       const a3 = cfgs.find((c: any) => c.agent_type === "assistant_tenant");
       if (a3?.telegram_bot_token) {
-        api.getTelegramBotInfo().then((info) => {
-          setBotUsername(info.username);
-          setActivateUrl(info.activate_url);
-        }).catch(() => {});
+        api.getTelegramBotInfo().then((i) => { setBotUsername(i.username); setActivateUrl(i.activate_url); }).catch(() => {});
       }
     }).catch(console.error);
     api.getAgentSyntheses().then(setSyntheses).catch(console.error);
     api.getMyRole().then(({ role }) => setMyRole(role)).catch(() => {});
+    api.assistantHistory().then(({ conversation_id, messages }) => {
+      if (conversation_id) setChatConvId(conversation_id);
+      if (messages.length > 0)
+        setChatMessages(messages.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })));
+    }).catch(console.error);
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      const meta = user.user_metadata ?? {};
-      const name =
-        [meta.first_name, meta.last_name].filter(Boolean).join(" ") ||
-        meta.full_name ||
-        user.email?.split("@")[0] ||
-        "";
-      setUserName(name);
+      const m = user.user_metadata ?? {};
+      setUserName([m.first_name, m.last_name].filter(Boolean).join(" ") || m.full_name || user.email?.split("@")[0] || "");
     });
   }, []);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "auto" }); }, [chatMessages]);
+
+  const config = (type: AgentType) => configs.find((c) => c.agent_type === type);
 
   const handleUpdate = async (agentType: string, field: string, value: string | number) => {
-    setSaving(agentType);
-    setError(null);
+    setSaving(agentType); setError(null);
     try {
       const updated = await api.updateAgentConfig(agentType, { [field]: value });
       setConfigs((prev) => prev.map((c) => (c.agent_type === agentType ? updated : c)));
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setSaving(null);
-    }
+      setSaveOk(agentType);
+      setTimeout(() => setSaveOk(null), 2000);
+    } catch (e: any) { setError(e.message); }
+    finally { setSaving(null); }
   };
 
-  const toggleStatus = (config: any) => {
-    const next = config.status === "active" ? "inactive" : "active";
-    handleUpdate(config.agent_type, "status", next);
-  };
+  const toggleStatus = (c: any) => handleUpdate(c.agent_type, "status", c.status === "active" ? "inactive" : "active");
 
   const setupTelegram = async () => {
-    setTelegramSetupLoading(true);
-    setTelegramSetupMsg(null);
+    setTgLoading(true); setTgMsg(null);
     try {
       const res = await api.setupTelegramWebhook();
       if (res.bot_username) setBotUsername(res.bot_username);
-      // Rafraîchir l'URL d'activation avec le bon tenant_id depuis le backend
-      api.getTelegramBotInfo().then((info) => {
-        setBotUsername(info.username);
-        setActivateUrl(info.activate_url);
-      }).catch(() => {});
-      setTelegramSetupMsg({ ok: true, text: `Webhook enregistré${res.bot_username ? ` (@${res.bot_username})` : ""}` });
-    } catch (e: any) {
-      setTelegramSetupMsg({ ok: false, text: e.message });
-    } finally {
-      setTelegramSetupLoading(false);
-    }
+      api.getTelegramBotInfo().then((i) => { setBotUsername(i.username); setActivateUrl(i.activate_url); }).catch(() => {});
+      setTgMsg({ ok: true, text: `Webhook enregistré${res.bot_username ? ` (@${res.bot_username})` : ""}` });
+    } catch (e: any) { setTgMsg({ ok: false, text: e.message }); }
+    finally { setTgLoading(false); }
   };
 
-  const sendChatMessage = async () => {
+  const sendChat = async () => {
     const text = chatInput.trim();
     if (!text || chatLoading) return;
     setChatInput("");
-    setChatMessages((prev) => [...prev, { role: "user", content: text }]);
+    setInputHeight(42);
+    setChatMessages((p) => [...p, { role: "user", content: text }]);
     setChatLoading(true);
     try {
       const res = await api.assistantChat({ message: text, conversation_id: chatConvId });
       setChatConvId(res.conversation_id);
-      setChatMessages((prev) => [...prev, { role: "assistant", content: res.reply }]);
+      setChatMessages((p) => [...p, { role: "assistant", content: res.reply }]);
     } catch (e: any) {
-      setChatMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Erreur : ${e.message}` },
-      ]);
+      setChatMessages((p) => [...p, { role: "assistant", content: `Erreur : ${e.message}` }]);
     } finally {
       setChatLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   };
 
-  return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Agents IA</h1>
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          Retour au dashboard
-        </Link>
-      </div>
+  // ── Config panel (partagé) ─────────────────────────────────────────────────
+  const ConfigPanel = ({ type }: { type: AgentType }) => {
+    const cfg = config(type);
+    if (!cfg) return <div className="p-8 text-gray-400 text-sm">Chargement…</div>;
+    return (
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-2xl">
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-          {error}
+        {/* Statut */}
+        <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 px-5 py-4">
+          <div>
+            <p className="font-medium text-gray-800">Statut de l'agent</p>
+            <p className="text-xs text-gray-400 mt-0.5">{AGENT_DESCRIPTIONS[type]}</p>
+          </div>
+          <button
+            onClick={() => toggleStatus(cfg)}
+            disabled={saving === type}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${cfg.status === "active" ? "bg-green-500" : "bg-gray-300"}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${cfg.status === "active" ? "translate-x-6" : "translate-x-1"}`} />
+          </button>
         </div>
-      )}
 
-      <div className="space-y-4">
-        {configs.length === 0 && (
-          <p className="text-gray-400 text-sm">
-            Aucun agent configuré. Ils seront créés automatiquement à votre prochaine connexion.
-          </p>
+        {/* Prompt système */}
+        <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            Prompt système <span className="text-gray-400 font-normal">(optionnel)</span>
+          </label>
+          <textarea
+            rows={5}
+            defaultValue={cfg.system_prompt ?? ""}
+            onBlur={(e) => { if (e.target.value !== (cfg.system_prompt ?? "")) handleUpdate(type, "system_prompt", e.target.value); }}
+            placeholder={`Ex : Tu es l'assistant de ${userName || "votre nom"}, réponds toujours en français, sois bienveillant…`}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50"
+          />
+          {saveOk === type && <p className="text-xs text-green-600">✓ Sauvegardé</p>}
+        </div>
+
+        {/* Agent 2 — info canal */}
+        {type === "support_client" && (
+          <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-4 space-y-2">
+            <p className="text-sm font-medium text-blue-800">Canal Telegram</p>
+            <p className="text-xs text-blue-700">Le bot est configuré dans l'Agent 3. Générez des liens d'invitation par contact depuis la page <strong>Demandes</strong>.</p>
+            <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-2">
+              <p className="text-xs text-amber-700"><strong>WhatsApp</strong> — en attente d'approbation Meta Business API.</p>
+            </div>
+          </div>
         )}
 
-        {configs.map((config) => (
-          <div key={config.agent_type} className="bg-white rounded-xl shadow p-6 space-y-4">
-            {/* En-tête */}
-            <div className="flex justify-between items-start">
+        {/* Agent 3 — Telegram + synthèse */}
+        {type === "assistant_tenant" && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 space-y-4">
+              <p className="text-sm font-semibold text-gray-700">Bot Telegram</p>
+              {(myRole === "owner" || myRole === "admin") ? (
+                <>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">
+                      Token — créez le bot sur{" "}
+                      <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="underline text-indigo-600">@BotFather</a>
+                    </label>
+                    <input
+                      type="text"
+                      defaultValue={cfg.telegram_bot_token ?? ""}
+                      onBlur={(e) => { const v = e.target.value.trim(); if (v !== (cfg.telegram_bot_token ?? "")) { handleUpdate(type, "telegram_bot_token", v); setBotUsername(""); } }}
+                      placeholder="123456789:AAF..."
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={setupTelegram}
+                      disabled={tgLoading || !cfg.telegram_bot_token}
+                      className="text-sm bg-indigo-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+                    >
+                      {tgLoading ? "Enregistrement…" : "Enregistrer le webhook"}
+                    </button>
+                    {tgMsg && <span className={`text-xs ${tgMsg.ok ? "text-green-600" : "text-red-600"}`}>{tgMsg.ok ? "✓ " : "✗ "}{tgMsg.text}</span>}
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">Configuration réservée au propriétaire / admin.</p>
+              )}
               <div>
-                <h2 className="font-semibold text-lg">{AGENT_LABELS[config.agent_type] ?? config.agent_type}</h2>
-                <p className="text-sm text-gray-500 mt-1">{AGENT_DESCRIPTIONS[config.agent_type]}</p>
+                <p className="text-xs text-gray-500 mb-2">Activer l'assistant sur votre Telegram personnel</p>
+                {cfg.telegram_notify_chat_id ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-1 font-medium">✓ Activé</span>
+                    <button onClick={() => handleUpdate(type, "telegram_notify_chat_id", "")} className="text-xs text-red-500 hover:underline">Désactiver</button>
+                  </div>
+                ) : activateUrl ? (
+                  <a href={activateUrl} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-100 transition-colors">
+                    {botUsername ? `Ouvrir @${botUsername} et activer` : "Activer l'assistant Telegram"}
+                  </a>
+                ) : (
+                  <p className="text-xs text-gray-400">{cfg.telegram_bot_token ? "Enregistrez d'abord le webhook." : "Entrez le token du bot ci-dessus."}</p>
+                )}
               </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 px-5 py-4 space-y-2">
+              <label className="text-sm font-medium text-gray-700">Fréquence de synthèse <span className="text-gray-400 font-normal">(minutes)</span></label>
+              <input
+                type="number" min={30} max={1440}
+                defaultValue={cfg.synthesis_schedule_minutes}
+                onBlur={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v !== cfg.synthesis_schedule_minutes) handleUpdate(type, "synthesis_schedule_minutes", v); }}
+                className="w-32 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <p className="text-xs text-gray-400">Min 30 min — Max 1440 min (24h)</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Chat panel (Agent 3) ───────────────────────────────────────────────────
+  const isChatActive = config("assistant_tenant")?.status === "active";
+
+  // ── Synthèses panel ────────────────────────────────────────────────────────
+  const SynthesesPanel = () => (
+    <div className="flex-1 overflow-y-auto p-6 space-y-4 max-w-2xl">
+      <h2 className="font-semibold text-gray-800 text-lg">Synthèses de conversations</h2>
+      {syntheses.length === 0
+        ? <p className="text-gray-400 text-sm">Aucune synthèse générée pour le moment.</p>
+        : syntheses.map((s) => (
+          <div key={s.id} className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
+            <p className="text-xs text-gray-400">
+              {new Date(s.period_start).toLocaleString("fr-BE", { dateStyle: "short", timeStyle: "short" })}
+              {" → "}
+              {new Date(s.period_end).toLocaleString("fr-BE", { dateStyle: "short", timeStyle: "short" })}
+            </p>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{s.content}</p>
+          </div>
+        ))
+      }
+    </div>
+  );
+
+  const currentAgentType = AGENT_ORDER.includes(selected as AgentType) ? selected as AgentType : null;
+
+  return (
+    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+
+      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
+      <aside className="w-56 bg-gray-900 flex flex-col shrink-0">
+        <div className="px-4 py-4 border-b border-gray-700">
+          <p className="text-white font-semibold text-sm">Agents IA</p>
+          <p className="text-gray-500 text-xs mt-0.5">Propulsé par Gemini</p>
+        </div>
+
+        <nav className="flex-1 py-2 space-y-0.5 overflow-y-auto">
+          {AGENT_ORDER.map((type) => {
+            const cfg = config(type);
+            const isActive = cfg?.status === "active";
+            const isSelected = selected === type;
+            return (
               <button
-                onClick={() => toggleStatus(config)}
-                disabled={saving === config.agent_type}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  config.status === "active"
-                    ? "bg-green-100 text-green-700 hover:bg-red-100 hover:text-red-700"
-                    : "bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-700"
+                key={type}
+                onClick={() => { setSelected(type); if (type === "assistant_tenant") setActiveTab("chat"); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                  isSelected ? "bg-gray-700 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
                 }`}
               >
-                {saving === config.agent_type ? "…" : config.status === "active" ? "Actif" : "Inactif"}
+                <div className={`shrink-0 ${isSelected ? "text-indigo-400" : "text-gray-500"}`}>
+                  <AgentIcon type={type} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{SIDEBAR_LABELS[type].name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? "bg-green-400" : "bg-gray-600"}`} />
+                    <p className="text-xs text-gray-500 truncate">{SIDEBAR_LABELS[type].role}</p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Synthèses */}
+        <button
+          onClick={() => setSelected("syntheses")}
+          className={`flex items-center gap-3 px-4 py-3 border-t border-gray-700 transition-colors ${
+            selected === "syntheses" ? "bg-gray-700 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+          }`}
+        >
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <span className="text-sm font-medium">Synthèses</span>
+          {syntheses.length > 0 && (
+            <span className="ml-auto bg-indigo-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none">
+              {syntheses.length}
+            </span>
+          )}
+        </button>
+      </aside>
+
+      {/* ── Contenu principal ───────────────────────────────────────────────── */}
+      <main className="flex-1 flex flex-col overflow-hidden bg-gray-50">
+
+        {error && (
+          <div className="bg-red-50 border-b border-red-100 px-6 py-2 text-xs text-red-700">{error}</div>
+        )}
+
+        {/* Agent 3 — tabs Chat / Configuration */}
+        {selected === "assistant_tenant" && (
+          <>
+            <div className="bg-white border-b border-gray-200 flex items-center px-6 gap-1 shrink-0">
+              <button
+                onClick={() => setActiveTab("chat")}
+                className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "chat" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.9 9.9 0 01-4-.8L3 20l1.4-4.2A7.8 7.8 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                Chat
+              </button>
+              <button
+                onClick={() => setActiveTab("config")}
+                className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === "config" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+                Configuration
               </button>
             </div>
-
-            {/* Modèle LLM */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Modèle LLM</label>
-              <select
-                value={config.model}
-                onChange={(e) => handleUpdate(config.agent_type, "model", e.target.value)}
-                className="border rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              >
-                {MODELS.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Prompt système */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Prompt système{" "}
-                <span className="text-gray-400 font-normal">(optionnel — personnalise le comportement)</span>
-              </label>
-              <textarea
-                rows={3}
-                defaultValue={config.system_prompt ?? ""}
-                onBlur={(e) => {
-                  if (e.target.value !== (config.system_prompt ?? "")) {
-                    handleUpdate(config.agent_type, "system_prompt", e.target.value);
-                  }
-                }}
-                placeholder={`Ex : Tu es l'assistant de ${userName || "votre prénom"}, professionnel de santé. Réponds en français, sois bienveillant…`}
-                className="border rounded-lg px-3 py-2 text-sm w-full resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
-            </div>
-
-            {/* Canal Agent 2 — Telegram (WhatsApp à venir) */}
-            {config.agent_type === "support_client" && (
-              <div className="space-y-4">
-                <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3">
-                  <p className="text-xs text-blue-700">
-                    <span className="font-medium">Canal Telegram</span> — configurez votre bot dans l'Agent 3 ci-dessous.
-                    Le même bot sert les clients (Agent 2) et votre assistant personnel (Agent 3).
-                    Vous générerez ensuite des liens d'invitation par contact depuis la page Leads.
-                  </p>
+            {activeTab === "chat" ? (
+              <div className="flex flex-col flex-1 overflow-hidden">
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+                  {chatMessages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-full text-center space-y-3 text-gray-400">
+                      <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center">
+                        <svg className="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" d="M9.75 3.104A9 9 0 0112 3c4.97 0 9 4.03 9 9s-4.03 9-9 9-9-4.03-9-9c0-1.04.177-2.04.5-2.97"/>
+                          <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-600">Bonjour{userName ? `, ${userName.split(" ")[0]}` : ""} !</p>
+                        <p className="text-sm mt-1">Posez une question sur vos RDV, vos demandes ou votre planning.</p>
+                        {!isChatActive && <p className="text-xs text-amber-600 mt-2 bg-amber-50 px-3 py-1 rounded-full">Agent inactif — activez-le dans Configuration</p>}
+                      </div>
+                    </div>
+                  )}
+                  {chatMessages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      {msg.role === "assistant" && (
+                        <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center mr-2 mt-1 shrink-0">
+                          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9.75 1.104A9 9 0 1118.5 10a9.006 9.006 0 01-8.75-8.896z"/></svg>
+                        </div>
+                      )}
+                      <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                        msg.role === "user"
+                          ? "bg-indigo-600 text-white rounded-tr-sm"
+                          : "bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm"
+                      }`}>
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {chatLoading && (
+                    <div className="flex justify-start">
+                      <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center mr-2 shrink-0">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9.75 1.104A9 9 0 1118.5 10a9.006 9.006 0 01-8.75-8.896z"/></svg>
+                      </div>
+                      <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+                        <div className="flex gap-1 items-center">
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
                 </div>
-                <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3">
-                  <p className="text-xs text-amber-700">
-                    <span className="font-medium">Canal WhatsApp</span> — en attente d'approbation Meta WhatsApp Business API.
-                    Disponible prochainement.
-                  </p>
+                {/* Input */}
+                <div className="border-t border-gray-200 bg-white px-4 py-3">
+                  <div className="flex items-end gap-3 max-w-3xl mx-auto">
+                    <textarea
+                      ref={inputRef}
+                      rows={1}
+                      value={chatInput}
+                      onChange={(e) => { setChatInput(e.target.value); e.target.style.height = "auto"; setInputHeight(Math.min(e.target.scrollHeight, 200)); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                      placeholder="Posez votre question… (Entrée pour envoyer)"
+                      disabled={!isChatActive}
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50 bg-gray-50 overflow-y-auto"
+                      style={{ height: `${inputHeight}px` }}
+                    />
+                    <button
+                      onClick={sendChat}
+                      disabled={chatLoading || !chatInput.trim() || !isChatActive}
+                      className="h-[42px] w-[42px] bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 disabled:opacity-40 transition-colors shrink-0"
+                    >
+                      <svg className="w-4 h-4 rotate-90" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5m-7 7l7-7 7 7" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
-            )}
+            ) : <ConfigPanel type="assistant_tenant" />}
+          </>
+        )}
 
-            {/* Telegram + fréquence synthèse — Agent 3 */}
-            {config.agent_type === "assistant_tenant" && (
-              <>
-                {/* Telegram — token + setup + activation */}
-                <div className="space-y-3">
-                  {(myRole === "owner" || myRole === "admin") ? (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Bot Telegram{" "}
-                          <span className="text-gray-400 font-normal">
-                            (créez-le sur{" "}
-                            <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="underline">
-                              @BotFather
-                            </a>
-                            , copiez le token ici)
-                          </span>
-                        </label>
-                        <input
-                          type="text"
-                          defaultValue={config.telegram_bot_token ?? ""}
-                          onBlur={(e) => {
-                            const val = e.target.value.trim();
-                            if (val !== (config.telegram_bot_token ?? "")) {
-                              handleUpdate(config.agent_type, "telegram_bot_token", val);
-                              setBotUsername("");
-                            }
-                          }}
-                          placeholder="123456789:AAF..."
-                          className="border rounded-lg px-3 py-2 text-sm w-full font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                        />
-                        <p className="text-xs text-gray-400 mt-1">
-                          Ce bot sert à la fois aux clients (Agent 2) et à votre assistant personnel (Agent 3).
-                        </p>
-                      </div>
+        {/* Agents 1 & 2 — config uniquement */}
+        {currentAgentType && currentAgentType !== "assistant_tenant" && (
+          <>
+            <div className="bg-white border-b border-gray-200 px-6 py-3 shrink-0">
+              <p className="font-semibold text-gray-800">{SIDEBAR_LABELS[currentAgentType].name}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{AGENT_DESCRIPTIONS[currentAgentType]}</p>
+            </div>
+            <ConfigPanel type={currentAgentType} />
+          </>
+        )}
 
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={setupTelegram}
-                          disabled={telegramSetupLoading || !config.telegram_bot_token}
-                          className="text-sm bg-indigo-600 text-white rounded-lg px-3 py-1.5 font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
-                        >
-                          {telegramSetupLoading ? "Enregistrement…" : "Enregistrer le webhook"}
-                        </button>
-                        {telegramSetupMsg && (
-                          <span className={`text-xs ${telegramSetupMsg.ok ? "text-green-600" : "text-red-600"}`}>
-                            {telegramSetupMsg.ok ? "✓ " : "✗ "}{telegramSetupMsg.text}
-                          </span>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-                      La configuration Telegram est réservée au propriétaire et aux admins.
-                    </p>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Activer l'assistant sur votre Telegram personnel
-                    </label>
-                    {config.telegram_notify_chat_id ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-1 font-medium">
-                          ✓ Activé
-                        </span>
-                        <button
-                          onClick={() => handleUpdate(config.agent_type, "telegram_notify_chat_id", "")}
-                          className="text-xs text-red-500 hover:underline"
-                        >
-                          Désactiver
-                        </button>
-                      </div>
-                    ) : activateUrl ? (
-                      <div>
-                        <a
-                          href={activateUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-100 transition-colors"
-                        >
-                          {botUsername ? `Ouvrir @${botUsername} et activer` : "Activer l'assistant Telegram"}
-                        </a>
-                        <p className="text-xs text-gray-400 mt-1">
-                          Cliquez, appuyez START dans Telegram — le bot enregistre automatiquement votre chat.
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-gray-400">
-                        {config.telegram_bot_token
-                          ? "Cliquez « Enregistrer le webhook » pour obtenir le lien d'activation."
-                          : "Entrez le token du bot ci-dessus, puis enregistrez le webhook."}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Fréquence de synthèse (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    min={30}
-                    max={1440}
-                    defaultValue={config.synthesis_schedule_minutes}
-                    onBlur={(e) => {
-                      const val = parseInt(e.target.value);
-                      if (!isNaN(val) && val !== config.synthesis_schedule_minutes) {
-                        handleUpdate(config.agent_type, "synthesis_schedule_minutes", val);
-                      }
-                    }}
-                    className="border rounded-lg px-3 py-2 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">Min 30 min — Max 1440 min (24h)</p>
-                </div>
-
-                {/* Chat Agent 3 inline */}
-                {config.status === "active" && (
-                  <div className="border-t pt-4 mt-2">
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3">
-                      Discuter avec votre assistant
-                    </h3>
-
-                    {/* Zone de messages */}
-                    <div className="bg-gray-50 rounded-lg p-3 h-64 overflow-y-auto space-y-3 mb-3">
-                      {chatMessages.length === 0 && (
-                        <p className="text-xs text-gray-400 text-center mt-8">
-                          Posez une question sur vos RDV, vos leads ou votre planning…
-                        </p>
-                      )}
-                      {chatMessages.map((msg, i) => (
-                        <div
-                          key={i}
-                          className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
-                              msg.role === "user"
-                                ? "bg-indigo-600 text-white"
-                                : "bg-white border border-gray-200 text-gray-800"
-                            }`}
-                          >
-                            <p className="whitespace-pre-wrap">{msg.content}</p>
-                          </div>
-                        </div>
-                      ))}
-                      {chatLoading && (
-                        <div className="flex justify-start">
-                          <div className="bg-white border border-gray-200 rounded-xl px-3 py-2">
-                            <span className="text-gray-400 text-xs">Assistant en train d'écrire…</span>
-                          </div>
-                        </div>
-                      )}
-                      <div ref={chatEndRef} />
-                    </div>
-
-                    {/* Saisie */}
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendChatMessage()}
-                        placeholder="Votre message…"
-                        disabled={chatLoading}
-                        className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
-                      />
-                      <button
-                        onClick={sendChatMessage}
-                        disabled={chatLoading || !chatInput.trim()}
-                        className="bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
-                      >
-                        Envoyer
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Synthèses récentes */}
-      {syntheses.length > 0 && (
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="font-semibold text-lg mb-4">Synthèses récentes</h2>
-          <ul className="space-y-4">
-            {syntheses.map((s) => (
-              <li key={s.id} className="border-l-4 border-indigo-400 pl-4">
-                <p className="text-xs text-gray-400 mb-1">
-                  {new Date(s.period_start).toLocaleString("fr-BE", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}
-                  {" → "}
-                  {new Date(s.period_end).toLocaleString("fr-BE", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}
-                </p>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{s.content}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        {/* Synthèses */}
+        {selected === "syntheses" && (
+          <>
+            <div className="bg-white border-b border-gray-200 px-6 py-3 shrink-0">
+              <p className="font-semibold text-gray-800">Synthèses récentes</p>
+            </div>
+            <SynthesesPanel />
+          </>
+        )}
+      </main>
     </div>
   );
 }
