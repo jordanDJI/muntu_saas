@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" role="img" aria-label="Klientys">
+  <title>Klientys</title>
+  <defs>
+    <linearGradient id="gd" gradientUnits="userSpaceOnUse" x1="95" y1="200" x2="705" y2="200">
+      <stop offset="0%"   stop-color="#7A5218"/>
+      <stop offset="30%"  stop-color="#DDAA40"/>
+      <stop offset="50%"  stop-color="#F0D268"/>
+      <stop offset="70%"  stop-color="#DDAA40"/>
+      <stop offset="100%" stop-color="#7A5218"/>
+    </linearGradient>
+    <clipPath id="bc">
+      <rect x="336" y="248" width="128" height="107"/>
+    </clipPath>
+    <path id="lc" d="M 200,240 A 100,84 0 0,1 356,188"/>
+    <path id="rc" d="M 444,212 A 100,84 0 0,1 596,244"/>
+  </defs>
+
+  <!-- Boucle droite (bleu pervenche) — derrière -->
+  <path fill-rule="evenodd" fill="#AABDD8"
+    d="M 705,200 A 175,155 0 1,1 355,200 A 175,155 0 1,1 705,200
+       M 618,200 A 88,70  0 1,1 442,200 A 88,70  0 1,1 618,200"/>
+
+  <!-- Boucle gauche (teal foncé) — devant -->
+  <path fill-rule="evenodd" fill="#0D4B58"
+    d="M 445,200 A 175,155 0 1,1 95,200  A 175,155 0 1,1 445,200
+       M 358,200 A 88,70  0 1,1 182,200 A 88,70  0 1,1 358,200"/>
+
+  <!-- Croisement bas : bleu passe devant le teal -->
+  <g clip-path="url(#bc)">
+    <path fill-rule="evenodd" fill="#AABDD8"
+      d="M 705,200 A 175,155 0 1,1 355,200 A 175,155 0 1,1 705,200
+         M 618,200 A 88,70  0 1,1 442,200 A 88,70  0 1,1 618,200"/>
+  </g>
+
+  <!-- Bordure intérieure dorée -->
+  <ellipse cx="270" cy="200" rx="98" ry="80" fill="url(#gd)"/>
+  <ellipse cx="530" cy="200" rx="98" ry="80" fill="url(#gd)"/>
+
+  <!-- Intérieurs blancs -->
+  <ellipse cx="270" cy="200" rx="88" ry="70" fill="#FFFFFF"/>
+  <ellipse cx="530" cy="200" rx="88" ry="70" fill="#FFFFFF"/>
+
+  <!-- Bande sage-green au croisement central -->
+  <rect x="374" y="158" width="52" height="84" rx="12" fill="#6B8A7A"/>
+
+  <!-- Contours -->
+  <ellipse cx="270" cy="200" rx="175" ry="155" fill="none" stroke="#07222F" stroke-width="3"/>
+  <ellipse cx="530" cy="200" rx="175" ry="155" fill="none" stroke="#07222F" stroke-width="3"/>
+  <ellipse cx="270" cy="200" rx="88"  ry="70"  fill="none" stroke="#07222F" stroke-width="2"/>
+  <ellipse cx="530" cy="200" rx="88"  ry="70"  fill="none" stroke="#07222F" stroke-width="2"/>
+
+  <!-- Textes courbés -->
+  <text font-family="Georgia,Palatino,serif" font-style="italic"
+        font-weight="700" font-size="30" fill="#07222F">
+    <textPath href="#lc" startOffset="50%" text-anchor="middle">Klientys</textPath>
+  </text>
+  <text font-family="Georgia,Palatino,serif" font-style="italic"
+        font-weight="700" font-size="30" fill="#07222F">
+    <textPath href="#rc" startOffset="50%" text-anchor="middle">Klientys</textPath>
+  </text>
+</svg>

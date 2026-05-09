@@ -10,13 +10,14 @@ const STATUSES = ["new", "contacted", "qualified", "scheduled", "closed_won", "c
 const APPT_STATUSES = ["scheduled", "closed_won", "closed_lost"];
 
 const STATUS_COLORS: Record<string, string> = {
-  new:         "bg-blue-100 text-blue-700",
-  contacted:   "bg-yellow-100 text-yellow-700",
-  qualified:   "bg-purple-100 text-purple-700",
-  scheduled:   "bg-indigo-100 text-indigo-700",
-  closed_won:  "bg-green-100 text-green-700",
-  closed_lost: "bg-gray-100 text-gray-500",
+  new:         "badge-status badge-new",
+  contacted:   "badge-status badge-contacted",
+  qualified:   "badge-status badge-qualified",
+  scheduled:   "badge-status badge-scheduled",
+  closed_won:  "badge-status badge-won",
+  closed_lost: "badge-status badge-lost",
 };
+
 
 type LinkModal = {
   contactName: string;
@@ -172,11 +173,11 @@ export default function LeadsPage() {
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setFilter(undefined)}
-          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm border transition-colors ${!filter ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+          className={`filter-btn inline-flex items-center gap-1.5 px-3 py-1 text-sm font-medium ${!filter ? "filter-btn-active" : ""}`}
         >
           {t.lead_all}
           {Object.values(statusCounts).reduce((a, b) => a + b, 0) > 0 && (
-            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none ${!filter ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
+            <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none bg-white/20">
               {Object.values(statusCounts).reduce((a, b) => a + b, 0)}
             </span>
           )}
@@ -185,11 +186,11 @@ export default function LeadsPage() {
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm border transition-colors ${filter === s ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            className={`filter-btn inline-flex items-center gap-1.5 px-3 py-1 text-sm font-medium ${filter === s ? "filter-btn-active" : ""}`}
           >
             {STATUS_LABELS[s]}
             {statusCounts[s] ? (
-              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none ${filter === s ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
+              <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none bg-white/20">
                 {statusCounts[s]}
               </span>
             ) : null}
@@ -210,7 +211,7 @@ export default function LeadsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold truncate">{contactName}</p>
                     {isApptLead && (
-                      <span className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-full px-2 py-0.5 font-medium shrink-0">
+                      <span className="inline-flex items-center gap-1 text-xs bg-primary-50 text-primary-600 border border-primary-200 rounded-full px-2 py-0.5 font-medium shrink-0">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <rect x="3" y="4" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M16 2v4M8 2v4M3 10h18"/>
                         </svg>
@@ -246,7 +247,7 @@ export default function LeadsPage() {
                   <select
                     value={lead.status}
                     onChange={(e) => updateStatus(lead.id, e.target.value)}
-                    className="text-sm border rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    className="text-sm border rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-primary-400"
                   >
                     {availableStatuses.map((s) => (
                       <option key={s} value={s}>{STATUS_LABELS[s]}</option>
@@ -279,7 +280,7 @@ export default function LeadsPage() {
                       }
                     }}
                     placeholder="Rappel mémo, contexte de la qualification, prochaine étape…"
-                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-yellow-50 placeholder-gray-400"
+                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-primary-300 bg-yellow-50 placeholder-gray-400"
                   />
                 </div>
               )}
@@ -315,7 +316,7 @@ export default function LeadsPage() {
         {hasMore && (
           <div ref={sentinelRef} className="h-10 flex items-center justify-center">
             {loading && (
-              <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
             )}
           </div>
         )}
@@ -346,7 +347,7 @@ export default function LeadsPage() {
               <div className="flex gap-2">
                 <button
                   onClick={copyLink}
-                  className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium bg-indigo-600 text-white rounded-xl px-4 py-2.5 hover:bg-indigo-700 transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 text-sm font-medium bg-primary-600 text-white rounded-xl px-4 py-2.5 hover:bg-primary-700 transition-colors"
                 >
                   {copied ? (
                     <>

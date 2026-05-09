@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, supabase } from "../../../lib/api";
 import { useLanguage } from "../../../contexts/LanguageContext";
 import type { T as TranslationT } from "../../../lib/i18n";
+import { COUNTRIES } from "../../../lib/countries";
 
 // ── Constantes statiques (sans texte) ────────────────────────────────────────
 
@@ -95,7 +96,7 @@ function AtoutIconSVG({ icon, className = "w-5 h-5" }: { icon: string; className
 }
 
 function SiteWireframe({ highlight }: { highlight: PhotoHighlight }) {
-  const ring = "ring-2 ring-indigo-500";
+  const ring = "ring-2 ring-primary-500";
   return (
     <div className="space-y-1 text-[0px]">
       {/* Nav */}
@@ -107,7 +108,7 @@ function SiteWireframe({ highlight }: { highlight: PhotoHighlight }) {
         </div>
       </div>
       {/* Hero */}
-      <div className={`h-11 rounded-sm flex flex-col items-center justify-center gap-0.5 transition-all ${highlight === "hero" ? `bg-indigo-400 ${ring}` : "bg-gray-300"}`}>
+      <div className={`h-11 rounded-sm flex flex-col items-center justify-center gap-0.5 transition-all ${highlight === "hero" ? `bg-primary-400 ${ring}` : "bg-gray-300"}`}>
         {highlight === "hero"
           ? <span className="text-white font-bold" style={{ fontSize: 7 }}>📷 VOTRE PHOTO — Zone héro</span>
           : null}
@@ -116,22 +117,22 @@ function SiteWireframe({ highlight }: { highlight: PhotoHighlight }) {
       </div>
       {/* About */}
       <div className={`h-9 rounded-sm flex items-center gap-1 px-1 ${highlight === "about" ? `bg-white ${ring}` : "bg-gray-50"}`}>
-        <div className={`w-9 h-7 rounded-sm flex-shrink-0 flex items-center justify-center ${highlight === "about" ? "bg-indigo-400" : "bg-gray-200"}`}>
+        <div className={`w-9 h-7 rounded-sm flex-shrink-0 flex items-center justify-center ${highlight === "about" ? "bg-primary-400" : "bg-gray-200"}`}>
           {highlight === "about" && <span className="text-white" style={{ fontSize: 6 }}>📷</span>}
         </div>
         <div className="flex-1 space-y-0.5 py-1">
-          <div className={`h-0.5 rounded-sm ${highlight === "about" ? "bg-indigo-200" : "bg-gray-200"}`} />
-          <div className={`h-0.5 rounded-sm w-4/5 ${highlight === "about" ? "bg-indigo-200" : "bg-gray-200"}`} />
-          <div className={`h-0.5 rounded-sm ${highlight === "about" ? "bg-indigo-200" : "bg-gray-200"}`} />
+          <div className={`h-0.5 rounded-sm ${highlight === "about" ? "bg-primary-200" : "bg-gray-200"}`} />
+          <div className={`h-0.5 rounded-sm w-4/5 ${highlight === "about" ? "bg-primary-200" : "bg-gray-200"}`} />
+          <div className={`h-0.5 rounded-sm ${highlight === "about" ? "bg-primary-200" : "bg-gray-200"}`} />
         </div>
         {highlight === "about" && (
-          <span className="text-indigo-600 font-bold flex-shrink-0" style={{ fontSize: 6 }}>← ICI</span>
+          <span className="text-primary-600 font-bold flex-shrink-0" style={{ fontSize: 6 }}>← ICI</span>
         )}
       </div>
       {/* Services */}
-      <div className={`h-11 rounded-sm flex flex-col items-center justify-center gap-1 px-1 ${highlight === "services" ? `bg-indigo-100 ${ring}` : "bg-gray-100"}`}>
+      <div className={`h-11 rounded-sm flex flex-col items-center justify-center gap-1 px-1 ${highlight === "services" ? `bg-primary-100 ${ring}` : "bg-gray-100"}`}>
         {highlight === "services" && (
-          <span className="text-indigo-700 font-bold" style={{ fontSize: 6 }}>📷 FOND — Section prestations</span>
+          <span className="text-primary-700 font-bold" style={{ fontSize: 6 }}>📷 FOND — Section prestations</span>
         )}
         <div className="flex gap-0.5">
           {[0, 1, 2].map((i) => (
@@ -141,12 +142,12 @@ function SiteWireframe({ highlight }: { highlight: PhotoHighlight }) {
       </div>
       {/* Contact */}
       <div className={`h-9 rounded-sm flex items-center gap-1 px-1 ${highlight === "contact" ? `bg-white ${ring}` : "bg-gray-50"}`}>
-        <div className={`w-9 h-7 rounded-sm flex-shrink-0 flex items-center justify-center ${highlight === "contact" ? "bg-indigo-400" : "bg-gray-200"}`}>
+        <div className={`w-9 h-7 rounded-sm flex-shrink-0 flex items-center justify-center ${highlight === "contact" ? "bg-primary-400" : "bg-gray-200"}`}>
           {highlight === "contact" && <span className="text-white" style={{ fontSize: 6 }}>📷</span>}
         </div>
-        <div className={`flex-1 h-7 rounded-sm ${highlight === "contact" ? "bg-indigo-50" : "bg-gray-200"}`} />
+        <div className={`flex-1 h-7 rounded-sm ${highlight === "contact" ? "bg-primary-50" : "bg-gray-200"}`} />
         {highlight === "contact" && (
-          <span className="text-indigo-600 font-bold flex-shrink-0" style={{ fontSize: 6 }}>← ICI</span>
+          <span className="text-primary-600 font-bold flex-shrink-0" style={{ fontSize: 6 }}>← ICI</span>
         )}
       </div>
       {/* Footer */}
@@ -224,6 +225,7 @@ export default function SiteBuilderPage() {
   const [addressStreet, setAddressStreet] = useState("");
   const [addressPostal, setAddressPostal] = useState("");
   const [addressCity, setAddressCity] = useState("");
+  const [addressCountry, setAddressCountry] = useState("BE");
   const [facebook, setFacebook] = useState("");
   const [instagram, setInstagram] = useState("");
   const [linkedin, setLinkedin] = useState("");
@@ -349,6 +351,7 @@ export default function SiteBuilderPage() {
       setAddressStreet(ap.street ?? ((!ap.city && s.address) ? s.address : ""));
       setAddressPostal(ap.postal_code ?? "");
       setAddressCity(ap.city ?? "");
+      setAddressCountry(ap.country ?? "BE");
       setFacebook(s.social_links?.facebook ?? "");
       setInstagram(s.social_links?.instagram ?? "");
       setLinkedin(s.social_links?.linkedin ?? "");
@@ -416,7 +419,7 @@ export default function SiteBuilderPage() {
           await api.updateSite(siteId, { title, tagline, description });
           break;
         case 3: {
-          const addrParts = { street: addressStreet, postal_code: addressPostal, city: addressCity };
+          const addrParts = { street: addressStreet, postal_code: addressPostal, city: addressCity, country: addressCountry };
           const fullAddress = [addressStreet, addressPostal, addressCity].filter(Boolean).join(", ");
           await api.updateSite(siteId, {
             phone, email_contact: emailContact, address: fullAddress,
@@ -583,7 +586,7 @@ export default function SiteBuilderPage() {
           <p className="text-sm text-gray-500">{t.sb_session_desc}</p>
           <button
             onClick={async () => { await supabase.auth.signOut(); router.push("/login"); }}
-            className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700"
+            className="px-5 py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700"
           >
             {t.sb_reconnect}
           </button>
@@ -595,7 +598,7 @@ export default function SiteBuilderPage() {
           <button
             onClick={createDefaultSite}
             disabled={creating}
-            className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 disabled:opacity-50"
+            className="px-5 py-2.5 bg-primary-600 text-white text-sm font-semibold rounded-xl hover:bg-primary-700 disabled:opacity-50"
           >
             {creating ? t.sb_creating_site : t.sb_create_site}
           </button>
@@ -649,7 +652,7 @@ export default function SiteBuilderPage() {
               href={`/${tenantSlug}`}
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-indigo-600 hover:underline border border-indigo-200 px-3 py-1.5 rounded-lg"
+              className="text-xs text-primary-600 hover:underline border border-primary-200 px-3 py-1.5 rounded-lg"
             >
               {t.sb_view_site}
             </a>
@@ -663,7 +666,7 @@ export default function SiteBuilderPage() {
           {STEPS.map((_s, i) => (
             <button key={i}
               onClick={() => { if (i < step) { setStepErrors({}); setStep(i); } }}
-              className={`flex-1 h-1.5 rounded-full transition-colors ${i <= step ? "bg-indigo-600" : "bg-gray-200"} ${i < step ? "cursor-pointer" : "cursor-default"}`} />
+              className={`flex-1 h-1.5 rounded-full transition-colors ${i <= step ? "bg-primary-600" : "bg-gray-200"} ${i < step ? "cursor-pointer" : "cursor-default"}`} />
           ))}
         </div>
         <p className="text-sm text-gray-500">
@@ -693,12 +696,12 @@ export default function SiteBuilderPage() {
               { key: "needs_creation", label: t.sb_logo_none,  hint: t.sb_logo_none_hint },
               { key: "text_only",      label: t.sb_logo_text,  hint: t.sb_logo_text_hint },
             ].map((opt) => (
-              <label key={opt.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${logoOption === opt.key ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}>
+              <label key={opt.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${logoOption === opt.key ? "border-primary-500 bg-primary-50" : "border-gray-200 hover:bg-gray-50"}`}>
                 <input type="radio" name="logo" value={opt.key} checked={logoOption === opt.key}
                   onChange={() => {
                     setLogoOption(opt.key as any);
                     if (opt.key === "needs_creation") setShowLogoServiceModal(true);
-                  }} className="mt-1 accent-indigo-600" />
+                  }} className="mt-1 accent-primary-600" />
                 <div>
                   <p className="font-medium text-sm text-gray-800">{opt.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{opt.hint}</p>
@@ -714,13 +717,13 @@ export default function SiteBuilderPage() {
                   <button
                     type="button"
                     onClick={() => setShowLogoUrlHelp((v) => !v)}
-                    className="w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 border transition-colors border-gray-300 text-gray-400 hover:border-indigo-400 hover:text-indigo-500"
+                    className="w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 border transition-colors border-gray-300 text-gray-400 hover:border-primary-400 hover:text-primary-500"
                   >?</button>
                 </div>
                 {showLogoUrlHelp && (
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-sm space-y-2">
-                    <p className="font-semibold text-indigo-800">{t.sb_logo_how_title}</p>
-                    <ol className="list-decimal list-inside space-y-1 text-indigo-700 text-xs">
+                  <div className="bg-primary-50 border border-primary-100 rounded-xl p-4 text-sm space-y-2">
+                    <p className="font-semibold text-primary-800">{t.sb_logo_how_title}</p>
+                    <ol className="list-decimal list-inside space-y-1 text-primary-700 text-xs">
                       <li>Uploadez votre logo sur <strong>Google Drive</strong>, <strong>Dropbox</strong> ou <strong>ImgBB</strong> (gratuit)</li>
                       <li>Obtenez le lien direct de partage (doit se terminer par .png, .jpg ou .svg)</li>
                       <li>Collez ce lien dans le champ ci-dessous</li>
@@ -731,10 +734,10 @@ export default function SiteBuilderPage() {
                   type="button"
                   onClick={() => triggerUpload((file) => uploadPhoto(file, "logo", setLogoUrl))}
                   disabled={uploading === "logo"}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-50 border border-primary-200 text-sm font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-50 transition-colors"
                 >
                   {uploading === "logo" ? (
-                    <><div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />Envoi…</>
+                    <><div className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />Envoi…</>
                   ) : (
                     <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>{t.sb_logo_upload_btn}</>
                   )}
@@ -769,14 +772,14 @@ export default function SiteBuilderPage() {
                     <div className="text-5xl mb-3">🎨</div>
                     <p className="text-sm text-gray-600">Pas de logo ? Pas de problème. Notre équipe peut vous créer un logo professionnel adapté à votre activité.</p>
                   </div>
-                  <div className="bg-indigo-50 rounded-xl p-4 space-y-1 text-sm text-indigo-700">
+                  <div className="bg-primary-50 rounded-xl p-4 space-y-1 text-sm text-primary-700">
                     <p>✅ Logo vectoriel (PNG + SVG)</p>
                     <p>✅ 3 propositions de design</p>
                     <p>✅ Retouches illimitées</p>
                     <p>✅ Livré sous 5 jours ouvrés</p>
                   </div>
                   <p className="text-xs text-gray-400 text-center">Contactez-nous après avoir complété ce formulaire pour recevoir un devis.</p>
-                  <button onClick={() => setShowLogoServiceModal(false)} className="w-full bg-indigo-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-indigo-700 transition-colors">
+                  <button onClick={() => setShowLogoServiceModal(false)} className="w-full bg-primary-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-primary-700 transition-colors">
                     {t.sb_logo_modal_ok}
                   </button>
                 </div>
@@ -793,7 +796,7 @@ export default function SiteBuilderPage() {
                 <button
                   key={c.key}
                   onClick={() => setPrimaryColor(c.key)}
-                  className={`flex items-center gap-2.5 p-2.5 border rounded-xl text-left transition-all ${primaryColor === c.key ? "border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50" : "border-gray-200 hover:border-gray-300"}`}
+                  className={`flex items-center gap-2.5 p-2.5 border rounded-xl text-left transition-all ${primaryColor === c.key ? "border-primary-500 ring-2 ring-primary-200 bg-primary-50" : "border-gray-200 hover:border-gray-300"}`}
                 >
                   <span className="w-7 h-7 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: c.hex }} />
                   <span className="text-xs font-medium text-gray-700 leading-tight">{c.label}</span>
@@ -806,9 +809,9 @@ export default function SiteBuilderPage() {
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
             <h2 className="font-semibold text-gray-800">{t.sb_font_title}</h2>
             {FONT_STYLES.map((f) => (
-              <label key={f.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${fontStyle === f.key ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}>
+              <label key={f.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${fontStyle === f.key ? "border-primary-500 bg-primary-50" : "border-gray-200 hover:bg-gray-50"}`}>
                 <input type="radio" name="font" value={f.key} checked={fontStyle === f.key}
-                  onChange={() => setFontStyle(f.key)} className="mt-1 accent-indigo-600" />
+                  onChange={() => setFontStyle(f.key)} className="mt-1 accent-primary-600" />
                 <div className="flex-1">
                   <p className="font-medium text-sm text-gray-800">{f.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{f.hint}</p>
@@ -832,13 +835,13 @@ export default function SiteBuilderPage() {
             <p className="text-sm text-gray-500">{t.sb_pages_desc}</p>
             <div className="space-y-3">
               {PAGES.map((page) => (
-                <label key={page.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${pagesEnabled.includes(page.key) ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"} ${page.locked ? "opacity-80" : ""}`}>
+                <label key={page.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${pagesEnabled.includes(page.key) ? "border-primary-500 bg-primary-50" : "border-gray-200 hover:bg-gray-50"} ${page.locked ? "opacity-80" : ""}`}>
                   <input
                     type="checkbox"
                     checked={pagesEnabled.includes(page.key)}
                     onChange={() => togglePage(page.key)}
                     disabled={page.locked}
-                    className="mt-0.5 w-4 h-4 accent-indigo-600"
+                    className="mt-0.5 w-4 h-4 accent-primary-600"
                   />
                   <div>
                     <p className="font-medium text-sm text-gray-800">
@@ -859,9 +862,9 @@ export default function SiteBuilderPage() {
               { key: "has_photos",  label: t.sb_photos_has,   hint: t.sb_photos_has_hint },
               { key: "needs_stock", label: t.sb_photos_stock, hint: t.sb_photos_stock_hint },
             ].map((opt) => (
-              <label key={opt.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${photosOption === opt.key ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}>
+              <label key={opt.key} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${photosOption === opt.key ? "border-primary-500 bg-primary-50" : "border-gray-200 hover:bg-gray-50"}`}>
                 <input type="radio" name="photos" value={opt.key} checked={photosOption === opt.key}
-                  onChange={() => setPhotosOption(opt.key as any)} className="mt-1 accent-indigo-600" />
+                  onChange={() => setPhotosOption(opt.key as any)} className="mt-1 accent-primary-600" />
                 <div>
                   <p className="font-medium text-sm text-gray-800">{opt.label}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{opt.hint}</p>
@@ -884,8 +887,8 @@ export default function SiteBuilderPage() {
                         onClick={() => setOpenGuide(openGuide === section.key ? null : section.key)}
                         className={`w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 transition-colors border ${
                           openGuide === section.key
-                            ? "bg-indigo-600 text-white border-indigo-600"
-                            : "bg-white text-gray-400 border-gray-300 hover:border-indigo-400 hover:text-indigo-600"
+                            ? "bg-primary-600 text-white border-primary-600"
+                            : "bg-white text-gray-400 border-gray-300 hover:border-primary-400 hover:text-primary-600"
                         }`}
                         title="Voir le guide de placement"
                       >
@@ -916,7 +919,7 @@ export default function SiteBuilderPage() {
                         <button
                           type="button"
                           onClick={() => setOpenGuide(null)}
-                          className="w-full text-xs text-center text-indigo-600 hover:underline pt-1"
+                          className="w-full text-xs text-center text-primary-600 hover:underline pt-1"
                         >
                           {t.sb_guide_close}
                         </button>
@@ -927,10 +930,10 @@ export default function SiteBuilderPage() {
                       type="button"
                       onClick={() => triggerUpload((file) => uploadPhoto(file, section.key, (url) => setPhotoUrls((p) => ({ ...p, [section.key]: url }))))}
                       disabled={!!uploading}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 text-sm font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-50 border border-primary-200 text-sm font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-50 transition-colors"
                     >
                       {uploading === section.key ? (
-                        <><div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />{t.sb_photo_uploading}</>
+                        <><div className="w-3.5 h-3.5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />{t.sb_photo_uploading}</>
                       ) : (
                         <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>{t.sb_photo_choose}</>
                       )}
@@ -1064,6 +1067,12 @@ export default function SiteBuilderPage() {
               <input value={addressCity} onChange={(e) => setAddressCity(e.target.value)} className="inp" placeholder="Bruxelles" />
             </div>
           </div>
+          <div>
+            <label className="lbl">Pays</label>
+            <select value={addressCountry} onChange={(e) => setAddressCountry(e.target.value)} className="inp">
+              {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+            </select>
+          </div>
           <div className="pt-3 border-t space-y-3">
             <p className="text-sm font-medium text-gray-700">{t.sb_contact_social_lbl} <span className="text-gray-400 font-normal">{t.sb_optional}</span></p>
             {[
@@ -1127,7 +1136,7 @@ export default function SiteBuilderPage() {
                       <li key={s}>
                         <button
                           type="button"
-                          className="w-full text-left px-4 py-2 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                          className="w-full text-left px-4 py-2 hover:bg-primary-50 hover:text-primary-700 transition-colors"
                           onMouseDown={() => {
                             setZones((prev) => prev.map((z2, idx) => idx === i ? s : z2));
                             setZoneSuggestions(null);
@@ -1143,7 +1152,7 @@ export default function SiteBuilderPage() {
               )}
             </div>
           ))}
-          <button onClick={() => listAdd(setZones, () => "")} className="text-sm text-indigo-600 hover:underline">
+          <button onClick={() => listAdd(setZones, () => "")} className="text-sm text-primary-600 hover:underline">
             {t.sb_zones_add}
           </button>
         </div>
@@ -1199,10 +1208,10 @@ export default function SiteBuilderPage() {
                     type="button"
                     onClick={() => triggerUpload((file) => uploadPhoto(file, "offer", (url) => listUpdate(setOffers, i, { image_url: url })))}
                     disabled={!!uploading}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-50 border border-primary-200 text-xs font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-50 transition-colors"
                   >
                     {uploading === `offer_${i}` ? (
-                      <><div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />{t.sb_uploading}</>
+                      <><div className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />{t.sb_uploading}</>
                     ) : (
                       <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>{t.sb_offer_choose}</>
                     )}
@@ -1222,7 +1231,7 @@ export default function SiteBuilderPage() {
               </div>
             </div>
           ))}
-          <button onClick={() => listAdd(setOffers, EMPTY_OFFER)} className="text-sm text-indigo-600 hover:underline">
+          <button onClick={() => listAdd(setOffers, EMPTY_OFFER)} className="text-sm text-primary-600 hover:underline">
             {t.sb_offer_add}
           </button>
         </div>
@@ -1237,7 +1246,7 @@ export default function SiteBuilderPage() {
             <p className="text-sm text-gray-500">{t.sb_values_hint}</p>
             <button
               onClick={() => setShowAtoutsHelp(true)}
-              className="shrink-0 w-6 h-6 rounded-full border border-gray-300 text-gray-400 hover:border-indigo-400 hover:text-indigo-500 transition-colors text-xs font-bold leading-none flex items-center justify-center"
+              className="shrink-0 w-6 h-6 rounded-full border border-gray-300 text-gray-400 hover:border-primary-400 hover:text-primary-500 transition-colors text-xs font-bold leading-none flex items-center justify-center"
               title="Qu'est-ce qu'un atout ?"
             >
               ?
@@ -1252,8 +1261,8 @@ export default function SiteBuilderPage() {
                   <button onClick={() => setShowAtoutsHelp(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
                 </div>
                 <p className="text-sm text-gray-600">{t.sb_atouts_help_desc}</p>
-                <div className="bg-indigo-50 rounded-xl p-4 space-y-3">
-                  <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">{t.sb_atouts_examples_lbl}</p>
+                <div className="bg-primary-50 rounded-xl p-4 space-y-3">
+                  <p className="text-xs font-semibold text-primary-700 uppercase tracking-wide">{t.sb_atouts_examples_lbl}</p>
                   <div className="space-y-2">
                     {[
                       { icon: "🏅", title: "10 ans d'expérience", desc: "Une expertise acquise auprès de centaines de patients en cabinet libéral." },
@@ -1270,7 +1279,7 @@ export default function SiteBuilderPage() {
                     ))}
                   </div>
                 </div>
-                <button onClick={() => setShowAtoutsHelp(false)} className="w-full bg-indigo-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-indigo-700 transition-colors">
+                <button onClick={() => setShowAtoutsHelp(false)} className="w-full bg-primary-600 text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-primary-700 transition-colors">
                   {t.sb_atouts_ok}
                 </button>
               </div>
@@ -1289,7 +1298,7 @@ export default function SiteBuilderPage() {
                   <button
                     type="button"
                     onClick={() => setIconPickerIdx(iconPickerIdx === i ? null : i)}
-                    className="inp w-14 h-10 flex items-center justify-center cursor-pointer hover:border-indigo-400 transition-colors text-indigo-600"
+                    className="inp w-14 h-10 flex items-center justify-center cursor-pointer hover:border-primary-400 transition-colors text-primary-600"
                     title={t.sb_icon_pick_lbl}
                   >
                     <AtoutIconSVG icon={v.icon || "star"} className="w-5 h-5" />
@@ -1303,7 +1312,7 @@ export default function SiteBuilderPage() {
                             key={ic.key}
                             type="button"
                             onClick={() => { listUpdate(setValues, i, { icon: ic.key }); setIconPickerIdx(null); }}
-                            className={`flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-indigo-50 transition-colors text-indigo-700 ${v.icon === ic.key ? "bg-indigo-100 ring-1 ring-indigo-400" : ""}`}
+                            className={`flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-primary-50 transition-colors text-primary-700 ${v.icon === ic.key ? "bg-primary-100 ring-1 ring-primary-400" : ""}`}
                             title={ic.label}
                           >
                             <AtoutIconSVG icon={ic.key} className="w-5 h-5" />
@@ -1328,7 +1337,7 @@ export default function SiteBuilderPage() {
             </div>
           ))}
           {values.length < 6 && (
-            <button onClick={() => listAdd(setValues, EMPTY_VALUE)} className="text-sm text-indigo-600 hover:underline">
+            <button onClick={() => listAdd(setValues, EMPTY_VALUE)} className="text-sm text-primary-600 hover:underline">
               {t.sb_value_add}
             </button>
           )}
@@ -1374,7 +1383,7 @@ export default function SiteBuilderPage() {
               </div>
             </div>
           ))}
-          <button onClick={() => listAdd(setTestimonials, EMPTY_TESTIMONIAL)} className="text-sm text-indigo-600 hover:underline">
+          <button onClick={() => listAdd(setTestimonials, EMPTY_TESTIMONIAL)} className="text-sm text-primary-600 hover:underline">
             {t.sb_testi_add}
           </button>
         </div>
@@ -1441,15 +1450,15 @@ export default function SiteBuilderPage() {
           </div>
 
           {/* Publication */}
-          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 space-y-3">
-            <h2 className="font-semibold text-indigo-900">{t.sb_ready_title}</h2>
-            <p className="text-sm text-indigo-700">{t.sb_ready_desc}</p>
+          <div className="bg-green-50 border border-green-100 rounded-xl p-6 space-y-3">
+            <h2 className="font-semibold text-green-900">{t.sb_ready_title}</h2>
+            <p className="text-sm text-green-700">{t.sb_ready_desc}</p>
             <button onClick={previewSite} disabled={saving || !tenantSlug}
-              className="w-full border border-indigo-400 text-indigo-700 bg-white font-semibold py-3 rounded-xl hover:bg-indigo-50 disabled:opacity-50 transition-colors">
+              className="w-full border border-green-400 text-green-700 bg-white font-semibold py-3 rounded-xl hover:bg-green-50 disabled:opacity-50 transition-colors">
               {saving ? t.sb_saving : t.sb_preview}
             </button>
             <button onClick={publish} disabled={saving}
-              className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+              className="w-full bg-green-600 text-white font-semibold py-3 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors">
               {saving ? t.sb_saving : t.sb_publish}
             </button>
           </div>
@@ -1465,7 +1474,7 @@ export default function SiteBuilderPage() {
         )}
         {step < STEPS.length - 1 && (
           <button onClick={next} disabled={saving}
-            className="flex-1 bg-indigo-600 text-white font-semibold py-2.5 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+            className="flex-1 bg-primary-600 text-white font-semibold py-2.5 rounded-xl hover:bg-primary-700 disabled:opacity-50 transition-colors">
             {saving ? t.sb_saving : t.sb_save_continue}
           </button>
         )}
@@ -1474,7 +1483,7 @@ export default function SiteBuilderPage() {
       <style jsx global>{`
         .lbl { display: block; font-size: 0.875rem; font-weight: 500; color: #374151; margin-bottom: 0.25rem; }
         .inp { width: 100%; border: 1px solid #d1d5db; border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; outline: none; transition: border-color 0.15s; }
-        .inp:focus { border-color: #6366f1; box-shadow: 0 0 0 2px #e0e7ff; }
+        .inp:focus { border-color: #0D4B58; box-shadow: 0 0 0 2px #C6E5EA; }
       `}</style>
     </div>
   );

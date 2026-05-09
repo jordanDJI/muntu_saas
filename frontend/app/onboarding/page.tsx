@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/api";
 import { useLanguage, LangSelector } from "../../contexts/LanguageContext";
+import { COUNTRIES } from "../../lib/countries";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function OnboardingPage() {
     tenant_name: "",
     tenant_slug: "",
     sector: "other",
+    country: "BE",
   });
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -97,16 +99,14 @@ export default function OnboardingPage() {
     const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
     const res = await fetch(`${API}/api/v1/onboarding/setup`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         first_name: form.first_name,
         last_name: form.last_name,
         tenant_name: form.tenant_name,
         tenant_slug: form.tenant_slug,
         sector: form.sector,
+        country: form.country,
       }),
     });
 
@@ -122,90 +122,125 @@ export default function OnboardingPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-lg bg-white rounded-2xl shadow p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{t.ob_title}</h1>
-            <p className="text-gray-500 text-sm mt-1">{t.ob_step} {step} {t.ob_of} 2</p>
+    <div className="d-page">
+      <div style={{ width: "100%", maxWidth: "520px", marginTop: "24px" }}>
+        <div className="d-card">
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "28px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <img src="/logo.png" alt="Klientys" style={{ height: "36px", width: "auto" }} />
+              <div>
+                <span style={{ display: "block", fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", fontWeight: 700, fontSize: "18px", color: "var(--l-text)" }}>Klientys</span>
+                <span style={{ fontSize: "12px", color: "var(--l-text-3)" }}>{t.ob_step} {step} {t.ob_of} 2</span>
+              </div>
+            </div>
+            <LangSelector />
           </div>
-          <LangSelector />
-        </div>
 
-        <form onSubmit={step === 1 ? (e) => { e.preventDefault(); setStep(2); } : handleSubmit} className="space-y-4">
+          {/* Progress bar */}
+          <div style={{ height: "3px", background: "rgba(170,189,216,.12)", borderRadius: "2px", marginBottom: "28px", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: step === 1 ? "50%" : "100%", background: "linear-gradient(90deg,var(--l-teal-xl),var(--l-gold))", borderRadius: "2px", transition: "width .4s" }} />
+          </div>
 
-          {step === 1 && (
-            <>
-              <div style={{ position: "absolute", opacity: 0, height: 0, overflow: "hidden", pointerEvents: "none" }} aria-hidden="true">
-                <input
-                  type="text"
-                  name="website"
-                  tabIndex={-1}
-                  autoComplete="off"
-                  value={honeypot}
-                  onChange={(e) => setHoneypot(e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input placeholder={t.ob_firstname} value={form.first_name} onChange={(e) => set("first_name", e.target.value)} required className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                <input placeholder={t.ob_lastname} value={form.last_name} onChange={(e) => set("last_name", e.target.value)} required className="border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
-              <input type="email" placeholder={t.ob_email} value={form.email} onChange={(e) => set("email", e.target.value)} required className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              <input type="password" placeholder={t.ob_password} value={form.password} onChange={(e) => set("password", e.target.value)} required minLength={8} className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              <button type="submit" className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-semibold hover:bg-indigo-700">
-                {t.ob_continue}
-              </button>
-            </>
-          )}
+          <h1 style={{ fontSize: "22px", fontWeight: 800, fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", marginBottom: "24px", color: "var(--l-text)" }}>
+            {t.ob_title}
+          </h1>
 
-          {step === 2 && (
-            <>
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">{t.ob_biz}</label>
-                <input
-                  placeholder="Ex: Muntu Cura"
-                  value={form.tenant_name}
-                  onChange={(e) => { set("tenant_name", e.target.value); set("tenant_slug", slugify(e.target.value)); }}
-                  required
-                  className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">{t.ob_url}</label>
-                <div className="flex items-center border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500">
-                  <span className="bg-gray-100 px-3 py-2 text-gray-500 text-sm border-r">votre-domaine.com/</span>
+          <form
+            onSubmit={step === 1 ? (e) => { e.preventDefault(); setStep(2); } : handleSubmit}
+            style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+          >
+            {step === 1 && (
+              <>
+                {/* honeypot */}
+                <div style={{ position: "absolute", opacity: 0, height: 0, overflow: "hidden", pointerEvents: "none" }} aria-hidden="true">
+                  <input type="text" name="website" tabIndex={-1} autoComplete="off" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <input className="d-input" placeholder={t.ob_firstname} value={form.first_name} onChange={(e) => set("first_name", e.target.value)} required />
+                  <input className="d-input" placeholder={t.ob_lastname} value={form.last_name} onChange={(e) => set("last_name", e.target.value)} required />
+                </div>
+                <input className="d-input" type="email" placeholder={t.ob_email} value={form.email} onChange={(e) => set("email", e.target.value)} required />
+                <input className="d-input" type="password" placeholder={t.ob_password} value={form.password} onChange={(e) => set("password", e.target.value)} required minLength={8} />
+
+                <button type="submit" className="l-btn l-btn-primary" style={{ width: "100%", justifyContent: "center", marginTop: "4px" }}>
+                  {t.ob_continue} →
+                </button>
+              </>
+            )}
+
+            {step === 2 && (
+              <>
+                <div>
+                  <label className="d-label">{t.ob_biz}</label>
                   <input
-                    value={form.tenant_slug}
-                    onChange={(e) => set("tenant_slug", slugify(e.target.value))}
+                    className="d-input"
+                    placeholder="Ex: Muntu Cura"
+                    value={form.tenant_name}
+                    onChange={(e) => { set("tenant_name", e.target.value); set("tenant_slug", slugify(e.target.value)); }}
                     required
-                    className="flex-1 px-3 py-2 focus:outline-none"
                   />
                 </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">{t.ob_sector}</label>
-                <select value={form.sector} onChange={(e) => set("sector", e.target.value)} className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                  {SECTORS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setStep(1)} className="flex-1 border rounded-lg py-2.5 text-gray-600 hover:bg-gray-50">
-                  {t.ob_back}
-                </button>
-                <button type="submit" disabled={loading} className="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50">
-                  {loading ? t.ob_creating : t.ob_create}
-                </button>
-              </div>
-            </>
-          )}
-        </form>
 
-        <p className="text-center text-sm text-gray-500">
-          {t.ob_already}{" "}
-          <Link href="/login" className="text-indigo-600 hover:underline font-medium">{t.ob_login}</Link>
-        </p>
+                <div>
+                  <label className="d-label">{t.ob_url}</label>
+                  <div className="d-input-prefix">
+                    <span>votre-domaine.com/</span>
+                    <input
+                      value={form.tenant_slug}
+                      onChange={(e) => set("tenant_slug", slugify(e.target.value))}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="d-label">{t.ob_sector}</label>
+                  <select className="d-select" value={form.sector} onChange={(e) => set("sector", e.target.value)}>
+                    {SECTORS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="d-label">Pays</label>
+                  <select className="d-select" value={form.country} onChange={(e) => set("country", e.target.value)}>
+                    {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                  </select>
+                </div>
+
+                {error && <p style={{ color: "#FC8181", fontSize: "13px", margin: 0 }}>{error}</p>}
+
+                <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="l-btn l-btn-ghost"
+                    style={{ flex: 1, justifyContent: "center" }}
+                  >
+                    {t.ob_back}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="l-btn l-btn-primary"
+                    style={{ flex: 1, justifyContent: "center", opacity: loading ? 0.6 : 1 }}
+                  >
+                    {loading ? t.ob_creating : t.ob_create}
+                  </button>
+                </div>
+              </>
+            )}
+          </form>
+
+          <p style={{ textAlign: "center", fontSize: "13px", color: "var(--l-text-2)", marginTop: "24px", marginBottom: 0 }}>
+            {t.ob_already}{" "}
+            <Link href="/login" style={{ color: "var(--l-teal-xl)", textDecoration: "none", fontWeight: 600 }}>
+              {t.ob_login}
+            </Link>
+          </p>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

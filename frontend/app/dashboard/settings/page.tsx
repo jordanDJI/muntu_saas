@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api, supabase } from "../../../lib/api";
 import { useLanguage, LangSelector, LANGUAGES } from "../../../contexts/LanguageContext";
+import DemandPotentialCard from "../analytics/DemandPotentialCard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
 function SaveBtn({ loading, label = "Sauvegarder" }: { loading: boolean; label?: string }) {
   return (
     <button type="submit" disabled={loading}
-      className="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium">
+      className="bg-primary-600 text-white px-5 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium">
       {loading ? "Sauvegarde…" : label}
     </button>
   );
@@ -60,7 +61,7 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
     <label className="flex items-center justify-between cursor-pointer">
       <span className="text-sm text-gray-700">{label}</span>
       <button type="button" onClick={() => onChange(!checked)}
-        className={`w-10 h-5 rounded-full transition-colors relative ${checked ? "bg-indigo-600" : "bg-gray-300"}`}>
+        className={`w-10 h-5 rounded-full transition-colors relative ${checked ? "bg-primary-600" : "bg-gray-300"}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${checked ? "left-5" : "left-0.5"}`}/>
       </button>
     </label>
@@ -109,7 +110,7 @@ function SectionProfil() {
       <Card>
         <form onSubmit={save} className="space-y-4">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center text-2xl font-bold text-indigo-600 shrink-0">
+            <div className="w-16 h-16 rounded-full bg-primary-100 flex items-center justify-center text-2xl font-bold text-primary-600 shrink-0">
               {initials}
             </div>
             <div>
@@ -122,7 +123,7 @@ function SectionProfil() {
           <div>
             <label className="block text-sm font-medium mb-1">{t.sett_fullname}</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Jean Dupont"
-              className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-400" />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">{t.sett_email_label}</label>
@@ -136,7 +137,7 @@ function SectionProfil() {
               <select
                 value={ctxLang}
                 onChange={e => ctxSetLang(e.target.value as any)}
-                className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
               >
                 {LANGUAGES.map(l => (
                   <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
@@ -145,7 +146,7 @@ function SectionProfil() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">{t.sett_tz_label}</label>
-              <select value={tz} onChange={e => setTz(e.target.value)} className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+              <select value={tz} onChange={e => setTz(e.target.value)} className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-400">
                 <option value="Europe/Brussels">Europe/Brussels (UTC+1/+2)</option>
                 <option value="Europe/Paris">Europe/Paris (UTC+1/+2)</option>
                 <option value="Europe/London">Europe/London (UTC+0/+1)</option>
@@ -226,7 +227,7 @@ function SectionSecurite() {
         {resetSent ? (
           <p className="text-green-600 text-sm">Email envoyé — vérifiez votre boîte mail.</p>
         ) : (
-          <button onClick={sendReset} className="text-indigo-600 text-sm hover:underline">
+          <button onClick={sendReset} className="text-primary-600 text-sm hover:underline">
             Envoyer le lien de réinitialisation
           </button>
         )}
@@ -313,7 +314,7 @@ function SectionSite() {
             </p>
             {tenantSlug && (
               <a href={`${origin}/${tenantSlug}`} target="_blank" rel="noreferrer"
-                className="text-xs text-indigo-500 hover:underline mt-1 block">
+                className="text-xs text-primary-500 hover:underline mt-1 block">
                 {origin.replace(/^https?:\/\//, "")}/{tenantSlug}
               </a>
             )}
@@ -330,7 +331,7 @@ function SectionSite() {
               </a>
             )}
             <button onClick={togglePublish}
-              className={`px-4 py-2 rounded-lg font-medium text-sm ${site?.status === "published" ? "bg-gray-100 text-gray-700 hover:bg-gray-200" : "bg-green-600 text-white hover:bg-green-700"}`}>
+              className={`px-4 py-2 rounded-lg font-medium text-sm ${site?.status === "published" ? "bg-red-100 text-red-700 hover:bg-red-200 border border-red-200" : "bg-green-600 text-white hover:bg-green-700"}`}>
               {site?.status === "published" ? "Dépublier" : "Publier"}
             </button>
           </div>
@@ -350,13 +351,8 @@ const METRIC_DEFS = [
   { id: "leads_30d",  label: "Demandes (30 jours)",    desc: "Nouvelles demandes reçues sur les 30 derniers jours",   icon: "📈" },
   { id: "rdv_30d",    label: "RDV (30 jours)",         desc: "Rendez-vous créés ou confirmés ce mois",                icon: "📅" },
   { id: "conv_rate",  label: "Taux de confirmation",   desc: "% de RDV confirmés parmi tous les RDV clôturés",        icon: "📊" },
-  { id: "activity",   label: "Activité hebdomadaire",  desc: "Graphique des demandes et RDV des 7 derniers jours",    icon: "📉" },
-];
-
-const ROI_DEFS = [
-  { label: "Revenu estimé (30j)",       desc: "Calculé à partir du prix de vos prestations configurées" },
-  { label: "Coût d'acquisition client", desc: "Basé sur vos dépenses marketing renseignées" },
-  { label: "Taux de fidélisation",      desc: "% de clients ayant pris un 2e rendez-vous" },
+  { id: "activity",        label: "Activité hebdomadaire",         desc: "Graphique des demandes et RDV des 7 derniers jours",      icon: "📉" },
+  { id: "demand_potential", label: "Potentiel de demande locale",  desc: "Indice Google Trends pour vos zones d'intervention",      icon: "🌍" },
 ];
 
 const ALL_METRIC_IDS = METRIC_DEFS.map((m) => m.id);
@@ -408,29 +404,11 @@ function SectionMetriques() {
         </div>
         <Feedback msg={msg} />
         <button onClick={save} disabled={saving}
-          className="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium">
+          className="bg-primary-600 text-white px-5 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium">
           {saving ? "Sauvegarde…" : "Enregistrer"}
         </button>
       </Card>
-      <Card>
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-700">Métriques ROI</p>
-          <span className="text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Bientôt</span>
-        </div>
-        <p className="text-xs text-gray-400">Indicateurs financiers et de retour sur investissement.</p>
-        <div className="divide-y divide-gray-100 -mx-2 opacity-50 pointer-events-none">
-          {ROI_DEFS.map((m) => (
-            <div key={m.label} className="flex items-center justify-between gap-4 px-2 py-2.5">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-700 leading-tight">{m.label}</p>
-                <p className="text-xs text-gray-400 mt-0.5 leading-tight">{m.desc}</p>
-              </div>
-              <Toggle checked={false} onChange={() => {}} label="" />
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-gray-400 italic">Ces indicateurs seront disponibles dans une prochaine mise à jour.</p>
-      </Card>
+      <DemandPotentialCard />
     </>
   );
 }
@@ -491,12 +469,12 @@ function SectionAbonnement() {
             <p className="text-sm text-gray-500">Modifier votre plan, consulter les factures ou mettre à jour votre moyen de paiement.</p>
             <div className="flex gap-3 flex-wrap">
               <button onClick={openPortal}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700">
+                className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-700">
                 Portail de facturation Stripe
               </button>
               {!sub && (
                 <button onClick={() => window.location.href = "/dashboard"}
-                  className="border border-indigo-300 text-indigo-600 px-4 py-2 rounded-lg text-sm hover:bg-indigo-50">
+                  className="border border-primary-300 text-primary-600 px-4 py-2 rounded-lg text-sm hover:bg-primary-50">
                   Choisir un plan
                 </button>
               )}
@@ -577,7 +555,7 @@ function SectionNotifications() {
         </div>
       </Card>
       <div className="flex items-center gap-3">
-        <button onClick={save} className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-indigo-700">
+        <button onClick={save} className="bg-primary-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-primary-700">
           Sauvegarder
         </button>
         {saved && <p className="text-green-600 text-sm">Préférences sauvegardées.</p>}
@@ -629,7 +607,7 @@ function SectionPreferences() {
         </div>
       </Card>
       <div className="flex items-center gap-3">
-        <button onClick={save} className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-indigo-700">
+        <button onClick={save} className="bg-primary-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-primary-700">
           Sauvegarder
         </button>
         {saved && <p className="text-green-600 text-sm">Préférences sauvegardées.</p>}
@@ -744,7 +722,7 @@ function SectionMembres() {
               return (
                 <div key={m.id} className="flex items-center justify-between py-2.5 border-b last:border-0">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">
+                    <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-xs font-bold text-primary-600">
                       {initials}
                     </div>
                     <div>
@@ -757,7 +735,7 @@ function SectionMembres() {
                       <select
                         value={m.role}
                         onChange={e => handleRoleChange(m.user_id, e.target.value)}
-                        className="text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        className="text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
                       >
                         {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
@@ -819,19 +797,19 @@ function SectionMembres() {
               onChange={e => { setEmail(e.target.value); setError(null); setSuccess(null); }}
               onKeyDown={e => e.key === "Enter" && handleInvite()}
               placeholder="email@exemple.com"
-              className="border rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="border rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
             />
             <select
               value={role}
               onChange={e => setRole(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             >
               {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             <button
               onClick={handleInvite}
               disabled={inviting || !email.trim()}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+              className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-40 transition-colors"
             >
               {inviting ? "Envoi…" : "Inviter"}
             </button>
@@ -901,7 +879,7 @@ function SectionExport() {
           <p className="text-green-600 text-sm">Votre export a été demandé. Vous recevrez un email avec le lien de téléchargement sous 24h.</p>
         ) : (
           <button onClick={requestExport} disabled={exporting}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50">
+            className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50">
             {exporting ? "Préparation…" : "Demander l'export"}
           </button>
         )}
@@ -1018,7 +996,7 @@ export default function SettingsPage() {
         <select
           value={active}
           onChange={e => setActive(e.target.value as Section)}
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary-400"
         >
           {NAV.map(item => (
             <option key={item.key} value={item.key}>
@@ -1038,7 +1016,7 @@ export default function SettingsPage() {
                 onClick={() => setActive(item.key)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
                   active === item.key
-                    ? "bg-indigo-50 text-indigo-700"
+                    ? "bg-primary-50 text-primary-700"
                     : "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
                 }`}
               >

@@ -12,6 +12,7 @@ class TenantSetupIn(BaseModel):
     tenant_name: str
     tenant_slug: str
     sector: str = "other"
+    country: str = "BE"
 
 
 @router.post("/setup")
@@ -37,6 +38,7 @@ async def setup_tenant(body: TenantSetupIn, user: dict = Depends(get_current_use
             "name": body.tenant_name,
             "slug": body.tenant_slug,
             "sector": body.sector,
+            "country": body.country,
         }).execute().data[0]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur création tenant: {e}")

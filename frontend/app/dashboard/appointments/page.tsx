@@ -36,9 +36,9 @@ const HOUR_START = 7;
 const HOUR_END   = 20;
 const SLOT_H     = 64;
 const STATUS_COLOR: Record<string, string> = {
-  confirmed: "bg-indigo-500 text-white",
-  cancelled: "bg-gray-300 text-gray-500",
-  pending:   "bg-yellow-400 text-white",
+  confirmed: "bg-primary-600 text-white",
+  cancelled: "bg-gray-500 text-white opacity-50",
+  pending:   "bg-accent-400 text-white",
 };
 const SOURCES = [
   "Bouche à oreille",
@@ -99,7 +99,7 @@ function ContactSearch({ onSelect, onCreateNew }: {
           {results.map(c => (
             <button key={c.id}
               onClick={() => { setQ(`${c.first_name} ${c.last_name}`); setOpen(false); onSelect(c); }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 border-b last:border-0">
+              className="w-full text-left px-3 py-2 text-sm hover:bg-primary-50 border-b last:border-0">
               <span className="font-medium">{c.first_name} {c.last_name}</span>
               {c.email && <span className="text-gray-400 ml-2 text-xs">{c.email}</span>}
             </button>
@@ -109,7 +109,7 @@ function ContactSearch({ onSelect, onCreateNew }: {
       {q.length >= 2 && results.length === 0 && (
         <button
           onClick={() => { setOpen(false); onCreateNew(q); }}
-          className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 z-20 text-left">
+          className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow px-3 py-2 text-sm text-primary-600 hover:bg-primary-50 z-20 text-left">
           + Nouveau client "{q}"
         </button>
       )}
@@ -182,7 +182,7 @@ function NewClientModal({ initialName, onConfirm, onClose }: {
               source: source || undefined,
             })}
             disabled={!fn.trim()}
-            className="w-full bg-indigo-600 text-white rounded-xl py-2.5 font-semibold hover:bg-indigo-700 disabled:opacity-50 text-sm">
+            className="w-full bg-primary-600 text-white rounded-xl py-2.5 font-semibold hover:bg-primary-700 disabled:opacity-50 text-sm">
             Ajouter ce client au rendez-vous
           </button>
         </div>
@@ -247,7 +247,7 @@ function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose
       <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
           {/* Header */}
-          <div className="bg-indigo-600 text-white rounded-t-2xl px-4 py-3 flex justify-between items-start">
+          <div className="bg-primary-600 text-white rounded-t-2xl px-4 py-3 flex justify-between items-start">
             <div>
               <p className="text-xs opacity-75 capitalize">
                 {day.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
@@ -259,8 +259,8 @@ function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose
           {/* Body */}
           <div className="p-4 space-y-3">
             {clientLabel ? (
-              <div className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-indigo-50">
-                <span className="text-sm font-medium text-indigo-800">{clientLabel}</span>
+              <div className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-primary-50">
+                <span className="text-sm font-medium text-primary-800">{clientLabel}</span>
                 <button onClick={() => { setContact(null); setNewClient(null); }}
                   className="text-xs text-gray-400 hover:text-red-500 ml-2">✕</button>
               </div>
@@ -285,7 +285,7 @@ function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose
             </select>
             {err && <p className="text-red-500 text-sm">{err}</p>}
             <button onClick={save} disabled={saving || (!contact && !newClient)}
-              className="w-full bg-indigo-600 text-white rounded-xl py-2.5 font-semibold hover:bg-indigo-700 disabled:opacity-50 text-sm">
+              className="w-full bg-primary-600 text-white rounded-xl py-2.5 font-semibold hover:bg-primary-700 disabled:opacity-50 text-sm">
               {saving ? "Création…" : "Créer le rendez-vous"}
             </button>
           </div>
@@ -366,17 +366,17 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
         </div>
         <div className="flex-1 overflow-auto p-4 space-y-3">
           {days.map((d, di) => (
-            <div key={di} className={`rounded-lg border p-3 space-y-2 ${d.is_active ? "border-indigo-300 bg-indigo-50" : "border-gray-200"}`}>
+            <div key={di} className={`rounded-lg border p-3 space-y-2 ${d.is_active ? "border-primary-300 bg-primary-50" : "border-gray-200"}`}>
               <div className="flex items-center justify-between">
                 <span className="font-medium text-sm">{DAYS_FULL[di]}</span>
                 <button onClick={() => toggleDay(di)}
-                  className={`w-10 h-5 rounded-full transition-colors relative ${d.is_active ? "bg-indigo-600" : "bg-gray-300"}`}>
+                  className={`w-10 h-5 rounded-full transition-colors relative ${d.is_active ? "bg-primary-600" : "bg-gray-300"}`}>
                   <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${d.is_active ? "left-5" : "left-0.5"}`} />
                 </button>
               </div>
 
               {d.is_active && d.ranges.map((r, ri) => (
-                <div key={ri} className="flex gap-2 items-center flex-wrap bg-white rounded-lg px-2 py-1.5 border border-indigo-100">
+                <div key={ri} className="flex gap-2 items-center flex-wrap bg-white rounded-lg px-2 py-1.5 border border-primary-100">
                   {ri === 0
                     ? <span className="text-xs text-gray-400 w-12 shrink-0">Matin</span>
                     : ri === 1
@@ -400,7 +400,7 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
 
               {d.is_active && d.ranges.length < 3 && (
                 <button onClick={() => addRange(di)}
-                  className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline pl-1">
+                  className="text-xs text-primary-600 hover:text-primary-800 hover:underline pl-1">
                   + Ajouter une plage (ex : après-midi)
                 </button>
               )}
@@ -409,7 +409,7 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
         </div>
         <div className="p-4 border-t">
           <button onClick={save} disabled={saving}
-            className="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50">
+            className="w-full bg-primary-600 text-white py-2 rounded-lg font-semibold hover:bg-primary-700 disabled:opacity-50">
             {saving ? "Enregistrement…" : "Enregistrer"}
           </button>
         </div>
@@ -527,7 +527,7 @@ function BlockPanel({ blocked, onSave, onClose }: {
             {blocked.length===0 && <p className="text-sm text-gray-400">Aucune période bloquée.</p>}
             {blocked.map(b=>(
               <div key={b.id}
-                className={`border rounded-lg p-3 flex justify-between items-start transition-colors ${editTarget?.id===b.id?"ring-2 ring-indigo-400 bg-indigo-50":""}`}
+                className={`border rounded-lg p-3 flex justify-between items-start transition-colors ${editTarget?.id===b.id?"ring-2 ring-primary-400 bg-primary-50":""}`}
                 style={{ borderLeftWidth: 4, borderLeftColor: b.color ?? "#ef4444" }}>
                 <div className="min-w-0">
                   <p className="text-sm font-medium">
@@ -540,7 +540,7 @@ function BlockPanel({ blocked, onSave, onClose }: {
                 <div className="flex gap-2 ml-2 shrink-0">
                   <button onClick={() => startEdit(b)}
                     title="Modifier"
-                    className="text-indigo-400 hover:text-indigo-600">
+                    className="text-primary-400 hover:text-primary-600">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                     </svg>
@@ -656,7 +656,7 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
 
         {!editing ? (
           <>
-            {appt.service_offer?.name && <p className="text-sm font-medium text-indigo-600">{appt.service_offer.name}</p>}
+            {appt.service_offer?.name && <p className="text-sm font-medium text-primary-600">{appt.service_offer.name}</p>}
             <div className="bg-gray-50 rounded-lg p-3 text-sm">
               <p>{new Date(appt.scheduled_at).toLocaleString("fr-BE",{dateStyle:"full",timeStyle:"short"})}</p>
               <p className="text-gray-400 text-xs mt-1">→ {fmtTime(appt.end_at)}</p>
@@ -667,7 +667,7 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
               </span>
               {appt.status !== "cancelled" && (
                 <button onClick={() => setEditing(true)}
-                  className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg px-2.5 py-1 hover:bg-indigo-50">
+                  className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800 border border-primary-200 rounded-lg px-2.5 py-1 hover:bg-primary-50">
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                   </svg>
@@ -696,7 +696,7 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
           </>
         ) : (
           <>
-            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">Modifier le rendez-vous</p>
+            <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide">Modifier le rendez-vous</p>
             <div className="space-y-2">
               <div>
                 <label className="text-xs font-medium text-gray-500">Date</label>
@@ -735,7 +735,7 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
                 Annuler
               </button>
               <button onClick={saveEdit} disabled={saving}
-                className="flex-1 bg-indigo-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50">
+                className="flex-1 bg-primary-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-primary-700 disabled:opacity-50">
                 {saving ? "Enregistrement…" : "Enregistrer"}
               </button>
             </div>
@@ -862,9 +862,9 @@ export default function AppointmentsPage() {
         <div className={`flex border-b sticky top-0 bg-white z-10 ${minW}`}>
           <div className="w-12 shrink-0"/>
           {days.map((d,i) => (
-            <div key={i} className={`flex-1 text-center py-2 border-l text-sm font-medium ${isSameDay(d,new Date())?"text-indigo-600":"text-gray-600"}`}>
+            <div key={i} className={`flex-1 text-center py-2 border-l text-sm font-medium ${isSameDay(d,new Date())?"text-primary-600":"text-gray-600"}`}>
               <div className="text-xs uppercase">{DAYS_FR[d.getDay()===0?6:d.getDay()-1]}</div>
-              <div className={`text-base font-bold mx-auto w-8 h-8 flex items-center justify-center rounded-full ${isSameDay(d,new Date())?"bg-indigo-600 text-white":""}`}>
+              <div className={`text-base font-bold mx-auto w-8 h-8 flex items-center justify-center rounded-full ${isSameDay(d,new Date())?"bg-primary-600 text-white":""}`}>
                 {d.getDate()}
               </div>
             </div>
@@ -921,7 +921,7 @@ export default function AppointmentsPage() {
                   key={a.id}
                   data-appt="1"
                   onClick={e => { e.stopPropagation(); setCreating(null); setSelectedAppt(a); }}
-                  className={`absolute left-0.5 right-0.5 rounded px-1 text-left text-xs overflow-hidden ${STATUS_COLOR[a.status]??"bg-indigo-400 text-white"}`}
+                  className={`absolute left-0.5 right-0.5 rounded px-1 text-left text-xs overflow-hidden ${STATUS_COLOR[a.status]??"bg-primary-400 text-white"}`}
                   style={{top:topPx(a.scheduled_at), height:heightPx(a.scheduled_at,a.end_at)}}
                 >
                   <span className="font-semibold block truncate">{fmtTime(a.scheduled_at)}</span>
@@ -955,14 +955,14 @@ export default function AppointmentsPage() {
               <div key={i}
                 className={`border-b border-r p-1 cursor-pointer hover:bg-gray-50 ${!inMonth?"bg-gray-50":""}`}
                 onClick={() => { setAnchor(d); setView("day"); }}>
-                <div className={`text-xs sm:text-sm font-medium w-6 h-6 flex items-center justify-center rounded-full mb-0.5 ${today?"bg-indigo-600 text-white":inMonth?"text-gray-800":"text-gray-300"}`}>
+                <div className={`text-xs sm:text-sm font-medium w-6 h-6 flex items-center justify-center rounded-full mb-0.5 ${today?"bg-primary-600 text-white":inMonth?"text-gray-800":"text-gray-300"}`}>
                   {d.getDate()}
                 </div>
                 <div className="space-y-0.5">
                   {dayAppts.slice(0,2).map(a=>(
                     <button key={a.id}
                       onClick={e => { e.stopPropagation(); setSelectedAppt(a); }}
-                      className="w-full text-left text-xs px-1 rounded bg-indigo-100 text-indigo-800 truncate">
+                      className="w-full text-left text-xs px-1 rounded bg-primary-100 text-primary-800 truncate">
                       {fmtTime(a.scheduled_at)} {a.contact?.first_name}
                     </button>
                   ))}
@@ -994,7 +994,7 @@ export default function AppointmentsPage() {
         <h1 className="text-lg sm:text-xl font-bold text-gray-900 flex-1 min-w-0">Rendez-vous</h1>
 
         <button onClick={()=>setShowAvail(true)}
-          className="text-xs sm:text-sm px-2.5 py-1.5 border border-indigo-300 text-indigo-600 rounded-lg hover:bg-indigo-50 shrink-0">
+          className="text-xs sm:text-sm px-2.5 py-1.5 border border-primary-300 text-primary-600 rounded-lg hover:bg-primary-50 shrink-0">
           ⚙ <span className="hidden sm:inline">Disponibilités</span>
         </button>
         <button onClick={()=>setShowBlock(true)}
@@ -1007,7 +1007,7 @@ export default function AppointmentsPage() {
           <div className="flex bg-gray-100 rounded-lg p-0.5 text-sm">
             {(["day","week","month"] as View[]).map(v=>(
               <button key={v} onClick={()=>{ setView(v); setCreating(null); }}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors text-xs sm:text-sm ${view===v?"bg-white shadow text-indigo-600":"text-gray-600 hover:text-gray-800"}`}>
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors text-xs sm:text-sm ${view===v?"bg-white shadow text-primary-600":"text-gray-600 hover:text-gray-800"}`}>
                 {v==="day"?"Jour":v==="week"?"Semaine":"Mois"}
               </button>
             ))}
@@ -1027,7 +1027,7 @@ export default function AppointmentsPage() {
 
           <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none ml-auto">
             <input type="checkbox" checked={allowPast} onChange={e => setAllowPast(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
             Événements passés
           </label>
         </div>

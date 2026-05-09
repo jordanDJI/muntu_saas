@@ -99,7 +99,7 @@ export default function ChatbotWidget({ tenantSlug }: { tenantSlug: string }) {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="Ouvrir le chatbot"
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 flex items-center justify-center text-2xl transition-transform hover:scale-105"
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary-600 text-white shadow-lg hover:bg-primary-700 flex items-center justify-center text-2xl transition-transform hover:scale-105"
       >
         {open ? "✕" : "💬"}
       </button>
@@ -108,11 +108,11 @@ export default function ChatbotWidget({ tenantSlug }: { tenantSlug: string }) {
       {open && (
         <div className="fixed bottom-24 right-6 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
           {/* Header */}
-          <div className="bg-indigo-600 text-white px-4 py-3 flex items-center gap-2">
+          <div className="bg-primary-600 text-white px-4 py-3 flex items-center gap-2">
             <span className="text-lg">🤖</span>
             <div>
               <p className="font-semibold text-sm">Assistant virtuel</p>
-              <p className="text-xs text-indigo-200">Répond en quelques secondes</p>
+              <p className="text-xs text-primary-200">Répond en quelques secondes</p>
             </div>
           </div>
 
@@ -126,7 +126,7 @@ export default function ChatbotWidget({ tenantSlug }: { tenantSlug: string }) {
                 <div
                   className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
                     msg.role === "user"
-                      ? "bg-indigo-600 text-white rounded-br-none"
+                      ? "bg-primary-600 text-white rounded-br-none"
                       : "bg-gray-100 text-gray-800 rounded-bl-none"
                   }`}
                 >
@@ -155,12 +155,12 @@ export default function ChatbotWidget({ tenantSlug }: { tenantSlug: string }) {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
               placeholder="Votre question…"
-              className="flex-1 resize-none border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="flex-1 resize-none border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             />
             <button
               onClick={send}
               disabled={loading || !input.trim()}
-              className="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+              className="bg-primary-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-40 transition-colors"
             >
               Envoyer
             </button>

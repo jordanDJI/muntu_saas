@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { api, supabase } from "../../lib/api";
 
 function JoinContent() {
@@ -21,14 +22,8 @@ function JoinContent() {
       return;
     }
     api.getInvite(token)
-      .then((data) => {
-        setInvite(data);
-        setStatus("ready");
-      })
-      .catch((e: any) => {
-        setStatus("error");
-        setMessage(e.message || "Invitation invalide ou expirée.");
-      });
+      .then((data) => { setInvite(data); setStatus("ready"); })
+      .catch((e: any) => { setStatus("error"); setMessage(e.message || "Invitation invalide ou expirée."); });
   }, [token]);
 
   const handleAccept = async () => {
@@ -36,13 +31,10 @@ function JoinContent() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        // Redirect to login with redirect_back
-        const redirectUrl = encodeURIComponent(`/join?token=${token}`);
-        router.push(`/auth/login?redirect=${redirectUrl}`);
+        router.push(`/auth/login?redirect=${encodeURIComponent(`/join?token=${token}`)}`);
         return;
       }
       await api.acceptInvite(token);
-      // Refresh the session so the new tenant_id is in the JWT
       await supabase.auth.refreshSession();
       setStatus("done");
       setTimeout(() => router.push("/dashboard"), 2000);
@@ -52,27 +44,30 @@ function JoinContent() {
     }
   };
 
+  const Logo = () => (
+    <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: "10px", textDecoration: "none", marginBottom: "20px" }}>
+      <img src="/logo.png" alt="Klientys" style={{ height: "34px", width: "auto" }} />
+      <span style={{ fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", fontWeight: 700, fontSize: "19px", color: "var(--l-text)" }}>Klientys</span>
+    </Link>
+  );
+
   if (status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-400">Vérification de l'invitation…</p>
+      <div className="d-page" style={{ alignItems: "center" }}>
+        <p style={{ color: "var(--l-text-3)" }}>Vérification de l'invitation…</p>
       </div>
     );
   }
 
   if (status === "error") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto text-2xl">✕</div>
-          <h1 className="text-xl font-bold text-gray-800">Invitation invalide</h1>
-          <p className="text-sm text-gray-500">{message}</p>
-          <button
-            onClick={() => router.push("/")}
-            className="text-indigo-600 text-sm hover:underline"
-          >
-            Retour à l'accueil
-          </button>
+      <div className="d-page" style={{ alignItems: "center" }}>
+        <div className="d-card" style={{ maxWidth: "420px", textAlign: "center" }}>
+          <Logo />
+          <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(191,51,51,.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: "20px", color: "#FC8181" }}>✕</div>
+          <h1 style={{ fontSize: "20px", fontWeight: 800, fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", marginBottom: "8px" }}>Invitation invalide</h1>
+          <p style={{ color: "var(--l-text-2)", fontSize: "14px", marginBottom: "24px" }}>{message}</p>
+          <Link href="/" className="l-btn l-btn-ghost" style={{ justifyContent: "center", width: "100%" }}>Retour à l'accueil</Link>
         </div>
       </div>
     );
@@ -80,42 +75,47 @@ function JoinContent() {
 
   if (status === "done") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto text-2xl">✓</div>
-          <h1 className="text-xl font-bold text-gray-800">Invitation acceptée !</h1>
-          <p className="text-sm text-gray-500">Vous rejoignez <strong>{invite?.tenant_name}</strong>. Redirection vers le tableau de bord…</p>
+      <div className="d-page" style={{ alignItems: "center" }}>
+        <div className="d-card" style={{ maxWidth: "420px", textAlign: "center" }}>
+          <Logo />
+          <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(29,122,74,.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: "20px", color: "#6DD9A0" }}>✓</div>
+          <h1 style={{ fontSize: "20px", fontWeight: 800, fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", marginBottom: "8px" }}>Invitation acceptée !</h1>
+          <p style={{ color: "var(--l-text-2)", fontSize: "14px", margin: 0 }}>
+            Vous rejoignez <strong style={{ color: "var(--l-text)" }}>{invite?.tenant_name}</strong>. Redirection vers le tableau de bord…
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full space-y-6">
-        <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center mx-auto text-2xl">✉</div>
-          <h1 className="text-xl font-bold text-gray-800">Invitation à rejoindre une équipe</h1>
-          <p className="text-sm text-gray-500">
+    <div className="d-page" style={{ alignItems: "center" }}>
+      <div className="d-card" style={{ maxWidth: "440px" }}>
+        <div style={{ textAlign: "center", marginBottom: "28px" }}>
+          <Logo />
+          <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(13,75,88,.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: "22px" }}>✉</div>
+          <h1 style={{ fontSize: "20px", fontWeight: 800, fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", marginBottom: "8px" }}>Invitation à rejoindre une équipe</h1>
+          <p style={{ color: "var(--l-text-2)", fontSize: "14px", margin: 0 }}>
             Vous avez été invité(e) à rejoindre{" "}
-            <strong>{invite?.tenant_name}</strong> en tant que{" "}
-            <strong>{ROLE_LABEL[invite?.role ?? ""] ?? invite?.role}</strong>.
+            <strong style={{ color: "var(--l-text)" }}>{invite?.tenant_name}</strong> en tant que{" "}
+            <strong style={{ color: "var(--l-text)" }}>{ROLE_LABEL[invite?.role ?? ""] ?? invite?.role}</strong>.
           </p>
         </div>
 
-        <div className="bg-gray-50 rounded-xl px-4 py-3 text-sm text-gray-600">
-          Email de l'invitation : <span className="font-medium text-gray-800">{invite?.email}</span>
+        <div style={{ background: "rgba(4,14,21,.5)", borderRadius: "10px", padding: "12px 16px", fontSize: "13px", color: "var(--l-text-2)", marginBottom: "24px", border: "1px solid rgba(170,189,216,.1)" }}>
+          Email de l'invitation : <span style={{ color: "var(--l-text)", fontWeight: 600 }}>{invite?.email}</span>
         </div>
 
-        <div className="space-y-3">
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           <button
             onClick={handleAccept}
             disabled={status === "accepting"}
-            className="w-full bg-indigo-600 text-white rounded-xl py-3 font-semibold text-sm hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            className="l-btn l-btn-primary"
+            style={{ width: "100%", justifyContent: "center", opacity: status === "accepting" ? 0.6 : 1 }}
           >
-            {status === "accepting" ? "Acceptation en cours…" : "Accepter l'invitation"}
+            {status === "accepting" ? "Acceptation en cours…" : "Accepter l'invitation →"}
           </button>
-          <p className="text-xs text-center text-gray-400">
+          <p style={{ fontSize: "12px", textAlign: "center", color: "var(--l-text-3)", margin: 0 }}>
             En acceptant, vous vous connecterez avec le compte associé à <strong>{invite?.email}</strong>.
           </p>
         </div>
@@ -127,8 +127,8 @@ function JoinContent() {
 export default function JoinPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <p className="text-gray-400">Chargement…</p>
+      <div className="d-page" style={{ alignItems: "center" }}>
+        <p style={{ color: "var(--l-text-3)" }}>Chargement…</p>
       </div>
     }>
       <JoinContent />

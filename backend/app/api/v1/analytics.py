@@ -175,3 +175,81 @@ async def get_summary(days: int = 30, tenant_id: str = Depends(get_current_tenan
         "conversion_lead_rate": conv_lead,
         "conversion_appt_rate": conv_appt,
     }
+
+
+# ── ROI / Demand potential (Google Trends via pytrends) ───────────────────────
+
+_CACHE_TTL = timedelta(hours=24)
+_VALID_PERIODS = {"week", "month", "quarter", "year"}
+
+
+@router.get("/roi-potential")
+async def get_roi_potential(
+    period: str = "month",
+    tenant_id: str = Depends(get_current_tenant),
+):
+    if period not in _VALID_PERIODS:
+        period = "month"
+
+    sb = get_supabase()
+
+    # ── Cache lookup ──────────────────────────────────────────────────────────
+    try:
+        cached = (
+            sb.table("tenant_roi_cache")
+            .select("data, computed_at")
+            .eq("tenant_id", tenant_id)
+            .eq("period", period)
+            .single()
+            .execute()
+        )
+        if cached.data:
+            computed_at = datetime.fromisoformat(
+                cached.data["computed_at"].replace("Z", "+00:00")
+            )
+            if datetime.now(timezone.utc) - computed_at < _CACHE_TTL:
+                return {**cached.data["data"], "cached_at": cached.data["computed_at"]}
+    except Exception:
+        pass
+
+    # ── Tenant info ───────────────────────────────────────────────────────────
+    tenant_row = (
+        sb.table("tenant")
+        .select("sector, country")
+        .eq("id", tenant_id)
+        .single()
+        .execute()
+    ).data or {}
+    sector  = tenant_row.get("sector", "other") or "other"
+    country = tenant_row.get("country", "BE") or "BE"
+
+    # ── Site + zones + offers ─────────────────────────────────────────────────
+    site_row = (
+        sb.table("site").select("id").eq("tenant_id", tenant_id).single().execute()
+    ).data
+
+    zones: list[str] = []
+    offer_names: list[str] = []
+    if site_row:
+        site_id = site_row["id"]
+        areas = sb.table("service_area").select("city").eq("site_id", site_id).execute()
+        zones = [a["city"] for a in (areas.data or []) if a.get("city")]
+        offers = sb.table("service_offer").select("name").eq("site_id", site_id).execute()
+        offer_names = [o["name"] for o in (offers.data or []) if o.get("name")]
+
+    # ── Fetch from pytrends ───────────────────────────────────────────────────
+    from app.services.trends import get_demand_data
+    data = await get_demand_data(sector, country, zones, period, offer_names)
+    data["period"] = period
+
+    # ── Store cache ───────────────────────────────────────────────────────────
+    now_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        sb.table("tenant_roi_cache").upsert(
+            {"tenant_id": tenant_id, "period": period, "data": data, "computed_at": now_iso},
+            on_conflict="tenant_id,period",
+        ).execute()
+    except Exception:
+        pass
+
+    return {**data, "cached_at": now_iso}

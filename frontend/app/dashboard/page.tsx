@@ -1,16 +1,19 @@
 "use client";
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { api, supabase } from "../../lib/api";
 import { useLanguage } from "../../contexts/LanguageContext";
 
+const DemandPotentialCard = dynamic(() => import("./analytics/DemandPotentialCard"), { ssr: false });
+
 const LEAD_STATUS_COLOR: Record<string, string> = {
-  new:         "bg-indigo-100 text-indigo-700",
-  contacted:   "bg-blue-100 text-blue-700",
+  new:         "bg-blue-100 text-blue-700",
+  contacted:   "bg-amber-100 text-amber-700",
   qualified:   "bg-purple-100 text-purple-700",
-  scheduled:   "bg-green-100 text-green-700",
-  closed_won:  "bg-emerald-100 text-emerald-700",
-  closed_lost: "bg-gray-100 text-gray-500",
+  scheduled:   "bg-primary-100 text-primary-700",
+  closed_won:  "bg-green-100 text-green-700",
+  closed_lost: "bg-red-100 text-red-500",
 };
 
 const NAV_ITEM_DEFS = [
@@ -147,7 +150,7 @@ export default function DashboardPage() {
         {tenantSlug && (
           <div className="flex items-center gap-3 mt-0.5">
             <a href={`/${tenantSlug}`} target="_blank" rel="noreferrer"
-              className="text-xs text-indigo-600 hover:underline inline-flex items-center gap-1">
+              className="text-xs text-primary-600 hover:underline inline-flex items-center gap-1">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
               </svg>
@@ -169,18 +172,18 @@ export default function DashboardPage() {
       {[showKpi("new_leads"), showKpi("pending"), showKpi("confirmed"), showKpi("contacts")].some(Boolean) && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {showKpi("new_leads") && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{t.kpi_new_leads}</p>
-              <p className="text-3xl font-bold text-indigo-600 mt-1">{loading ? "—" : newLeads.length}</p>
+              <p className="text-3xl font-bold text-primary-600 mt-1">{loading ? "—" : newLeads.length}</p>
               {newLeads.length > 0 && (
-                <Link href="/dashboard/leads" className="text-xs text-indigo-500 hover:underline mt-1 inline-block">
+                <Link href="/dashboard/leads" className="text-xs text-primary-500 hover:underline mt-1 inline-block">
                   {t.kpi_treat}
                 </Link>
               )}
             </div>
           )}
           {showKpi("pending") && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{t.kpi_pending}</p>
               <p className={`text-3xl font-bold mt-1 ${pending.length > 0 ? "text-amber-500" : "text-gray-300"}`}>
                 {loading ? "—" : pending.length}
@@ -193,14 +196,14 @@ export default function DashboardPage() {
             </div>
           )}
           {showKpi("confirmed") && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{t.kpi_confirmed_appts}</p>
               <p className="text-3xl font-bold text-green-600 mt-1">{loading ? "—" : confirmed.length}</p>
               <p className="text-xs text-gray-400 mt-1">{t.kpi_upcoming}</p>
             </div>
           )}
           {showKpi("contacts") && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{t.kpi_contacts}</p>
               <p className="text-3xl font-bold text-gray-700 mt-1">{loading || contactsCount === null ? "—" : contactsCount}</p>
               <p className="text-xs text-gray-400 mt-1">{t.kpi_distinct}</p>
@@ -229,7 +232,7 @@ export default function DashboardPage() {
                     {fmtDate(a.scheduled_at)} {t.dash_at} {fmtTime(a.scheduled_at)}
                   </span>
                   {a.service_offer?.name && (
-                    <span className="text-indigo-500 ml-2 text-xs">{a.service_offer.name}</span>
+                    <span className="text-primary-500 ml-2 text-xs">{a.service_offer.name}</span>
                   )}
                 </div>
                 <div className="flex gap-1.5 shrink-0">
@@ -258,10 +261,10 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         {/* Recent leads */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-50">
             <h2 className="font-semibold text-gray-800 text-sm">{t.dash_recent_leads}</h2>
-            <Link href="/dashboard/leads" className="text-xs text-indigo-600 hover:underline">{t.dash_see_all}</Link>
+            <Link href="/dashboard/leads" className="text-xs text-primary-600 hover:underline">{t.dash_see_all}</Link>
           </div>
           <ul className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
             {loading && (
@@ -300,10 +303,10 @@ export default function DashboardPage() {
         </div>
 
         {/* Upcoming confirmed appointments */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-50">
             <h2 className="font-semibold text-gray-800 text-sm">{t.dash_upcoming_appts}</h2>
-            <Link href="/dashboard/appointments" className="text-xs text-indigo-600 hover:underline">{t.dash_agenda}</Link>
+            <Link href="/dashboard/appointments" className="text-xs text-primary-600 hover:underline">{t.dash_agenda}</Link>
           </div>
           <ul className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
             {loading && (
@@ -317,9 +320,9 @@ export default function DashboardPage() {
             )}
             {confirmed.slice(0, 8).map((appt) => (
               <li key={appt.id} className="flex items-center px-5 py-3 gap-3">
-                <div className="shrink-0 text-center bg-indigo-50 rounded-lg px-2 py-1 min-w-[48px]">
-                  <p className="text-xs font-bold text-indigo-600 leading-none">{fmtDate(appt.scheduled_at)}</p>
-                  <p className="text-xs text-indigo-400 mt-0.5">{fmtTime(appt.scheduled_at)}</p>
+                <div className="shrink-0 text-center bg-primary-50 rounded-lg px-2 py-1 min-w-[48px]">
+                  <p className="text-xs font-bold text-primary-600 leading-none">{fmtDate(appt.scheduled_at)}</p>
+                  <p className="text-xs text-primary-400 mt-0.5">{fmtTime(appt.scheduled_at)}</p>
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-800 truncate">
@@ -343,15 +346,15 @@ export default function DashboardPage() {
             <Link key={item.href} href={item.href}
               className={`flex items-center gap-3 p-4 rounded-xl border transition-all active:scale-95 ${
                 item.accent
-                  ? "bg-indigo-600 border-indigo-600 text-white hover:bg-indigo-700"
-                  : "bg-white border-gray-200 text-gray-700 hover:border-indigo-300 hover:bg-indigo-50"
+                  ? "bg-primary-600 border-primary-600 text-white hover:bg-primary-700"
+                  : "bg-white border-gray-200 text-gray-700 hover:border-primary-300 hover:bg-primary-50"
               }`}>
-              <span className={item.accent ? "text-white opacity-90" : "text-indigo-500"}>
+              <span className={item.accent ? "text-white opacity-90" : "text-primary-500"}>
                 {item.icon}
               </span>
               <div className="min-w-0">
                 <p className="text-sm font-semibold leading-tight">{item.label}</p>
-                <p className={`text-xs leading-tight mt-0.5 truncate ${item.accent ? "text-indigo-200" : "text-gray-400"}`}>
+                <p className={`text-xs leading-tight mt-0.5 truncate ${item.accent ? "text-primary-200" : "text-gray-400"}`}>
                   {item.desc}
                 </p>
               </div>
@@ -364,12 +367,12 @@ export default function DashboardPage() {
       {(showKpi("leads_30d") || showKpi("rdv_30d") || showKpi("conv_rate") || showKpi("activity")) && (
       <div>
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{t.dash_perf_title}</p>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-5">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-5">
           {(showKpi("leads_30d") || showKpi("rdv_30d") || showKpi("conv_rate")) && (
           <div className={`grid gap-4 text-center ${perfGridClass}`}>
             {showKpi("leads_30d") && (
             <div className="space-y-1">
-              <p className="text-2xl font-bold text-indigo-600">{loading ? "—" : leadsLast30}</p>
+              <p className="text-2xl font-bold text-primary-600">{loading ? "—" : leadsLast30}</p>
               <p className="text-xs text-gray-500">{t.dash_requests}</p>
               <p className="text-[10px] text-gray-400">{t.dash_30d}</p>
             </div>
@@ -411,7 +414,7 @@ export default function DashboardPage() {
                         )}
                         {d.leads > 0 && (
                           <div
-                            className={`w-full bg-indigo-500 ${d.appts === 0 ? "rounded-t-sm" : ""}`}
+                            className={`w-full bg-primary-500 ${d.appts === 0 ? "rounded-t-sm" : ""}`}
                             style={{ height: Math.round((d.leads / maxBar) * 64) }}
                             title={`${d.leads} demandes`}
                           />
@@ -428,7 +431,7 @@ export default function DashboardPage() {
             )}
             <div className="flex items-center gap-4 mt-3">
               <span className="flex items-center gap-1.5 text-[10px] text-gray-400">
-                <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500 inline-block" /> {t.dash_requests}
+                <span className="w-2.5 h-2.5 rounded-sm bg-primary-500 inline-block" /> {t.dash_requests}
               </span>
               <span className="flex items-center gap-1.5 text-[10px] text-gray-400">
                 <span className="w-2.5 h-2.5 rounded-sm bg-green-400 inline-block" /> {t.dash_bookings}
@@ -439,6 +442,9 @@ export default function DashboardPage() {
         </div>
       </div>
       )}
+
+      {/* Potentiel de demande locale */}
+      {showKpi("demand_potential") && <DemandPotentialCard />}
 
       {/* Lien site */}
       {!loading && (
@@ -460,7 +466,7 @@ export default function DashboardPage() {
               href={`/${tenantSlug}`}
               target="_blank"
               rel="noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 transition-colors text-sm font-medium"
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-primary-200 text-primary-600 hover:bg-primary-50 hover:border-primary-400 transition-colors text-sm font-medium"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>

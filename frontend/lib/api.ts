@@ -183,6 +183,7 @@ export const api = {
 
   // Analytics
   getAnalyticsSummary: (days = 30) => apiFetch<any>(`/api/v1/analytics/summary?days=${days}`),
+  getRoiPotential: (period = "month") => apiFetch<any>(`/api/v1/analytics/roi-potential?period=${period}`),
 
   // Booking public (sans auth)
   getPublicAvailableDays: (tenantSlug: string, year: number, month: number) => {

@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
+import DemandPotentialCard from "./DemandPotentialCard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,12 +42,12 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  new:         "#6366f1",
-  contacted:   "#3b82f6",
-  qualified:   "#8b5cf6",
-  scheduled:   "#10b981",
-  closed_won:  "#22c55e",
-  closed_lost: "#94a3b8",
+  new:         "#0D4B58",
+  contacted:   "#4E7EA8",
+  qualified:   "#6B8A7A",
+  scheduled:   "#1A7A8F",
+  closed_won:  "#1D7A4A",
+  closed_lost: "#BF3333",
   inconnu:     "#e5e7eb",
 };
 
@@ -92,7 +93,7 @@ const SECTION_LABELS: Record<string, string> = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function KpiCard({ label, value, sub, color = "#6366f1", icon }: {
+function KpiCard({ label, value, sub, color = "#0D4B58", icon }: {
   label: string; value: string | number; sub?: string; color?: string; icon: React.ReactNode;
 }) {
   return (
@@ -109,7 +110,7 @@ function KpiCard({ label, value, sub, color = "#6366f1", icon }: {
   );
 }
 
-function BarRow({ label, value, max, color = "#6366f1" }: {
+function BarRow({ label, value, max, color = "#0D4B58" }: {
   label: string; value: number; max: number; color?: string;
 }) {
   const pct = Math.round((value / Math.max(max, 1)) * 100);
@@ -262,7 +263,7 @@ export default function AnalyticsPage() {
         <div className="flex bg-gray-100 rounded-lg p-0.5">
           {PERIODS.map((p) => (
             <button key={p.value} onClick={() => setDays(p.value)}
-              className={`px-3 py-1 rounded-md font-medium text-xs transition-colors ${days === p.value ? "bg-white shadow text-indigo-600" : "text-gray-500 hover:text-gray-800"}`}>
+              className={`px-3 py-1 rounded-md font-medium text-xs transition-colors ${days === p.value ? "bg-white shadow text-primary-600" : "text-gray-500 hover:text-gray-800"}`}>
               {p.label}
             </button>
           ))}
@@ -280,35 +281,35 @@ export default function AnalyticsPage() {
               label="Vues de page"
               value={hasBehavioural ? data.pageviews.toLocaleString("fr-BE") : "—"}
               sub={hasBehavioural ? `${data.unique_sessions} sessions` : "Tracking non actif"}
-              color="#3b82f6"
+              color="#4E7EA8"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>}
             />
             <KpiCard
               label="Demandes"
               value={data.leads_total}
               sub={`sur ${days} jours`}
-              color="#6366f1"
+              color="#0D4B58"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>}
             />
             <KpiCard
               label="Rendez-vous"
               value={data.appointments_total}
               sub={`${data.appointments_by_status["confirmed"] ?? 0} confirmés`}
-              color="#10b981"
+              color="#1D7A4A"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M16 2v4M8 2v4M3 10h18"/></svg>}
             />
             <KpiCard
               label="Contacts"
               value={data.contacts_total}
               sub="total CRM"
-              color="#8b5cf6"
+              color="#4A6757"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-4a4 4 0 11-8 0 4 4 0 018 0z"/></svg>}
             />
             <KpiCard
               label="Conversion"
               value={data.conversion_appt_rate != null ? `${data.conversion_appt_rate}%` : "—"}
               sub="Demandes → RDV confirmés"
-              color="#f59e0b"
+              color="#DDAA40"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>}
             />
           </div>
@@ -317,15 +318,15 @@ export default function AnalyticsPage() {
           <Card>
             <CardTitle>Entonnoir de conversion</CardTitle>
             <div className="grid grid-cols-5 gap-2">
-              <FunnelStep label="Vues" value={data.pageviews} color="#3b82f6" />
+              <FunnelStep label="Vues" value={data.pageviews} color="#4E7EA8" />
               <FunnelStep label="Form. ouvert" value={data.form_opens}
-                rate={pct(data.form_opens, data.pageviews)} color="#6366f1" />
+                rate={pct(data.form_opens, data.pageviews)} color="#2E94A8" />
               <FunnelStep label="Soumis" value={data.form_submits}
-                rate={pct(data.form_submits, data.form_opens)} color="#8b5cf6" />
+                rate={pct(data.form_submits, data.form_opens)} color="#1A7A8F" />
               <FunnelStep label="Demandes" value={data.leads_total}
-                rate={pct(data.leads_total, data.form_submits)} color="#0ea5e9" />
+                rate={pct(data.leads_total, data.form_submits)} color="#0D4B58" />
               <FunnelStep label="RDV" value={data.appointments_total}
-                rate={pct(data.appointments_total, data.leads_total)} color="#10b981" isLast />
+                rate={pct(data.appointments_total, data.leads_total)} color="#1D7A4A" isLast />
             </div>
             {!hasBehavioural && (
               <p className="mt-4 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
@@ -369,9 +370,9 @@ export default function AnalyticsPage() {
                 ? <Empty text="Tracking non actif — les données apparaîtront dès les premières visites." />
                 : <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-indigo-50 rounded-xl p-4 text-center">
-                        <p className="text-2xl font-extrabold text-indigo-700">{data.chatbot_conversations}</p>
-                        <p className="text-xs text-indigo-500 mt-1">Conversations</p>
+                      <div className="bg-primary-50 rounded-xl p-4 text-center">
+                        <p className="text-2xl font-extrabold text-primary-700">{data.chatbot_conversations}</p>
+                        <p className="text-xs text-primary-500 mt-1">Conversations</p>
                       </div>
                       <div className="bg-purple-50 rounded-xl p-4 text-center">
                         <p className="text-2xl font-extrabold text-purple-700">{data.chatbot_messages}</p>
@@ -449,6 +450,9 @@ export default function AnalyticsPage() {
               </div>
             </Card>
           )}
+
+          {/* ── Potentiel de demande locale ──────────────────────────────── */}
+          <DemandPotentialCard />
 
         </div>
       )}

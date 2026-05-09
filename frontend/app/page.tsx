@@ -2,191 +2,423 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/api";
-import { useLanguage, LangSelector } from "../contexts/LanguageContext";
-
-const PROFILE_ICONS = ["🩺", "🔧", "💆", "⚖️", "✂️", "🏠"];
-const PROFILE_KEYS_FR = [
-  "Infirmier·ère indépendant·e",
-  "Artisan & prestataire local",
-  "Kinésithérapeute / Coach",
-  "Consultant·e & profession libérale",
-  "Esthéticien·ne & beauté",
-  "Service à domicile",
-];
-const PROFILE_KEYS_EN = ["Independent nurse", "Artisan & local provider", "Physio / Coach", "Consultant & liberal profession", "Beauty professional", "Home service"];
-const PROFILE_KEYS_DE = ["Selbstständige Krankenschwester", "Handwerker & Anbieter", "Physio / Coach", "Berater & freier Beruf", "Beauty-Profi", "Haushaltsservice"];
-const PROFILE_KEYS_NL = ["Zelfstandige verpleegkundige", "Ambachtsman & aanbieder", "Fysiotherapeut / Coach", "Consultant & vrij beroep", "Schoonheidsspecialist", "Thuisdienst"];
-
-const PROFILE_LABELS: Record<string, string[]> = {
-  fr: PROFILE_KEYS_FR, en: PROFILE_KEYS_EN, de: PROFILE_KEYS_DE, nl: PROFILE_KEYS_NL,
-};
+import { LangSelector } from "../contexts/LanguageContext";
 
 export default function LandingPage() {
-  const { t, lang } = useLanguage();
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
+  const [navScrolled, setNavScrolled] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setLoggedIn(!!session);
-    });
+    supabase.auth.getSession().then(({ data: { session } }) => setLoggedIn(!!session));
   }, []);
 
-  const profiles = (PROFILE_LABELS[lang] ?? PROFILE_KEYS_FR).map((label, i) => ({
-    emoji: PROFILE_ICONS[i],
-    label,
-  }));
+  useEffect(() => {
+    const onScroll = () => setNavScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
-  const features = [
-    { icon: "🌐", title: t.feat_site_title,   description: t.feat_site_desc },
-    { icon: "📬", title: t.feat_inbox_title,  description: t.feat_inbox_desc },
-    { icon: "📅", title: t.feat_rdv_title,    description: t.feat_rdv_desc },
-    { icon: "🤖", title: t.feat_bot_title,    description: t.feat_bot_desc },
-    { icon: "⚡", title: t.feat_assist_title, description: t.feat_assist_desc },
-    { icon: "📊", title: t.feat_roi_title,    description: t.feat_roi_desc },
-  ];
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("on"); observer.unobserve(e.target); } }),
+      { threshold: 0.12 }
+    );
+    document.querySelectorAll("[data-r]").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
 
-  const steps = [
-    { number: "01", title: t.step1_title, description: t.step1_desc },
-    { number: "02", title: t.step2_title, description: t.step2_desc },
-    { number: "03", title: t.step3_title, description: t.step3_desc },
-  ];
+  useEffect(() => {
+    const barsEl = document.getElementById("hero-bars");
+    if (!barsEl) return;
+    barsEl.querySelectorAll(".lbar").forEach((b) => ((b as HTMLElement).style.height = "0"));
+    const bro = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) {
+        const heights = [45, 62, 38, 80, 55, 92, 70];
+        barsEl.querySelectorAll(".lbar").forEach((b, i) =>
+          setTimeout(() => ((b as HTMLElement).style.height = heights[i] + "%"), i * 80)
+        );
+        bro.disconnect();
+      }
+    }, { threshold: 0.3 });
+    bro.observe(barsEl);
+    return () => bro.disconnect();
+  }, []);
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
-      {/* Nav */}
-      <nav className="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="font-bold text-lg text-indigo-600">Présence&nbsp;Pro</span>
-          <div className="flex items-center gap-2">
+    <div className="l-page">
+
+      {/* ── NAV ── */}
+      <nav className={`l-nav${navScrolled ? " scrolled" : ""}`}>
+        <div className="l-nav-inner">
+          <Link href="/" className="l-nav-logo">
+            <img src="/logo.png" alt="Klientys" style={{ height: "30px", width: "auto" }} />
+            Klientys
+          </Link>
+          <ul className="l-nav-links">
+            <li><a href="#features">Fonctionnalités</a></li>
+            <li><a href="#how">Comment ça marche</a></li>
+            <li><a href="#pricing">Tarifs</a></li>
+          </ul>
+          <div className="l-nav-cta">
             <LangSelector />
             {loggedIn ? (
-              <Link
-                href="/dashboard"
-                className="text-sm bg-indigo-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                {t.nav_dashboard}
-              </Link>
+              <Link href="/dashboard" className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }}>Dashboard</Link>
             ) : (
               <>
-                <Link
-                  href="/login"
-                  className="text-sm text-gray-600 hover:text-indigo-600 font-medium px-3 py-2 rounded-lg transition-colors"
-                >
-                  {t.nav_login}
-                </Link>
-                <Link
-                  href="/onboarding"
-                  className="text-sm bg-indigo-600 text-white font-medium px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-                >
-                  {t.nav_signup}
-                </Link>
+                <Link href="/login" className="l-btn l-btn-ghost" style={{ padding: "9px 20px", fontSize: "14px" }}>Connexion</Link>
+                <Link href="/onboarding" className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }}>Commencer →</Link>
               </>
             )}
           </div>
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="pt-32 pb-24 px-6 bg-gradient-to-b from-indigo-50 to-white">
-        <div className="max-w-4xl mx-auto text-center space-y-6">
-          <span className="inline-block bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wide">
-            {t.land_badge}
-          </span>
-          <h1 className="text-4xl sm:text-5xl font-extrabold text-gray-900 leading-tight">
-            {t.land_h1}{" "}
-            <span className="text-indigo-600">{t.land_h1_accent}</span>
-          </h1>
-          <p className="text-lg text-gray-500 max-w-2xl mx-auto">{t.land_sub}</p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-            <Link href="/onboarding" className="bg-indigo-600 text-white font-semibold px-8 py-3 rounded-xl hover:bg-indigo-700 transition-colors text-sm">
-              {t.land_cta}
-            </Link>
-            <Link href="/login" className="border border-gray-200 text-gray-700 font-semibold px-8 py-3 rounded-xl hover:bg-gray-50 transition-colors text-sm">
-              {t.land_cta2}
-            </Link>
+      {/* ── HERO ── */}
+      <section className="l-hero">
+        <div className="l-hero-bg" />
+        <div className="l-hero-grid" />
+        <div className="l-hero-content">
+          <div className="l-hero-badge">✦ <span>Agents IA</span> — Telegram, WhatsApp & email intégrés</div>
+          <h1>Votre vitrine pro.<br /><span className="l-gradient-text">En 15 minutes.</span></h1>
+          <p className="l-hero-sub">Site web, réservations en ligne, CRM et agents IA. Tout-en-un pour infirmières, kinés, artisans et consultants.</p>
+          <div className="l-hero-ctas">
+            <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">Créer mon site gratuitement →</Link>
+            <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">Me connecter</Link>
           </div>
-          <p className="text-xs text-gray-400">{t.land_nocard}</p>
+          <div className="l-hero-stats">
+            <div className="l-hero-stat"><strong>500+</strong><span>Professionnels</span></div>
+            <div className="l-hero-stat"><strong>15 min</strong><span>Temps moyen</span></div>
+            <div className="l-hero-stat"><strong>3×</strong><span>Plus de RDV</span></div>
+            <div className="l-hero-stat"><strong>97%</strong><span>Satisfaction</span></div>
+          </div>
         </div>
-      </section>
 
-      {/* Features */}
-      <section className="py-20 px-6 bg-white">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900">{t.land_feat_title}</h2>
-            <p className="text-gray-500 mt-3 max-w-xl mx-auto">{t.land_feat_sub}</p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((f) => (
-              <div key={f.title} className="bg-gray-50 rounded-2xl p-6 space-y-3 hover:shadow-md transition-shadow">
-                <span className="text-3xl">{f.icon}</span>
-                <h3 className="font-semibold text-gray-900">{f.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{f.description}</p>
+        <div className="l-hero-visual">
+          <div style={{ position: "relative" }}>
+            <div className="l-float-card l-float-1">
+              <div className="l-float-label">Nouveaux RDV</div>
+              <div className="l-float-val">↑ +12</div>
+              <div style={{ fontSize: "11px", color: "var(--l-text-3)", marginTop: "2px" }}>cette semaine</div>
+            </div>
+            <div className="l-float-card l-float-2">
+              <div className="l-float-label">Nouveau lead</div>
+              <div style={{ fontSize: "13px", color: "var(--l-text)", marginTop: "2px" }}>🩺 Marie Dupont</div>
+              <div style={{ fontSize: "11px", color: "var(--l-text-3)" }}>il y a 3 minutes</div>
+            </div>
+            <div className="l-dash-frame">
+              <div className="l-dash-bar">
+                <div className="l-dash-dot" style={{ background: "#FF5F57" }} />
+                <div className="l-dash-dot" style={{ background: "#FEBC2E" }} />
+                <div className="l-dash-dot" style={{ background: "#28C840" }} />
+                <div style={{ flex: 1, height: "18px", background: "rgba(255,255,255,.06)", borderRadius: "4px", marginLeft: "8px" }} />
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section className="py-20 px-6 bg-indigo-50">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900">{t.land_how_title}</h2>
-            <p className="text-gray-500 mt-3">{t.land_how_sub}</p>
-          </div>
-          <div className="grid sm:grid-cols-3 gap-8">
-            {steps.map((s) => (
-              <div key={s.number} className="text-center space-y-3">
-                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-indigo-600 text-white font-bold text-lg">
-                  {s.number}
+              <div className="l-dash-body">
+                <div className="l-dash-sidebar">
+                  <div className="l-dash-nav-item active">📊 Dashboard</div>
+                  <div className="l-dash-nav-item">🌐 Mon site</div>
+                  <div className="l-dash-nav-item">👥 Clients</div>
+                  <div className="l-dash-nav-item">📅 Rendez-vous</div>
+                  <div className="l-dash-nav-item">🤖 Agents IA</div>
                 </div>
-                <h3 className="font-semibold text-gray-900 text-lg">{s.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{s.description}</p>
+                <div className="l-dash-main">
+                  <div className="l-dash-cards">
+                    <div className="l-dash-card">
+                      <div className="l-dash-card-label">Visiteurs / 30j</div>
+                      <div className="l-dash-card-value">1 248</div>
+                      <div className="l-dash-card-delta">↑ 18% ce mois</div>
+                    </div>
+                    <div className="l-dash-card">
+                      <div className="l-dash-card-label">Leads reçus</div>
+                      <div className="l-dash-card-value">34</div>
+                      <div className="l-dash-card-delta">↑ 8 nouveaux</div>
+                    </div>
+                    <div className="l-dash-card">
+                      <div className="l-dash-card-label">RDV confirmés</div>
+                      <div className="l-dash-card-value">21</div>
+                      <div className="l-dash-card-delta">↑ 12 ce mois</div>
+                    </div>
+                  </div>
+                  <div className="l-dash-chart">
+                    <div className="l-dash-chart-title">Réservations — 7 derniers jours</div>
+                    <div className="l-bars" id="hero-bars">
+                      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                        <div key={i} className="lbar" />
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── PROFESSIONS ── */}
+      <div className="l-logos-section">
+        <div className="l-container">
+          <div className="l-logos-label">Fait pour les professionnels de terrain</div>
+          <div className="l-logos-row">
+            {["🩺 Infirmier·ère", "🦴 Kinésithérapeute", "🔧 Artisan", "✂️ Esthéticien·ne", "⚖️ Consultant·e", "💆 Coach"].map((p) => (
+              <span key={p} className="l-logo-item">{p}</span>
             ))}
           </div>
         </div>
+      </div>
+
+      {/* ── FEATURES ── */}
+      <section className="l-features" id="features">
+        <div className="l-container">
+          <div className="l-section-tag" data-r=""><div className="l-tag">✦ Fonctionnalités</div></div>
+          <h2 className="l-section-h2" data-r="" data-d="1">Tout ce dont vous avez besoin.<br /><span className="l-gradient-text">Dans un seul outil.</span></h2>
+          <p className="l-section-sub" data-r="" data-d="2">Fini les dizaines d&apos;abonnements. Klientys centralise votre site, vos réservations et votre relation client.</p>
+          <div className="l-features-grid">
+
+            <div className="l-feat-card gold" data-r="" data-d="1">
+              <div className="l-feat-icon">⚡</div>
+              <h3>Site en 15 minutes</h3>
+              <p>Wizard guidé en 9 étapes : logo, couleurs, services, photos, témoignages. Votre vitrine pro en ligne immédiatement.</p>
+              <ul className="l-feat-list">
+                <li>9 étapes guidées pas à pas</li>
+                <li>Éditeur visuel no-code</li>
+                <li>Publication en 1 clic</li>
+                <li>SEO automatique inclus</li>
+              </ul>
+            </div>
+
+            <div className="l-feat-card blue" data-r="" data-d="2">
+              <div className="l-feat-icon">📅</div>
+              <h3>Réservations en ligne</h3>
+              <p>Calendrier intelligent avec plages horaires, pauses déjeuner et périodes bloquées. Confirmations automatiques par email.</p>
+              <ul className="l-feat-list">
+                <li>Créneaux disponibles en temps réel</li>
+                <li>Confirmation + rappel email</li>
+                <li>Gestion des indisponibilités</li>
+                <li>Widget embarquable</li>
+              </ul>
+            </div>
+
+            <div className="l-feat-card teal" data-r="" data-d="3">
+              <div className="l-feat-icon">🤝</div>
+              <h3>CRM & Agents IA</h3>
+              <p>Pipeline de leads, suivi des contacts et agents IA sur Telegram & WhatsApp pour répondre à vos clients 24/7.</p>
+              <ul className="l-feat-list">
+                <li>Pipeline visuel de leads</li>
+                <li>Agents IA Telegram & WhatsApp</li>
+                <li>Analytics comportementaux</li>
+                <li>Emails automatiques</li>
+              </ul>
+            </div>
+
+          </div>
+        </div>
       </section>
 
-      {/* Profiles */}
-      <section className="py-20 px-6 bg-white">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">{t.land_prof_title}</h2>
-          <p className="text-gray-500 mb-10">{t.land_prof_sub}</p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {profiles.map((p) => (
-              <div key={p.label} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-full px-4 py-2 text-sm font-medium text-gray-700">
-                <span>{p.emoji}</span>
-                <span>{p.label}</span>
+      {/* ── HOW IT WORKS ── */}
+      <section className="l-how" id="how">
+        <div className="l-container">
+          <div className="l-section-tag" data-r=""><div className="l-tag">✦ Processus</div></div>
+          <h2 className="l-section-h2" data-r="" data-d="1">De zéro à en ligne<br /><span className="l-gradient-text">en 3 étapes.</span></h2>
+          <div className="l-steps">
+            <div className="l-step" data-r="" data-d="1">
+              <div className="l-step-num">1</div>
+              <h3>Créez votre compte</h3>
+              <p>2 minutes, sans carte bancaire. Choisissez votre type de profession et c&apos;est parti.</p>
+            </div>
+            <div className="l-step" data-r="" data-d="2">
+              <div className="l-step-num">2</div>
+              <h3>Configurez en 15 min</h3>
+              <p>Notre wizard en 9 étapes vous guide : logo, services, disponibilités, zones d&apos;intervention.</p>
+            </div>
+            <div className="l-step" data-r="" data-d="3">
+              <div className="l-step-num">3</div>
+              <h3>Recevez vos clients</h3>
+              <p>Votre site est en ligne, vos créneaux visibles, vos agents IA répondent 24/7.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── STATS ── */}
+      <section className="l-stats">
+        <div className="l-container">
+          <div className="l-stats-grid" data-r="">
+            <div className="l-stat-item">
+              <div className="l-stat-num l-gradient-text">500+</div>
+              <div className="l-stat-label">Professionnels<br />sur Klientys</div>
+            </div>
+            <div className="l-stat-item">
+              <div className="l-stat-num l-gradient-text">15 min</div>
+              <div className="l-stat-label">Temps moyen<br />de création</div>
+            </div>
+            <div className="l-stat-item">
+              <div className="l-stat-num l-gradient-text">3×</div>
+              <div className="l-stat-label">Plus de rendez-vous<br />en moyenne</div>
+            </div>
+            <div className="l-stat-item">
+              <div className="l-stat-num l-gradient-text">97%</div>
+              <div className="l-stat-label">Clients satisfaits<br />sur 12 mois</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── PRICING ── */}
+      <section className="l-pricing" id="pricing">
+        <div className="l-container">
+          <div className="l-section-tag" data-r=""><div className="l-tag">✦ Tarifs</div></div>
+          <h2 className="l-section-h2" data-r="" data-d="1">Simple. Transparent.<br /><span className="l-gradient-text">Sans surprise.</span></h2>
+          <p className="l-section-sub" data-r="" data-d="2">Nos tarifs sont en cours de finalisation. Rejoignez la liste d&apos;attente maintenant — inscription gratuite.</p>
+          <div className="l-pricing-grid">
+
+            <div className="l-price-card" data-r="" data-d="1">
+              <div className="l-price-plan">Starter</div>
+              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-text-3)", letterSpacing: "-.01em" }}>À venir</div>
+              <p className="l-price-desc">Parfait pour démarrer votre présence en ligne.</p>
+              <div className="l-price-divider" />
+              <ul className="l-price-features">
+                <li>1 site vitrine</li>
+                <li>Réservations en ligne</li>
+                <li>50 contacts CRM</li>
+                <li>Emails automatiques</li>
+                <li>Support email</li>
+              </ul>
+              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>Rejoindre la liste d'attente</Link>
+            </div>
+
+            <div className="l-price-card featured" data-r="" data-d="2">
+              <div className="l-price-badge">Le plus populaire</div>
+              <div className="l-price-plan">Pro</div>
+              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-gold)", letterSpacing: "-.01em" }}>À venir</div>
+              <p className="l-price-desc">Pour les pros qui veulent tout automatiser.</p>
+              <div className="l-price-divider" />
+              <ul className="l-price-features">
+                <li>Site vitrine complet</li>
+                <li>Réservations illimitées</li>
+                <li>CRM complet + pipeline</li>
+                <li>Agents IA Telegram & WhatsApp</li>
+                <li>Analytics comportementaux</li>
+                <li>Widget embarquable</li>
+                <li>Support prioritaire 24/7</li>
+              </ul>
+              <Link href="/onboarding" className="l-btn l-btn-primary" style={{ width: "100%", justifyContent: "center" }}>Rejoindre la liste d'attente →</Link>
+            </div>
+
+            <div className="l-price-card" data-r="" data-d="3">
+              <div className="l-price-plan">Cabinet / Équipe</div>
+              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-text-3)", letterSpacing: "-.01em" }}>À venir</div>
+              <p className="l-price-desc">Pour les cabinets multi-praticiens et structures avec plusieurs membres.</p>
+              <div className="l-price-divider" />
+              <ul className="l-price-features">
+                <li>Multi-utilisateurs</li>
+                <li>Gestion d&apos;équipe</li>
+                <li>Calendriers séparés</li>
+                <li>API complète</li>
+                <li>Onboarding personnalisé</li>
+                <li>Account manager dédié</li>
+              </ul>
+              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>Nous contacter</Link>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ── TESTIMONIALS ── */}
+      <section className="l-testimonials">
+        <div className="l-container">
+          <div className="l-section-tag" data-r=""><div className="l-tag">✦ Témoignages</div></div>
+          <h2 className="l-section-h2" data-r="" data-d="1">Ils nous font <span className="l-gradient-text">confiance.</span></h2>
+          <div className="l-testi-grid" style={{ marginTop: "48px" }}>
+
+            <div className="l-testi-card" data-r="" data-d="1">
+              <div className="l-testi-stars">★★★★★</div>
+              <p className="l-testi-text">&quot;Mon site était en ligne en 18 minutes chrono. Mes patients prennent désormais RDV directement, je ne reçois plus d&apos;appels à 22h. Un vrai soulagement.&quot;</p>
+              <div className="l-testi-author">
+                <div className="l-testi-avatar" style={{ background: "rgba(13,75,88,.4)", color: "var(--l-teal-xl)" }}>SR</div>
+                <div>
+                  <div className="l-testi-name">Sophie Renard</div>
+                  <div className="l-testi-role">Infirmière libérale, Bruxelles</div>
+                </div>
               </div>
-            ))}
+            </div>
+
+            <div className="l-testi-card" data-r="" data-d="2">
+              <div className="l-testi-stars">★★★★★</div>
+              <p className="l-testi-text">&quot;L&apos;agent IA Telegram répond aux questions pendant que je suis en séance. Mon taux de no-show a chuté de 40% grâce aux rappels automatiques.&quot;</p>
+              <div className="l-testi-author">
+                <div className="l-testi-avatar" style={{ background: "rgba(170,189,216,.15)", color: "var(--l-blue)" }}>MD</div>
+                <div>
+                  <div className="l-testi-name">Marc Dupont</div>
+                  <div className="l-testi-role">Kinésithérapeute, Lyon</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="l-testi-card" data-r="" data-d="3">
+              <div className="l-testi-stars">★★★★★</div>
+              <p className="l-testi-text">&quot;J&apos;avais peur de ne pas m&apos;en sortir techniquement. Le wizard est tellement bien guidé que même moi j&apos;ai réussi ! Mon agenda est plein depuis le premier mois.&quot;</p>
+              <div className="l-testi-author">
+                <div className="l-testi-avatar" style={{ background: "rgba(221,170,64,.15)", color: "var(--l-gold)" }}>AB</div>
+                <div>
+                  <div className="l-testi-name">Aminata Bastin</div>
+                  <div className="l-testi-role">Esthéticienne, Paris</div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>
 
-      {/* Dark CTA */}
-      <section className="py-20 px-6 bg-gray-900 text-white">
-        <div className="max-w-3xl mx-auto text-center space-y-6">
-          <h2 className="text-3xl font-bold">{t.land_dark_title}</h2>
-          <p className="text-gray-400 text-lg">{t.land_dark_text}</p>
-          <Link href="/onboarding" className="inline-block bg-indigo-500 text-white font-semibold px-8 py-3 rounded-xl hover:bg-indigo-400 transition-colors text-sm">
-            {t.land_dark_btn}
-          </Link>
+      {/* ── FINAL CTA ── */}
+      <section className="l-cta-section">
+        <div className="l-container">
+          <div data-r="">
+            <h2>Prêt à décoller ?<br /><span className="l-gradient-text">Commencez maintenant.</span></h2>
+            <p>Rejoignez 500+ professionnels qui ont choisi Klientys.<br />14 jours gratuits, sans carte bancaire.</p>
+            <div className="l-cta-group">
+              <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">Créer mon compte gratuitement →</Link>
+              <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">Me connecter</Link>
+            </div>
+            <p className="l-cta-note">✓ Installation en 2 minutes &nbsp;·&nbsp; ✓ Annulation à tout moment &nbsp;·&nbsp; ✓ Support inclus</p>
+          </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-10 px-6 bg-white border-t border-gray-100">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="font-bold text-indigo-600">Présence Pro</span>
-          <div className="flex gap-6 text-sm text-gray-500">
-            <Link href="/login" className="hover:text-indigo-600 transition-colors">{t.land_footer_login}</Link>
-            <Link href="/onboarding" className="hover:text-indigo-600 transition-colors">{t.land_footer_signup}</Link>
+      {/* ── FOOTER ── */}
+      <footer className="l-footer">
+        <div className="l-footer-inner">
+          <div className="l-footer-top">
+            <div>
+              <Link href="/" className="l-footer-logo">
+                <img src="/logo.png" alt="Klientys" style={{ height: "28px", width: "auto" }} />
+                Klientys
+              </Link>
+              <p className="l-footer-desc">La plateforme tout-en-un pour créer votre site, gérer vos réservations et fidéliser vos clients.</p>
+            </div>
+            <div className="l-footer-col">
+              <h4>Produit</h4>
+              <a href="#features">Fonctionnalités</a>
+              <a href="#pricing">Tarifs</a>
+              <a href="#how">Comment ça marche</a>
+            </div>
+            <div className="l-footer-col">
+              <h4>Accès</h4>
+              <Link href="/login">Connexion</Link>
+              <Link href="/onboarding">Créer un compte</Link>
+            </div>
+            <div className="l-footer-col">
+              <h4>Contact</h4>
+              <a href="mailto:hello@klientys.com">hello@klientys.com</a>
+            </div>
           </div>
-          <p className="text-xs text-gray-400">© {new Date().getFullYear()} Présence Pro. {t.land_footer_rights}</p>
+          <div className="l-footer-bottom">
+            <span>© {new Date().getFullYear()} Klientys. Tous droits réservés.</span>
+            <LangSelector />
+          </div>
         </div>
       </footer>
+
     </div>
   );
 }

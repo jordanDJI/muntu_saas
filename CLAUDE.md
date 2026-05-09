@@ -1,10 +1,10 @@
-# CLAUDE.md — SaaS Présence Digitale
+# CLAUDE.md — Klientys
 
 ## Vue d'ensemble
 
-SaaS tout-en-un pour indépendants et TPE (infirmières, kinés, artisans…). Chaque tenant obtient un site vitrine public, un système de réservation, un CRM léger, et des agents IA de communication.
+**Klientys** — SaaS tout-en-un pour indépendants et TPE (infirmières, kinés, artisans…). Chaque tenant obtient un site vitrine public, un système de réservation, un CRM léger, des agents IA de communication, et un tableau de bord analytics avec potentiel de demande locale.
 
-**Stack** : Next.js 14 (App Router) · Tailwind CSS · FastAPI · Supabase (Postgres + Auth + Storage) · Resend (emails) · Google Gemini (IA)
+**Stack** : Next.js 14 (App Router) · Tailwind CSS · FastAPI · Supabase (Postgres + Auth + Storage) · Resend (emails) · Google Gemini (IA) · pytrends (Google Trends) · react-leaflet (cartographie)
 
 ---
 
@@ -22,9 +22,10 @@ SaaS/
 │   ├── app/
 │   │   ├── api/v1/    # Endpoints REST
 │   │   ├── models/    # Pydantic schemas
-│   │   ├── services/  # email, whatsapp, telegram, ocr, lead
+│   │   ├── services/  # email, whatsapp, telegram, ocr, lead, trends
 │   │   ├── middleware/ # tenant.py (JWT → tenant_id)
 │   │   └── core/      # config.py, supabase.py
+│   ├── supabase/migrations/  # Fichiers SQL de migration (001→018)
 │   └── main.py
 └── docs/
 ```
@@ -57,8 +58,11 @@ SaaS/
 | `PATCH /api/v1/sites/{id}` | Met à jour le site |
 | `POST /api/v1/analytics/event` | Enregistre un événement comportemental (public, via slug) |
 | `GET /api/v1/analytics/summary?days=30` | Résumé analytics agrégé (tenant authentifié) |
+| `GET /api/v1/analytics/roi-potential?period=month` | Potentiel de demande locale via Google Trends (tenant authentifié, cache 24h) |
 | `GET /api/v1/public/site/{slug}` | Données du site publié (public, sans auth) |
 | `GET /api/v1/public/site/{slug}?preview=true` | Données du site en draft (public, sans auth) |
+| `POST /api/v1/sites/{id}/publish` | Publie le site (set status=published) |
+| `GET /api/v1/auth/me/tenant` | Slug + nom du tenant courant (tenant authentifié) |
 
 ---
 
@@ -66,7 +70,7 @@ SaaS/
 
 | Table | Description |
 |-------|-------------|
-| `tenant` | Espace professionnel (slug, name, is_active) |
+| `tenant` | Espace professionnel (slug, name, is_active, sector, country) |
 | `site` | Site vitrine (title, tagline, description, address, site_style JSONB) |
 | `service_offer` | Prestations (lié au site) |
 | `contact` | CRM — clients/prospects |
@@ -78,6 +82,7 @@ SaaS/
 | `agent_config` | Config agents IA (vitrine, support_client, assistant_tenant) |
 | `membership` | Lien user ↔ tenant (owner/admin/member) |
 | `site_event` | Événements comportementaux du site public (session_id, event_type, section, data JSONB) |
+| `tenant_roi_cache` | Cache 24h du potentiel de demande locale par tenant + période (data JSONB, computed_at) |
 
 ### Champ `site_style` (JSONB)
 
@@ -92,7 +97,7 @@ Stocke les préférences visuelles et structurelles sans migration. Sous-clés u
   "pages_enabled": ["home", "about", "services", "contact"],
   "photos_option": "needs_stock",
   "photo_urls": {},
-  "address_parts": { "street": "Rue ...", "postal_code": "1000", "city": "Bruxelles" },
+  "address_parts": { "street": "Rue ...", "postal_code": "1000", "city": "Bruxelles", "country": "BE" },
   "tracking": { "ga4_id": "", "meta_pixel_id": "", "gtm_id": "" }
 }
 ```
@@ -126,10 +131,10 @@ L'adresse est stockée à la fois dans `site.address` (string consolidée, pour 
 
 ## Dashboard principal (`/dashboard`)
 
-- Lien vers le site public du tenant en haut (header) : `/{tenantSlug}` et `/{tenantSlug}?preview=1`
-- Lien "Voir mon site public" en bas de page
+- Liens en haut (header) : `/{tenantSlug}` (site publié) et `/{tenantSlug}?preview=1` (preview draft)
+- Boutons en bas : "Prévisualiser mon site" (`?preview=1`, toujours actif) et "Voir le site publié" (`/{slug}`)
 - Affiche "Site non configuré" (grisé) si le slug n'est pas encore défini
-- Le `tenantSlug` est récupéré via la jointure Supabase `membership → tenant(slug)`
+- Le `tenantSlug` est récupéré via `api.getMyTenant()` → `GET /api/v1/auth/me/tenant` (contourne les RLS Supabase)
 
 ## Site-builder (`/dashboard/site-builder`)
 
@@ -140,7 +145,7 @@ Wizard 9 étapes :
 | 0 | Logo, couleurs, police | — |
 | 1 | Pages activées, photos | — |
 | 2 | Titre *, tagline, description | `title` obligatoire |
-| 3 | Téléphone, email, adresse (rue / CP / ville), réseaux | format email |
+| 3 | Téléphone, email, adresse (rue / CP / ville / **pays**), réseaux | format email |
 | 4 | Zones d'intervention (autocomplete Nominatim) | — |
 | 5 | Prestations (nom *, description, durée, prix) | nom obligatoire si autres champs remplis |
 | 6 | Atouts (icône SVG, titre *, description) | titre obligatoire si description remplie |
@@ -165,6 +170,57 @@ Les icônes des atouts sont des SVG inline (20 icônes disponibles dans `ATOUT_I
 - **Multi-lead par client** : un même contact peut générer plusieurs leads (plusieurs RDV, plusieurs demandes). `ensure_lead()` insère toujours une nouvelle ligne — pas de contrainte d'unicité par contact.
 - Les RDV en attente (pending) ont un pipeline restreint : uniquement `new → confirmed / refused`. Les autres sources ont le pipeline complet.
 - Source `booking` = réservation publique ; source `contact_form` = formulaire de contact du site vitrine.
+
+## Pays du tenant
+
+- Stocké dans `tenant.country` (code ISO 2 lettres, défaut `"BE"`).
+- Migration : `backend/supabase/migrations/017_tenant_country.sql`
+- **Onboarding** (`/onboarding`) : sélecteur pays à l'étape 2 (entre secteur et bouton valider), liste complète dans `frontend/lib/countries.ts`.
+- **Site-builder** (`/dashboard/site-builder`) : sélecteur pays à l'étape 3 après le champ ville, enregistré dans `site_style.address_parts.country`.
+- Le backend (`onboarding.py`, `TenantSetupIn`) accepte `country: str = "BE"` et l'insère dans la table `tenant`.
+- Utilisé par le service pytrends pour gérer les tendances locales (ex. recherches google par pays).
+
+---
+
+## Potentiel de demande locale (`/api/v1/analytics/roi-potential`)
+
+Estime la demande pour le secteur du tenant en utilisant **pytrends** (API non officielle Google Trends), filtrée par pays et zones d'intervention.
+
+### Service `backend/app/services/trends.py`
+
+- `SECTOR_KEYWORDS` — dict secteur → liste de mots-clés Google Trends
+- `TIMEFRAMES` — week / month / quarter / year → chaînes pytrends (`"now 7-d"`, `"today 1-m"`, etc.)
+- `_semaphore = asyncio.Semaphore(3)` — max 3 appels pytrends simultanés (anti rate-limit Google)
+- `_geocode(name, country_code)` — géocodage async via Nominatim (OpenStreetMap) pour obtenir lat/lng des zones
+- `_run_pytrends(keywords, geo, timeframe, zones)` — exécuté dans un thread via `run_in_executor`
+- `get_demand_data(sector, country, zones, period, offer_names)` — fonction principale async
+
+### Endpoint `GET /api/v1/analytics/roi-potential`
+
+- Auth : tenant authentifié
+- Paramètre : `period` = `week | month | quarter | year` (défaut `month`)
+- Cache 24h dans `tenant_roi_cache` (upsert sur `tenant_id, period`)
+- Migration : `backend/supabase/migrations/018_roi_cache.sql`
+- Retourne : `aggregate_score` (0-100), `keywords`, `interest_over_time` (série), `zones` (score + lat/lng par ville), `related_queries`, `period`, `cached_at`
+
+### Composants frontend
+
+- **`DemandPotentialCard`** (`frontend/app/dashboard/analytics/DemandPotentialCard.tsx`) — carte partagée : onglets période, score agrégé, mini-graphique SVG, barres par zone, carte heatmap, requêtes associées. Affiche un bandeau amber si le backend est inaccessible (local/prod).
+- **`DemandMap`** (`frontend/app/dashboard/analytics/DemandMap.tsx`) — carte react-leaflet avec `CircleMarker` par zone (couleur selon score : vert ≥ 67, amber ≥ 34, rouge < 34). Importé avec `dynamic(..., { ssr: false })` pour éviter les erreurs SSR de Leaflet.
+
+### Intégration dashboard / analytics
+
+- **`/dashboard/analytics`** : `DemandPotentialCard` toujours affiché en bas de page.
+- **`/dashboard`** : affiché uniquement si le KPI `demand_potential` est activé (`user_metadata.dashboard_kpis`).
+- **`/dashboard/settings`** (section Métriques) : KPI `"Potentiel de demande locale"` ajouté à `METRIC_DEFS`, toggle pour l'activer sur le dashboard. Preview `DemandPotentialCard` affiché dans la section paramètres.
+
+### Dépendances backend
+
+```
+pytrends==4.9.2   # pip install pytrends
+```
+
+---
 
 ## Analytics comportementaux (`/dashboard/analytics`)
 
@@ -202,7 +258,7 @@ Retourne pour la période choisie (`?days=30`) :
 - CRM : `contacts_total`, `leads_total`, `leads_by_source`, `leads_by_status`
 - RDV : `appointments_total`, `appointments_by_status`
 - Comportemental : `pageviews`, `unique_sessions`, `sections_viewed`, `cta_clicks`, `form_opens`, `form_submits`, `chatbot_conversations`, `chatbot_messages`
-- Calculé : `conversion_lead_rate` (leads / sessions), `conversion_appt_rate` (RDV / leads)
+- Calculé : `conversion_lead_rate` (leads / sessions), `conversion_appt_rate` (RDV confirmés / leads, plafonné à 100%)
 
 Dégrade gracieusement si la table `site_event` n'existe pas encore (retourne zéros).
 
@@ -219,6 +275,16 @@ FRONTEND_URL=https://...
 APP_URL=https://...          # doit être HTTPS (webhook Telegram)
 AGENT_LINK_SECRET=
 ```
+
+## Variables d'environnement (frontend Vercel)
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_API_URL=https://...   # URL du backend FastAPI (obligatoire en prod)
+```
+
+> `SUPABASE_SERVICE_ROLE_KEY` n'est **pas** nécessaire côté frontend — le backend l'utilise via `GET /api/v1/public/site/{slug}`.
 
 ---
 

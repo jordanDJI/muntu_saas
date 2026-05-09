@@ -15,7 +15,7 @@ function CopyBlock({ label, code, id }: { label: string; code: string; id: strin
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-gray-700">{label}</label>
         <button onClick={copy}
-          className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${copied ? "bg-green-100 text-green-700" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"}`}>
+          className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${copied ? "bg-green-100 text-green-700" : "bg-primary-50 text-primary-600 hover:bg-primary-100"}`}>
           {copied ? "Copié ✓" : "Copier"}
         </button>
       </div>
@@ -36,7 +36,7 @@ function WidgetCard({ number, title, subtitle, children }: WidgetCardProps) {
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-3">
-        <span className="w-8 h-8 bg-indigo-100 text-indigo-600 rounded-lg flex items-center justify-center text-sm font-bold">{number}</span>
+        <span className="w-8 h-8 bg-primary-100 text-primary-600 rounded-lg flex items-center justify-center text-sm font-bold">{number}</span>
         <div>
           <h2 className="font-semibold text-gray-800">{title}</h2>
           <p className="text-xs text-gray-500">{subtitle}</p>
@@ -161,9 +161,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </div>
 
       {/* Loader info */}
-      <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 space-y-2">
-        <p className="text-sm font-semibold text-indigo-800">Étape préalable : chargeur universel</p>
-        <p className="text-xs text-indigo-700">Ajoutez ce script une seule fois avant <code>&lt;/body&gt;</code> pour activer tous les widgets ci-dessous.</p>
+      <div className="bg-primary-50 border border-primary-100 rounded-xl px-4 py-3 space-y-2">
+        <p className="text-sm font-semibold text-primary-800">Étape préalable : chargeur universel</p>
+        <p className="text-xs text-primary-700">Ajoutez ce script une seule fois avant <code>&lt;/body&gt;</code> pour activer tous les widgets ci-dessous.</p>
         {!loading && <CopyBlock label="Script universel (une fois par site)" code={loaderTag} id="loader-code" />}
       </div>
 
@@ -215,7 +215,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         {(!siteData?.ga4_id && !siteData?.meta_pixel_id && !siteData?.gtm_id) ? (
           <div className="bg-gray-50 border rounded-xl px-4 py-4 text-sm text-gray-600 space-y-2">
             <p>Aucun ID de tracking configuré pour l&apos;instant.</p>
-            <Link href="/dashboard/site-builder" className="text-indigo-600 hover:underline font-medium">
+            <Link href="/dashboard/site-builder" className="text-primary-600 hover:underline font-medium">
               → Configurer dans le constructeur de site (étape 9)
             </Link>
           </div>

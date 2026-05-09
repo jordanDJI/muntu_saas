@@ -14,3 +14,4 @@ email-validator
 google-genai==1.10.0
 python-multipart==0.0.12
 Pillow==11.2.1
+pytrends==4.9.2

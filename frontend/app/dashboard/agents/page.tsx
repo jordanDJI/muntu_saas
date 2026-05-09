@@ -156,7 +156,7 @@ export default function AgentsPage() {
             defaultValue={cfg.system_prompt ?? ""}
             onBlur={(e) => { if (e.target.value !== (cfg.system_prompt ?? "")) handleUpdate(type, "system_prompt", e.target.value); }}
             placeholder={`Ex : Tu es l'assistant de ${userName || "votre nom"}, réponds toujours en français, sois bienveillant…`}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary-400 bg-gray-50"
           />
           {saveOk === type && <p className="text-xs text-green-600">✓ Sauvegardé</p>}
         </div>
@@ -182,21 +182,21 @@ export default function AgentsPage() {
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
                       Token — créez le bot sur{" "}
-                      <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="underline text-indigo-600">@BotFather</a>
+                      <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="underline text-primary-600">@BotFather</a>
                     </label>
                     <input
                       type="text"
                       defaultValue={cfg.telegram_bot_token ?? ""}
                       onBlur={(e) => { const v = e.target.value.trim(); if (v !== (cfg.telegram_bot_token ?? "")) { handleUpdate(type, "telegram_bot_token", v); setBotUsername(""); } }}
                       placeholder="123456789:AAF..."
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-400"
                     />
                   </div>
                   <div className="flex items-center gap-3">
                     <button
                       onClick={setupTelegram}
                       disabled={tgLoading || !cfg.telegram_bot_token}
-                      className="text-sm bg-indigo-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+                      className="text-sm bg-primary-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-primary-700 disabled:opacity-40 transition-colors"
                     >
                       {tgLoading ? "Enregistrement…" : "Enregistrer le webhook"}
                     </button>
@@ -229,7 +229,7 @@ export default function AgentsPage() {
                 type="number" min={30} max={1440}
                 defaultValue={cfg.synthesis_schedule_minutes}
                 onBlur={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v !== cfg.synthesis_schedule_minutes) handleUpdate(type, "synthesis_schedule_minutes", v); }}
-                className="w-32 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="w-32 border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-400"
               />
               <p className="text-xs text-gray-400">Min 30 min — Max 1440 min (24h)</p>
             </div>
@@ -287,7 +287,7 @@ export default function AgentsPage() {
                   isSelected ? "bg-gray-700 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
                 }`}
               >
-                <div className={`shrink-0 ${isSelected ? "text-indigo-400" : "text-gray-500"}`}>
+                <div className={`shrink-0 ${isSelected ? "text-primary-400" : "text-gray-500"}`}>
                   <AgentIcon type={type} />
                 </div>
                 <div className="min-w-0">
@@ -314,7 +314,7 @@ export default function AgentsPage() {
           </svg>
           <span className="text-sm font-medium">Synthèses</span>
           {syntheses.length > 0 && (
-            <span className="ml-auto bg-indigo-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none">
+            <span className="ml-auto bg-primary-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none">
               {syntheses.length}
             </span>
           )}
@@ -335,7 +335,7 @@ export default function AgentsPage() {
               <button
                 onClick={() => setActiveTab("chat")}
                 className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "chat" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700"
+                  activeTab === "chat" ? "border-primary-600 text-primary-600" : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -346,7 +346,7 @@ export default function AgentsPage() {
               <button
                 onClick={() => setActiveTab("config")}
                 className={`inline-flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "config" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700"
+                  activeTab === "config" ? "border-primary-600 text-primary-600" : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -361,8 +361,8 @@ export default function AgentsPage() {
                 <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
                   {chatMessages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-center space-y-3 text-gray-400">
-                      <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center">
-                        <svg className="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                      <div className="w-14 h-14 rounded-2xl bg-primary-100 flex items-center justify-center">
+                        <svg className="w-7 h-7 text-primary-600" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
                           <path strokeLinecap="round" d="M9.75 3.104A9 9 0 0112 3c4.97 0 9 4.03 9 9s-4.03 9-9 9-9-4.03-9-9c0-1.04.177-2.04.5-2.97"/>
                           <circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/>
                         </svg>
@@ -377,13 +377,13 @@ export default function AgentsPage() {
                   {chatMessages.map((msg, i) => (
                     <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                       {msg.role === "assistant" && (
-                        <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center mr-2 mt-1 shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center mr-2 mt-1 shrink-0">
                           <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9.75 1.104A9 9 0 1118.5 10a9.006 9.006 0 01-8.75-8.896z"/></svg>
                         </div>
                       )}
                       <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                         msg.role === "user"
-                          ? "bg-indigo-600 text-white rounded-tr-sm"
+                          ? "bg-primary-600 text-white rounded-tr-sm"
                           : "bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm"
                       }`}>
                         <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -392,7 +392,7 @@ export default function AgentsPage() {
                   ))}
                   {chatLoading && (
                     <div className="flex justify-start">
-                      <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center mr-2 shrink-0">
+                      <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center mr-2 shrink-0">
                         <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9.75 1.104A9 9 0 1118.5 10a9.006 9.006 0 01-8.75-8.896z"/></svg>
                       </div>
                       <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
@@ -417,13 +417,13 @@ export default function AgentsPage() {
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
                       placeholder="Posez votre question… (Entrée pour envoyer)"
                       disabled={!isChatActive}
-                      className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-50 bg-gray-50 overflow-y-auto"
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 bg-gray-50 overflow-y-auto"
                       style={{ height: `${inputHeight}px` }}
                     />
                     <button
                       onClick={sendChat}
                       disabled={chatLoading || !chatInput.trim() || !isChatActive}
-                      className="h-[42px] w-[42px] bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 disabled:opacity-40 transition-colors shrink-0"
+                      className="h-[42px] w-[42px] bg-primary-600 text-white rounded-xl flex items-center justify-center hover:bg-primary-700 disabled:opacity-40 transition-colors shrink-0"
                     >
                       <svg className="w-4 h-4 rotate-90" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5m-7 7l7-7 7 7" />
