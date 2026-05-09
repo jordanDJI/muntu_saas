@@ -57,6 +57,8 @@ SaaS/
 | `PATCH /api/v1/sites/{id}` | Met à jour le site |
 | `POST /api/v1/analytics/event` | Enregistre un événement comportemental (public, via slug) |
 | `GET /api/v1/analytics/summary?days=30` | Résumé analytics agrégé (tenant authentifié) |
+| `GET /api/v1/public/site/{slug}` | Données du site publié (public, sans auth) |
+| `GET /api/v1/public/site/{slug}?preview=true` | Données du site en draft (public, sans auth) |
 
 ---
 
@@ -116,10 +118,18 @@ L'adresse est stockée à la fois dans `site.address` (string consolidée, pour 
 
 ---
 
+## Site public (`/[slug]`)
+
+- Les données du site sont récupérées via `GET /api/v1/public/site/{slug}` (backend, clé admin) — plus de dépendance à `SUPABASE_SERVICE_ROLE_KEY` côté frontend.
+- Mode normal : requiert `status = "published"` (le tenant doit avoir cliqué "Publier" dans le site-builder).
+- Mode preview (`?preview=true`) : affiche le brouillon sans filtre de statut + bannière `PreviewBanner`.
+
 ## Dashboard principal (`/dashboard`)
 
-- Lien vers le site public du tenant en bas de page : `/{tenantSlug}` (target `_blank`)
+- Lien vers le site public du tenant en haut (header) : `/{tenantSlug}` et `/{tenantSlug}?preview=1`
+- Lien "Voir mon site public" en bas de page
 - Affiche "Site non configuré" (grisé) si le slug n'est pas encore défini
+- Le `tenantSlug` est récupéré via la jointure Supabase `membership → tenant(slug)`
 
 ## Site-builder (`/dashboard/site-builder`)
 

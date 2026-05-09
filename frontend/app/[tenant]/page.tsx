@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
 import Script from "next/script";
 import ContactForm from "./contact-form";
 import ChatbotWidget from "../../components/ChatbotWidget";
@@ -37,32 +36,17 @@ const FONT_FAMILY: Record<string, string> = {
   tech:       "Consolas, 'Courier New', monospace",
 };
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function getSiteData(slug: string, preview = false) {
-  const { data: tenant } = await supabaseAdmin
-    .from("tenant")
-    .select("id, name")
-    .eq("slug", slug)
-    .single();
-
-  if (!tenant) return null;
-
-  let query = supabaseAdmin
-    .from("site")
-    .select("*, service_offer(*), service_area(*), testimonial(*)")
-    .eq("tenant_id", tenant.id);
-
-  if (!preview) {
-    query = query.eq("status", "published");
+  try {
+    const url = `${API_URL}/api/v1/public/site/${encodeURIComponent(slug)}${preview ? "?preview=true" : ""}`;
+    const res = await fetch(url, { cache: preview ? "no-store" : "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
   }
-
-  const { data: site } = await query.single();
-  if (!site) return null;
-  return { ...site, tenant };
 }
 
 export default async function TenantSitePage({
