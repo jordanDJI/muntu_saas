@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from app.core.supabase import get_supabase_admin
+from app.middleware.tenant import get_current_tenant
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -53,3 +54,13 @@ async def refresh_token(body: RefreshIn):
         raise
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session invalide ou expirée")
+
+
+@router.get("/me/tenant")
+async def get_my_tenant(tenant_id: str = Depends(get_current_tenant)):
+    """Retourne le slug et le nom du tenant courant — utilisé par le dashboard."""
+    sb = get_supabase_admin()
+    res = sb.table("tenant").select("id, slug, name").eq("id", tenant_id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Tenant introuvable")
+    return res.data

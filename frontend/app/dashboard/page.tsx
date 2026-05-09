@@ -65,13 +65,11 @@ export default function DashboardPage() {
         if (user) {
           const prefs = user.user_metadata?.dashboard_kpis;
           if (Array.isArray(prefs)) setKpis(prefs);
-          const { data: membership } = await supabase
-            .from("membership")
-            .select("tenant:tenant_id(slug)")
-            .eq("user_id", user.id)
-            .single();
-          if (membership?.tenant) setTenantSlug((membership.tenant as any).slug ?? "");
         }
+        try {
+          const tenant = await api.getMyTenant();
+          if (tenant?.slug) setTenantSlug(tenant.slug);
+        } catch { /* slug reste vide */ }
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     };
@@ -442,26 +440,42 @@ export default function DashboardPage() {
       </div>
       )}
 
-      {/* Lien site public */}
-      {tenantSlug ? (
-        <a
-          href={`/${tenantSlug}`}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 transition-colors text-sm font-medium"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-          </svg>
-          Voir mon site public
-        </a>
-      ) : !loading && (
-        <div className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 text-sm">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-          </svg>
-          Site non configuré
-        </div>
+      {/* Lien site */}
+      {!loading && (
+        tenantSlug ? (
+          <div className="flex gap-2">
+            <a
+              href={`/${tenantSlug}?preview=1`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors text-sm font-medium"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+              Prévisualiser mon site
+            </a>
+            <a
+              href={`/${tenantSlug}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 transition-colors text-sm font-medium"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+              </svg>
+              Voir le site publié
+            </a>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 text-sm">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+            </svg>
+            Site non configuré
+          </div>
+        )
       )}
     </div>
   );

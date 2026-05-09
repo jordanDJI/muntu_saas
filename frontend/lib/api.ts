@@ -178,6 +178,9 @@ export const api = {
   removeMember: (userId: string) =>
     apiFetch(`/api/v1/members/${userId}`, { method: "DELETE" }),
 
+  // Tenant info
+  getMyTenant: () => apiFetch<{ id: string; slug: string; name: string }>("/api/v1/auth/me/tenant"),
+
   // Analytics
   getAnalyticsSummary: (days = 30) => apiFetch<any>(`/api/v1/analytics/summary?days=${days}`),
 

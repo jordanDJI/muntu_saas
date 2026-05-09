@@ -318,15 +318,10 @@ export default function SiteBuilderPage() {
       setSiteId(s.id);
 
       // Récupérer le slug tenant pour le lien de prévisualisation
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: membership } = await supabase
-          .from("membership")
-          .select("tenant:tenant_id(slug)")
-          .eq("user_id", user.id)
-          .single();
-        if (membership?.tenant) setTenantSlug((membership.tenant as any).slug ?? "");
-      }
+      try {
+        const tenant = await api.getMyTenant();
+        if (tenant?.slug) setTenantSlug(tenant.slug);
+      } catch { /* slug reste vide */ }
 
       // Style
       const style = s.site_style ?? {};
