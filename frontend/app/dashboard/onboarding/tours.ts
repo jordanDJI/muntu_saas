@@ -11,7 +11,6 @@ const welcomeSteps: Step[] = [
       "Je vais vous faire visiter votre espace professionnel en moins d'une minute. Ce guide vous montre chaque outil à votre disposition. Vous pourrez le relancer à tout moment.",
     selector: "body",
     side: "bottom",
-    align: "center",
     pointerPadding: 0,
     pointerRadius: 0,
   },
