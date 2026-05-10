@@ -13,11 +13,11 @@ router = APIRouter(prefix="/public", tags=["Public"])
 async def get_public_site(slug: str, preview: bool = Query(False)):
     sb = get_supabase()
 
-    tenant_res = sb.table("tenant").select("id, name").eq("slug", slug).single().execute()
+    tenant_res = sb.table("tenant").select("id, name").eq("slug", slug).limit(1).execute()
     if not tenant_res.data:
         raise HTTPException(status_code=404, detail="Site introuvable")
 
-    tenant = tenant_res.data
+    tenant = tenant_res.data[0]
 
     query = (
         sb.table("site")

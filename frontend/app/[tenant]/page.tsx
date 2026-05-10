@@ -27,13 +27,13 @@ const COLOR_HEX: Record<string, { hero: string; accent: string; light: string }>
 };
 
 const FONT_FAMILY: Record<string, string> = {
-  modern:     "system-ui, -apple-system, sans-serif",
-  classic:    "Georgia, 'Times New Roman', serif",
-  handwritten:"'Brush Script MT', 'Segoe Script', cursive",
-  rounded:    "ui-rounded, 'Nunito', 'Varela Round', sans-serif",
-  bold:       "Impact, 'Arial Black', sans-serif",
-  humanist:   "'Gill Sans', 'Trebuchet MS', sans-serif",
-  tech:       "Consolas, 'Courier New', monospace",
+  modern: "system-ui, -apple-system, sans-serif",
+  classic: "Georgia, 'Times New Roman', serif",
+  handwritten: "'Brush Script MT', 'Segoe Script', cursive",
+  rounded: "ui-rounded, 'Nunito', 'Varela Round', sans-serif",
+  bold: "Impact, 'Arial Black', sans-serif",
+  humanist: "'Gill Sans', 'Trebuchet MS', sans-serif",
+  tech: "Consolas, 'Courier New', monospace",
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -68,6 +68,7 @@ export default async function TenantSitePage({
       </main>
     );
   }
+
 
   const previewBanner = isPreview ? <PreviewBanner siteId={site.id} /> : null;
 
@@ -155,7 +156,7 @@ export default async function TenantSitePage({
       {/* ── Behaviour tracker ────────────────────────────────────────────── */}
       <Script id="pp-tracker" strategy="afterInteractive">{`
         (function(){
-          var SLUG='${tenantSlug}',API='${process.env.NEXT_PUBLIC_API_URL??'http://localhost:8000'}';
+          var SLUG='${tenantSlug}',API='${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'}';
           var sid=sessionStorage.getItem('_pp_sid');
           if(!sid){sid=Math.random().toString(36).slice(2)+Date.now().toString(36);sessionStorage.setItem('_pp_sid',sid);}
           function send(type,section,data){
