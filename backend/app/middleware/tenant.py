@@ -1,12 +1,13 @@
 import logging
 from functools import lru_cache
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 import httpx
 from jose import jwk as jose_jwk, jwt as jose_jwt
 from jose.exceptions import JWTError, ExpiredSignatureError
 
 from app.core.config import settings
+from app.core.supabase import get_supabase_admin
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 logger = logging.getLogger(__name__)
@@ -65,8 +66,40 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     }
 
 
-async def get_current_tenant(user: dict = Depends(get_current_user)) -> str:
-    tenant_id = user.get("app_metadata", {}).get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aucun tenant associé")
-    return tenant_id
+async def get_current_tenant(request: Request, user: dict = Depends(get_current_user)) -> str:
+    user_id = user.get("sub")
+
+    # Explicit tenant selection via header (multi-tenant switching)
+    header_tenant_id = request.headers.get("X-Tenant-Id")
+    if header_tenant_id:
+        sb = get_supabase_admin()
+        res = (
+            sb.table("membership")
+            .select("id")
+            .eq("tenant_id", header_tenant_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if not res.data:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à ce tenant")
+        return header_tenant_id
+
+    # Fallback 1: JWT app_metadata (set at onboarding)
+    jwt_tenant_id = user.get("app_metadata", {}).get("tenant_id")
+    if jwt_tenant_id:
+        return jwt_tenant_id
+
+    # Fallback 2: first membership row in DB
+    sb = get_supabase_admin()
+    res = (
+        sb.table("membership")
+        .select("tenant_id")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if res.data:
+        return res.data[0]["tenant_id"]
+
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aucun tenant associé")

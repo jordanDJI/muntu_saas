@@ -185,6 +185,7 @@ function SectionSecurite() {
       const { error } = await supabase.auth.updateUser({ password: next });
       if (error) throw error;
       setMsg("Mot de passe modifié avec succès."); setCurrent(""); setNext(""); setConfirm("");
+      api.logActivity({ action: "Mot de passe modifié", detail: "Depuis les paramètres" }).catch(() => {});
     } catch (err: any) { setMsg(`Erreur : ${err.message}`); }
     finally { setSaving(false); }
   };
@@ -508,20 +509,27 @@ const NOTIF_DEFAULTS = {
 };
 
 function SectionNotifications() {
-  const [prefs, setPrefs] = useState(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("notif_prefs");
-      return stored ? JSON.parse(stored) : NOTIF_DEFAULTS;
-    }
-    return NOTIF_DEFAULTS;
-  });
-  const [saved, setSaved] = useState(false);
+  const [prefs, setPrefs] = useState(NOTIF_DEFAULTS);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      const stored = user.user_metadata?.notif_prefs;
+      if (stored) setPrefs({ ...NOTIF_DEFAULTS, ...stored });
+    });
+  }, []);
 
   const toggle = (key: string) => setPrefs((p: any) => ({ ...p, [key]: !p[key] }));
 
-  const save = () => {
-    localStorage.setItem("notif_prefs", JSON.stringify(prefs));
-    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  const save = async () => {
+    setSaving(true); setMsg("");
+    try {
+      await supabase.auth.updateUser({ data: { notif_prefs: prefs } });
+      setMsg("Préférences sauvegardées.");
+    } catch { setMsg("Erreur lors de la sauvegarde."); }
+    finally { setSaving(false); }
   };
 
   const Row = ({ k, label }: { k: string; label: string }) => (
@@ -555,10 +563,10 @@ function SectionNotifications() {
         </div>
       </Card>
       <div className="flex items-center gap-3">
-        <button onClick={save} className="bg-primary-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-primary-700">
-          Sauvegarder
+        <button onClick={save} disabled={saving} className="bg-primary-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50">
+          {saving ? "Sauvegarde…" : "Sauvegarder"}
         </button>
-        {saved && <p className="text-green-600 text-sm">Préférences sauvegardées.</p>}
+        <Feedback msg={msg} />
       </div>
     </>
   );
@@ -570,18 +578,26 @@ function SectionPreferences() {
   const [darkMode, setDarkMode]     = useState(false);
   const [compactView, setCompact]   = useState(false);
   const [dateFormat, setDateFormat] = useState("dd/mm/yyyy");
-  const [saved, setSaved]           = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [msg, setMsg]               = useState("");
 
   useEffect(() => {
-    const p = JSON.parse(localStorage.getItem("ui_prefs") ?? "{}");
-    setDarkMode(p.darkMode ?? false);
-    setCompact(p.compactView ?? false);
-    setDateFormat(p.dateFormat ?? "dd/mm/yyyy");
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      const p = user.user_metadata?.ui_prefs ?? {};
+      setDarkMode(p.darkMode ?? false);
+      setCompact(p.compactView ?? false);
+      setDateFormat(p.dateFormat ?? "dd/mm/yyyy");
+    });
   }, []);
 
-  const save = () => {
-    localStorage.setItem("ui_prefs", JSON.stringify({ darkMode, compactView, dateFormat }));
-    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  const save = async () => {
+    setSaving(true); setMsg("");
+    try {
+      await supabase.auth.updateUser({ data: { ui_prefs: { darkMode, compactView, dateFormat } } });
+      setMsg("Préférences sauvegardées.");
+    } catch { setMsg("Erreur lors de la sauvegarde."); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -607,10 +623,10 @@ function SectionPreferences() {
         </div>
       </Card>
       <div className="flex items-center gap-3">
-        <button onClick={save} className="bg-primary-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-primary-700">
-          Sauvegarder
+        <button onClick={save} disabled={saving} className="bg-primary-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50">
+          {saving ? "Sauvegarde…" : "Sauvegarder"}
         </button>
-        {saved && <p className="text-green-600 text-sm">Préférences sauvegardées.</p>}
+        <Feedback msg={msg} />
       </div>
     </>
   );
@@ -823,34 +839,87 @@ function SectionMembres() {
 // ── Section Intégrations ──────────────────────────────────────────────────────
 
 function SectionIntegrations() {
+  const [status, setStatus] = useState<{ stripe: boolean; resend: boolean; gemini: boolean; whatsapp: boolean } | null>(null);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    api.getIntegrationsStatus().then(setStatus).catch(() => {});
+    api.getTenantApiKey().then(r => setApiKey(r.api_key)).catch(() => {});
+  }, []);
+
+  const handleCopy = () => {
+    if (!apiKey) return;
+    navigator.clipboard.writeText(apiKey).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  };
+
+  const handleRegenerate = async () => {
+    if (!confirm("Régénérer la clé API ? L'ancienne clé sera immédiatement invalidée.")) return;
+    setRegenerating(true);
+    try {
+      const r = await api.regenerateTenantApiKey();
+      setApiKey(r.api_key);
+      setRevealed(true);
+    } finally { setRegenerating(false); }
+  };
+
+  const maskedKey = apiKey ? `${apiKey.slice(0, 8)}${"•".repeat(24)}` : "sk_••••••••••••••••••••••••••••••";
+
+  const integrations = [
+    { name: "Stripe",             desc: "Paiements et abonnements",          key: "stripe"   as const },
+    { name: "Resend",             desc: "Envoi d'emails transactionnels",     key: "resend"   as const },
+    { name: "Google Gemini (IA)", desc: "Agents IA et analyses",              key: "gemini"   as const },
+    { name: "WhatsApp Business",  desc: "Agent de conversion client",         key: "whatsapp" as const },
+  ];
+
   return (
     <>
       <SectionTitle title="Intégrations & API" subtitle="Connectez votre espace à des services tiers." />
-      {[
-        { name: "Stripe", desc: "Paiements et abonnements", status: "Connecté", color: "text-green-600 bg-green-50" },
-        { name: "Resend", desc: "Envoi d'emails transactionnels", status: "Connecté", color: "text-green-600 bg-green-50" },
-        { name: "Google Calendar", desc: "Synchronisation des rendez-vous", status: "À venir", color: "text-gray-500 bg-gray-50" },
-        { name: "WhatsApp Business", desc: "Agent de conversion client", status: "À venir", color: "text-gray-500 bg-gray-50" },
-        { name: "Zapier / Make", desc: "Automatisations no-code", status: "À venir", color: "text-gray-500 bg-gray-50" },
-      ].map(item => (
-        <Card key={item.name}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-sm text-gray-800">{item.name}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+      {integrations.map(item => {
+        const connected = status ? status[item.key] : null;
+        return (
+          <Card key={item.name}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-sm text-gray-800">{item.name}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                connected === null ? "bg-gray-50 text-gray-400" :
+                connected ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"
+              }`}>
+                {connected === null ? "…" : connected ? "Connecté" : "Non configuré"}
+              </span>
             </div>
-            <span className={`text-xs px-2 py-1 rounded-full font-medium ${item.color}`}>{item.status}</span>
-          </div>
-        </Card>
-      ))}
+          </Card>
+        );
+      })}
+      <Card>
+        <p className="text-xs text-gray-400 bg-gray-50 border rounded px-2 py-1 inline-block">À venir</p>
+        <p className="font-semibold text-sm text-gray-500 mt-1">Google Calendar · Zapier / Make</p>
+        <p className="text-xs text-gray-400">Synchronisation des rendez-vous et automatisations no-code.</p>
+      </Card>
       <Card>
         <h3 className="font-semibold text-sm text-gray-700">Clé API</h3>
-        <p className="text-sm text-gray-500">Accès programmatique à votre compte. <span className="text-amber-600 font-medium">(Fonctionnalité à venir)</span></p>
+        <p className="text-sm text-gray-500">Accès programmatique à votre espace Klientys.</p>
         <div className="flex gap-2">
-          <input value="sk_•••••••••••••••••••••••••••••" readOnly
-            className="border rounded-lg px-3 py-2 text-sm flex-1 font-mono bg-gray-50 text-gray-400" />
-          <button className="border px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50">Copier</button>
+          <input
+            value={revealed && apiKey ? apiKey : maskedKey}
+            readOnly
+            className="border rounded-lg px-3 py-2 text-sm flex-1 font-mono bg-gray-50 text-gray-600"
+          />
+          <button onClick={() => setRevealed(v => !v)} className="border px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50 shrink-0">
+            {revealed ? "Masquer" : "Révéler"}
+          </button>
+          <button onClick={handleCopy} className="border px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50 shrink-0">
+            {copied ? "Copié ✓" : "Copier"}
+          </button>
         </div>
+        <button onClick={handleRegenerate} disabled={regenerating} className="text-xs text-red-500 hover:underline disabled:opacity-50">
+          {regenerating ? "Régénération…" : "Régénérer la clé (invalide l'ancienne)"}
+        </button>
       </Card>
     </>
   );
@@ -859,14 +928,34 @@ function SectionIntegrations() {
 // ── Section Export & RGPD ─────────────────────────────────────────────────────
 
 function SectionExport() {
-  const [delStep, setDelStep]   = useState(0);
-  const [confirm, setConfirm]   = useState("");
-  const [exporting, setExporting] = useState(false);
+  const router = useRouter();
+  const [delStep, setDelStep]       = useState(0);
+  const [confirm, setConfirm]       = useState("");
+  const [exporting, setExporting]   = useState(false);
   const [exportDone, setExportDone] = useState(false);
+  const [deleting, setDeleting]     = useState(false);
+  const [exportError, setExportError] = useState("");
 
-  const requestExport = () => {
-    setExporting(true);
-    setTimeout(() => { setExporting(false); setExportDone(true); }, 1500);
+  const requestExport = async () => {
+    setExporting(true); setExportError("");
+    try {
+      await api.exportData();
+      setExportDone(true);
+    } catch (e: any) {
+      setExportError(e.message ?? "Erreur lors de l'export.");
+    } finally { setExporting(false); }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.deleteAccount();
+      await supabase.auth.signOut();
+      router.replace("/");
+    } catch (e: any) {
+      alert(e.message ?? "Erreur lors de la suppression.");
+      setDeleting(false);
+    }
   };
 
   return (
@@ -876,12 +965,15 @@ function SectionExport() {
         <h3 className="font-semibold text-sm text-gray-700">Exporter mes données</h3>
         <p className="text-sm text-gray-500">Téléchargez l'ensemble de vos données (contacts, rendez-vous, leads, paramètres) au format JSON.</p>
         {exportDone ? (
-          <p className="text-green-600 text-sm">Votre export a été demandé. Vous recevrez un email avec le lien de téléchargement sous 24h.</p>
+          <p className="text-green-600 text-sm">Export téléchargé avec succès.</p>
         ) : (
-          <button onClick={requestExport} disabled={exporting}
-            className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50">
-            {exporting ? "Préparation…" : "Demander l'export"}
-          </button>
+          <>
+            <button onClick={requestExport} disabled={exporting}
+              className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50">
+              {exporting ? "Préparation…" : "Télécharger mes données (JSON)"}
+            </button>
+            {exportError && <p className="text-red-500 text-sm">{exportError}</p>}
+          </>
         )}
       </Card>
       <Card>
@@ -907,9 +999,11 @@ function SectionExport() {
             <div className="flex gap-2">
               <button onClick={() => { setDelStep(0); setConfirm(""); }}
                 className="px-4 py-2 border rounded-lg text-sm">Annuler</button>
-              <button disabled={confirm !== "SUPPRIMER"}
+              <button
+                disabled={confirm !== "SUPPRIMER" || deleting}
+                onClick={handleDelete}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm disabled:opacity-40 hover:bg-red-700">
-                Confirmer la suppression
+                {deleting ? "Suppression…" : "Confirmer la suppression"}
               </button>
             </div>
           </div>
@@ -921,33 +1015,53 @@ function SectionExport() {
 
 // ── Section Activité ──────────────────────────────────────────────────────────
 
+const ACTION_ICON: Record<string, string> = {
+  "Connexion":          "🔑",
+  "Site publié":        "🌐",
+  "Site dépublié":      "🌐",
+  "Mot de passe modifié": "🔐",
+  "Membre invité":      "👥",
+  "Membre retiré":      "👥",
+  "Nouvel espace créé": "🏢",
+  "Clé API régénérée":  "🔑",
+  "Compte désactivé":   "⚠️",
+};
+
 function SectionActivite() {
-  const MOCK = [
-    { action: "Connexion", detail: "Chrome · Windows", date: new Date().toISOString(), icon: "🔑" },
-    { action: "Site publié", detail: "Vitrine mise en ligne", date: new Date(Date.now()-3600000).toISOString(), icon: "🌐" },
-    { action: "Mot de passe modifié", detail: "Depuis les paramètres", date: new Date(Date.now()-86400000).toISOString(), icon: "🔐" },
-    { action: "RDV créé", detail: "Marie Dupont — 14h00", date: new Date(Date.now()-172800000).toISOString(), icon: "📅" },
-    { action: "Connexion", detail: "Safari · iPhone", date: new Date(Date.now()-259200000).toISOString(), icon: "🔑" },
-  ];
+  const [logs, setLogs]       = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getActivityLog(50)
+      .then(setLogs)
+      .catch(() => setLogs([]))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <>
       <SectionTitle title="Journaux d'activité" subtitle="Historique des actions récentes sur votre compte." />
       <Card>
-        <div className="space-y-1">
-          {MOCK.map((e, i) => (
-            <div key={i} className="flex items-start gap-3 py-2.5 border-b last:border-0">
-              <span className="text-lg leading-none mt-0.5">{e.icon}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800">{e.action}</p>
-                <p className="text-xs text-gray-400">{e.detail}</p>
+        {loading ? (
+          <p className="text-sm text-gray-400">Chargement…</p>
+        ) : logs.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">Aucune activité enregistrée pour l'instant.</p>
+        ) : (
+          <div className="space-y-1">
+            {logs.map((e, i) => (
+              <div key={e.id ?? i} className="flex items-start gap-3 py-2.5 border-b last:border-0">
+                <span className="text-lg leading-none mt-0.5">{ACTION_ICON[e.action] ?? "📋"}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{e.action}</p>
+                  {e.detail && <p className="text-xs text-gray-400">{e.detail}</p>}
+                </div>
+                <p className="text-xs text-gray-400 shrink-0">
+                  {new Date(e.created_at).toLocaleString("fr-BE", { dateStyle: "short", timeStyle: "short" })}
+                </p>
               </div>
-              <p className="text-xs text-gray-400 shrink-0">
-                {new Date(e.date).toLocaleString("fr-BE", { dateStyle: "short", timeStyle: "short" })}
-              </p>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-gray-400 text-center pt-2">Les journaux complets seront disponibles dans une prochaine mise à jour.</p>
+            ))}
+          </div>
+        )}
       </Card>
     </>
   );
@@ -1008,11 +1122,12 @@ export default function SettingsPage() {
 
       <div className="max-w-6xl mx-auto flex">
         {/* Sidebar desktop */}
-        <aside className="w-56 shrink-0 py-6 px-3 hidden md:block">
+        <aside id="settings-nav" className="w-56 shrink-0 py-6 px-3 hidden md:block">
           <nav className="space-y-0.5">
             {NAV.map(item => (
               <button
                 key={item.key}
+                id={`settings-${item.key}-btn`}
                 onClick={() => setActive(item.key)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left ${
                   active === item.key

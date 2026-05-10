@@ -3,6 +3,7 @@ module.exports = {
   content: [
     "./app/**/*.{ts,tsx,js,jsx}",
     "./components/**/*.{ts,tsx,js,jsx}",
+    "./node_modules/onborda/dist/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {

@@ -170,7 +170,7 @@ export default function LeadsPage() {
       </div>
 
       {/* Filtres par statut */}
-      <div className="flex gap-2 flex-wrap">
+      <div id="leads-filters" className="flex gap-2 flex-wrap">
         <button
           onClick={() => setFilter(undefined)}
           className={`filter-btn inline-flex items-center gap-1.5 px-3 py-1 text-sm font-medium ${!filter ? "filter-btn-active" : ""}`}
@@ -199,7 +199,7 @@ export default function LeadsPage() {
       </div>
 
       {/* Cartes leads */}
-      <div className="space-y-3">
+      <div id="leads-list" className="space-y-3">
         {leads.map((lead) => {
           const contactName = [lead.contact?.first_name, lead.contact?.last_name].filter(Boolean).join(" ") || "—";
           const isApptLead = lead.request_type === "b2c_appointment" || lead.request_type === "b2b_appointment";

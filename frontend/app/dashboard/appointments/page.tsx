@@ -993,7 +993,7 @@ export default function AppointmentsPage() {
 
         <h1 className="text-lg sm:text-xl font-bold text-gray-900 flex-1 min-w-0">Rendez-vous</h1>
 
-        <button onClick={()=>setShowAvail(true)}
+        <button id="appts-availability-btn" onClick={()=>setShowAvail(true)}
           className="text-xs sm:text-sm px-2.5 py-1.5 border border-primary-300 text-primary-600 rounded-lg hover:bg-primary-50 shrink-0">
           ⚙ <span className="hidden sm:inline">Disponibilités</span>
         </button>
@@ -1004,7 +1004,7 @@ export default function AppointmentsPage() {
 
         {/* Ligne 2 : vue + navigation */}
         <div className="w-full flex items-center gap-2 flex-wrap">
-          <div className="flex bg-gray-100 rounded-lg p-0.5 text-sm">
+          <div id="appts-view-toggle" className="flex bg-gray-100 rounded-lg p-0.5 text-sm">
             {(["day","week","month"] as View[]).map(v=>(
               <button key={v} onClick={()=>{ setView(v); setCreating(null); }}
                 className={`px-2.5 py-1 rounded-md font-medium transition-colors text-xs sm:text-sm ${view===v?"bg-white shadow text-primary-600":"text-gray-600 hover:text-gray-800"}`}>
@@ -1013,7 +1013,7 @@ export default function AppointmentsPage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-1 text-sm flex-1 justify-center">
+          <div id="appts-nav" className="flex items-center gap-1 text-sm flex-1 justify-center">
             <button onClick={()=>navigate(-1)} className="p-1.5 rounded hover:bg-gray-100 text-gray-600">◀</button>
             <span className="font-medium text-center capitalize text-xs sm:text-sm px-1 truncate max-w-[180px] sm:max-w-none">
               {headerLabel()}
@@ -1035,7 +1035,7 @@ export default function AppointmentsPage() {
 
       {/* Bannière RDVs en attente */}
       {!loading && appointments.filter(a => a.status === "pending").length > 0 && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 space-y-1.5 shrink-0">
+        <div id="appts-pending" className="bg-amber-50 border-b border-amber-200 px-4 py-2 space-y-1.5 shrink-0">
           <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
             {appointments.filter(a => a.status === "pending").length} rendez-vous en attente de confirmation
           </p>
@@ -1069,7 +1069,7 @@ export default function AppointmentsPage() {
       {loading ? (
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Chargement…</div>
       ) : (
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div id="appts-calendar" className="flex-1 overflow-hidden flex flex-col">
           {view==="month" && <MonthGrid/>}
           {view==="week"  && <TimeGrid days={weekDays}/>}
           {view==="day"   && <TimeGrid days={[anchor]}/>}

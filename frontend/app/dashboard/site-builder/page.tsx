@@ -661,7 +661,7 @@ export default function SiteBuilderPage() {
       </div>
 
       {/* Progress bar */}
-      <div className="space-y-2">
+      <div id="sb-progress" className="space-y-2">
         <div className="flex gap-1">
           {STEPS.map((_s, i) => (
             <button key={i}
@@ -686,7 +686,7 @@ export default function SiteBuilderPage() {
           ÉTAPE 0 — VOTRE IMAGE
       ────────────────────────────────────────────────────────────────────── */}
       {step === 0 && (
-        <div className="space-y-6">
+        <div id="sb-content" className="space-y-6">
 
           {/* Logo */}
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
@@ -1433,22 +1433,6 @@ export default function SiteBuilderPage() {
             </div>
           </div>
 
-          {/* CSS personnalisé — premium */}
-          <div className="bg-white rounded-xl shadow p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800">{t.sb_css_title}</h2>
-              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">{t.sb_css_premium}</span>
-            </div>
-            <p className="text-sm text-gray-500">{t.sb_css_desc}</p>
-            <textarea
-              rows={8}
-              value={customCss}
-              onChange={(e) => setCustomCss(e.target.value)}
-              className="inp resize-y font-mono text-xs"
-              placeholder={`/* Exemples */\n.hero-section { min-height: 600px; }\nh1 { letter-spacing: -0.02em; }\n.card { border-radius: 1.5rem; }`}
-            />
-          </div>
-
           {/* Publication */}
           <div className="bg-green-50 border border-green-100 rounded-xl p-6 space-y-3">
             <h2 className="font-semibold text-green-900">{t.sb_ready_title}</h2>
@@ -1466,7 +1450,7 @@ export default function SiteBuilderPage() {
       )}
 
       {/* ── Navigation ─────────────────────────────────────────────────────── */}
-      <div className="flex gap-3">
+      <div id="sb-nav" className="flex gap-3">
         {step > 0 && (
           <button onClick={prev} className="flex-1 border rounded-xl py-2.5 text-gray-600 hover:bg-gray-50 font-medium">
             {t.sb_prev}

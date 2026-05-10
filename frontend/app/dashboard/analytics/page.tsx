@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
 import DemandPotentialCard from "./DemandPotentialCard";
+import { UpgradeGate } from "../components/UpgradeGate";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -224,6 +225,7 @@ export default function AnalyticsPage() {
   const maxCta     = data ? Math.max(1, ...Object.values(data.cta_clicks)) : 1;
 
   return (
+    <UpgradeGate feature="analytics">
     <div className="min-h-screen bg-gray-50 pb-16">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -276,7 +278,7 @@ export default function AnalyticsPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
 
           {/* ── KPIs ─────────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div id="analytics-kpis" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <KpiCard
               label="Vues de page"
               value={hasBehavioural ? data.pageviews.toLocaleString("fr-BE") : "—"}
@@ -401,7 +403,7 @@ export default function AnalyticsPage() {
 
           {/* ── Comportement site ────────────────────────────────────────── */}
           {hasBehavioural && (
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div id="analytics-behavioral" className="grid sm:grid-cols-2 gap-4">
               <Card>
                 <CardTitle>Sections les plus consultées</CardTitle>
                 {Object.keys(data.sections_viewed).length === 0
@@ -452,7 +454,9 @@ export default function AnalyticsPage() {
           )}
 
           {/* ── Potentiel de demande locale ──────────────────────────────── */}
-          <DemandPotentialCard />
+          <div id="analytics-demand">
+            <DemandPotentialCard />
+          </div>
 
         </div>
       )}
@@ -466,5 +470,6 @@ export default function AnalyticsPage() {
         </div>
       )}
     </div>
+    </UpgradeGate>
   );
 }

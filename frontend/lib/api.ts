@@ -9,7 +9,13 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  if (!session?.access_token) return {};
+  const headers: Record<string, string> = { Authorization: `Bearer ${session.access_token}` };
+  if (typeof window !== "undefined") {
+    const tenantId = localStorage.getItem("klientys_tenant_id");
+    if (tenantId) headers["X-Tenant-Id"] = tenantId;
+  }
+  return headers;
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -180,6 +186,37 @@ export const api = {
 
   // Tenant info
   getMyTenant: () => apiFetch<{ id: string; slug: string; name: string }>("/api/v1/auth/me/tenant"),
+  getMyTenants: () => apiFetch<{ id: string; slug: string; name: string; role: string }[]>("/api/v1/auth/me/tenants"),
+  createTenant: (body: { name: string; slug: string; sector: string; country: string }) =>
+    apiFetch<{ id: string; slug: string; name: string }>("/api/v1/tenants/", { method: "POST", body: JSON.stringify(body) }),
+
+  // Subscription / plan
+  getMySubscription: () => apiFetch<any>("/api/v1/subscriptions/plan"),
+
+  // Tenant API key
+  getTenantApiKey: () => apiFetch<{ api_key: string }>("/api/v1/tenants/api-key"),
+  regenerateTenantApiKey: () => apiFetch<{ api_key: string }>("/api/v1/tenants/api-key/regenerate", { method: "POST" }),
+
+  // Users — journal d'activité, export, suppression
+  getActivityLog: (limit = 50) => apiFetch<any[]>(`/api/v1/users/activity-log?limit=${limit}`),
+  logActivity: (body: { action: string; detail?: string }) =>
+    apiFetch("/api/v1/users/log-activity", { method: "POST", body: JSON.stringify(body) }),
+  exportData: async (): Promise<void> => {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/v1/users/export`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "klientys-export.json";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+  deleteAccount: () => apiFetch("/api/v1/users/delete-account", { method: "POST" }),
+  getIntegrationsStatus: () => apiFetch<{ stripe: boolean; resend: boolean; gemini: boolean; whatsapp: boolean }>("/api/v1/users/integrations/status"),
 
   // Analytics
   getAnalyticsSummary: (days = 30) => apiFetch<any>(`/api/v1/analytics/summary?days=${days}`),

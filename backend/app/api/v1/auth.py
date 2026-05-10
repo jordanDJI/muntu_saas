@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from app.core.supabase import get_supabase_admin
-from app.middleware.tenant import get_current_tenant
+from app.middleware.tenant import get_current_tenant, get_current_user
+from app.services.activity import log_activity
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -28,10 +29,19 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         })
         if not resp.session:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identifiants incorrects")
-        return TokenOut(
+        token_out = TokenOut(
             access_token=resp.session.access_token,
             refresh_token=resp.session.refresh_token,
         )
+        try:
+            user_id = resp.session.user.id
+            sb = get_supabase_admin()
+            mem = sb.table("membership").select("tenant_id").eq("user_id", user_id).limit(1).execute()
+            if mem.data:
+                log_activity(mem.data[0]["tenant_id"], user_id, "Connexion", "Via email/mot de passe")
+        except Exception:
+            pass
+        return token_out
     except HTTPException:
         raise
     except Exception:
@@ -64,3 +74,27 @@ async def get_my_tenant(tenant_id: str = Depends(get_current_tenant)):
     if not res.data:
         raise HTTPException(status_code=404, detail="Tenant introuvable")
     return res.data
+
+
+@router.get("/me/tenants")
+async def get_my_tenants(user: dict = Depends(get_current_user)):
+    """Retourne tous les tenants auxquels l'utilisateur appartient."""
+    user_id = user.get("sub")
+    sb = get_supabase_admin()
+    res = (
+        sb.table("membership")
+        .select("role, tenant:tenant_id(id, slug, name)")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    tenants = []
+    for row in res.data or []:
+        tenant = row.get("tenant") or {}
+        if tenant:
+            tenants.append({
+                "id": tenant["id"],
+                "slug": tenant["slug"],
+                "name": tenant["name"],
+                "role": row["role"],
+            })
+    return tenants

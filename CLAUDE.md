@@ -25,7 +25,7 @@ SaaS/
 │   │   ├── services/  # email, whatsapp, telegram, ocr, lead, trends
 │   │   ├── middleware/ # tenant.py (JWT → tenant_id)
 │   │   └── core/      # config.py, supabase.py
-│   ├── supabase/migrations/  # Fichiers SQL de migration (001→018)
+│   ├── supabase/migrations/  # Fichiers SQL de migration (001→020)
 │   └── main.py
 └── docs/
 ```
@@ -301,6 +301,62 @@ cd frontend && npm run dev
 ngrok http 8000
 # puis APP_URL=https://xxx.ngrok-free.app dans .env backend
 ```
+
+---
+
+## Onboarding guidé (Onborda)
+
+Bibliothèque de tours interactifs intégrée dans le dashboard. Cible des utilisateurs non-techniques : explications en français très simple, zéro jargon.
+
+### Fichiers clés
+
+| Fichier | Rôle |
+|---------|------|
+| `frontend/app/dashboard/onboarding/tours.ts` | Définitions des 8 tours (`ALL_TOURS`, `TOUR_MENU`, `PAGE_TOUR`) |
+| `frontend/components/OnboardingCard.tsx` | Card custom (thème sombre Klientys) |
+| `frontend/app/dashboard/layout.tsx` | `OnbordaProvider` + `TourStarter` (auto-start) + `TourHelpMenu` (bouton ?) |
+
+### Tours disponibles
+
+| Tour | Déclencheur | Étapes |
+|------|-------------|--------|
+| `welcome` | Premier login (localStorage `klientys_welcomed`) | 8 étapes — barre nav |
+| `dashboard` | Menu ? sur `/dashboard` | 5 étapes |
+| `leads` | Menu ? sur `/dashboard/leads` | 2 étapes |
+| `appointments` | Menu ? sur `/dashboard/appointments` | 5 étapes |
+| `site-builder` | Menu ? sur `/dashboard/site-builder` | 3 étapes |
+| `analytics` | Menu ? sur `/dashboard/analytics` | 3 étapes |
+| `agents` | Menu ? sur `/dashboard/agents` | 2 étapes |
+| `settings` | Menu ? sur `/dashboard/settings` | 5 étapes |
+
+### IDs DOM requis par les tours
+
+Chaque tour cible des éléments via leur `id` HTML. Les IDs doivent exister dans les pages correspondantes :
+
+| ID | Page | Élément |
+|----|------|---------|
+| `nav-logo` | layout | Logo lien |
+| `nav-dashboard`, `nav-leads`, etc. | layout | Liens de navigation |
+| `tour-help` | layout | Bouton d'aide ? |
+| `dash-kpis`, `dash-pending`, `dash-recent-leads`, `dash-upcoming-appts` | dashboard/page | Sections dashboard |
+| `leads-filters`, `leads-list` | leads/page | Filtres + liste |
+| `appts-view-toggle`, `appts-nav`, `appts-pending`, `appts-calendar`, `appts-availability-btn` | appointments/page | Contrôles agenda |
+| `sb-progress`, `sb-content`, `sb-nav` | site-builder/page | Barre, contenu step 0, navigation |
+| `analytics-kpis`, `analytics-behavioral`, `analytics-demand` | analytics/page | Sections analytics |
+| `agents-list`, `agent-panel` | agents/page | Sidebar + panneau |
+| `settings-nav`, `settings-profil-btn`, `settings-site-btn`, etc. | settings/page | Navigation paramètres |
+
+### Déclenchement programmatique
+
+```typescript
+import { useOnborda } from "onborda";
+const { startOnborda } = useOnborda();
+startOnborda("welcome"); // démarre le tour nommé "welcome"
+```
+
+### Auto-start au premier login
+
+`TourStarter` (dans `layout.tsx`) vérifie `localStorage.getItem("klientys_welcomed")`. Si absent, démarre le tour `welcome` après 800 ms et pose le flag.
 
 ---
 

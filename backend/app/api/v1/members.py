@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant, get_current_user
 from app.services.email import send_team_invite
+from app.services.activity import log_activity
 
 router = APIRouter(prefix="/members", tags=["members"])
 logger = logging.getLogger(__name__)
@@ -148,6 +149,7 @@ async def invite_member(
         logger.warning("Invite email failed (domain not verified?): %s", exc)
         email_sent = False
 
+    log_activity(tenant_id, user["sub"], "Membre invité", f"{body.email} ({body.role})")
     return {"status": "invited", "email": body.email, "invite_url": invite_url, "email_sent": email_sent}
 
 
@@ -305,6 +307,7 @@ async def remove_member(
         raise HTTPException(status_code=403, detail="Le propriétaire ne peut pas être retiré.")
 
     sb.table("membership").delete().eq("tenant_id", tenant_id).eq("user_id", member_user_id).execute()
+    log_activity(tenant_id, user["sub"], "Membre retiré", member_user_id)
     return {"status": "removed"}
 
 

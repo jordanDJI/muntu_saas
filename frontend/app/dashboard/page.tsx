@@ -170,7 +170,7 @@ export default function DashboardPage() {
 
       {/* KPIs */}
       {[showKpi("new_leads"), showKpi("pending"), showKpi("confirmed"), showKpi("contacts")].some(Boolean) && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div id="dash-kpis" className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {showKpi("new_leads") && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{t.kpi_new_leads}</p>
@@ -214,7 +214,7 @@ export default function DashboardPage() {
 
       {/* Pending RDV action banner */}
       {!loading && pending.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+        <div id="dash-pending" className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             <p className="text-sm font-semibold text-amber-800">
@@ -261,7 +261,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         {/* Recent leads */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div id="dash-recent-leads" className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-50">
             <h2 className="font-semibold text-gray-800 text-sm">{t.dash_recent_leads}</h2>
             <Link href="/dashboard/leads" className="text-xs text-primary-600 hover:underline">{t.dash_see_all}</Link>
@@ -303,7 +303,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Upcoming confirmed appointments */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div id="dash-upcoming-appts" className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-50">
             <h2 className="font-semibold text-gray-800 text-sm">{t.dash_upcoming_appts}</h2>
             <Link href="/dashboard/appointments" className="text-xs text-primary-600 hover:underline">{t.dash_agenda}</Link>
@@ -339,7 +339,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Navigation */}
-      <div>
+      <div id="dash-nav">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{t.dash_quick_access}</p>
         <nav className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {NAV_ITEMS.map((item) => (

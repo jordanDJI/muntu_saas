@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_user
+from app.services.tenant_setup import provision_tenant
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
 
@@ -62,36 +63,8 @@ async def setup_tenant(body: TenantSetupIn, user: dict = Depends(get_current_use
         "role": "owner",
     }).execute()
 
-    # Créer le calendrier par défaut
-    supabase.table("calendar").insert({
-        "tenant_id": tenant_id,
-        "name": "Principal",
-    }).execute()
-
-    # Créer les pipeline stages par défaut
-    supabase.table("pipeline_stage").insert([
-        {"tenant_id": tenant_id, "name": "Nouveau",  "position": 1},
-        {"tenant_id": tenant_id, "name": "Contacté", "position": 2},
-        {"tenant_id": tenant_id, "name": "Qualifié", "position": 3},
-        {"tenant_id": tenant_id, "name": "Planifié", "position": 4},
-        {"tenant_id": tenant_id, "name": "Conclu",   "position": 5},
-    ]).execute()
-
-    # Créer le site par défaut
-    supabase.table("site").insert({
-        "tenant_id": tenant_id,
-        "title": body.tenant_name,
-        "status": "draft",
-        "audience_mode": "b2c",
-        "default_language": "fr"
-    }).execute()
-
-    # Créer les 3 configs d'agents IA par défaut
-    supabase.table("agent_config").insert([
-        {"tenant_id": tenant_id, "agent_type": "vitrine",          "status": "active", "model": "gemini-2.5-flash"},
-        {"tenant_id": tenant_id, "agent_type": "support_client",   "status": "active", "model": "gemini-2.5-flash"},
-        {"tenant_id": tenant_id, "agent_type": "assistant_tenant", "status": "active", "model": "gemini-2.5-flash"},
-    ]).execute()
+    # Créer calendrier, pipeline, site, agents IA
+    await provision_tenant(tenant_id, user_id, body.tenant_name)
 
     # Injecter tenant_id dans app_metadata du JWT
     import httpx

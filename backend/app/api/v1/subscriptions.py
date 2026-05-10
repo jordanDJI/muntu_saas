@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin
 from app.core.config import settings
+from app.services.subscription import get_tenant_plan
 
 stripe.api_key = settings.stripe_secret_key
 
@@ -64,3 +65,9 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
             }, on_conflict="tenant_id").execute()
 
     return {"received": True}
+
+
+@router.get("/plan")
+async def get_my_plan(tenant_id: str = Depends(get_current_tenant)):
+    """Retourne le plan et les features du tenant courant."""
+    return await get_tenant_plan(tenant_id)

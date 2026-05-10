@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from uuid import UUID
-from app.middleware.tenant import get_current_tenant
+from app.middleware.tenant import get_current_tenant, get_current_user
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.site import SiteCreateIn, SiteUpdateIn, SiteOut, ServiceOfferIn, TestimonialIn
+from app.services.activity import log_activity
 
 router = APIRouter(prefix="/sites", tags=["Sites"])
 
@@ -55,20 +56,22 @@ async def update_site(site_id: UUID, body: SiteUpdateIn, tenant_id: str = Depend
 
 
 @router.post("/{site_id}/publish")
-async def publish_site(site_id: UUID, tenant_id: str = Depends(get_current_tenant)):
+async def publish_site(site_id: UUID, tenant_id: str = Depends(get_current_tenant), user: dict = Depends(get_current_user)):
     sb = get_supabase()
     result = sb.table("site").update({"status": "published"}).eq("id", str(site_id)).eq("tenant_id", tenant_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Site introuvable")
+    log_activity(tenant_id, user["sub"], "Site publié", result.data[0].get("title"))
     return {"status": "published"}
 
 
 @router.post("/{site_id}/unpublish")
-async def unpublish_site(site_id: UUID, tenant_id: str = Depends(get_current_tenant)):
+async def unpublish_site(site_id: UUID, tenant_id: str = Depends(get_current_tenant), user: dict = Depends(get_current_user)):
     sb = get_supabase()
     result = sb.table("site").update({"status": "draft"}).eq("id", str(site_id)).eq("tenant_id", tenant_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Site introuvable")
+    log_activity(tenant_id, user["sub"], "Site dépublié", result.data[0].get("title"))
     return {"status": "draft"}
 
 

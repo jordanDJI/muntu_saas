@@ -1,6 +1,15 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, supabase } from "../../../lib/api";
+import { UpgradeGate } from "../components/UpgradeGate";
+import { useSubscription } from "../../../contexts/SubscriptionContext";
+import type { FeatureKey } from "../../../contexts/SubscriptionContext";
+
+const AGENT_FEATURE: Record<string, FeatureKey> = {
+  vitrine:          "agent_vitrine",
+  support_client:   "agent_support",
+  assistant_tenant: "agent_assistant",
+};
 
 
 const AGENT_ORDER = ["vitrine", "support_client", "assistant_tenant"] as const;
@@ -30,6 +39,7 @@ function AgentIcon({ type }: { type: AgentType }) {
 }
 
 export default function AgentsPage() {
+  const { hasFeature } = useSubscription();
   const [configs, setConfigs]             = useState<any[]>([]);
   const [syntheses, setSyntheses]         = useState<any[]>([]);
   const [selected, setSelected]           = useState<Panel>("assistant_tenant");
@@ -268,7 +278,7 @@ export default function AgentsPage() {
     <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
 
       {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <aside className="w-56 bg-gray-900 flex flex-col shrink-0">
+      <aside id="agents-list" className="w-56 bg-gray-900 flex flex-col shrink-0">
         <div className="px-4 py-4 border-b border-gray-700">
           <p className="text-white font-semibold text-sm">Agents IA</p>
           <p className="text-gray-500 text-xs mt-0.5">Propulsé par Gemini</p>
@@ -322,7 +332,7 @@ export default function AgentsPage() {
       </aside>
 
       {/* ── Contenu principal ───────────────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-gray-50">
+      <main id="agent-panel" className="flex-1 flex flex-col overflow-hidden bg-gray-50 relative">
 
         {error && (
           <div className="bg-red-50 border-b border-red-100 px-6 py-2 text-xs text-red-700">{error}</div>
@@ -456,6 +466,17 @@ export default function AgentsPage() {
             <SynthesesPanel />
           </>
         )}
+
+        {/* Feature gate overlay — covers panel content when plan is insufficient */}
+        {(() => {
+          const feat = AGENT_FEATURE[selected];
+          if (!feat || hasFeature(feat)) return null;
+          return (
+            <div className="absolute inset-0 flex items-center justify-center p-8 z-10" style={{ background: "rgba(241,237,230,0.96)" }}>
+              <UpgradeGate feature={feat}><></></UpgradeGate>
+            </div>
+          );
+        })()}
       </main>
     </div>
   );
