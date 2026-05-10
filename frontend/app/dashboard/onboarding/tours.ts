@@ -9,10 +9,11 @@ const welcomeSteps: Step[] = [
     title: "Bienvenue sur Klientys !",
     content:
       "Je vais vous faire visiter votre espace professionnel en moins d'une minute. Ce guide vous montre chaque outil à votre disposition. Vous pourrez le relancer à tout moment.",
-    selector: "#nav-logo",
+    selector: "body",
     side: "bottom",
-    pointerPadding: 6,
-    pointerRadius: 10,
+    align: "center",
+    pointerPadding: 0,
+    pointerRadius: 0,
   },
   {
     icon: "📊",
