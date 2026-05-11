@@ -452,6 +452,15 @@
 [data-dash-dark] .bg-white .text-red-400{color:rgba(252,129,129,.75)!important;}
 [data-dash-dark] .bg-white .text-gray-900.font-bold,[data-dash-dark] .bg-white h3{color:var(--text-primary)!important;}
 
+/* ── Onborda — contraindre la card dans le viewport ──────────────── */
+@media (max-width: 767px) {
+  [data-onborda] {
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    max-width: calc(100vw - 1rem) !important;
+  }
+}
+
 /* ── Scrollbar globale ────────────────────────────────────────────── */
 ::-webkit-scrollbar{width:6px;}
 ::-webkit-scrollbar-track{background:transparent;}

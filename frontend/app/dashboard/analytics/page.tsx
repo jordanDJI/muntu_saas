@@ -402,56 +402,55 @@ export default function AnalyticsPage() {
           </div>
 
           {/* ── Comportement site ────────────────────────────────────────── */}
-          {hasBehavioural && (
-            <div id="analytics-behavioral" className="grid sm:grid-cols-2 gap-4">
-              <Card>
-                <CardTitle>Sections les plus consultées</CardTitle>
-                {Object.keys(data.sections_viewed).length === 0
-                  ? <Empty text="Aucune section trackée." />
-                  : <div className="space-y-3">
-                      {Object.entries(data.sections_viewed)
-                        .sort(([, a], [, b]) => b - a)
-                        .map(([sec, n]) => (
-                          <BarRow key={sec} label={SECTION_LABELS[sec] ?? sec} value={n} max={maxSection} color="#0891b2" />
-                        ))}
-                    </div>}
-              </Card>
+          <div id="analytics-behavioral">
+            {hasBehavioural ? (
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Card>
+                  <CardTitle>Sections les plus consultées</CardTitle>
+                  {Object.keys(data.sections_viewed).length === 0
+                    ? <Empty text="Aucune section trackée." />
+                    : <div className="space-y-3">
+                        {Object.entries(data.sections_viewed)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([sec, n]) => (
+                            <BarRow key={sec} label={SECTION_LABELS[sec] ?? sec} value={n} max={maxSection} color="#0891b2" />
+                          ))}
+                      </div>}
+                </Card>
 
-              <Card>
-                <CardTitle>Clics & interactions</CardTitle>
-                {Object.keys(data.cta_clicks).length === 0
-                  ? <Empty text="Aucun clic enregistré." />
-                  : <div className="space-y-3">
-                      {Object.entries(data.cta_clicks)
-                        .sort(([, a], [, b]) => b - a)
-                        .map(([action, n]) => (
-                          <BarRow key={action} label={CTA_LABELS[action] ?? action} value={n} max={maxCta} color="#f59e0b" />
-                        ))}
-                    </div>}
-              </Card>
-            </div>
-          )}
-
-          {/* ── Bannière tracking inactif ────────────────────────────────── */}
-          {!hasBehavioural && (
-            <Card className="border-amber-200 bg-amber-50">
-              <div className="flex gap-3 items-start">
-                <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z"/>
-                </svg>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-amber-800">Tracking comportemental en attente de données</p>
-                  <p className="text-xs text-amber-700 mt-1">
-                    Le script de tracking est actif sur votre site. Les métriques comportementales
-                    (vues, sections, clics, chatbot) apparaîtront automatiquement dès les premières visites.
-                  </p>
-                  <p className="text-xs text-amber-600 mt-2 font-medium">
-                    Note : L'acquisition de trafic (sources, appareils, pays) est gérée par vos outils GA4 / Meta Pixel configurés dans le site-builder étape 8.
-                  </p>
-                </div>
+                <Card>
+                  <CardTitle>Clics & interactions</CardTitle>
+                  {Object.keys(data.cta_clicks).length === 0
+                    ? <Empty text="Aucun clic enregistré." />
+                    : <div className="space-y-3">
+                        {Object.entries(data.cta_clicks)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([action, n]) => (
+                            <BarRow key={action} label={CTA_LABELS[action] ?? action} value={n} max={maxCta} color="#f59e0b" />
+                          ))}
+                      </div>}
+                </Card>
               </div>
-            </Card>
-          )}
+            ) : (
+              <Card className="border-amber-200 bg-amber-50">
+                <div className="flex gap-3 items-start">
+                  <svg className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z"/>
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-800">Tracking comportemental en attente de données</p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Le script de tracking est actif sur votre site. Les métriques comportementales
+                      (vues, sections, clics, chatbot) apparaîtront automatiquement dès les premières visites.
+                    </p>
+                    <p className="text-xs text-amber-600 mt-2 font-medium">
+                      Note : L'acquisition de trafic (sources, appareils, pays) est gérée par vos outils GA4 / Meta Pixel configurés dans le site-builder étape 8.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </div>
 
           {/* ── Potentiel de demande locale ──────────────────────────────── */}
           <div id="analytics-demand">

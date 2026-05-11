@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useRef } from "react";
 import { useOnborda } from "onborda";
 import type { CardComponentProps } from "onborda";
 
@@ -11,11 +12,30 @@ export default function OnboardingCard({
   arrow,
 }: CardComponentProps) {
   const { closeOnborda } = useOnborda();
-  const isFirst = currentStep === 1;
-  const isLast  = currentStep === totalSteps;
+  const isFirst = currentStep === 0;
+  const isLast  = currentStep === totalSteps - 1;
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const parent = cardRef.current?.parentElement as HTMLElement | null;
+    if (!parent) return;
+    const raf = requestAnimationFrame(() => {
+      const rect = parent.getBoundingClientRect();
+      const vw = window.innerWidth;
+      if (rect.right > vw - 8) {
+        const cur = parseFloat(parent.style.left || "0");
+        parent.style.left = `${cur - (rect.right - vw + 8)}px`;
+      }
+      if (rect.left < 8) {
+        parent.style.left = "8px";
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [currentStep]);
 
   return (
     <div
+      ref={cardRef}
       className="relative w-[min(20rem,calc(100vw-1.5rem))] rounded-2xl shadow-2xl overflow-hidden"
       style={{ background: "var(--bg-nav, #07222F)", border: "1px solid rgba(170,189,216,.18)" }}
     >
@@ -79,7 +99,7 @@ export default function OnboardingCard({
               </button>
             )}
             <button
-              onClick={nextStep}
+              onClick={isLast ? closeOnborda : nextStep}
               className="flex-1 py-2 rounded-xl text-sm font-semibold text-white transition-opacity"
               style={{ background: isLast ? "rgba(13,75,88,.9)" : "var(--l-teal-xl, #0D4B58)" }}
             >

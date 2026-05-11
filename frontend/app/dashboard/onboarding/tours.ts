@@ -9,7 +9,7 @@ const welcomeSteps: Step[] = [
     title: "Bienvenue sur Klientys !",
     content:
       "Je vais vous faire visiter votre espace professionnel en moins d'une minute. Ce guide vous montre chaque outil à votre disposition. Vous pourrez le relancer à tout moment.",
-    selector: "body",
+    selector: "#onboarding-center",
     side: "bottom",
     pointerPadding: 0,
     pointerRadius: 0,
@@ -102,8 +102,8 @@ const dashboardSteps: Step[] = [
     icon: "⏳",
     title: "Rendez-vous à confirmer",
     content:
-      "Quand un client réserve depuis votre site, le rendez-vous arrive ici \"en attente\". Cliquez sur le bouton vert ✓ pour accepter, ou sur ✕ pour refuser. Votre client reçoit automatiquement un email de confirmation ou d'annulation.",
-    selector: "#dash-pending",
+      "Quand un client réserve depuis votre site, le rendez-vous arrive \"en attente\". Cliquez sur le bouton vert ✓ pour accepter, ou sur ✕ pour refuser. Votre client reçoit automatiquement un email de confirmation ou d'annulation.",
+    selector: "#dash-upcoming-appts",
     side: "bottom",
     pointerPadding: 8,
     pointerRadius: 10,
@@ -190,9 +190,9 @@ const appointmentsSteps: Step[] = [
     icon: "⏳",
     title: "Confirmer les rendez-vous",
     content:
-      "Les rendez-vous pris depuis votre site apparaissent ici \"en attente\". Cliquez sur le bouton vert ✓ pour accepter, ou sur ✕ pour refuser. Votre client est automatiquement prévenu par email dans les deux cas.",
-    selector: "#appts-pending",
-    side: "bottom",
+      "Les rendez-vous pris depuis votre site apparaissent en bannière amber \"en attente\". Cliquez sur le bouton vert ✓ pour accepter, ou sur ✕ pour refuser. Votre client est automatiquement prévenu par email dans les deux cas.",
+    selector: "#appts-calendar",
+    side: "top",
     pointerPadding: 8,
     pointerRadius: 10,
   },
@@ -235,8 +235,8 @@ const siteBuilderSteps: Step[] = [
     title: "Remplissez les informations",
     content:
       "Chaque étape vous demande des informations sur votre activité : votre nom, vos services, vos horaires... Si vous ne savez pas quoi écrire, laissez le champ vide pour l'instant — vous pourrez revenir le compléter plus tard.",
-    selector: "#sb-content",
-    side: "right",
+    selector: "#sb-progress",
+    side: "bottom",
     pointerPadding: 8,
     pointerRadius: 10,
   },
@@ -347,7 +347,7 @@ const settingsSteps: Step[] = [
     title: "Vos notifications",
     content:
       "Dans \"Notifications\", choisissez comment vous souhaitez être prévenu : par email quand un nouveau client vous contacte, quand un rendez-vous est réservé, pour les rappels... Activez ou désactivez chaque alerte selon vos préférences.",
-    selector: "#settings-notif-btn",
+    selector: "#settings-notifications-btn",
     side: "right",
     pointerPadding: 8,
     pointerRadius: 8,

@@ -340,16 +340,13 @@ function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: 
           <span>▶</span> Guide de cette page
         </button>
       )}
-      {TOUR_MENU.map(item => (
-        <button
-          key={item.tour}
-          onClick={() => handleStart(item.tour)}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-colors"
-          style={{ color: "#AABDD8" }}
-        >
-          {item.label}
-        </button>
-      ))}
+      <button
+        onClick={() => handleStart("welcome")}
+        className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-colors"
+        style={{ color: "#AABDD8" }}
+      >
+        🗺 Visite guidée générale
+      </button>
     </div>
   );
 }
@@ -407,6 +404,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <OnbordaProvider>
         <Onborda steps={ALL_TOURS} cardComponent={OnboardingCard} shadowOpacity="0.6" shadowRgb="7,34,47">
     <div data-dash-dark className="min-h-screen bg-gray-50">
+      {/* Ancre invisible fixée au centre du viewport — cible pour la card de bienvenue */}
+      <div id="onboarding-center" style={{ position: "fixed", top: "38%", left: "50%", width: 0, height: 0, pointerEvents: "none" }} />
       <TourStarter />
       {/* Navbar fixe */}
       <nav className="fixed top-0 inset-x-0 z-50 h-14" style={{ background: "var(--bg-nav)", borderBottom: "1px solid rgba(170,189,216,.1)" }}>
@@ -419,6 +418,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               Klientys
             </span>
           </Link>
+
+          {/* Nom plateforme — visible uniquement sur mobile */}
+          <span className="md:hidden flex-1 text-center text-sm font-semibold text-white tracking-wide" style={{ fontFamily: "Georgia, Palatino, serif", fontStyle: "italic" }}>
+            Klientys
+          </span>
 
           {/* Liens nav — icônes seules sur md, icônes + labels sur lg */}
           <div className="hidden md:flex items-center gap-0.5 flex-1 justify-center">
