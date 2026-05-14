@@ -84,7 +84,8 @@ export async function generateMetadata({
   }
   if (!desc) desc = `${title} — Retrouvez toutes les informations et prenez rendez-vous en ligne.`;
 
-  const canonical = `${APP_URL}/${tenantSlug}`;
+  const activeDomain: string | null = site.tenant?.custom_domain ?? null;
+  const canonical = activeDomain ? `https://${activeDomain}` : `${APP_URL}/${tenantSlug}`;
 
   return {
     title: titleTag,
@@ -275,7 +276,7 @@ export default async function TenantSitePage({
         <section id="a-propos" className="py-16 px-6">
           <div className={`max-w-3xl mx-auto text-center${photoUrls.about ? " sm:grid sm:grid-cols-2 sm:gap-10 sm:text-left sm:max-w-5xl sm:items-center" : ""}`}>
             {photoUrls.about && (
-              <img src={photoUrls.about} alt="À propos" className="w-full h-64 object-cover rounded-2xl shadow-md mb-6 sm:mb-0" />
+              <img src={photoUrls.about} alt={`${site.title} — présentation`} className="w-full h-64 object-cover rounded-2xl shadow-md mb-6 sm:mb-0" />
             )}
             <div>
               <h2 className="text-2xl font-bold mb-6">À propos</h2>
@@ -389,7 +390,7 @@ export default async function TenantSitePage({
           <h2 className="text-2xl font-bold mb-8 text-center">Prendre contact</h2>
           <div className={`grid gap-10 ${photoUrls.contact ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
             {photoUrls.contact && (
-              <img src={photoUrls.contact} alt="Contact" className="w-full h-48 sm:h-full object-cover rounded-2xl shadow-md" />
+              <img src={photoUrls.contact} alt={`Contacter ${site.title}`} className="w-full h-48 sm:h-full object-cover rounded-2xl shadow-md" />
             )}
             <div className="space-y-4">
               {site.phone && (
@@ -475,6 +476,21 @@ export default async function TenantSitePage({
               }),
               ...(zones.length > 0 && {
                 areaServed: zones.map((z: string) => ({ "@type": "City", name: z })),
+              }),
+              ...(testimonials.length > 0 && {
+                aggregateRating: {
+                  "@type": "AggregateRating",
+                  ratingValue: (testimonials.reduce((s: number, t: any) => s + (t.rating ?? 5), 0) / testimonials.length).toFixed(1),
+                  reviewCount: testimonials.length,
+                  bestRating: "5",
+                  worstRating: "1",
+                },
+                review: testimonials.map((t: any) => ({
+                  "@type": "Review",
+                  reviewRating: { "@type": "Rating", ratingValue: String(t.rating ?? 5), bestRating: "5" },
+                  author: { "@type": "Person", name: t.author_name },
+                  reviewBody: t.content,
+                })),
               }),
               ...(site.service_offer?.length > 0 && {
                 hasOfferCatalog: {

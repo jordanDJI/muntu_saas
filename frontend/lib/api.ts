@@ -251,6 +251,11 @@ export const api = {
       body: JSON.stringify({ success_url: successUrl, cancel_url: cancelUrl }),
     }),
 
+  // Annuaire public
+  getDirectoryListing: () => apiFetch<any>("/api/v1/directory/my-listing"),
+  directoryOptIn: (body: object) => apiFetch("/api/v1/directory/opt-in", { method: "POST", body: JSON.stringify(body) }),
+  directoryOptOut: () => apiFetch("/api/v1/directory/opt-out", { method: "DELETE" }),
+
   // Booking public (sans auth)
   getPublicAvailableDays: (tenantSlug: string, year: number, month: number) => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";

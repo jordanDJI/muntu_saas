@@ -1,0 +1,502 @@
+[
+  {
+    "slug": "infirmier-liberal",
+    "label": "Infirmier libéral",
+    "labelArticle": "un infirmier libéral",
+    "labelPlural": "Infirmiers libéraux",
+    "famille": "sante",
+    "description": "Soins infirmiers à domicile — pansements, injections, prises de sang",
+    "painPoints": [
+      "Mes patients ne savent pas que j'interviens dans leur commune",
+      "Doctolib coûte 160 €/mois pour une visibilité sur les grandes villes — pas mes tournées",
+      "Je perds 30 min par jour à expliquer mes zones de déplacement au téléphone"
+    ],
+    "keyFeatures": [
+      "Site vitrine avec vos zones d'intervention affichées et indexées par Google",
+      "Agenda de réservation en ligne — sans commission Doctolib",
+      "Agent IA WhatsApp qui répond aux patients en dehors de vos heures"
+    ],
+    "comparatif": "Doctolib",
+    "templateColor": "teal",
+    "kw_monthly_fr": 590,
+    "kw_monthly_be": 180,
+    "testimonialName": "Sandrine M.",
+    "testimonialCity": "Lyon",
+    "testimonialQuote": "En 3 semaines, 4 nouveaux patients m'ont trouvée en tapant 'infirmière' suivi de leur commune. Jamais eu ça avec Doctolib seul."
+  },
+  {
+    "slug": "kinesitherapeute",
+    "label": "Kinésithérapeute",
+    "labelArticle": "un kinésithérapeute",
+    "labelPlural": "Kinésithérapeutes",
+    "famille": "sante",
+    "description": "Rééducation et soins de kinésithérapie — cabinet ou domicile",
+    "painPoints": [
+      "Quand un patient cherche 'kiné à domicile [ma ville]', je n'apparais pas",
+      "Mes concurrents sur Doctolib ont 200 avis — moi zéro visibilité propre",
+      "Je couvre 3 communes mais mon site ne le dit pas"
+    ],
+    "keyFeatures": [
+      "Pages dédiées par commune d'intervention",
+      "Prise de RDV en ligne directe — sans intermédiaire",
+      "Schema.org médical pour les rich snippets Google"
+    ],
+    "comparatif": "Doctolib",
+    "templateColor": "indigo",
+    "kw_monthly_fr": 720,
+    "kw_monthly_be": 140,
+    "testimonialName": "Thomas L.",
+    "testimonialCity": "Bordeaux",
+    "testimonialQuote": "Mon site Klientys me rapporte maintenant plus de nouveaux patients que Doctolib. Et je ne paie plus 160 €/mois."
+  },
+  {
+    "slug": "osteopathe",
+    "label": "Ostéopathe",
+    "labelArticle": "un ostéopathe",
+    "labelPlural": "Ostéopathes",
+    "famille": "sante",
+    "description": "Ostéopathie — nourrissons, adultes, sportifs, femmes enceintes",
+    "painPoints": [
+      "Je ne suis pas sur Doctolib — je dois tout gérer à la main",
+      "Mon site actuel n'est pas optimisé pour mon quartier",
+      "Les patients ne savent pas que je me déplace à domicile"
+    ],
+    "keyFeatures": [
+      "Site professionnel en 10 min, sans coder",
+      "Agenda en ligne avec créneaux configurables",
+      "Affichage de vos zones d'intervention sur une carte"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "green",
+    "kw_monthly_fr": 480,
+    "kw_monthly_be": 90,
+    "testimonialName": "Claire D.",
+    "testimonialCity": "Nantes",
+    "testimonialQuote": "J'avais un site Wix que je n'arrivais pas à mettre à jour. Klientys m'a pris 12 minutes et j'ai déjà eu 2 appels cette semaine."
+  },
+  {
+    "slug": "psychologue",
+    "label": "Psychologue",
+    "labelArticle": "un psychologue",
+    "labelPlural": "Psychologues",
+    "famille": "sante",
+    "description": "Consultations de psychologie — adultes, adolescents, couples",
+    "painPoints": [
+      "Je veux être trouvé sans exposer trop d'informations personnelles",
+      "Les plateformes généralistes me mélangent avec des coachs non diplômés",
+      "Je reçois trop d'appels non qualifiés hors de ma spécialité"
+    ],
+    "keyFeatures": [
+      "Présentation ciblée de vos spécialités",
+      "Formulaire de contact qualifié",
+      "Mode présentiel / téléconsultation configurable"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "purple",
+    "kw_monthly_fr": 540,
+    "kw_monthly_be": 100,
+    "testimonialName": "Marie-Hélène R.",
+    "testimonialCity": "Paris",
+    "testimonialQuote": "Mon agenda est complet et je reçois uniquement des patients qui correspondent à ma pratique. Le filtre par spécialité est vraiment utile."
+  },
+  {
+    "slug": "coach-sportif",
+    "label": "Coach sportif",
+    "labelArticle": "un coach sportif",
+    "labelPlural": "Coachs sportifs",
+    "famille": "services",
+    "description": "Coaching sportif personnalisé — à domicile, en salle ou en plein air",
+    "painPoints": [
+      "Mes clients trouvent d'autres coachs sur Instagram mais pas moi sur Google",
+      "Je perds du temps à envoyer mes dispo par WhatsApp",
+      "Je couvre tout le nord de la ville mais personne ne le sait"
+    ],
+    "keyFeatures": [
+      "Site optimisé pour '[coach sportif] + [votre ville]'",
+      "Réservation de séances en ligne en 2 clics",
+      "Galerie de résultats clients et témoignages"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "orange",
+    "kw_monthly_fr": 650,
+    "kw_monthly_be": 85,
+    "testimonialName": "Julien K.",
+    "testimonialCity": "Marseille",
+    "testimonialQuote": "Je pensais que Google c'était pour les grandes marques. Mon site Klientys m'a apporté 6 nouveaux clients le premier mois."
+  },
+  {
+    "slug": "naturopathe",
+    "label": "Naturopathe",
+    "labelArticle": "un naturopathe",
+    "labelPlural": "Naturopathes",
+    "famille": "sante",
+    "description": "Accompagnement naturopathique — alimentation, phytothérapie, gestion du stress",
+    "painPoints": [
+      "Les clients potentiels ne savent pas différencier les naturopathes qualifiés",
+      "Je me déplace à domicile mais mon site dit juste 'cabinet'",
+      "Je dois expliquer ma pratique à chaque premier appel"
+    ],
+    "keyFeatures": [
+      "Page 'À propos' structurée pour expliquer votre approche",
+      "Vos zones d'intervention domicile affichées clairement",
+      "Agenda de consultations en ligne"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "green",
+    "kw_monthly_fr": 440,
+    "kw_monthly_be": 60,
+    "testimonialName": "Aline B.",
+    "testimonialCity": "Toulouse",
+    "testimonialQuote": "Mes clientes me disent souvent qu'elles m'ont trouvée en cherchant 'naturopathe à domicile [leur ville]'. C'est exactement ce que je voulais."
+  },
+  {
+    "slug": "sophrologue",
+    "label": "Sophrologue",
+    "labelArticle": "un sophrologue",
+    "labelPlural": "Sophrologues",
+    "famille": "sante",
+    "description": "Sophrologie — gestion du stress, sommeil, confiance en soi",
+    "painPoints": [
+      "Beaucoup de sophrologues non certifiés nuisent à la visibilité des pros diplômés",
+      "Je propose des séances à domicile et en cabinet mais mon site ne le précise pas",
+      "Je n'apparais pas quand on cherche 'sophrologue [ma ville]'"
+    ],
+    "keyFeatures": [
+      "Mise en valeur de vos certifications et formations",
+      "Double mode : cabinet + domicile configurable",
+      "Réservation en ligne avec séance découverte"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "indigo",
+    "kw_monthly_fr": 380,
+    "kw_monthly_be": 55,
+    "testimonialName": "Nathalie P.",
+    "testimonialCity": "Strasbourg",
+    "testimonialQuote": "Je n'avais aucune présence en ligne. Aujourd'hui j'ai un agenda plein pour les 3 prochaines semaines."
+  },
+  {
+    "slug": "plombier",
+    "label": "Plombier",
+    "labelArticle": "un plombier",
+    "labelPlural": "Plombiers",
+    "famille": "artisan",
+    "description": "Plomberie — installations, dépannages, rénovations",
+    "painPoints": [
+      "Le bouche à oreille ne suffit plus — je dois être sur Google",
+      "Les plateformes comme Habitatpresto prennent 15-20% de commission",
+      "Mes concurrents ont un site, moi non — je perds des devis"
+    ],
+    "keyFeatures": [
+      "Site professionnel avec vos zones d'intervention précises",
+      "Demande de devis en ligne — sans intermédiaire",
+      "Galerie de vos réalisations avec photos"
+    ],
+    "comparatif": "Habitatpresto",
+    "templateColor": "blue",
+    "kw_monthly_fr": 720,
+    "kw_monthly_be": 130,
+    "testimonialName": "Karim B.",
+    "testimonialCity": "Lyon",
+    "testimonialQuote": "J'ai arrêté Habitatpresto. Mon site Klientys me ramène autant de clients, sans payer de commission sur chaque devis."
+  },
+  {
+    "slug": "electricien",
+    "label": "Électricien",
+    "labelArticle": "un électricien",
+    "labelPlural": "Électriciens",
+    "famille": "artisan",
+    "description": "Électricité — installations, mises aux normes, domotique",
+    "painPoints": [
+      "Quand quelqu'un cherche 'électricien [ma ville]', je n'apparais pas",
+      "Je perds des clients au profit de collègues qui ont un site",
+      "Les agrégateurs de devis m'envoient des leads très froids"
+    ],
+    "keyFeatures": [
+      "Page spécifique par commune couverte",
+      "Formulaire de devis rapide en ligne",
+      "Badge certifications (RGE, Qualifelec...)"
+    ],
+    "comparatif": "Pages Jaunes",
+    "templateColor": "amber",
+    "kw_monthly_fr": 580,
+    "kw_monthly_be": 110,
+    "testimonialName": "David M.",
+    "testimonialCity": "Lille",
+    "testimonialQuote": "Depuis que j'ai mon site, je reçois 3-4 demandes de devis par semaine directement. Avant c'était zéro."
+  },
+  {
+    "slug": "jardinier-paysagiste",
+    "label": "Jardinier paysagiste",
+    "labelArticle": "un jardinier paysagiste",
+    "labelPlural": "Jardiniers paysagistes",
+    "famille": "artisan",
+    "description": "Jardinage et paysagisme — entretien, création, taille",
+    "painPoints": [
+      "Je tourne dans 5 communes mais personne ne le sait sauf mes clients actuels",
+      "La saison commence et je dois remplir mon agenda rapidement",
+      "Les plateformes d'annonces me coûtent plus cher que ce qu'elles rapportent"
+    ],
+    "keyFeatures": [
+      "Galerie avant/après de vos réalisations",
+      "Zones d'intervention avec carte interactive",
+      "Formulaire de devis adapté aux travaux de jardinage"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "green",
+    "kw_monthly_fr": 410,
+    "kw_monthly_be": 70,
+    "testimonialName": "Patrick V.",
+    "testimonialCity": "Bordeaux",
+    "testimonialQuote": "Au printemps dernier, 8 nouveaux clients m'ont contacté via mon site. Sans rien faire d'autre que le publier."
+  },
+  {
+    "slug": "photographe-mariage",
+    "label": "Photographe mariage",
+    "labelArticle": "un photographe mariage",
+    "labelPlural": "Photographes mariage",
+    "famille": "services",
+    "description": "Photographie de mariage et événementiel",
+    "painPoints": [
+      "Les couples cherchent sur Google avant Instagram — je rate cette étape",
+      "Je couvre toute la région mais mon site dit juste ma ville principale",
+      "Les plateformes de mariages prennent 20% sur chaque réservation"
+    ],
+    "keyFeatures": [
+      "Portfolio intégré avec galeries par événement",
+      "Formulaire de réservation avec date et lieu",
+      "Zones géographiques couvertes — régions et villes"
+    ],
+    "comparatif": "Mariages.net",
+    "templateColor": "rose",
+    "kw_monthly_fr": 890,
+    "kw_monthly_be": 140,
+    "testimonialName": "Léa C.",
+    "testimonialCity": "Rennes",
+    "testimonialQuote": "J'avais un portfolio sur Squarespace que personne ne trouvait. Maintenant je reçois 2-3 demandes par mois via Google."
+  },
+  {
+    "slug": "professeur-particulier",
+    "label": "Professeur particulier",
+    "labelArticle": "un professeur particulier",
+    "labelPlural": "Professeurs particuliers",
+    "famille": "services",
+    "description": "Cours particuliers à domicile — toutes matières et tous niveaux",
+    "painPoints": [
+      "Les plateformes type Superprof prennent 20% sur chaque heure",
+      "Les parents cherchent un prof dans leur quartier — pas dans toute la ville",
+      "Je me déplace dans un rayon de 10 km mais mon profil Superprof le cache"
+    ],
+    "keyFeatures": [
+      "Page par matière et par niveau",
+      "Zones de déplacement précises",
+      "Réservation de séance d'essai gratuite"
+    ],
+    "comparatif": "Superprof",
+    "templateColor": "indigo",
+    "kw_monthly_fr": 540,
+    "kw_monthly_be": 85,
+    "testimonialName": "Emma R.",
+    "testimonialCity": "Paris",
+    "testimonialQuote": "J'ai quitté Superprof et je gagne 20% de plus par heure. Mes élèves viennent maintenant tous de Google."
+  },
+  {
+    "slug": "aide-domicile",
+    "label": "Aide à domicile",
+    "labelArticle": "une aide à domicile",
+    "labelPlural": "Aides à domicile",
+    "famille": "services",
+    "description": "Aide à domicile — personnes âgées, ménage, courses, compagnie",
+    "painPoints": [
+      "Les familles cherchent quelqu'un de confiance proche de chez elles",
+      "Les agences prennent une grande part du tarif horaire",
+      "Je n'ai aucune visibilité en ligne en dehors du bouche à oreille"
+    ],
+    "keyFeatures": [
+      "Présentation de vos services et de votre expérience",
+      "Zones d'intervention par commune",
+      "Formulaire de contact sécurisé"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "teal",
+    "kw_monthly_fr": 430,
+    "kw_monthly_be": 95,
+    "testimonialName": "Isabelle N.",
+    "testimonialCity": "Nantes",
+    "testimonialQuote": "Des familles que je ne connaissais pas m'ont contactée via mon site. C'est une clientèle que je n'aurais jamais pu toucher avant."
+  },
+  {
+    "slug": "menuisier",
+    "label": "Menuisier",
+    "labelArticle": "un menuisier",
+    "labelPlural": "Menuisiers",
+    "famille": "artisan",
+    "description": "Menuiserie — pose, fabrication sur mesure, rénovation",
+    "painPoints": [
+      "Je n'ai pas de site et je perds des clients au profit de collègues qui en ont un",
+      "Les clients me demandent mes réalisations — je n'ai nulle part pour les montrer",
+      "Je couvre 4 communes mais on me trouve que si on me connaît déjà"
+    ],
+    "keyFeatures": [
+      "Galerie de réalisations avec photos avant/après",
+      "Formulaire de devis en ligne",
+      "Zones d'intervention par commune"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "amber",
+    "kw_monthly_fr": 310,
+    "kw_monthly_be": 55,
+    "testimonialName": "Stéphane C.",
+    "testimonialCity": "Grenoble",
+    "testimonialQuote": "Ma galerie en ligne a tout changé. Les clients arrivent déjà convaincus avant même le premier appel."
+  },
+  {
+    "slug": "peintre-artisan",
+    "label": "Peintre artisan",
+    "labelArticle": "un peintre artisan",
+    "labelPlural": "Peintres artisans",
+    "famille": "artisan",
+    "description": "Peinture intérieure et extérieure — particuliers et professionnels",
+    "painPoints": [
+      "Les gros chantiers vont aux entreprises qui ont un site vitrine",
+      "Je dois montrer mes travaux mais je n'ai pas de portfolio en ligne",
+      "Les comparateurs de devis me mettent en concurrence sur le prix uniquement"
+    ],
+    "keyFeatures": [
+      "Portfolio photos de vos chantiers",
+      "Devis rapide en ligne",
+      "Zones d'intervention affichées"
+    ],
+    "comparatif": "Houzz",
+    "templateColor": "blue",
+    "kw_monthly_fr": 270,
+    "kw_monthly_be": 45,
+    "testimonialName": "Frédéric A.",
+    "testimonialCity": "Toulouse",
+    "testimonialQuote": "Les clients qui m'appellent via mon site sont bien plus sérieux. Ils ont vu mes réalisations avant."
+  },
+  {
+    "slug": "dieteticienne",
+    "label": "Diététicienne",
+    "labelArticle": "une diététicienne",
+    "labelPlural": "Diététiciennes",
+    "famille": "sante",
+    "description": "Consultations diététiques — perte de poids, rééquilibrage alimentaire, maladies chroniques",
+    "painPoints": [
+      "Les coachs nutrition non diplômés occupent mon espace sur Google",
+      "Je propose des consultations à domicile mais mon site ne le précise pas",
+      "Je veux mettre en avant mes spécialités sans repartir de zéro"
+    ],
+    "keyFeatures": [
+      "Distinction claire diplôme diét. vs coach nutrition",
+      "Consultations domicile / cabinet / visio configurables",
+      "Prise de RDV en ligne avec questionnaire initial"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "green",
+    "kw_monthly_fr": 180,
+    "kw_monthly_be": 35,
+    "testimonialName": "Sophie T.",
+    "testimonialCity": "Montpellier",
+    "testimonialQuote": "Mon agenda est maintenant complet deux semaines à l'avance. Je n'aurais pas cru que Google pouvait changer autant la donne."
+  },
+  {
+    "slug": "sage-femme",
+    "label": "Sage-femme libérale",
+    "labelArticle": "une sage-femme libérale",
+    "labelPlural": "Sages-femmes libérales",
+    "famille": "sante",
+    "description": "Suivi de grossesse, préparation à l'accouchement, rééducation périnéale",
+    "painPoints": [
+      "Les futurs parents cherchent une sage-femme proche de chez eux dès le 1er trimestre",
+      "Je couvre plusieurs communes mais ma visibilité est nulle en dehors de ma ville principale",
+      "Doctolib ne reflète pas la diversité de mes consultations"
+    ],
+    "keyFeatures": [
+      "Page dédiée par type de consultation",
+      "Zones d'intervention affichées sur carte",
+      "Agenda en ligne adapté aux consultations longues"
+    ],
+    "comparatif": "Doctolib",
+    "templateColor": "rose",
+    "kw_monthly_fr": 290,
+    "kw_monthly_be": 55,
+    "testimonialName": "Julie M.",
+    "testimonialCity": "Lille",
+    "testimonialQuote": "Les mamans me trouvent maintenant en cherchant 'sage-femme à domicile [leur ville]'. C'est exactement les patientes que je cherche."
+  },
+  {
+    "slug": "toiletteur",
+    "label": "Toiletteur animalier",
+    "labelArticle": "un toiletteur animalier",
+    "labelPlural": "Toiletteurs animaliers",
+    "famille": "services",
+    "description": "Toilettage chiens et chats — salon ou déplacement à domicile",
+    "painPoints": [
+      "Les gens cherchent 'toiletteur [leur ville]' sur Google — je n'y suis pas",
+      "Je me déplace à domicile dans un rayon de 15 km mais personne ne le sait",
+      "Les réseaux sociaux seuls ne suffisent plus"
+    ],
+    "keyFeatures": [
+      "Galerie avant/après des toilettages",
+      "Réservation en ligne de créneaux",
+      "Zones de déplacement affichées"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "teal",
+    "kw_monthly_fr": 290,
+    "kw_monthly_be": 50,
+    "testimonialName": "Aurélie F.",
+    "testimonialCity": "Strasbourg",
+    "testimonialQuote": "Mes clientes me disent régulièrement qu'elles m'ont trouvée sur Google. Ce n'était pas le cas avant mon site Klientys."
+  },
+  {
+    "slug": "dj-evenementiel",
+    "label": "DJ événementiel",
+    "labelArticle": "un DJ événementiel",
+    "labelPlural": "DJs événementiels",
+    "famille": "services",
+    "description": "Animation musicale — mariages, anniversaires, événements d'entreprise",
+    "painPoints": [
+      "Les couples cherchent 'DJ mariage [leur région]' — je n'apparais pas",
+      "Je perds des réservations car les clients trouvent un concurrent en ligne d'abord",
+      "Mon profil réseaux sociaux ne suffit pas pour les clients qui cherchent sur Google"
+    ],
+    "keyFeatures": [
+      "Portfolio avec mix, vidéos et références",
+      "Formulaire de réservation avec date et type d'événement",
+      "Zones géographiques d'intervention"
+    ],
+    "comparatif": "Wix",
+    "templateColor": "purple",
+    "kw_monthly_fr": 220,
+    "kw_monthly_be": 35,
+    "testimonialName": "Kevin S.",
+    "testimonialCity": "Paris",
+    "testimonialQuote": "Je pensais que les DJs se trouvaient uniquement par recommandation. Mon site me prouve que Google est un canal énorme."
+  },
+  {
+    "slug": "podologue",
+    "label": "Podologue",
+    "labelArticle": "un podologue",
+    "labelPlural": "Podologues",
+    "famille": "sante",
+    "description": "Podologie — semelles orthopédiques, soins des pieds, bilan podologique",
+    "painPoints": [
+      "Je ne suis pas sur Doctolib mais mes patients cherchent quand même sur internet",
+      "Les patients âgés ont besoin d'un podologue qui se déplace — je le fais mais ça ne se sait pas",
+      "Mon site actuel date de 2018 et n'est pas sur mobile"
+    ],
+    "keyFeatures": [
+      "Site responsive mobile-first",
+      "Option visite à domicile visible",
+      "Prise de RDV en ligne sans commission"
+    ],
+    "comparatif": "Doctolib",
+    "templateColor": "blue",
+    "kw_monthly_fr": 220,
+    "kw_monthly_be": 45,
+    "testimonialName": "Bernard L.",
+    "testimonialCity": "Nice",
+    "testimonialQuote": "J'avais un vieux site que je ne pouvais plus modifier. Klientys m'a donné un site moderne en moins d'une demi-heure."
+  }
+]

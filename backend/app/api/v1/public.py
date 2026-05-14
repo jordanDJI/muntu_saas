@@ -22,6 +22,31 @@ async def get_published_slugs():
     return {"slugs": slugs}
 
 
+@router.get("/directory-slugs")
+async def get_directory_slugs():
+    import unicodedata
+    def to_slug(s: str) -> str:
+        s = unicodedata.normalize("NFD", s.lower())
+        s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+        return s.replace(" ", "-")
+
+    sb = get_supabase()
+    rows = (
+        sb.table("directory_listing")
+        .select("metier_slug, primary_zone, tenant!inner(slug)")
+        .eq("is_listed", True)
+        .execute()
+    )
+    slugs = []
+    for r in rows.data:
+        tenant_slug = r.get("tenant", {}).get("slug", "")
+        metier = r.get("metier_slug", "")
+        ville_slug = to_slug(r.get("primary_zone") or "")
+        if tenant_slug and metier and ville_slug:
+            slugs.append({"metier": metier, "ville": ville_slug, "slug": tenant_slug})
+    return {"slugs": slugs}
+
+
 @router.get("/site/{slug}")
 async def get_public_site(slug: str, preview: bool = Query(False)):
     sb = get_supabase()
@@ -45,4 +70,7 @@ async def get_public_site(slug: str, preview: bool = Query(False)):
     if not site_res.data:
         raise HTTPException(status_code=404, detail="Site introuvable ou non publié")
 
-    return {**site_res.data, "tenant": {**tenant, "country": tenant_res.data[0].get("country", "FR")}}
+    domain_res = sb.table("custom_domain").select("domain").eq("tenant_id", tenant["id"]).eq("status", "active").limit(1).execute()
+    custom_domain = domain_res.data[0]["domain"] if domain_res.data else None
+
+    return {**site_res.data, "tenant": {**tenant, "country": tenant_res.data[0].get("country", "FR"), "custom_domain": custom_domain}}

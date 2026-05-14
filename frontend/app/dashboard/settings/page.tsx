@@ -4,19 +4,22 @@ import { useRouter } from "next/navigation";
 import { api, supabase } from "../../../lib/api";
 import { useLanguage, LangSelector, LANGUAGES } from "../../../contexts/LanguageContext";
 import DemandPotentialCard from "../analytics/DemandPotentialCard";
+import metiers from "../../../data/metiers.json";
+import villes from "../../../data/villes.json";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Section =
   | "profil" | "securite" | "site" | "metriques"
   | "abonnement" | "notifications" | "preferences"
-  | "membres" | "integrations" | "export" | "activite" | "domaine";
+  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire";
 
 const NAV: { key: Section; label: string; icon: string }[] = [
   { key: "profil",        label: "Profil",          icon: "👤" },
   { key: "securite",      label: "Sécurité",        icon: "🔐" },
   { key: "site",          label: "Mon site",        icon: "🌐" },
   { key: "domaine",       label: "Domaine",         icon: "🔗" },
+  { key: "annuaire",      label: "Annuaire public",  icon: "📋" },
   { key: "metriques",     label: "Métriques",       icon: "📊" },
   { key: "abonnement",    label: "Abonnement",      icon: "💳" },
   { key: "notifications", label: "Notifications",   icon: "🔔" },
@@ -1561,12 +1564,247 @@ function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
   );
 }
 
+// ── Section Annuaire ──────────────────────────────────────────────────────────
+
+function SectionAnnuaire() {
+  const [listing, setListing]         = useState<any>(null);
+  const [loading, setLoading]         = useState(true);
+  const [saving, setSaving]           = useState(false);
+  const [msg, setMsg]                 = useState("");
+
+  const [isListed, setIsListed]       = useState(false);
+  const [metierSlug, setMetierSlug]   = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [tagline, setTagline]         = useState("");
+  const [zones, setZones]             = useState<string[]>([]);
+  const [primaryZone, setPrimaryZone] = useState("");
+  const [acceptsBooking, setAcceptsBooking] = useState(true);
+  const [zoneInput, setZoneInput]     = useState("");
+
+  useEffect(() => {
+    api.getDirectoryListing()
+      .then(data => {
+        if (data) {
+          setListing(data);
+          setIsListed(data.is_listed ?? false);
+          setMetierSlug(data.metier_slug ?? "");
+          setDisplayName(data.display_name ?? "");
+          setTagline(data.tagline ?? "");
+          setZones(data.zones ?? []);
+          setPrimaryZone(data.primary_zone ?? "");
+          setAcceptsBooking(data.accepts_booking ?? true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const addZone = () => {
+    const z = zoneInput.trim();
+    if (z && !zones.includes(z)) {
+      const next = [...zones, z];
+      setZones(next);
+      if (!primaryZone) setPrimaryZone(z);
+    }
+    setZoneInput("");
+  };
+
+  const removeZone = (z: string) => {
+    const next = zones.filter(x => x !== z);
+    setZones(next);
+    if (primaryZone === z) setPrimaryZone(next[0] ?? "");
+  };
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true); setMsg("");
+    try {
+      if (isListed) {
+        await api.directoryOptIn({
+          metier_slug: metierSlug,
+          display_name: displayName,
+          tagline: tagline || null,
+          zones,
+          primary_zone: primaryZone || zones[0] || "",
+          accepts_booking: acceptsBooking,
+        });
+        setMsg("Profil annuaire sauvegardé et visible publiquement.");
+      } else {
+        if (listing) await api.directoryOptOut();
+        setMsg("Vous n'apparaissez plus dans l'annuaire.");
+      }
+      setListing((prev: any) => ({ ...prev, is_listed: isListed }));
+    } catch (err: any) {
+      setMsg(`Erreur : ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const villeSlug = villes.find(v => v.label.toLowerCase() === primaryZone.toLowerCase())?.slug
+    ?? primaryZone.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, "-");
+
+  const previewUrl = isListed && metierSlug && primaryZone
+    ? `/annuaire/${metierSlug}/${villeSlug}`
+    : null;
+
+  if (loading) return <p className="text-sm text-gray-400">Chargement…</p>;
+
+  return (
+    <>
+      <SectionTitle
+        title="Annuaire public"
+        subtitle="Apparaissez dans l'annuaire Klientys et soyez trouvé par vos clients locaux."
+      />
+
+      <form onSubmit={save} className="space-y-4">
+        <Card>
+          <Toggle
+            checked={isListed}
+            onChange={setIsListed}
+            label={isListed ? "Visible dans l'annuaire public" : "Non listé dans l'annuaire"}
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Quand activé, votre profil est indexé dans l'annuaire et référencé par les moteurs de recherche.
+          </p>
+        </Card>
+
+        {isListed && (
+          <Card>
+            <h3 className="font-semibold text-sm text-gray-700 mb-1">Informations de profil</h3>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Métier</label>
+              <select
+                value={metierSlug}
+                onChange={e => setMetierSlug(e.target.value)}
+                required
+                className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              >
+                <option value="">Choisir votre métier</option>
+                {metiers.map(m => (
+                  <option key={m.slug} value={m.slug}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Nom affiché</label>
+              <input
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                placeholder="Jean Dupont"
+                required
+                className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Tagline <span className="text-gray-400 font-normal">(optionnel)</span></label>
+              <input
+                value={tagline}
+                onChange={e => setTagline(e.target.value)}
+                placeholder="Kinésithérapeute spécialisé en rééducation sportive"
+                maxLength={120}
+                className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              />
+              <p className="text-xs text-gray-400 mt-1">{tagline.length}/120 caractères</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Zones d'intervention</label>
+              <div className="flex gap-2">
+                <input
+                  value={zoneInput}
+                  onChange={e => setZoneInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addZone(); } }}
+                  placeholder="Ex: Bruxelles"
+                  className="border rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                />
+                <button
+                  type="button"
+                  onClick={addZone}
+                  className="border px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                >
+                  Ajouter
+                </button>
+              </div>
+              {zones.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {zones.map(z => (
+                    <span key={z} className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full">
+                      📍 {z}
+                      <button
+                        type="button"
+                        onClick={() => removeZone(z)}
+                        className="text-indigo-400 hover:text-indigo-600 leading-none ml-0.5"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {zones.length > 1 && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Zone principale <span className="text-gray-400 font-normal">(URL de votre fiche)</span></label>
+                <select
+                  value={primaryZone}
+                  onChange={e => setPrimaryZone(e.target.value)}
+                  className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                >
+                  {zones.map(z => (
+                    <option key={z} value={z}>{z}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <Toggle
+              checked={acceptsBooking}
+              onChange={setAcceptsBooking}
+              label="Afficher l'option de réservation en ligne sur ma fiche"
+            />
+          </Card>
+        )}
+
+        <Feedback msg={msg} />
+        <div className="flex items-center gap-3">
+          <SaveBtn loading={saving} label={saving ? "Sauvegarde…" : "Sauvegarder"} />
+        </div>
+      </form>
+
+      {previewUrl && (
+        <Card className="border-indigo-100 bg-indigo-50">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-indigo-800">Voir ma fiche dans l'annuaire</p>
+              <p className="text-xs text-indigo-600 mt-0.5">Votre profil est visible publiquement à cette adresse.</p>
+            </div>
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-800 transition-colors shrink-0"
+            >
+              Voir ma fiche →
+            </a>
+          </div>
+        </Card>
+      )}
+    </>
+  );
+}
+
 // ── Page principale ───────────────────────────────────────────────────────────
 
 const SECTION_MAP: Record<Exclude<Section, "domaine">, React.FC> = {
   profil:        SectionProfil,
   securite:      SectionSecurite,
   site:          SectionSite,
+  annuaire:      SectionAnnuaire,
   metriques:     SectionMetriques,
   abonnement:    SectionAbonnement,
   notifications: SectionNotifications,
