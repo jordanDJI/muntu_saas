@@ -1195,7 +1195,6 @@ function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
       const base = `${window.location.origin}/dashboard/settings`;
       const res = await api.createDomainPurchaseCheckout(
         confirmPurchase.domain,
-        confirmPurchase.price_ht,
         autoRenew,
         `${base}?domain_success=1`,
         `${base}`,
