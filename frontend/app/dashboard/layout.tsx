@@ -7,9 +7,27 @@ import { supabase, api } from "../../lib/api";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { TenantProvider, useTenant } from "../../contexts/TenantContext";
 import { SubscriptionProvider, useSubscription } from "../../contexts/SubscriptionContext";
+import type { FeatureKey } from "../../contexts/SubscriptionContext";
 import { COUNTRIES } from "../../lib/countries";
 import OnboardingCard from "../../components/OnboardingCard";
 import { ALL_TOURS, TOUR_MENU, PAGE_TOUR } from "./onboarding/tours";
+
+// Page cible de chaque tour (vide = nav toujours visible, pas de redirect)
+const TOUR_PAGE: Record<string, string> = {
+  welcome:        "",
+  dashboard:      "/dashboard",
+  leads:          "/dashboard/leads",
+  appointments:   "/dashboard/appointments",
+  "site-builder": "/dashboard/site-builder",
+  analytics:      "/dashboard/analytics",
+  agents:         "/dashboard/agents",
+  settings:       "/dashboard/settings",
+};
+
+// Feature d'abonnement requise pour afficher le tour dans le menu
+const TOUR_REQUIRED_FEATURE: Partial<Record<string, FeatureKey>> = {
+  analytics: "analytics",
+};
 
 const NAV_HREFS = [
   { href: "/dashboard",              tKey: "nav_db",       icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg> },
@@ -226,22 +244,34 @@ function TenantSwitcher() {
 
 function TourStarter() {
   const { startOnborda } = useOnborda();
+  const pathname = usePathname();
+
+  // Lance le tour en attente après une navigation inter-pages
+  useEffect(() => {
+    const pending = localStorage.getItem("klientys_pending_tour");
+    if (!pending) return;
+    const targetPage = TOUR_PAGE[pending];
+    if (!targetPage || pathname !== targetPage) return;
+    localStorage.removeItem("klientys_pending_tour");
+    const t = setTimeout(() => startOnborda(pending), 500);
+    return () => clearTimeout(t);
+  }, [pathname, startOnborda]);
+
+  // Tour de bienvenue au premier login (desktop uniquement)
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.innerWidth < 768) return; // nav links hidden on mobile — skip
-
+    if (window.innerWidth < 768) return;
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      if (user.user_metadata?.onboarding_done) return; // déjà vu
-
+      if (user.user_metadata?.onboarding_done) return;
       const t = setTimeout(async () => {
         startOnborda("welcome");
         await supabase.auth.updateUser({ data: { onboarding_done: true } });
       }, 800);
-
       return () => clearTimeout(t);
     });
   }, [startOnborda]);
+
   return null;
 }
 
@@ -249,7 +279,9 @@ function TourStarter() {
 
 function TourHelpMenu() {
   const { startOnborda } = useOnborda();
+  const { hasFeature } = useSubscription();
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -263,10 +295,20 @@ function TourHelpMenu() {
 
   const handleStart = (tour: string) => {
     setOpen(false);
-    startOnborda(tour);
+    const targetPage = TOUR_PAGE[tour];
+    if (targetPage && pathname !== targetPage) {
+      localStorage.setItem("klientys_pending_tour", tour);
+      router.push(targetPage);
+    } else {
+      startOnborda(tour);
+    }
   };
 
   const pageTour = PAGE_TOUR[pathname];
+  const visibleTours = TOUR_MENU.filter(item => {
+    const req = TOUR_REQUIRED_FEATURE[item.tour];
+    return !req || hasFeature(req);
+  });
 
   return (
     <div ref={ref} className="relative" id="tour-help">
@@ -287,7 +329,7 @@ function TourHelpMenu() {
             Guides interactifs
           </p>
 
-          {pageTour && (
+          {pageTour && (!TOUR_REQUIRED_FEATURE[pageTour] || hasFeature(TOUR_REQUIRED_FEATURE[pageTour]!)) && (
             <>
               <button
                 onClick={() => handleStart(pageTour)}
@@ -300,7 +342,7 @@ function TourHelpMenu() {
             </>
           )}
 
-          {TOUR_MENU.map(item => (
+          {visibleTours.map(item => (
             <button
               key={item.tour}
               onClick={() => handleStart(item.tour)}
@@ -320,11 +362,20 @@ function TourHelpMenu() {
 
 function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: string }) {
   const { startOnborda } = useOnborda();
+  const { hasFeature } = useSubscription();
+  const router = useRouter();
   const pageTour = PAGE_TOUR[pathname];
+  const canSeePageTour = pageTour && (!TOUR_REQUIRED_FEATURE[pageTour] || hasFeature(TOUR_REQUIRED_FEATURE[pageTour]!));
 
   const handleStart = (tour: string) => {
     onStart();
-    setTimeout(() => startOnborda(tour), 100);
+    const targetPage = TOUR_PAGE[tour];
+    if (targetPage && pathname !== targetPage) {
+      localStorage.setItem("klientys_pending_tour", tour);
+      setTimeout(() => router.push(targetPage), 100);
+    } else {
+      setTimeout(() => startOnborda(tour), 100);
+    }
   };
 
   return (
@@ -332,7 +383,7 @@ function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: 
       <p className="text-xs font-semibold uppercase tracking-widest px-2 pb-1" style={{ color: "rgba(170,189,216,.5)" }}>
         Guides interactifs
       </p>
-      {pageTour && (
+      {canSeePageTour && (
         <button
           onClick={() => handleStart(pageTour)}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-white/10 transition-colors"

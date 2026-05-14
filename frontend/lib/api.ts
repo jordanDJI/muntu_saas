@@ -222,6 +222,35 @@ export const api = {
   getAnalyticsSummary: (days = 30) => apiFetch<any>(`/api/v1/analytics/summary?days=${days}`),
   getRoiPotential: (period = "month") => apiFetch<any>(`/api/v1/analytics/roi-potential?period=${period}`),
 
+  // Domaines personnalisés
+  getDomain: () => apiFetch<any>("/api/v1/domains/my"),
+  connectDomain: (domain: string) =>
+    apiFetch<any>("/api/v1/domains/connect", { method: "POST", body: JSON.stringify({ domain }) }),
+  pollDomainStatus: () => apiFetch<any>("/api/v1/domains/status"),
+  deleteDomain: () => apiFetch<any>("/api/v1/domains/my", { method: "DELETE" }),
+  searchDomains: (query: string) =>
+    apiFetch<any[]>(`/api/v1/domains/search?query=${encodeURIComponent(query)}`),
+  createDomainPurchaseCheckout: (
+    domain: string,
+    autoRenew: boolean,
+    successUrl: string,
+    cancelUrl: string,
+  ) =>
+    apiFetch<{ checkout_url: string }>("/api/v1/domains/purchase", {
+      method: "POST",
+      body: JSON.stringify({
+        domain,
+        auto_renew: autoRenew,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+      }),
+    }),
+  createDomainAddonCheckout: (successUrl: string, cancelUrl: string) =>
+    apiFetch<{ checkout_url: string }>("/api/v1/domains/addon/checkout", {
+      method: "POST",
+      body: JSON.stringify({ success_url: successUrl, cancel_url: cancelUrl }),
+    }),
+
   // Booking public (sans auth)
   getPublicAvailableDays: (tenantSlug: string, year: number, month: number) => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";

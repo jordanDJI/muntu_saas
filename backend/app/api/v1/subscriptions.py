@@ -51,11 +51,68 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        tenant_id = session.get("metadata", {}).get("tenant_id")
-        plan_id = session.get("metadata", {}).get("plan_id")
+        meta = session.get("metadata", {})
+        tenant_id = meta.get("tenant_id")
+        addon_type = meta.get("addon_type")
+        plan_id = meta.get("plan_id")
         stripe_subscription_id = session.get("subscription")
 
-        if tenant_id and plan_id:
+        event_type = meta.get("type")
+        addon_type = meta.get("addon_type")
+
+        if tenant_id and event_type == "domain_purchase":
+            # ── Achat domaine via OVH déclenché après paiement Stripe confirmé ──
+            domain = meta.get("domain")
+            auto_renew = meta.get("auto_renew") == "true"
+            if domain:
+                supabase = get_supabase_admin()
+                # Idempotence — ne pas racheter si déjà traité
+                already = supabase.table("custom_domain").select("id").eq("domain", domain).limit(1).execute()
+                if not already.data:
+                    from app.services import ovh_domains, vercel_domains as vd
+                    # 1. Achat OVH
+                    try:
+                        await ovh_domains.purchase_domain(domain)
+                    except Exception as exc:
+                        import logging
+                        logging.getLogger(__name__).error("OVH purchase failed for %s: %s", domain, exc)
+                        # TODO: déclencher un remboursement Stripe automatique
+                        return {"received": True}
+                    # 2. DNS automatique dans la zone OVH
+                    try:
+                        await ovh_domains.configure_dns(domain)
+                    except Exception:
+                        pass
+                    # 3. Ajouter dans Vercel
+                    try:
+                        await vd.add_domain(domain)
+                    except Exception:
+                        pass
+                    # 4. Enregistrer en base
+                    supabase.table("custom_domain").upsert({
+                        "tenant_id": tenant_id,
+                        "domain": domain,
+                        "status": "pending",
+                        "source": "ovh_purchased",
+                        "auto_renew": auto_renew,
+                        "dns_record_type": "CNAME",
+                        "dns_record_name": "www",
+                        "dns_record_value": "cname.vercel-dns.com",
+                    }, on_conflict="tenant_id").execute()
+
+        elif tenant_id and addon_type == "custom_domain":
+            supabase = get_supabase_admin()
+            supabase.table("tenant").update({"custom_domain_addon": True}).eq("id", tenant_id).execute()
+            # Si un domaine était déjà en DB, l'activer sur Vercel maintenant
+            domain_row = supabase.table("custom_domain").select("domain").eq("tenant_id", tenant_id).limit(1).execute()
+            if domain_row.data:
+                from app.services import vercel_domains as vd
+                try:
+                    await vd.add_domain(domain_row.data[0]["domain"])
+                except Exception:
+                    pass
+
+        elif tenant_id and plan_id:
             supabase = get_supabase_admin()
             supabase.table("subscription").upsert({
                 "tenant_id": tenant_id,

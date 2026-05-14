@@ -31,7 +31,7 @@ async def _geocode(name: str, country_code: str) -> Optional[tuple[float, float]
             r = await c.get(
                 "https://nominatim.openstreetmap.org/search",
                 params={"q": f"{name}, {country_code}", "format": "json", "limit": 1},
-                headers={"User-Agent": "LocalPresenceSaaS/1.0 contact@example.com"},
+                headers={"User-Agent": "LocalPresenceSaaS/1.0 support@klientys.co"},
             )
             data = r.json()
             if data:

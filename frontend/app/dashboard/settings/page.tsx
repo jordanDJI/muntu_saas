@@ -10,12 +10,13 @@ import DemandPotentialCard from "../analytics/DemandPotentialCard";
 type Section =
   | "profil" | "securite" | "site" | "metriques"
   | "abonnement" | "notifications" | "preferences"
-  | "membres" | "integrations" | "export" | "activite";
+  | "membres" | "integrations" | "export" | "activite" | "domaine";
 
 const NAV: { key: Section; label: string; icon: string }[] = [
   { key: "profil",        label: "Profil",          icon: "👤" },
   { key: "securite",      label: "Sécurité",        icon: "🔐" },
   { key: "site",          label: "Mon site",        icon: "🌐" },
+  { key: "domaine",       label: "Domaine",         icon: "🔗" },
   { key: "metriques",     label: "Métriques",       icon: "📊" },
   { key: "abonnement",    label: "Abonnement",      icon: "💳" },
   { key: "notifications", label: "Notifications",   icon: "🔔" },
@@ -1067,9 +1068,503 @@ function SectionActivite() {
   );
 }
 
+// ── Section Domaine ───────────────────────────────────────────────────────────
+
+function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
+  const [plan, setPlan]               = useState<any>(null);
+  const [domainInfo, setDomainInfo]   = useState<any>(null);
+  const [loadingInit, setLoadingInit] = useState(true);
+  const [tab, setTab]                 = useState<"connect" | "buy">("connect");
+
+  // Connect form
+  const [connectInput, setConnectInput]   = useState("");
+  const [connectLoading, setConnectLoading] = useState(false);
+  const [connectMsg, setConnectMsg]       = useState("");
+
+  // OVH search
+  const [searchQuery, setSearchQuery]     = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching]         = useState(false);
+  const [searchMsg, setSearchMsg]         = useState("");
+
+  // Purchase — confirmation inline
+  const [confirmPurchase, setConfirmPurchase] = useState<{ domain: string; price_ht: number } | null>(null);
+  const [autoRenew, setAutoRenew]             = useState(true);
+  const [checkingOut, setCheckingOut]         = useState(false);
+  const [purchaseMsg, setPurchaseMsg]         = useState("");
+
+  // Polling
+  const [polling, setPolling]             = useState(false);
+
+  // Delete
+  const [deleting, setDeleting]           = useState(false);
+
+  const loadData = useCallback(async () => {
+    setLoadingInit(true);
+    try {
+      const [p, d] = await Promise.all([
+        api.getMySubscription().catch(() => null),
+        api.getDomain().catch(() => null),
+      ]);
+      setPlan(p);
+      setDomainInfo(d);
+    } finally {
+      setLoadingInit(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // Polling automatique toutes les 30s quand le domaine est en attente
+  useEffect(() => {
+    if (domainInfo?.status !== "pending") return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.pollDomainStatus();
+        setDomainInfo(res);
+      } catch { /* silencieux */ }
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [domainInfo?.status]);
+
+  const hasAccess = plan?.features?.custom_domain === true;
+
+  const handleConnect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!connectInput.trim()) return;
+    setConnectLoading(true); setConnectMsg("");
+    try {
+      const res = await api.connectDomain(connectInput.trim());
+      setDomainInfo(res);
+      setConnectMsg("Domaine ajouté. Configurez le DNS ci-dessous.");
+    } catch (err: any) {
+      setConnectMsg(`Erreur : ${err.message}`);
+    } finally {
+      setConnectLoading(false);
+    }
+  };
+
+  const handlePollStatus = async () => {
+    setPolling(true);
+    try {
+      const res = await api.pollDomainStatus();
+      setDomainInfo(res);
+      if (res.status === "active") setConnectMsg("Domaine vérifié et actif !");
+      else setConnectMsg("DNS pas encore propagé. Réessayez dans quelques minutes.");
+    } catch (err: any) {
+      setConnectMsg(`Erreur : ${err.message}`);
+    } finally {
+      setPolling(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Supprimer le domaine ${domainInfo?.domain} ?`)) return;
+    setDeleting(true);
+    try {
+      await api.deleteDomain();
+      setDomainInfo(null);
+      setConnectInput("");
+      setConnectMsg("");
+    } catch (err: any) {
+      setConnectMsg(`Erreur : ${err.message}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setSearching(true); setSearchMsg(""); setSearchResults([]);
+    try {
+      const res = await api.searchDomains(searchQuery.trim());
+      setSearchResults(res);
+      if (!res.length) setSearchMsg("Aucun résultat.");
+    } catch (err: any) {
+      setSearchMsg(`Erreur : ${err.message}`);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleConfirmPurchase = async () => {
+    if (!confirmPurchase) return;
+    setCheckingOut(true); setPurchaseMsg("");
+    try {
+      const base = `${window.location.origin}/dashboard/settings`;
+      const res = await api.createDomainPurchaseCheckout(
+        confirmPurchase.domain,
+        confirmPurchase.price_ht,
+        autoRenew,
+        `${base}?domain_success=1`,
+        `${base}`,
+      );
+      window.location.href = res.checkout_url;
+    } catch (err: any) {
+      setPurchaseMsg(`Erreur : ${err.message}`);
+      setCheckingOut(false);
+    }
+  };
+
+  const handleAddonCheckout = async () => {
+    try {
+      const base = window.location.origin + "/dashboard/settings";
+      const res = await api.createDomainAddonCheckout(`${base}?domain_addon=success`, `${base}`);
+      window.location.href = res.checkout_url;
+    } catch (err: any) {
+      alert(`Erreur : ${err.message}`);
+    }
+  };
+
+  if (loadingInit) {
+    return (
+      <>
+        <SectionTitle title="Domaine personnalisé" subtitle="Connectez votre site à votre propre nom de domaine." />
+        <p className="text-sm text-gray-400">Chargement…</p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <SectionTitle
+        title="Domaine personnalisé"
+        subtitle="Connectez votre site à votre propre nom de domaine (ex: www.monsite.be)."
+      />
+
+      {/* ── Accès verrouillé ── */}
+      {!hasAccess && (
+        <Card className="border-amber-200 bg-amber-50">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🔒</span>
+            <div className="flex-1">
+              <p className="font-semibold text-sm text-amber-900">Fonctionnalité Premium</p>
+              <p className="text-sm text-amber-700 mt-1">
+                Le domaine personnalisé est <strong>inclus dans le plan Business</strong>. Si vous êtes
+                sur un autre plan, vous pouvez l'activer pour <strong>+5€/mois</strong>.
+              </p>
+              <div className="flex gap-2 mt-3 flex-wrap">
+                <button
+                  onClick={handleAddonCheckout}
+                  className="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700"
+                >
+                  Activer pour +5€/mois
+                </button>
+                <button
+                  onClick={() => onNavigate("abonnement")}
+                  className="border border-amber-400 text-amber-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-100"
+                >
+                  Passer au plan Business
+                </button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Domaine actif ── */}
+      {hasAccess && domainInfo?.status === "active" && (
+        <Card className="border-green-200">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-green-600 text-xl">✓</span>
+              <div>
+                <p className="font-semibold text-sm text-gray-800">{domainInfo.domain}</p>
+                <p className="text-xs text-green-600 mt-0.5">Domaine actif et fonctionnel</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <a
+                href={`https://${domainInfo.domain}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="border px-3 py-1.5 rounded-lg text-xs text-gray-600 hover:bg-gray-50"
+              >
+                Visiter
+              </a>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="text-xs text-red-500 hover:underline disabled:opacity-50"
+              >
+                {deleting ? "Suppression…" : "Supprimer"}
+              </button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Domaine en attente de vérification DNS ── */}
+      {hasAccess && domainInfo?.status === "pending" && (
+        <Card className="border-amber-200">
+          <h3 className="font-semibold text-sm text-amber-800">En attente de validation</h3>
+
+          {/* Barre de progression DNS → SSL → Actif */}
+          <div className="flex items-center gap-1 text-xs">
+            {[
+              { label: "DNS propagé",  done: domainInfo.propagated },
+              { label: "SSL actif",    done: domainInfo.ssl },
+              { label: "Domaine actif", done: false },
+            ].map((step, i, arr) => (
+              <div key={step.label} className="flex items-center gap-1">
+                <span className={`flex items-center gap-1 px-2 py-1 rounded-full font-medium ${
+                  step.done ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"
+                }`}>
+                  {step.done ? "✓" : "○"} {step.label}
+                </span>
+                {i < arr.length - 1 && <span className="text-gray-300">→</span>}
+              </div>
+            ))}
+          </div>
+
+          {/* Conflits DNS */}
+          {domainInfo.conflicts?.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">
+              <strong>Conflit DNS détecté :</strong> un enregistrement existant empêche la validation.
+              Supprimez les enregistrements conflictuels chez votre registrar.
+            </div>
+          )}
+
+          <p className="text-sm text-gray-600">
+            {domainInfo.source === "ovh_purchased"
+              ? "Les DNS ont été configurés automatiquement. La propagation prend quelques minutes."
+              : "Chez votre registrar, créez l'enregistrement suivant :"}
+          </p>
+
+          {domainInfo.source !== "ovh_purchased" && (
+            <div className="bg-gray-50 rounded-lg border p-4 font-mono text-xs">
+              <div className="grid grid-cols-3 gap-2">
+                <div><span className="text-gray-500 block">Type</span><strong>{domainInfo.dns_record_type}</strong></div>
+                <div><span className="text-gray-500 block">Nom / Hôte</span><strong>{domainInfo.dns_record_name}</strong></div>
+                <div><span className="text-gray-500 block">Valeur / Cible</span><strong>{domainInfo.dns_record_value}</strong></div>
+              </div>
+            </div>
+          )}
+
+          <p className="text-xs text-gray-400">
+            Vérification automatique toutes les 30 secondes. La propagation DNS peut prendre jusqu'à 48h.
+          </p>
+
+          <div className="flex gap-2 items-center flex-wrap">
+            <button
+              onClick={handlePollStatus}
+              disabled={polling}
+              className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50"
+            >
+              {polling ? "Vérification…" : "Vérifier maintenant"}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-sm text-red-500 hover:underline disabled:opacity-50"
+            >
+              {deleting ? "Suppression…" : "Annuler"}
+            </button>
+          </div>
+          {connectMsg && (
+            <p className={`text-sm ${connectMsg.startsWith("Erreur") ? "text-red-500" : "text-green-600"}`}>
+              {connectMsg}
+            </p>
+          )}
+        </Card>
+      )}
+
+      {/* ── Formulaires (si pas encore de domaine) ── */}
+      {hasAccess && !domainInfo && (
+        <>
+          {/* Tabs */}
+          <div className="flex border-b">
+            {(["connect", "buy"] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  tab === t
+                    ? "border-primary-600 text-primary-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {t === "connect" ? "J'ai déjà un domaine" : "Acheter un domaine"}
+              </button>
+            ))}
+          </div>
+
+          {/* Connecter un domaine existant */}
+          {tab === "connect" && (
+            <Card>
+              <h3 className="font-semibold text-sm text-gray-700">Connecter votre domaine</h3>
+              <p className="text-sm text-gray-500">
+                Entrez votre nom de domaine (ex: www.monsite.be). Nous vous fournirons les
+                instructions DNS à configurer chez votre registrar.
+              </p>
+              <form onSubmit={handleConnect} className="flex gap-2">
+                <input
+                  type="text"
+                  value={connectInput}
+                  onChange={e => setConnectInput(e.target.value)}
+                  placeholder="www.monsite.be"
+                  className="border rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                />
+                <button
+                  type="submit"
+                  disabled={connectLoading || !connectInput.trim()}
+                  className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-40"
+                >
+                  {connectLoading ? "Connexion…" : "Connecter"}
+                </button>
+              </form>
+              {connectMsg && (
+                <p className={`text-sm ${connectMsg.startsWith("Erreur") ? "text-red-500" : "text-green-600"}`}>
+                  {connectMsg}
+                </p>
+              )}
+            </Card>
+          )}
+
+          {/* Acheter un domaine via OVH */}
+          {tab === "buy" && (
+            <Card>
+              <h3 className="font-semibold text-sm text-gray-700">Chercher un nom de domaine</h3>
+              <p className="text-sm text-gray-500">
+                Tapez un nom (sans extension). Nous vérifions la disponibilité sur .be, .fr, .com, .eu et .net.
+              </p>
+              <form onSubmit={handleSearch} className="flex gap-2">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="monsite"
+                  className="border rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                />
+                <button
+                  type="submit"
+                  disabled={searching || !searchQuery.trim()}
+                  className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-40"
+                >
+                  {searching ? "Recherche…" : "Rechercher"}
+                </button>
+              </form>
+
+              {searchMsg && <p className="text-sm text-gray-400">{searchMsg}</p>}
+
+              {searchResults.length > 0 && (
+                <div className="space-y-2 mt-1">
+                  {searchResults.map(r => (
+                    <div
+                      key={r.domain}
+                      className={`flex items-center justify-between px-4 py-3 rounded-lg border ${
+                        r.available ? "bg-white" : "bg-gray-50 opacity-60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-mono font-medium ${r.available ? "text-gray-800" : "text-gray-400"}`}>
+                          {r.domain}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          r.available ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"
+                        }`}>
+                          {r.available ? "Disponible" : "Pris"}
+                        </span>
+                      </div>
+                      {r.available && (
+                        <div className="flex items-center gap-3">
+                          {r.price_ht != null && (
+                            <span className="text-sm text-gray-500">{r.price_ht.toFixed(2)}€ HT/an</span>
+                          )}
+                          <button
+                            onClick={() => { setConfirmPurchase({ domain: r.domain, price_ht: r.price_ht ?? 0 }); setPurchaseMsg(""); }}
+                            disabled={confirmPurchase?.domain === r.domain}
+                            className="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-40"
+                          >
+                            Acheter
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Carte de confirmation ── */}
+              {confirmPurchase && (
+                <div className="border-2 border-primary-200 rounded-xl p-5 bg-primary-50 space-y-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-gray-800">
+                        Confirmer l'achat de <span className="font-mono">{confirmPurchase.domain}</span>
+                      </p>
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        {confirmPurchase.price_ht.toFixed(2)}€ HT/an · paiement sécurisé via Stripe
+                      </p>
+                    </div>
+                    <button onClick={() => setConfirmPurchase(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+                  </div>
+
+                  {/* Toggle renouvellement automatique */}
+                  <div className="bg-white border rounded-lg p-4 space-y-1">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">Renouvellement automatique</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {autoRenew
+                            ? "Votre domaine sera renouvelé automatiquement chaque année."
+                            : "Vous devrez renouveler manuellement avant expiration — risque de perte du domaine."}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAutoRenew(v => !v)}
+                        className={`ml-4 w-10 h-5 rounded-full transition-colors relative shrink-0 ${autoRenew ? "bg-primary-600" : "bg-gray-300"}`}
+                      >
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${autoRenew ? "left-5" : "left-0.5"}`} />
+                      </button>
+                    </label>
+                    {!autoRenew && (
+                      <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                        Sans renouvellement automatique, votre domaine peut être libéré et racheté par quelqu'un d'autre à expiration.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleConfirmPurchase}
+                      disabled={checkingOut}
+                      className="bg-primary-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex-1"
+                    >
+                      {checkingOut ? "Redirection vers le paiement…" : `Payer ${confirmPurchase.price_ht.toFixed(2)}€ HT`}
+                    </button>
+                    <button
+                      onClick={() => setConfirmPurchase(null)}
+                      className="border px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+
+                  {purchaseMsg && (
+                    <p className="text-sm text-red-500">{purchaseMsg}</p>
+                  )}
+                </div>
+              )}
+
+              {!confirmPurchase && purchaseMsg && (
+                <p className={`text-sm ${purchaseMsg.startsWith("Erreur") ? "text-red-500" : "text-green-600"}`}>
+                  {purchaseMsg}
+                </p>
+              )}
+            </Card>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 // ── Page principale ───────────────────────────────────────────────────────────
 
-const SECTION_MAP: Record<Section, React.FC> = {
+const SECTION_MAP: Record<Exclude<Section, "domaine">, React.FC> = {
   profil:        SectionProfil,
   securite:      SectionSecurite,
   site:          SectionSite,
@@ -1087,7 +1582,6 @@ export default function SettingsPage() {
   const router = useRouter();
   const { t } = useLanguage();
   const [active, setActive] = useState<Section>("profil");
-  const ActiveSection = SECTION_MAP[active];
   const activeItem = NAV.find(n => n.key === active)!;
 
   return (
@@ -1144,7 +1638,10 @@ export default function SettingsPage() {
 
         {/* Contenu */}
         <main className="flex-1 py-6 px-4 sm:px-6 min-w-0 space-y-4">
-          <ActiveSection />
+          {active === "domaine"
+            ? <SectionDomaine onNavigate={setActive} />
+            : (() => { const S = SECTION_MAP[active]; return <S />; })()
+          }
         </main>
       </div>
     </div>

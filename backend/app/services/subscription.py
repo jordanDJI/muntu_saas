@@ -10,6 +10,7 @@ ESSENTIEL_FEATURES: dict = {
     "multi_tenant": False,
     "booking": True,
     "crm": True,
+    "custom_domain": False,
 }
 
 BUSINESS_FEATURES: dict = {
@@ -24,6 +25,7 @@ BUSINESS_FEATURES: dict = {
     "multi_tenant": True,
     "booking": True,
     "crm": True,
+    "custom_domain": True,
 }
 
 

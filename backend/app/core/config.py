@@ -38,5 +38,24 @@ class Settings(BaseSettings):
     dialog360_webhook_secret: str = ""   # secret HMAC pour vérifier les webhooks
     dialog360_verify_token: str = ""     # token de vérification webhook Meta
 
+    # Domaines personnalisés — Vercel
+    vercel_api_token: str = ""
+    vercel_project_id: str = ""
+
+    # Domaines personnalisés — OVH
+    ovh_endpoint: str = "ovh-eu"
+    ovh_app_key: str = ""
+    ovh_app_secret: str = ""
+    ovh_consumer_key: str = ""
+
+    # Stripe — addon domaine (+5€/mois pour plans non-Business)
+    stripe_domain_addon_price_id: str = ""
+
+    # Marge sur la revente de domaines OVH (% appliqué sur le prix HT OVH)
+    domain_markup_percent: float = 25.0
+
+    # Google Indexing API — service account JSON (stringifié)
+    google_service_account_json: str = ""
+
 
 settings = Settings()

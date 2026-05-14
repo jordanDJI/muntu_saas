@@ -4,6 +4,7 @@ from app.middleware.tenant import get_current_tenant, get_current_user
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.site import SiteCreateIn, SiteUpdateIn, SiteOut, ServiceOfferIn, TestimonialIn
 from app.services.activity import log_activity
+from app.services.google_indexing import notify_url_updated, notify_url_deleted
 
 router = APIRouter(prefix="/sites", tags=["Sites"])
 
@@ -62,6 +63,11 @@ async def publish_site(site_id: UUID, tenant_id: str = Depends(get_current_tenan
     if not result.data:
         raise HTTPException(status_code=404, detail="Site introuvable")
     log_activity(tenant_id, user["sub"], "Site publié", result.data[0].get("title"))
+    tenant = sb.table("tenant").select("slug").eq("id", tenant_id).single().execute()
+    if tenant.data:
+        from app.core.config import settings
+        url = f"{settings.frontend_url}/{tenant.data['slug']}"
+        await notify_url_updated(url)
     return {"status": "published"}
 
 
@@ -72,6 +78,11 @@ async def unpublish_site(site_id: UUID, tenant_id: str = Depends(get_current_ten
     if not result.data:
         raise HTTPException(status_code=404, detail="Site introuvable")
     log_activity(tenant_id, user["sub"], "Site dépublié", result.data[0].get("title"))
+    tenant = sb.table("tenant").select("slug").eq("id", tenant_id).single().execute()
+    if tenant.data:
+        from app.core.config import settings
+        url = f"{settings.frontend_url}/{tenant.data['slug']}"
+        await notify_url_deleted(url)
     return {"status": "draft"}
 
 

@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.services.scheduler import start_scheduler, stop_scheduler
-from app.api.v1 import sites, leads, appointments, subscriptions, onboarding, auth, chatbot, agents, calendar, booking, webhook, assistant, members, uploads, analytics, public, tenants, users
+from app.api.v1 import sites, leads, appointments, subscriptions, onboarding, auth, chatbot, agents, calendar, booking, webhook, assistant, members, uploads, analytics, public, tenants, users, domains
 
 if settings.sentry_dsn:
     import sentry_sdk
@@ -54,6 +54,7 @@ app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(public.router, prefix="/api/v1")
 app.include_router(tenants.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
+app.include_router(domains.router, prefix="/api/v1")
 
 
 @app.get("/health")

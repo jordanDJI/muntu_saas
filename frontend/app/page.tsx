@@ -2,11 +2,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/api";
-import { LangSelector } from "../contexts/LanguageContext";
+import { LangSelector, useLanguage } from "../contexts/LanguageContext";
 
 export default function LandingPage() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [navScrolled, setNavScrolled] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setLoggedIn(!!session));
@@ -55,18 +56,18 @@ export default function LandingPage() {
             Klientys
           </Link>
           <ul className="l-nav-links">
-            <li><a href="#features">Fonctionnalités</a></li>
-            <li><a href="#how">Comment ça marche</a></li>
-            <li><a href="#pricing">Tarifs</a></li>
+            <li><a href="#features">{t.lp_nav_feat}</a></li>
+            <li><a href="#how">{t.lp_nav_how}</a></li>
+            <li><a href="#pricing">{t.lp_nav_pricing}</a></li>
           </ul>
           <div className="l-nav-cta">
             <LangSelector />
             {loggedIn ? (
-              <Link href="/dashboard" className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }}>Dashboard</Link>
+              <Link href="/dashboard" className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }}>{t.nav_dashboard}</Link>
             ) : (
               <>
-                <Link href="/login" className="l-btn l-btn-ghost" style={{ padding: "9px 20px", fontSize: "14px" }}>Connexion</Link>
-                <Link href="/onboarding" className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }}>Commencer →</Link>
+                <Link href="/login" className="l-btn l-btn-ghost" style={{ padding: "9px 20px", fontSize: "14px" }}>{t.lp_nav_login}</Link>
+                <Link href="/onboarding" className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }}>{t.lp_nav_start}</Link>
               </>
             )}
           </div>
@@ -78,18 +79,18 @@ export default function LandingPage() {
         <div className="l-hero-bg" />
         <div className="l-hero-grid" />
         <div className="l-hero-content">
-          <div className="l-hero-badge">✦ <span>Agents IA</span> — Telegram, WhatsApp & email intégrés</div>
-          <h1>Votre vitrine pro.<br /><span className="l-gradient-text">En 15 minutes.</span></h1>
-          <p className="l-hero-sub">Site web, réservations en ligne, CRM et agents IA. Tout-en-un pour infirmières, kinés, artisans et consultants.</p>
+          <div className="l-hero-badge">✦ <span>Agents IA</span> — Telegram, WhatsApp &amp; email intégrés</div>
+          <h1>{t.lp_h1}<br /><span className="l-gradient-text">{t.lp_h1b}</span></h1>
+          <p className="l-hero-sub">{t.lp_sub}</p>
           <div className="l-hero-ctas">
-            <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">Créer mon site gratuitement →</Link>
-            <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">Me connecter</Link>
+            <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">{t.lp_cta}</Link>
+            <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">{t.lp_cta2}</Link>
           </div>
           <div className="l-hero-stats">
-            <div className="l-hero-stat"><strong>500+</strong><span>Professionnels</span></div>
-            <div className="l-hero-stat"><strong>15 min</strong><span>Temps moyen</span></div>
-            <div className="l-hero-stat"><strong>3×</strong><span>Plus de RDV</span></div>
-            <div className="l-hero-stat"><strong>97%</strong><span>Satisfaction</span></div>
+            <div className="l-hero-stat"><strong>500+</strong><span>{t.lp_stat1}</span></div>
+            <div className="l-hero-stat"><strong>15 min</strong><span>{t.lp_stat2}</span></div>
+            <div className="l-hero-stat"><strong>3×</strong><span>{t.lp_stat3}</span></div>
+            <div className="l-hero-stat"><strong>97%</strong><span>{t.lp_stat4}</span></div>
           </div>
         </div>
 
@@ -156,7 +157,7 @@ export default function LandingPage() {
       {/* ── PROFESSIONS ── */}
       <div className="l-logos-section">
         <div className="l-container">
-          <div className="l-logos-label">Fait pour les professionnels de terrain</div>
+          <div className="l-logos-label">{t.lp_for_pros}</div>
           <div className="l-logos-row">
             {["🩺 Infirmier·ère", "🦴 Kinésithérapeute", "🔧 Artisan", "✂️ Esthéticien·ne", "⚖️ Consultant·e", "💆 Coach"].map((p) => (
               <span key={p} className="l-logo-item">{p}</span>
@@ -168,15 +169,15 @@ export default function LandingPage() {
       {/* ── FEATURES ── */}
       <section className="l-features" id="features">
         <div className="l-container">
-          <div className="l-section-tag" data-r=""><div className="l-tag">✦ Fonctionnalités</div></div>
-          <h2 className="l-section-h2" data-r="" data-d="1">Tout ce dont vous avez besoin.<br /><span className="l-gradient-text">Dans un seul outil.</span></h2>
-          <p className="l-section-sub" data-r="" data-d="2">Fini les dizaines d&apos;abonnements. Klientys centralise votre site, vos réservations et votre relation client.</p>
+          <div className="l-section-tag" data-r=""><div className="l-tag">✦ {t.lp_feat_tag}</div></div>
+          <h2 className="l-section-h2" data-r="" data-d="1">{t.lp_feat_h2a}<br /><span className="l-gradient-text">{t.lp_feat_h2b}</span></h2>
+          <p className="l-section-sub" data-r="" data-d="2">{t.lp_feat_sub}</p>
           <div className="l-features-grid">
 
             <div className="l-feat-card gold" data-r="" data-d="1">
               <div className="l-feat-icon">⚡</div>
-              <h3>Site en 15 minutes</h3>
-              <p>Wizard guidé en 9 étapes : logo, couleurs, services, photos, témoignages. Votre vitrine pro en ligne immédiatement.</p>
+              <h3>{t.lp_feat1_t}</h3>
+              <p>{t.lp_feat1_d}</p>
               <ul className="l-feat-list">
                 <li>9 étapes guidées pas à pas</li>
                 <li>Éditeur visuel no-code</li>
@@ -187,8 +188,8 @@ export default function LandingPage() {
 
             <div className="l-feat-card blue" data-r="" data-d="2">
               <div className="l-feat-icon">📅</div>
-              <h3>Réservations en ligne</h3>
-              <p>Calendrier intelligent avec plages horaires, pauses déjeuner et périodes bloquées. Confirmations automatiques par email.</p>
+              <h3>{t.lp_feat2_t}</h3>
+              <p>{t.lp_feat2_d}</p>
               <ul className="l-feat-list">
                 <li>Créneaux disponibles en temps réel</li>
                 <li>Confirmation + rappel email</li>
@@ -199,11 +200,11 @@ export default function LandingPage() {
 
             <div className="l-feat-card teal" data-r="" data-d="3">
               <div className="l-feat-icon">🤝</div>
-              <h3>CRM & Agents IA</h3>
-              <p>Pipeline de leads, suivi des contacts et agents IA sur Telegram & WhatsApp pour répondre à vos clients 24/7.</p>
+              <h3>{t.lp_feat3_t}</h3>
+              <p>{t.lp_feat3_d}</p>
               <ul className="l-feat-list">
                 <li>Pipeline visuel de leads</li>
-                <li>Agents IA Telegram & WhatsApp</li>
+                <li>Agents IA Telegram &amp; WhatsApp</li>
                 <li>Analytics comportementaux</li>
                 <li>Emails automatiques</li>
               </ul>
@@ -216,23 +217,23 @@ export default function LandingPage() {
       {/* ── HOW IT WORKS ── */}
       <section className="l-how" id="how">
         <div className="l-container">
-          <div className="l-section-tag" data-r=""><div className="l-tag">✦ Processus</div></div>
-          <h2 className="l-section-h2" data-r="" data-d="1">De zéro à en ligne<br /><span className="l-gradient-text">en 3 étapes.</span></h2>
+          <div className="l-section-tag" data-r=""><div className="l-tag">✦ {t.lp_how_tag}</div></div>
+          <h2 className="l-section-h2" data-r="" data-d="1">{t.lp_how_h2a}<br /><span className="l-gradient-text">{t.lp_how_h2b}</span></h2>
           <div className="l-steps">
             <div className="l-step" data-r="" data-d="1">
               <div className="l-step-num">1</div>
-              <h3>Créez votre compte</h3>
-              <p>2 minutes, sans carte bancaire. Choisissez votre type de profession et c&apos;est parti.</p>
+              <h3>{t.lp_step1_t}</h3>
+              <p>{t.lp_step1_d}</p>
             </div>
             <div className="l-step" data-r="" data-d="2">
               <div className="l-step-num">2</div>
-              <h3>Configurez en 15 min</h3>
-              <p>Notre wizard en 9 étapes vous guide : logo, services, disponibilités, zones d&apos;intervention.</p>
+              <h3>{t.lp_step2_t}</h3>
+              <p>{t.lp_step2_d}</p>
             </div>
             <div className="l-step" data-r="" data-d="3">
               <div className="l-step-num">3</div>
-              <h3>Recevez vos clients</h3>
-              <p>Votre site est en ligne, vos créneaux visibles, vos agents IA répondent 24/7.</p>
+              <h3>{t.lp_step3_t}</h3>
+              <p>{t.lp_step3_d}</p>
             </div>
           </div>
         </div>
@@ -244,19 +245,19 @@ export default function LandingPage() {
           <div className="l-stats-grid" data-r="">
             <div className="l-stat-item">
               <div className="l-stat-num l-gradient-text">500+</div>
-              <div className="l-stat-label">Professionnels<br />sur Klientys</div>
+              <div className="l-stat-label" style={{ whiteSpace: "pre-line" }}>{t.lp_sstat1}</div>
             </div>
             <div className="l-stat-item">
               <div className="l-stat-num l-gradient-text">15 min</div>
-              <div className="l-stat-label">Temps moyen<br />de création</div>
+              <div className="l-stat-label" style={{ whiteSpace: "pre-line" }}>{t.lp_sstat2}</div>
             </div>
             <div className="l-stat-item">
               <div className="l-stat-num l-gradient-text">3×</div>
-              <div className="l-stat-label">Plus de rendez-vous<br />en moyenne</div>
+              <div className="l-stat-label" style={{ whiteSpace: "pre-line" }}>{t.lp_sstat3}</div>
             </div>
             <div className="l-stat-item">
               <div className="l-stat-num l-gradient-text">97%</div>
-              <div className="l-stat-label">Clients satisfaits<br />sur 12 mois</div>
+              <div className="l-stat-label" style={{ whiteSpace: "pre-line" }}>{t.lp_sstat4}</div>
             </div>
           </div>
         </div>
@@ -265,15 +266,15 @@ export default function LandingPage() {
       {/* ── PRICING ── */}
       <section className="l-pricing" id="pricing">
         <div className="l-container">
-          <div className="l-section-tag" data-r=""><div className="l-tag">✦ Tarifs</div></div>
-          <h2 className="l-section-h2" data-r="" data-d="1">Simple. Transparent.<br /><span className="l-gradient-text">Sans surprise.</span></h2>
-          <p className="l-section-sub" data-r="" data-d="2">Nos tarifs sont en cours de finalisation. Rejoignez la liste d&apos;attente maintenant — inscription gratuite.</p>
+          <div className="l-section-tag" data-r=""><div className="l-tag">✦ {t.lp_price_tag}</div></div>
+          <h2 className="l-section-h2" data-r="" data-d="1">{t.lp_price_h2a}<br /><span className="l-gradient-text">{t.lp_price_h2b}</span></h2>
+          <p className="l-section-sub" data-r="" data-d="2">{t.lp_price_sub}</p>
           <div className="l-pricing-grid">
 
             <div className="l-price-card" data-r="" data-d="1">
-              <div className="l-price-plan">Starter</div>
-              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-text-3)", letterSpacing: "-.01em" }}>À venir</div>
-              <p className="l-price-desc">Parfait pour démarrer votre présence en ligne.</p>
+              <div className="l-price-plan">{t.lp_plan1_n}</div>
+              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-text-3)", letterSpacing: "-.01em" }}>{t.lp_coming}</div>
+              <p className="l-price-desc">{t.lp_plan1_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
                 <li>1 site vitrine</li>
@@ -282,31 +283,31 @@ export default function LandingPage() {
                 <li>Emails automatiques</li>
                 <li>Support email</li>
               </ul>
-              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>Rejoindre la liste d'attente</Link>
+              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>{t.lp_waitlist}</Link>
             </div>
 
             <div className="l-price-card featured" data-r="" data-d="2">
-              <div className="l-price-badge">Le plus populaire</div>
-              <div className="l-price-plan">Pro</div>
-              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-gold)", letterSpacing: "-.01em" }}>À venir</div>
-              <p className="l-price-desc">Pour les pros qui veulent tout automatiser.</p>
+              <div className="l-price-badge">{t.lp_popular}</div>
+              <div className="l-price-plan">{t.lp_plan2_n}</div>
+              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-gold)", letterSpacing: "-.01em" }}>{t.lp_coming}</div>
+              <p className="l-price-desc">{t.lp_plan2_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
                 <li>Site vitrine complet</li>
                 <li>Réservations illimitées</li>
                 <li>CRM complet + pipeline</li>
-                <li>Agents IA Telegram & WhatsApp</li>
+                <li>Agents IA Telegram &amp; WhatsApp</li>
                 <li>Analytics comportementaux</li>
                 <li>Widget embarquable</li>
                 <li>Support prioritaire 24/7</li>
               </ul>
-              <Link href="/onboarding" className="l-btn l-btn-primary" style={{ width: "100%", justifyContent: "center" }}>Rejoindre la liste d'attente →</Link>
+              <Link href="/onboarding" className="l-btn l-btn-primary" style={{ width: "100%", justifyContent: "center" }}>{t.lp_waitlist_arr}</Link>
             </div>
 
             <div className="l-price-card" data-r="" data-d="3">
-              <div className="l-price-plan">Cabinet / Équipe</div>
-              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-text-3)", letterSpacing: "-.01em" }}>À venir</div>
-              <p className="l-price-desc">Pour les cabinets multi-praticiens et structures avec plusieurs membres.</p>
+              <div className="l-price-plan">{t.lp_plan3_n}</div>
+              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-text-3)", letterSpacing: "-.01em" }}>{t.lp_coming}</div>
+              <p className="l-price-desc">{t.lp_plan3_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
                 <li>Multi-utilisateurs</li>
@@ -316,7 +317,7 @@ export default function LandingPage() {
                 <li>Onboarding personnalisé</li>
                 <li>Account manager dédié</li>
               </ul>
-              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>Nous contacter</Link>
+              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>{t.lp_contact_us}</Link>
             </div>
 
           </div>
@@ -326,17 +327,17 @@ export default function LandingPage() {
       {/* ── TESTIMONIALS ── */}
       <section className="l-testimonials">
         <div className="l-container">
-          <div className="l-section-tag" data-r=""><div className="l-tag">✦ Témoignages</div></div>
-          <h2 className="l-section-h2" data-r="" data-d="1">Ils nous font <span className="l-gradient-text">confiance.</span></h2>
+          <div className="l-section-tag" data-r=""><div className="l-tag">✦ {t.lp_testi_tag}</div></div>
+          <h2 className="l-section-h2" data-r="" data-d="1">{t.lp_testi_h2a}<span className="l-gradient-text">{t.lp_testi_h2b}</span></h2>
           <div className="l-testi-grid" style={{ marginTop: "48px" }}>
 
             <div className="l-testi-card" data-r="" data-d="1">
               <div className="l-testi-stars">★★★★★</div>
-              <p className="l-testi-text">&quot;Mon site était en ligne en 18 minutes chrono. Mes patients prennent désormais RDV directement, je ne reçois plus d&apos;appels à 22h. Un vrai soulagement.&quot;</p>
+              <p className="l-testi-text">&quot;Mes patients réservent maintenant directement en ligne. Plus d&apos;appels le soir — mon agenda est toujours plein et je me concentre sur mes soins.&quot;</p>
               <div className="l-testi-author">
-                <div className="l-testi-avatar" style={{ background: "rgba(13,75,88,.4)", color: "var(--l-teal-xl)" }}>SR</div>
+                <div className="l-testi-avatar" style={{ background: "rgba(13,75,88,.4)", color: "var(--l-teal-xl)" }}>JY</div>
                 <div>
-                  <div className="l-testi-name">Sophie Renard</div>
+                  <div className="l-testi-name">Josiane Yollande</div>
                   <div className="l-testi-role">Infirmière libérale, Bruxelles</div>
                 </div>
               </div>
@@ -344,23 +345,23 @@ export default function LandingPage() {
 
             <div className="l-testi-card" data-r="" data-d="2">
               <div className="l-testi-stars">★★★★★</div>
-              <p className="l-testi-text">&quot;L&apos;agent IA Telegram répond aux questions pendant que je suis en séance. Mon taux de no-show a chuté de 40% grâce aux rappels automatiques.&quot;</p>
+              <p className="l-testi-text">&quot;Je suis sur chantier toute la journée. L&apos;agent IA répond à mes clients pendant que je travaille. Mon taux de no-show a chuté de 40% grâce aux rappels automatiques.&quot;</p>
               <div className="l-testi-author">
-                <div className="l-testi-avatar" style={{ background: "rgba(170,189,216,.15)", color: "var(--l-blue)" }}>MD</div>
+                <div className="l-testi-avatar" style={{ background: "rgba(170,189,216,.15)", color: "var(--l-blue)" }}>TB</div>
                 <div>
-                  <div className="l-testi-name">Marc Dupont</div>
-                  <div className="l-testi-role">Kinésithérapeute, Lyon</div>
+                  <div className="l-testi-name">Thierry Bales</div>
+                  <div className="l-testi-role">Artisan BTP, Darmstadt – Allemagne</div>
                 </div>
               </div>
             </div>
 
             <div className="l-testi-card" data-r="" data-d="3">
               <div className="l-testi-stars">★★★★★</div>
-              <p className="l-testi-text">&quot;J&apos;avais peur de ne pas m&apos;en sortir techniquement. Le wizard est tellement bien guidé que même moi j&apos;ai réussi ! Mon agenda est plein depuis le premier mois.&quot;</p>
+              <p className="l-testi-text">&quot;Je n&apos;y connaissais rien en informatique. Le wizard est tellement bien guidé que même moi j&apos;ai réussi ! Mon agenda est plein depuis le premier mois.&quot;</p>
               <div className="l-testi-author">
-                <div className="l-testi-avatar" style={{ background: "rgba(221,170,64,.15)", color: "var(--l-gold)" }}>AB</div>
+                <div className="l-testi-avatar" style={{ background: "rgba(221,170,64,.15)", color: "var(--l-gold)" }}>SG</div>
                 <div>
-                  <div className="l-testi-name">Aminata Bastin</div>
+                  <div className="l-testi-name">Samy Glo</div>
                   <div className="l-testi-role">Esthéticienne, Paris</div>
                 </div>
               </div>
@@ -374,13 +375,13 @@ export default function LandingPage() {
       <section className="l-cta-section">
         <div className="l-container">
           <div data-r="">
-            <h2>Prêt à décoller ?<br /><span className="l-gradient-text">Commencez maintenant.</span></h2>
-            <p>Rejoignez 500+ professionnels qui ont choisi Klientys.<br />14 jours gratuits, sans carte bancaire.</p>
+            <h2>{t.lp_final_h2a}<br /><span className="l-gradient-text">{t.lp_final_h2b}</span></h2>
+            <p style={{ whiteSpace: "pre-line" }}>{t.lp_final_sub}</p>
             <div className="l-cta-group">
-              <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">Créer mon compte gratuitement →</Link>
-              <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">Me connecter</Link>
+              <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">{t.lp_final_cta}</Link>
+              <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">{t.lp_cta2}</Link>
             </div>
-            <p className="l-cta-note">✓ Installation en 2 minutes &nbsp;·&nbsp; ✓ Annulation à tout moment &nbsp;·&nbsp; ✓ Support inclus</p>
+            <p className="l-cta-note">{t.lp_final_note}</p>
           </div>
         </div>
       </section>
@@ -394,26 +395,26 @@ export default function LandingPage() {
                 <img src="/logo.png" alt="Klientys" style={{ height: "28px", width: "auto" }} />
                 Klientys
               </Link>
-              <p className="l-footer-desc">La plateforme tout-en-un pour créer votre site, gérer vos réservations et fidéliser vos clients.</p>
+              <p className="l-footer-desc">{t.lp_footer_desc}</p>
             </div>
             <div className="l-footer-col">
-              <h4>Produit</h4>
-              <a href="#features">Fonctionnalités</a>
-              <a href="#pricing">Tarifs</a>
-              <a href="#how">Comment ça marche</a>
+              <h4>{t.lp_footer_prod}</h4>
+              <a href="#features">{t.lp_nav_feat}</a>
+              <a href="#pricing">{t.lp_nav_pricing}</a>
+              <a href="#how">{t.lp_nav_how}</a>
             </div>
             <div className="l-footer-col">
-              <h4>Accès</h4>
-              <Link href="/login">Connexion</Link>
-              <Link href="/onboarding">Créer un compte</Link>
+              <h4>{t.lp_footer_access}</h4>
+              <Link href="/login">{t.lp_nav_login}</Link>
+              <Link href="/onboarding">{t.lp_footer_create}</Link>
             </div>
             <div className="l-footer-col">
-              <h4>Contact</h4>
-              <a href="mailto:hello@klientys.com">hello@klientys.com</a>
+              <h4>{t.lp_footer_contact_h}</h4>
+              <a href="mailto:support@klientys.co">support@klientys.co</a>
             </div>
           </div>
           <div className="l-footer-bottom">
-            <span>© {new Date().getFullYear()} Klientys. Tous droits réservés.</span>
+            <span>© {new Date().getFullYear()} Klientys. {t.land_footer_rights}</span>
             <LangSelector />
           </div>
         </div>

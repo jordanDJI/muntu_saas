@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Script from "next/script";
 import ContactForm from "./contact-form";
 import ChatbotWidget from "../../components/ChatbotWidget";
@@ -37,6 +38,7 @@ const FONT_FAMILY: Record<string, string> = {
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
 
 async function getSiteData(slug: string, preview = false) {
   try {
@@ -47,6 +49,57 @@ async function getSiteData(slug: string, preview = false) {
   } catch {
     return null;
   }
+}
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ tenant: string }>;
+  searchParams?: Promise<{ preview?: string }>;
+}): Promise<Metadata> {
+  const { tenant: tenantSlug } = await params;
+  const sp = searchParams ? await searchParams : {};
+  if (sp?.preview === "1") {
+    return { title: "Aperçu — Klientys", robots: { index: false, follow: false } };
+  }
+
+  const site = await getSiteData(tenantSlug, false);
+  if (!site) return { title: "Site introuvable — Klientys" };
+
+  const title: string = site.title ?? "Site professionnel";
+  const zones: string[] = site.coverage_zones?.length
+    ? site.coverage_zones
+    : (site.service_area ?? []).map((a: any) => a.city).filter(Boolean);
+
+  const titleTag = zones.length > 0
+    ? `${title} — ${zones.slice(0, 3).join(", ")}`
+    : title;
+
+  let desc: string = site.tagline ?? "";
+  if (!desc && site.description) {
+    desc = site.description.length > 155
+      ? site.description.slice(0, 152) + "…"
+      : site.description;
+  }
+  if (!desc) desc = `${title} — Retrouvez toutes les informations et prenez rendez-vous en ligne.`;
+
+  const canonical = `${APP_URL}/${tenantSlug}`;
+
+  return {
+    title: titleTag,
+    description: desc,
+    robots: { index: true, follow: true },
+    alternates: { canonical },
+    openGraph: {
+      title: titleTag,
+      description: desc,
+      type: "website",
+      url: canonical,
+      siteName: "Klientys",
+    },
+    twitter: { card: "summary_large_image", title: titleTag, description: desc },
+  };
 }
 
 export default async function TenantSitePage({
@@ -391,6 +444,57 @@ export default async function TenantSitePage({
       </footer>
 
       <ChatbotWidget tenantSlug={tenantSlug} />
+
+      {/* ── Schema.org LocalBusiness ─────────────────────────────────────── */}
+      {!isPreview && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "LocalBusiness",
+              name: site.title,
+              description: site.tagline ?? site.description ?? undefined,
+              url: `${APP_URL}/${tenantSlug}`,
+              ...(site.phone && { telephone: site.phone }),
+              ...(site.email_contact && { email: site.email_contact }),
+              ...(site.address && {
+                address: (() => {
+                  const parts = site.site_style?.address_parts;
+                  if (parts?.city) {
+                    return {
+                      "@type": "PostalAddress",
+                      streetAddress: parts.street ?? undefined,
+                      postalCode: parts.postal_code ?? undefined,
+                      addressLocality: parts.city,
+                      addressCountry: parts.country ?? site.tenant?.country ?? "FR",
+                    };
+                  }
+                  return { "@type": "PostalAddress", streetAddress: site.address };
+                })(),
+              }),
+              ...(zones.length > 0 && {
+                areaServed: zones.map((z: string) => ({ "@type": "City", name: z })),
+              }),
+              ...(site.service_offer?.length > 0 && {
+                hasOfferCatalog: {
+                  "@type": "OfferCatalog",
+                  name: "Prestations",
+                  itemListElement: site.service_offer.map((o: any) => ({
+                    "@type": "Offer",
+                    itemOffered: {
+                      "@type": "Service",
+                      name: o.name,
+                      ...(o.description && { description: o.description }),
+                      ...(o.price_eur && { offers: { "@type": "Offer", price: o.price_eur, priceCurrency: "EUR" } }),
+                    },
+                  })),
+                },
+              }),
+            }),
+          }}
+        />
+      )}
     </main>
   );
 }
