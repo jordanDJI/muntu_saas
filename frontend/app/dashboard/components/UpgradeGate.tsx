@@ -41,7 +41,7 @@ export function UpgradeGate({ feature, children }: { feature: FeatureKey; childr
         </p>
       </div>
       <Link
-        href="/dashboard/settings#subscription"
+        href="/dashboard/settings?section=abonnement"
         className="l-btn l-btn-primary"
         style={{ textDecoration: "none" }}
       >

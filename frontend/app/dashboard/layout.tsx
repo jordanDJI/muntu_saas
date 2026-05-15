@@ -402,6 +402,94 @@ function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: 
   );
 }
 
+function TrialBanner() {
+  const { status, trialDaysLeft, loading } = useSubscription();
+  if (loading) return null;
+
+  if (status === "trial_expired") {
+    return (
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        background: "rgba(4,14,21,.92)", backdropFilter: "blur(8px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: "24px",
+      }}>
+        <div style={{
+          background: "var(--card-bg)", border: "1px solid rgba(170,189,216,.15)",
+          borderRadius: "20px", padding: "40px 48px", maxWidth: "480px", width: "100%",
+          textAlign: "center",
+        }}>
+          <div style={{ fontSize: "40px", marginBottom: "16px" }}>⏰</div>
+          <h2 style={{ color: "var(--text-primary)", fontSize: "22px", fontWeight: 700, marginBottom: "12px" }}>
+            Votre période d&apos;essai est terminée
+          </h2>
+          <p style={{ color: "var(--text-muted)", fontSize: "14px", lineHeight: 1.6, marginBottom: "28px" }}>
+            Les 14 jours d&apos;essai gratuit sont écoulés. Choisissez un plan pour continuer à accéder à votre tableau de bord et à tous vos clients.
+          </p>
+          <Link
+            href="/dashboard/settings?section=abonnement"
+            className="l-btn l-btn-primary"
+            style={{ width: "100%", justifyContent: "center", textDecoration: "none" }}
+          >
+            Choisir un plan →
+          </Link>
+          <p style={{ marginTop: "12px", fontSize: "12px", color: "var(--text-muted)" }}>
+            Vos données sont conservées · Annulation à tout moment
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "trial" && trialDaysLeft !== null && trialDaysLeft <= 3) {
+    return (
+      <div style={{
+        background: trialDaysLeft <= 1 ? "rgba(191,51,51,.15)" : "rgba(221,170,64,.1)",
+        borderBottom: `1px solid ${trialDaysLeft <= 1 ? "rgba(191,51,51,.3)" : "rgba(221,170,64,.25)"}`,
+        padding: "10px 24px", display: "flex", alignItems: "center", justifyContent: "center",
+        gap: "16px", flexWrap: "wrap", fontSize: "13px",
+      }}>
+        <span style={{ color: trialDaysLeft <= 1 ? "#FC8181" : "#DDAA40", fontWeight: 600 }}>
+          {trialDaysLeft <= 1
+            ? "⚠️ Dernier jour d'essai gratuit !"
+            : `⚠️ Il vous reste ${trialDaysLeft} jours d'essai gratuit.`}
+        </span>
+        <Link
+          href="/dashboard/settings?section=abonnement"
+          style={{
+            background: "var(--l-gold)", color: "#07222F", fontWeight: 700,
+            fontSize: "12px", padding: "5px 14px", borderRadius: "100px",
+            textDecoration: "none",
+          }}
+        >
+          S&apos;abonner maintenant →
+        </Link>
+      </div>
+    );
+  }
+
+  if (status === "trial" && trialDaysLeft !== null && trialDaysLeft > 3) {
+    return (
+      <div style={{
+        background: "rgba(13,75,88,.12)", borderBottom: "1px solid rgba(13,75,88,.2)",
+        padding: "8px 24px", display: "flex", alignItems: "center", justifyContent: "center",
+        gap: "16px", flexWrap: "wrap", fontSize: "13px",
+      }}>
+        <span style={{ color: "var(--text-muted)" }}>
+          🎉 Essai gratuit — {trialDaysLeft} jours restants
+        </span>
+        <Link
+          href="/dashboard/settings?section=abonnement"
+          style={{ color: "var(--teal-l)", fontWeight: 600, textDecoration: "none", fontSize: "12px" }}
+        >
+          Voir les plans →
+        </Link>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -639,6 +727,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Contenu — offset pour la navbar */}
       <div className="pt-14">
+        <TrialBanner />
         {children}
       </div>
     </div>

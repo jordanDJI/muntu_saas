@@ -1902,6 +1902,11 @@ export default function SettingsPage() {
   const router = useRouter();
   const { t } = useLanguage();
   const [active, setActive] = useState<Section>("profil");
+
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get("section");
+    if (s && s in SECTION_MAP) setActive(s as Section);
+  }, []);
   const activeItem = NAV.find(n => n.key === active)!;
 
   return (

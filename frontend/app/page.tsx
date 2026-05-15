@@ -4,9 +4,20 @@ import Link from "next/link";
 import { supabase } from "../lib/api";
 import { LangSelector, useLanguage } from "../contexts/LanguageContext";
 
+const FAQ_KEYS = [
+  ["lp_faq1_q", "lp_faq1_a"],
+  ["lp_faq2_q", "lp_faq2_a"],
+  ["lp_faq3_q", "lp_faq3_a"],
+  ["lp_faq4_q", "lp_faq4_a"],
+  ["lp_faq5_q", "lp_faq5_a"],
+  ["lp_faq6_q", "lp_faq6_a"],
+] as const;
+
 export default function LandingPage() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [navScrolled, setNavScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -45,8 +56,35 @@ export default function LandingPage() {
     return () => bro.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (mobileMenuOpen) document.body.style.overflow = "hidden";
+    else document.body.style.overflow = "";
+    return () => { document.body.style.overflow = ""; };
+  }, [mobileMenuOpen]);
+
+  const closeMobile = () => setMobileMenuOpen(false);
+
   return (
     <div className="l-page">
+
+      {/* ── MOBILE MENU ── */}
+      <div className={`l-mobile-menu${mobileMenuOpen ? " open" : ""}`}>
+        <button className="l-mobile-menu-close" onClick={closeMobile} aria-label="Fermer">×</button>
+        <a href="#features" onClick={closeMobile}>{t.lp_nav_feat}</a>
+        <a href="#how" onClick={closeMobile}>{t.lp_nav_how}</a>
+        <a href="#pricing" onClick={closeMobile}>{t.lp_nav_pricing}</a>
+        <a href="#faq" onClick={closeMobile}>FAQ</a>
+        <div className="l-mobile-menu-cta">
+          {loggedIn ? (
+            <Link href="/dashboard" className="l-btn l-btn-primary" style={{ justifyContent: "center" }} onClick={closeMobile}>{t.nav_dashboard}</Link>
+          ) : (
+            <>
+              <Link href="/onboarding" className="l-btn l-btn-primary" style={{ justifyContent: "center" }} onClick={closeMobile}>{t.lp_nav_start}</Link>
+              <Link href="/login" className="l-btn l-btn-ghost" style={{ justifyContent: "center" }} onClick={closeMobile}>{t.lp_nav_login}</Link>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* ── NAV ── */}
       <nav className={`l-nav${navScrolled ? " scrolled" : ""}`}>
@@ -59,6 +97,7 @@ export default function LandingPage() {
             <li><a href="#features">{t.lp_nav_feat}</a></li>
             <li><a href="#how">{t.lp_nav_how}</a></li>
             <li><a href="#pricing">{t.lp_nav_pricing}</a></li>
+            <li><a href="#faq">FAQ</a></li>
           </ul>
           <div className="l-nav-cta">
             <LangSelector />
@@ -70,6 +109,12 @@ export default function LandingPage() {
                 <Link href="/onboarding" className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }}>{t.lp_nav_start}</Link>
               </>
             )}
+            <button className="l-nav-hamburger" onClick={() => setMobileMenuOpen(true)} aria-label="Menu">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M2 4h14M2 9h14M2 14h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+              {t.nav_mobile_open}
+            </button>
           </div>
         </div>
       </nav>
@@ -83,8 +128,17 @@ export default function LandingPage() {
           <h1>{t.lp_h1}<br /><span className="l-gradient-text">{t.lp_h1b}</span></h1>
           <p className="l-hero-sub">{t.lp_sub}</p>
           <div className="l-hero-ctas">
-            <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">{t.lp_cta}</Link>
+            <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">
+              {t.lp_cta}
+            </Link>
             <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">{t.lp_cta2}</Link>
+          </div>
+          <div className="l-hero-trust">
+            <span>✓ Sans carte bancaire</span>
+            <span className="l-hero-trust-dot">·</span>
+            <span>✓ En ligne en 15 minutes</span>
+            <span className="l-hero-trust-dot">·</span>
+            <span>✓ Annulation à tout moment</span>
           </div>
           <div className="l-hero-stats">
             <div className="l-hero-stat"><strong>500+</strong><span>{t.lp_stat1}</span></div>
@@ -201,7 +255,7 @@ export default function LandingPage() {
             </div>
 
             <div className="l-feat-card teal" data-r="" data-d="3">
-              <div className="l-feat-icon">🤝</div>
+              <div className="l-feat-icon">🤖</div>
               <h3>{t.lp_feat3_t}</h3>
               <p>{t.lp_feat3_d}</p>
               <ul className="l-feat-list">
@@ -265,6 +319,61 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ── TESTIMONIALS (moved before pricing) ── */}
+      <section className="l-testimonials">
+        <div className="l-container">
+          <div className="l-section-tag" data-r=""><div className="l-tag">✦ {t.lp_testi_tag}</div></div>
+          <h2 className="l-section-h2" data-r="" data-d="1">{t.lp_testi_h2a}<span className="l-gradient-text">{t.lp_testi_h2b}</span></h2>
+          <div className="l-testi-grid" style={{ marginTop: "48px" }}>
+
+            <div className="l-testi-card" data-r="" data-d="1">
+              <div className="l-testi-stars">★★★★★</div>
+              <p className="l-testi-text">&quot;Mes patients réservent maintenant directement en ligne. Plus d&apos;appels le soir — mon agenda est toujours plein et je me concentre sur mes soins.&quot;</p>
+              <div className="l-testi-author">
+                <div className="l-testi-avatar" style={{ background: "rgba(13,75,88,.4)", color: "var(--l-teal-xl)" }}>JY</div>
+                <div>
+                  <div className="l-testi-name">Josiane Yollande</div>
+                  <div className="l-testi-role">Infirmière libérale, Bruxelles</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="l-testi-card" data-r="" data-d="2">
+              <div className="l-testi-stars">★★★★★</div>
+              <p className="l-testi-text">&quot;Je suis sur chantier toute la journée. L&apos;agent IA répond à mes clients pendant que je travaille. Mon taux de no-show a chuté de 40% grâce aux rappels automatiques.&quot;</p>
+              <div className="l-testi-author">
+                <div className="l-testi-avatar" style={{ background: "rgba(170,189,216,.15)", color: "var(--l-blue)" }}>TB</div>
+                <div>
+                  <div className="l-testi-name">Thierry Bales</div>
+                  <div className="l-testi-role">Artisan BTP, Darmstadt – Allemagne</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="l-testi-card" data-r="" data-d="3">
+              <div className="l-testi-stars">★★★★★</div>
+              <p className="l-testi-text">&quot;Je n&apos;y connaissais rien en informatique. Le wizard est tellement bien guidé que même moi j&apos;ai réussi ! Mon agenda est plein depuis le premier mois.&quot;</p>
+              <div className="l-testi-author">
+                <div className="l-testi-avatar" style={{ background: "rgba(221,170,64,.15)", color: "var(--l-gold)" }}>SG</div>
+                <div>
+                  <div className="l-testi-name">Samy Glo</div>
+                  <div className="l-testi-role">Esthéticienne, Paris</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ── TRUST BAR ── */}
+      <div className="l-trust-bar">
+        <div className="l-trust-item"><span className="l-trust-icon">🔒</span>{t.lp_trust_stripe}</div>
+        <div className="l-trust-item"><span className="l-trust-icon">🇪🇺</span>{t.lp_trust_gdpr}</div>
+        <div className="l-trust-item"><span className="l-trust-icon">✕</span>{t.lp_trust_cancel}</div>
+        <div className="l-trust-item"><span className="l-trust-icon">💬</span>{t.lp_trust_support}</div>
+      </div>
 
       {/* ── PRICING ── */}
       <section className="l-pricing" id="pricing">
@@ -332,7 +441,7 @@ export default function LandingPage() {
                 <li>Onboarding personnalisé</li>
                 <li>Account manager dédié</li>
               </ul>
-              <a href="mailto:support@klientys.co" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>{t.lp_contact_us}</a>
+              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>{t.lp_waitlist}</Link>
             </div>
 
           </div>
@@ -342,49 +451,29 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── TESTIMONIALS ── */}
-      <section className="l-testimonials">
+      {/* ── FAQ ── */}
+      <section className="l-faq" id="faq">
         <div className="l-container">
-          <div className="l-section-tag" data-r=""><div className="l-tag">✦ {t.lp_testi_tag}</div></div>
-          <h2 className="l-section-h2" data-r="" data-d="1">{t.lp_testi_h2a}<span className="l-gradient-text">{t.lp_testi_h2b}</span></h2>
-          <div className="l-testi-grid" style={{ marginTop: "48px" }}>
-
-            <div className="l-testi-card" data-r="" data-d="1">
-              <div className="l-testi-stars">★★★★★</div>
-              <p className="l-testi-text">&quot;Mes patients réservent maintenant directement en ligne. Plus d&apos;appels le soir — mon agenda est toujours plein et je me concentre sur mes soins.&quot;</p>
-              <div className="l-testi-author">
-                <div className="l-testi-avatar" style={{ background: "rgba(13,75,88,.4)", color: "var(--l-teal-xl)" }}>JY</div>
-                <div>
-                  <div className="l-testi-name">Josiane Yollande</div>
-                  <div className="l-testi-role">Infirmière libérale, Bruxelles</div>
+          <div className="l-section-tag" data-r=""><div className="l-tag">✦ {t.lp_faq_tag}</div></div>
+          <h2 className="l-section-h2" data-r="" data-d="1">{t.lp_faq_h2a}<br /><span className="l-gradient-text">{t.lp_faq_h2b}</span></h2>
+          <div className="l-faq-list">
+            {FAQ_KEYS.map(([qKey, aKey], i) => (
+              <div key={i} data-r="" data-d={String(Math.min(i + 1, 4))}>
+                <div className={`l-faq-item${openFaq === i ? " open" : ""}`}>
+                  <div className="l-faq-q" onClick={() => setOpenFaq(openFaq === i ? null : i)}>
+                    <span>{t[qKey]}</span>
+                    <span className="l-faq-chevron">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </span>
+                  </div>
+                  <div className="l-faq-a">
+                    <div className="l-faq-a-inner">{t[aKey]}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-
-            <div className="l-testi-card" data-r="" data-d="2">
-              <div className="l-testi-stars">★★★★★</div>
-              <p className="l-testi-text">&quot;Je suis sur chantier toute la journée. L&apos;agent IA répond à mes clients pendant que je travaille. Mon taux de no-show a chuté de 40% grâce aux rappels automatiques.&quot;</p>
-              <div className="l-testi-author">
-                <div className="l-testi-avatar" style={{ background: "rgba(170,189,216,.15)", color: "var(--l-blue)" }}>TB</div>
-                <div>
-                  <div className="l-testi-name">Thierry Bales</div>
-                  <div className="l-testi-role">Artisan BTP, Darmstadt – Allemagne</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="l-testi-card" data-r="" data-d="3">
-              <div className="l-testi-stars">★★★★★</div>
-              <p className="l-testi-text">&quot;Je n&apos;y connaissais rien en informatique. Le wizard est tellement bien guidé que même moi j&apos;ai réussi ! Mon agenda est plein depuis le premier mois.&quot;</p>
-              <div className="l-testi-author">
-                <div className="l-testi-avatar" style={{ background: "rgba(221,170,64,.15)", color: "var(--l-gold)" }}>SG</div>
-                <div>
-                  <div className="l-testi-name">Samy Glo</div>
-                  <div className="l-testi-role">Esthéticienne, Paris</div>
-                </div>
-              </div>
-            </div>
-
+            ))}
           </div>
         </div>
       </section>
@@ -420,6 +509,7 @@ export default function LandingPage() {
               <a href="#features">{t.lp_nav_feat}</a>
               <a href="#pricing">{t.lp_nav_pricing}</a>
               <a href="#how">{t.lp_nav_how}</a>
+              <a href="#faq">FAQ</a>
             </div>
             <div className="l-footer-col">
               <h4>{t.lp_footer_access}</h4>
@@ -430,6 +520,12 @@ export default function LandingPage() {
               <h4>{t.lp_footer_contact_h}</h4>
               <a href="mailto:support@klientys.co">support@klientys.co</a>
             </div>
+            <div className="l-footer-col">
+              <h4>{t.lp_footer_legal}</h4>
+              <Link href="/legal/cgu">{t.lp_footer_cgu}</Link>
+              <Link href="/legal/privacy">{t.lp_footer_privacy}</Link>
+              <Link href="/legal/mentions">{t.lp_footer_mentions}</Link>
+            </div>
           </div>
           <div className="l-footer-bottom">
             <span>© {new Date().getFullYear()} Klientys. {t.land_footer_rights}</span>
@@ -437,6 +533,12 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* ── STICKY MOBILE CTA ── */}
+      <div className="l-sticky-cta">
+        <Link href="/onboarding" className="l-btn l-btn-primary" style={{ flex: 1, justifyContent: "center" }}>{t.lp_nav_start}</Link>
+        <Link href="/login" className="l-btn l-btn-ghost" style={{ padding: "12px 20px" }}>{t.lp_nav_login}</Link>
+      </div>
 
     </div>
   );

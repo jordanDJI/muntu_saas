@@ -6,7 +6,6 @@ import { useSubscription } from "../../../contexts/SubscriptionContext";
 import type { FeatureKey } from "../../../contexts/SubscriptionContext";
 
 const AGENT_FEATURE: Record<string, FeatureKey> = {
-  vitrine:          "agent_vitrine",
   support_client:   "agent_support",
   assistant_tenant: "agent_assistant",
 };

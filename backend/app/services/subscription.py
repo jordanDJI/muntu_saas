@@ -51,9 +51,16 @@ PLAN_FEATURES: dict = {
 }
 
 
+TRIAL_DAYS = 14
+
+
 async def get_tenant_plan(tenant_id: str) -> dict:
     from app.core.supabase import get_supabase_admin
+    from datetime import datetime, timezone, timedelta
+
     sb = get_supabase_admin()
+
+    # 1. Abonnement actif ou en période de grâce Stripe
     res = (
         sb.table("subscription")
         .select("status, plan:plan_id(name, features)")
@@ -62,13 +69,40 @@ async def get_tenant_plan(tenant_id: str) -> dict:
         .limit(1)
         .execute()
     )
-    if not res.data:
-        return {"plan_name": "Essentiel", "status": "trial", "features": ESSENTIEL_FEATURES}
-    row = res.data[0]
-    plan = row["plan"]
-    features = plan.get("features") or PLAN_FEATURES.get(plan["name"], ESSENTIEL_FEATURES)
-    return {
-        "plan_name": plan["name"],
-        "status": row["status"],
-        "features": features,
-    }
+    if res.data:
+        row = res.data[0]
+        plan = row["plan"]
+        features = plan.get("features") or PLAN_FEATURES.get(plan["name"], ESSENTIEL_FEATURES)
+        return {"plan_name": plan["name"], "status": row["status"], "features": features, "trial_days_left": None}
+
+    # 2. Pas d'abonnement → vérifier la fenêtre d'essai de 14 jours
+    tenant = sb.table("tenant").select("created_at").eq("id", tenant_id).maybe_single().execute()
+    if tenant and tenant.data and tenant.data.get("created_at"):
+        raw = tenant.data["created_at"]
+        created_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        trial_end = created_at + timedelta(days=TRIAL_DAYS)
+        now = datetime.now(timezone.utc)
+
+        if now < trial_end:
+            days_left = max(1, (trial_end - now).days)
+            return {
+                "plan_name": "Essentiel",
+                "status": "trial",
+                "features": ESSENTIEL_FEATURES,
+                "trial_days_left": days_left,
+            }
+
+        # Essai expiré — tout verrouillé
+        expired_features = {
+            k: (False if isinstance(v, bool) else 0)
+            for k, v in ESSENTIEL_FEATURES.items()
+        }
+        return {
+            "plan_name": None,
+            "status": "trial_expired",
+            "features": expired_features,
+            "trial_days_left": 0,
+        }
+
+    # Fallback (tenant sans created_at) → essai par défaut
+    return {"plan_name": "Essentiel", "status": "trial", "features": ESSENTIEL_FEATURES, "trial_days_left": TRIAL_DAYS}

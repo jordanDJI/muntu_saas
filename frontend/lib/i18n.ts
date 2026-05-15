@@ -412,6 +412,33 @@ const fr = {
   lp_footer_access:"Accès",
   lp_footer_contact_h: "Contact",
   lp_footer_create:"Créer un compte",
+  lp_footer_legal:  "Légal",
+  lp_footer_cgu:    "Conditions générales",
+  lp_footer_privacy:"Politique de confidentialité",
+  lp_footer_mentions:"Mentions légales",
+
+  lp_faq_tag:  "FAQ",
+  lp_faq_h2a: "Vos questions,",
+  lp_faq_h2b: "nos réponses.",
+  lp_faq1_q:  "Est-ce vraiment sans carte bancaire pour l'essai ?",
+  lp_faq1_a:  "Oui, 14 jours d'essai complet sans aucune information de paiement. Vous entrez votre carte uniquement si vous décidez de continuer.",
+  lp_faq2_q:  "En combien de temps mon site est-il en ligne ?",
+  lp_faq2_a:  "En moyenne 15 minutes. Notre wizard vous guide étape par étape : logo, couleurs, services, disponibilités. À la fin, vous cliquez 'Publier' et c'est en ligne.",
+  lp_faq3_q:  "Dois-je avoir des connaissances techniques ?",
+  lp_faq3_a:  "Aucune. Klientys est conçu pour des non-techniciens : infirmières, artisans, kinés. Si vous savez utiliser WhatsApp, vous savez utiliser Klientys.",
+  lp_faq4_q:  "Puis-je utiliser mon propre nom de domaine ?",
+  lp_faq4_a:  "Oui. Sur le plan Pro vous pouvez connecter votre domaine existant (ex. www.mon-cabinet.fr) ou en acheter un nouveau directement depuis Klientys.",
+  lp_faq5_q:  "Que se passe-t-il si j'annule mon abonnement ?",
+  lp_faq5_a:  "Vous conservez l'accès jusqu'à la fin de la période payée. Aucun frais caché, aucune pénalité. Vos données sont exportables à tout moment.",
+  lp_faq6_q:  "Les agents IA fonctionnent-ils vraiment 24h/24 ?",
+  lp_faq6_a:  "Oui. Une fois configurés, l'agent vitrine répond aux visiteurs de votre site et l'agent support répond sur Telegram et WhatsApp, même quand vous dormez.",
+
+  lp_trust_stripe: "Paiement sécurisé Stripe",
+  lp_trust_gdpr:   "Conforme RGPD",
+  lp_trust_cancel: "Annulation à tout moment",
+  lp_trust_support:"Support humain inclus",
+
+  nav_mobile_open: "Menu",
 };
 
 const en: T = {
@@ -797,6 +824,33 @@ const en: T = {
   lp_footer_access:"Access",
   lp_footer_contact_h: "Contact",
   lp_footer_create:"Create account",
+  lp_footer_legal:  "Legal",
+  lp_footer_cgu:    "Terms of service",
+  lp_footer_privacy:"Privacy policy",
+  lp_footer_mentions:"Legal notice",
+
+  lp_faq_tag:  "FAQ",
+  lp_faq_h2a: "Your questions,",
+  lp_faq_h2b: "our answers.",
+  lp_faq1_q:  "Is it really free to try without a credit card?",
+  lp_faq1_a:  "Yes, 14-day full trial with no payment info required. You only enter your card if you decide to continue.",
+  lp_faq2_q:  "How quickly will my website be live?",
+  lp_faq2_a:  "On average 15 minutes. Our wizard guides you step by step: logo, colours, services, availability. At the end, click 'Publish' and you're live.",
+  lp_faq3_q:  "Do I need any technical skills?",
+  lp_faq3_a:  "None. Klientys is built for non-technical users: nurses, craftsmen, physios. If you can use WhatsApp, you can use Klientys.",
+  lp_faq4_q:  "Can I use my own domain name?",
+  lp_faq4_a:  "Yes. On the Pro plan you can connect your existing domain (e.g. www.my-practice.com) or buy a new one directly through Klientys.",
+  lp_faq5_q:  "What happens if I cancel my subscription?",
+  lp_faq5_a:  "You keep access until the end of the paid period. No hidden fees, no penalties. Your data is exportable at any time.",
+  lp_faq6_q:  "Do the AI agents really work 24/7?",
+  lp_faq6_a:  "Yes. Once configured, the showcase agent replies to your website visitors and the support agent replies on Telegram and WhatsApp, even while you sleep.",
+
+  lp_trust_stripe: "Secure Stripe payments",
+  lp_trust_gdpr:   "GDPR compliant",
+  lp_trust_cancel: "Cancel anytime",
+  lp_trust_support:"Human support included",
+
+  nav_mobile_open: "Menu",
 };
 
 const de: T = {
@@ -1182,6 +1236,33 @@ const de: T = {
   lp_footer_access:"Zugang",
   lp_footer_contact_h: "Kontakt",
   lp_footer_create:"Konto erstellen",
+  lp_footer_legal:  "Rechtliches",
+  lp_footer_cgu:    "Nutzungsbedingungen",
+  lp_footer_privacy:"Datenschutz",
+  lp_footer_mentions:"Impressum",
+
+  lp_faq_tag:  "FAQ",
+  lp_faq_h2a: "Ihre Fragen,",
+  lp_faq_h2b: "unsere Antworten.",
+  lp_faq1_q:  "Ist der Test wirklich ohne Kreditkarte?",
+  lp_faq1_a:  "Ja, 14 Tage vollständige Testversion ohne Zahlungsinformationen. Sie geben Ihre Karte nur ein, wenn Sie weitermachen möchten.",
+  lp_faq2_q:  "Wie schnell ist meine Website online?",
+  lp_faq2_a:  "Im Durchschnitt 15 Minuten. Unser Wizard führt Sie Schritt für Schritt: Logo, Farben, Dienste, Verfügbarkeit. Am Ende klicken Sie auf 'Veröffentlichen'.",
+  lp_faq3_q:  "Brauche ich technische Kenntnisse?",
+  lp_faq3_a:  "Keine. Klientys ist für Nicht-Techniker entwickelt: Krankenpfleger, Handwerker, Physiotherapeuten. Wenn Sie WhatsApp nutzen können, können Sie Klientys nutzen.",
+  lp_faq4_q:  "Kann ich meinen eigenen Domainnamen verwenden?",
+  lp_faq4_a:  "Ja. Im Pro-Plan können Sie Ihre bestehende Domain verbinden oder eine neue direkt über Klientys kaufen.",
+  lp_faq5_q:  "Was passiert, wenn ich kündige?",
+  lp_faq5_a:  "Sie behalten den Zugang bis zum Ende des bezahlten Zeitraums. Keine versteckten Gebühren. Ihre Daten sind jederzeit exportierbar.",
+  lp_faq6_q:  "Arbeiten die KI-Agenten wirklich 24/7?",
+  lp_faq6_a:  "Ja. Einmal konfiguriert, antworten die Agenten auf Website-Besucher und auf Telegram & WhatsApp, auch wenn Sie schlafen.",
+
+  lp_trust_stripe: "Sichere Stripe-Zahlung",
+  lp_trust_gdpr:   "DSGVO-konform",
+  lp_trust_cancel: "Jederzeit kündbar",
+  lp_trust_support:"Menschlicher Support inklusive",
+
+  nav_mobile_open: "Menü",
 };
 
 const nl: T = {
@@ -1567,6 +1648,33 @@ const nl: T = {
   lp_footer_access:"Toegang",
   lp_footer_contact_h: "Contact",
   lp_footer_create:"Account aanmaken",
+  lp_footer_legal:  "Juridisch",
+  lp_footer_cgu:    "Algemene voorwaarden",
+  lp_footer_privacy:"Privacybeleid",
+  lp_footer_mentions:"Juridische vermeldingen",
+
+  lp_faq_tag:  "FAQ",
+  lp_faq_h2a: "Uw vragen,",
+  lp_faq_h2b: "onze antwoorden.",
+  lp_faq1_q:  "Is de proefperiode echt gratis zonder creditcard?",
+  lp_faq1_a:  "Ja, 14 dagen volledige proefperiode zonder betalingsgegevens. U voert uw kaart alleen in als u wilt doorgaan.",
+  lp_faq2_q:  "Hoe snel is mijn website online?",
+  lp_faq2_a:  "Gemiddeld 15 minuten. Onze wizard begeleidt u stap voor stap: logo, kleuren, diensten, beschikbaarheid. Aan het einde klikt u op 'Publiceren'.",
+  lp_faq3_q:  "Heb ik technische kennis nodig?",
+  lp_faq3_a:  "Geen. Klientys is gebouwd voor niet-technici: verpleegkundigen, ambachtslieden, fysiotherapeuten. Als u WhatsApp kunt gebruiken, kunt u Klientys gebruiken.",
+  lp_faq4_q:  "Kan ik mijn eigen domeinnaam gebruiken?",
+  lp_faq4_a:  "Ja. Met het Pro-plan kunt u uw bestaande domein koppelen of een nieuw domein rechtstreeks via Klientys kopen.",
+  lp_faq5_q:  "Wat gebeurt er als ik opzeg?",
+  lp_faq5_a:  "U behoudt toegang tot het einde van de betaalde periode. Geen verborgen kosten. Uw gegevens zijn altijd exporteerbaar.",
+  lp_faq6_q:  "Werken de AI-agenten echt 24/7?",
+  lp_faq6_a:  "Ja. Eenmaal geconfigureerd, antwoorden de agenten op websitebezoekers en op Telegram & WhatsApp, ook terwijl u slaapt.",
+
+  lp_trust_stripe: "Veilige Stripe-betaling",
+  lp_trust_gdpr:   "AVG-conform",
+  lp_trust_cancel: "Op elk moment opzegbaar",
+  lp_trust_support:"Menselijke ondersteuning inbegrepen",
+
+  nav_mobile_open: "Menu",
 };
 
 export const translations: Record<Lang, T> = { fr, en, de, nl };

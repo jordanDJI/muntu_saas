@@ -6,7 +6,7 @@ from app.core.supabase import get_supabase_admin
 from app.core.config import settings
 from app.services.subscription import get_tenant_plan
 
-stripe.api_key = settings.stripe_secret_key
+stripe.api_key = settings.stripe_secret_key.strip()
 
 router = APIRouter(prefix="/subscriptions", tags=["Subscriptions"])
 
@@ -40,6 +40,7 @@ async def create_checkout(body: CheckoutIn, tenant_id: str = Depends(get_current
     try:
         session = stripe.checkout.Session.create(
             mode="subscription",
+            payment_method_types=["card"],
             line_items=[{"price": plan["stripe_price_id"], "quantity": 1}],
             success_url=body.success_url,
             cancel_url=body.cancel_url,
