@@ -37,13 +37,20 @@ async def create_checkout(body: CheckoutIn, tenant_id: str = Depends(get_current
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant introuvable")
 
-    session = stripe.checkout.Session.create(
-        mode="subscription",
-        line_items=[{"price": plan["stripe_price_id"], "quantity": 1}],
-        success_url=body.success_url,
-        cancel_url=body.cancel_url,
-        metadata={"tenant_id": tenant_id, "plan_id": body.plan_id},
-    )
+    try:
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": plan["stripe_price_id"], "quantity": 1}],
+            success_url=body.success_url,
+            cancel_url=body.cancel_url,
+            metadata={"tenant_id": tenant_id, "plan_id": body.plan_id},
+        )
+    except stripe.error.AuthenticationError:
+        raise HTTPException(status_code=503, detail="Clé Stripe non configurée — contactez le support.")
+    except stripe.error.InvalidRequestError as e:
+        raise HTTPException(status_code=400, detail=f"Erreur Stripe : {e.user_message or str(e)}")
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=502, detail=f"Erreur paiement : {e.user_message or str(e)}")
 
     return {"checkout_url": session.url}
 
