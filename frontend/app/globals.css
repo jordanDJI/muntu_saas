@@ -466,17 +466,31 @@
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:rgba(13,75,88,.4);border-radius:3px;}
 
-/* ── Status badges (pipeline) ─────────────────────────────────────── */
+/* ── Status badges (pipeline) — light mode par défaut ────────────── */
 .badge-status{display:inline-flex;align-items:center;padding:2px 10px;border-radius:9999px;font-size:11px;font-weight:600;border:1px solid;white-space:nowrap;line-height:1.6;}
-.badge-new      {background:#1A3A4A;color:#5BC4D4;border-color:#1A6E82;}
-.badge-contacted{background:#3A2A00;color:#DDAA40;border-color:#8C6820;}
-.badge-qualified{background:#1A2A4A;color:#AABDD8;border-color:#4A6A9A;}
-.badge-scheduled{background:#1A1A4A;color:#9090E0;border-color:#4040A0;}
-.badge-won      {background:#0A2A1A;color:#4ACA7A;border-color:#1A6A3A;}
-.badge-lost     {background:#2A1010;color:#E06060;border-color:#8A2020;}
+.badge-new      {background:#E0F7FA;color:#0D4B58;border-color:#80DEEA;}
+.badge-contacted{background:#FFF8E1;color:#6D4C00;border-color:#FFE082;}
+.badge-qualified{background:#EEF2FF;color:#1E3A8A;border-color:#A5B4FC;}
+.badge-scheduled{background:#F0EFFE;color:#4338CA;border-color:#A78BFA;}
+.badge-won      {background:#F0FDF4;color:#14532D;border-color:#86EFAC;}
+.badge-lost     {background:#FEF2F2;color:#991B1B;border-color:#FCA5A5;}
 
-/* ── Filtres (boutons sur fond card) ──────────────────────────────── */
-.filter-btn{background:var(--card-bg);border:1px solid var(--card-border)!important;border-radius:9999px;color:var(--text-muted);transition:color .15s,background .15s;}
-.filter-btn:hover{color:var(--text-primary);}
-.filter-btn-active{background:var(--teal)!important;border-color:var(--teal)!important;color:#fff!important;}
-.filter-inactive{color:var(--text-muted)!important;}
+/* ── Status badges — dark mode overrides ─────────────────────────── */
+[data-dash-dark] .badge-new      {background:#1A3A4A;color:#5BC4D4;border-color:#1A6E82;}
+[data-dash-dark] .badge-contacted{background:#3A2A00;color:#DDAA40;border-color:#8C6820;}
+[data-dash-dark] .badge-qualified{background:#1A2A4A;color:#AABDD8;border-color:#4A6A9A;}
+[data-dash-dark] .badge-scheduled{background:#1A1A4A;color:#9090E0;border-color:#4040A0;}
+[data-dash-dark] .badge-won      {background:#0A2A1A;color:#4ACA7A;border-color:#1A6A3A;}
+[data-dash-dark] .badge-lost     {background:#2A1010;color:#E06060;border-color:#8A2020;}
+
+/* ── Filtres (boutons sur fond card) — light mode par défaut ─────── */
+.filter-btn{background:#fff;border:1px solid #E5E7EB!important;border-radius:9999px;color:#6B7280;transition:color .15s,background .15s;}
+.filter-btn:hover{color:#111827;}
+.filter-btn-active{background:#0D4B58!important;border-color:#0D4B58!important;color:#fff!important;}
+.filter-inactive{color:#9CA3AF!important;}
+
+/* ── Filtres — dark mode overrides ──────────────────────────────── */
+[data-dash-dark] .filter-btn{background:var(--card-bg)!important;border-color:var(--card-border)!important;color:var(--text-muted);}
+[data-dash-dark] .filter-btn:hover{color:var(--text-primary);}
+[data-dash-dark] .filter-btn-active{background:var(--teal)!important;border-color:var(--teal)!important;color:#fff!important;}
+[data-dash-dark] .filter-inactive{color:var(--text-muted)!important;}

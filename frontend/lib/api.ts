@@ -77,6 +77,7 @@ export const api = {
 
   // Subscriptions
   createCheckout: (body: object) => apiFetch("/api/v1/subscriptions/checkout", { method: "POST", body: JSON.stringify(body) }),
+  billingPortal: () => apiFetch<{ url: string }>("/api/v1/subscriptions/billing-portal", { method: "POST" }),
 
   // Agents IA — config
   getAgentConfigs: () => apiFetch<any[]>("/api/v1/agents/config"),

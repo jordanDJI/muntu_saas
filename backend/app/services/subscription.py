@@ -29,12 +29,46 @@ BUSINESS_FEATURES: dict = {
 }
 
 
-async def get_tenant_plan(_tenant_id: str) -> dict:
-    """Return plan name, status and features for a tenant.
-    TODO: query subscription table once Stripe + migration 019 are applied.
-    Until then every tenant gets Business (trial) access."""
+PRO_FEATURES: dict = {
+    "max_contacts": -1,
+    "max_team_members": 1,
+    "analytics": True,
+    "analytics_roi": False,
+    "agent_vitrine": True,
+    "agent_support": True,
+    "agent_assistant": False,
+    "multi_page_site": True,
+    "multi_tenant": False,
+    "booking": True,
+    "crm": True,
+    "custom_domain": True,
+}
+
+PLAN_FEATURES: dict = {
+    "Essentiel": ESSENTIEL_FEATURES,
+    "Pro":       PRO_FEATURES,
+    "Business":  BUSINESS_FEATURES,
+}
+
+
+async def get_tenant_plan(tenant_id: str) -> dict:
+    from app.core.supabase import get_supabase_admin
+    sb = get_supabase_admin()
+    res = (
+        sb.table("subscription")
+        .select("status, plan:plan_id(name, features)")
+        .eq("tenant_id", tenant_id)
+        .in_("status", ["active", "trialing"])
+        .limit(1)
+        .execute()
+    )
+    if not res.data:
+        return {"plan_name": "Essentiel", "status": "trial", "features": ESSENTIEL_FEATURES}
+    row = res.data[0]
+    plan = row["plan"]
+    features = plan.get("features") or PLAN_FEATURES.get(plan["name"], ESSENTIEL_FEATURES)
     return {
-        "plan_name": "Business",
-        "status": "trial",
-        "features": BUSINESS_FEATURES,
+        "plan_name": plan["name"],
+        "status": row["status"],
+        "features": features,
     }

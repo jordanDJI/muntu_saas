@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     vercel_project_id: str = ""
 
     # Domaines personnalisés — OVH
-    ovh_endpoint: str = "ovh-eu"
+    ovh_endpoint: str = "ovh-ca"
     ovh_app_key: str = ""
     ovh_app_secret: str = ""
     ovh_consumer_key: str = ""

@@ -121,7 +121,45 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
                 "status": "active",
             }, on_conflict="tenant_id").execute()
 
+    elif event["type"] == "customer.subscription.updated":
+        sub = event["data"]["object"]
+        stripe_sub_id = sub["id"]
+        new_status = sub["status"]  # active, trialing, past_due, canceled…
+        supabase = get_supabase_admin()
+        supabase.table("subscription").update({"status": new_status}).eq("stripe_subscription_id", stripe_sub_id).execute()
+
+    elif event["type"] == "customer.subscription.deleted":
+        sub = event["data"]["object"]
+        stripe_sub_id = sub["id"]
+        supabase = get_supabase_admin()
+        supabase.table("subscription").update({"status": "canceled"}).eq("stripe_subscription_id", stripe_sub_id).execute()
+
+    elif event["type"] == "invoice.payment_failed":
+        invoice = event["data"]["object"]
+        stripe_sub_id = invoice.get("subscription")
+        if stripe_sub_id:
+            supabase = get_supabase_admin()
+            supabase.table("subscription").update({"status": "past_due"}).eq("stripe_subscription_id", stripe_sub_id).execute()
+
     return {"received": True}
+
+
+@router.post("/billing-portal")
+async def billing_portal(tenant_id: str = Depends(get_current_tenant)):
+    """Ouvre le portail de facturation Stripe pour le tenant courant."""
+    supabase = get_supabase_admin()
+    sub = supabase.table("subscription").select("stripe_subscription_id").eq("tenant_id", tenant_id).eq("status", "active").limit(1).execute()
+    if not sub.data or not sub.data[0].get("stripe_subscription_id"):
+        raise HTTPException(status_code=404, detail="Aucun abonnement actif")
+
+    stripe_sub = stripe.Subscription.retrieve(sub.data[0]["stripe_subscription_id"])
+    customer_id = stripe_sub["customer"]
+
+    session = stripe.billing_portal.Session.create(
+        customer=customer_id,
+        return_url=f"{settings.frontend_url_prod or settings.frontend_url}/dashboard/settings",
+    )
+    return {"url": session.url}
 
 
 @router.get("/plan")

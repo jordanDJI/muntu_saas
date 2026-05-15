@@ -40,6 +40,24 @@ def _apex_and_sub(domain: str) -> tuple[str, str]:
 
 # ── Recherche ─────────────────────────────────────────────────────────────────
 
+def _subsidiary() -> str:
+    """Subsidiary OVH selon l'endpoint configuré."""
+    return "CA" if "ca" in settings.ovh_endpoint else "FR"
+
+
+def _is_available(item: dict) -> bool:
+    """
+    Détecte la disponibilité d'un domaine selon le format de réponse OVH.
+    - EU endpoint : champ 'action' == 'order'
+    - CA endpoint : settings.pricingMode == 'create-default'
+    """
+    action = item.get("action")
+    if action is not None:
+        return action == "order"
+    pricing_mode = (item.get("settings") or {}).get("pricingMode", "")
+    return pricing_mode == "create-default"
+
+
 def _search_sync(query: str) -> list[dict]:
     client = _client()
     results: list[dict] = []
@@ -48,7 +66,7 @@ def _search_sync(query: str) -> list[dict]:
         domain = f"{query.lower().strip()}{tld}"
         cart_id = None
         try:
-            cart = client.post("/order/cart", ovhSubsidiary="FR", _need_auth=False)
+            cart = client.post("/order/cart", ovhSubsidiary=_subsidiary(), _need_auth=False)
             cart_id = cart["cartId"]
             client.post(f"/order/cart/{cart_id}/assign")
             items = client.post(f"/order/cart/{cart_id}/domain", domain=domain)
@@ -56,17 +74,20 @@ def _search_sync(query: str) -> list[dict]:
                 items = [items]
 
             for item in items:
-                action = item.get("action", "unknown")
                 prices = item.get("prices", [])
                 price_ht = next(
                     (p["price"]["value"] for p in prices if p.get("label") in ("TOTAL", "PRICE")),
                     None,
                 )
+                currency = next(
+                    (p["price"]["currencyCode"] for p in prices if p.get("label") == "TOTAL"),
+                    "EUR",
+                )
                 results.append({
                     "domain": domain,
-                    "available": action == "order",
+                    "available": _is_available(item),
                     "price_ht": price_ht,
-                    "currency": "EUR",
+                    "currency": currency,
                 })
         except Exception as e:
             logger.warning("OVH search error for %s: %s", domain, e)
@@ -95,14 +116,14 @@ def _get_price_sync(domain: str) -> float:
     client = _client()
     cart_id = None
     try:
-        cart = client.post("/order/cart", ovhSubsidiary="FR", _need_auth=False)
+        cart = client.post("/order/cart", ovhSubsidiary=_subsidiary(), _need_auth=False)
         cart_id = cart["cartId"]
         client.post(f"/order/cart/{cart_id}/assign")
         items = client.post(f"/order/cart/{cart_id}/domain", domain=domain)
         if not isinstance(items, list):
             items = [items]
         item = items[0]
-        if item.get("action") != "order":
+        if not _is_available(item):
             raise ValueError(f"Domaine {domain} non disponible à l'achat")
         prices = item.get("prices", [])
         price_ht = next(
@@ -132,7 +153,7 @@ async def get_domain_price(domain: str) -> float:
 def _purchase_sync(domain: str) -> dict:
     client = _client()
 
-    cart = client.post("/order/cart", ovhSubsidiary="FR", _need_auth=False)
+    cart = client.post("/order/cart", ovhSubsidiary=_subsidiary(), _need_auth=False)
     cart_id = cart["cartId"]
     client.post(f"/order/cart/{cart_id}/assign")
 
@@ -141,8 +162,8 @@ def _purchase_sync(domain: str) -> dict:
         items = [items]
     item = items[0]
 
-    if item.get("action") != "order":
-        raise ValueError(f"Domaine {domain} non disponible à l'achat (action={item.get('action')})")
+    if not _is_available(item):
+        raise ValueError(f"Domaine {domain} non disponible à l'achat")
 
     order = client.post(
         f"/order/cart/{cart_id}/checkout",

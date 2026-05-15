@@ -1,8 +1,8 @@
-# Dossier Projet — SaaS de gestion de présence digitale pour indépendants et structures locales
+# Dossier Projet — Klientys gestion de présence digitale pour indépendants et structures locales
 
-**Version :** 2.6 — Mise à jour Mai 2026  
-**Date :** Mai 2026  
-**Auteur :** Jordan (porteur du projet)  
+**Version :** 2.6 — Mise à jour Mai 2026
+**Date :** Mai 2026
+**Auteur :** Jordan (porteur du projet)
 **Statut :** En développement actif — MVP déployé, V1 livré, V2 avancé (agents IA + équipe)
 
 ---
@@ -26,11 +26,11 @@ Le projet est né d'un constat simple : beaucoup d'indépendants, de professionn
 
 **Les trois freins principaux identifiés :**
 
-| Frein | Ce que ça signifie concrètement |
-|---|---|
-| Finance | Le coût d'un site pro (500–2000 €) est perçu comme trop élevé pour un indépendant qui démarre |
-| Compétence technique | Créer, publier et maintenir un site demande des connaissances que la plupart n'ont pas |
-| ROI non prévisible | L'indépendant ne sait pas combien de clients supplémentaires un site va lui apporter |
+| Frein                 | Ce que ça signifie concrètement                                                                     |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
+| Finance               | Le coût d'un site pro (500–2000 €) est perçu comme trop élevé pour un indépendant qui démarre |
+| Compétence technique | Créer, publier et maintenir un site demande des connaissances que la plupart n'ont pas               |
+| ROI non prévisible   | L'indépendant ne sait pas combien de clients supplémentaires un site va lui apporter                |
 
 **Exemple concret :** Yolande NYA, infirmière indépendante à Halle (Belgique), a un site (muntu-cura.be) créé par son frère. Elle fait 70 % de son activité en B2B (maisons de repos, mutuelles, médecins) et 30 % en B2C (patients directs). Sans aide technique, elle n'aurait pas pu avoir ce site.
 
@@ -55,13 +55,13 @@ C'est une **plateforme tout-en-un** qui permet à un indépendant non technicien
 
 ## 3. Pour qui ?
 
-| Profil cible | Exemples |
-|---|---|
-| Indépendant non technicien | Infirmier/ière, kinésithérapeute, coach, esthéticien/ne |
-| Artisan ou prestataire local | Plombier, électricien, couvreur |
-| Profession de conseil | Comptable, avocat, consultant |
-| Structure de soins à domicile | Association d'aide à domicile, cabinet infirmier |
-| TPE avec activité mixte | Entreprise qui vend à des particuliers ET à des entreprises |
+| Profil cible                   | Exemples                                                      |
+| ------------------------------ | ------------------------------------------------------------- |
+| Indépendant non technicien    | Infirmier/ière, kinésithérapeute, coach, esthéticien/ne   |
+| Artisan ou prestataire local   | Plombier, électricien, couvreur                              |
+| Profession de conseil          | Comptable, avocat, consultant                                 |
+| Structure de soins à domicile | Association d'aide à domicile, cabinet infirmier             |
+| TPE avec activité mixte       | Entreprise qui vend à des particuliers ET à des entreprises |
 
 ---
 
@@ -85,19 +85,20 @@ La plateforme détecte automatiquement quel type de visiteur consulte le site et
 
 L'indépendant configure son site via un **wizard guidé en 9 étapes** accessible depuis le dashboard (`/dashboard/site-builder`) :
 
-| Étape | Contenu |
-|---|---|
+| Étape                  | Contenu                                                                                                                                                                                                                                                                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. Votre image & photos | Logo (a / n'a pas / texte simple), palette de couleurs (16 choix), style de police (7 styles : moderne, classique, manuscrit, arrondi, gras, humaniste, tech), option photos (stock / propres). Si "propres photos" : champs URL pour 4 zones (héro, à propos, services, contact) avec guide visuel intégré (popover wireframe) |
-| 2. Votre contenu | Pages à inclure (Accueil, Présentation, Services, Contact) |
-| 3. Identité | Nom de l'activité, accroche (tagline), description |
-| 4. Contact & Réseaux | Téléphone, email, adresse, liens Facebook/Instagram/LinkedIn |
-| 5. Zones d'intervention | Liste des villes/régions couvertes |
-| 6. Prestations | Nom, description, durée en minutes (facultatif), prix en € (facultatif), URL image (facultatif) |
-| 7. Nos atouts | Jusqu'à 6 atouts avec icône emoji, titre et description |
-| 8. Témoignages | Avis clients (auteur, rôle, texte, note 1–5) |
-| 9. Suivi & Lancement | IDs de tracking analytics (GA4, Meta Pixel, GTM), CSS premium (plan Business), bouton de publication |
+| 2. Votre contenu        | Pages à inclure (Accueil, Présentation, Services, Contact)                                                                                                                                                                                                                                                                        |
+| 3. Identité            | Nom de l'activité, accroche (tagline), description                                                                                                                                                                                                                                                                                 |
+| 4. Contact & Réseaux   | Téléphone, email, adresse, liens Facebook/Instagram/LinkedIn                                                                                                                                                                                                                                                                      |
+| 5. Zones d'intervention | Liste des villes/régions couvertes                                                                                                                                                                                                                                                                                                 |
+| 6. Prestations          | Nom, description, durée en minutes (facultatif), prix en € (facultatif), URL image (facultatif)                                                                                                                                                                                                                                   |
+| 7. Nos atouts           | Jusqu'à 6 atouts avec icône emoji, titre et description                                                                                                                                                                                                                                                                           |
+| 8. Témoignages         | Avis clients (auteur, rôle, texte, note 1–5)                                                                                                                                                                                                                                                                                      |
+| 9. Suivi & Lancement    | IDs de tracking analytics (GA4, Meta Pixel, GTM), CSS premium (plan Business), bouton de publication                                                                                                                                                                                                                                |
 
 **Rendu du site vitrine (template inspiré EvaCare.be) :**
+
 - Navigation fixe avec ancres (Prestations, À propos, Contact)
 - Hero pleine largeur avec couleur, police et photo choisies par le tenant
 - Section À propos avec photo optionnelle, grille de prestations sur fond photo optionnel, zones d'intervention, atouts, témoignages, section contact avec coordonnées + formulaire + photo optionnelle, footer
@@ -107,9 +108,11 @@ L'indépendant configure son site via un **wizard guidé en 9 étapes** accessib
 - Styles appliqués dynamiquement via CSS inline (16 palettes × 7 polices = 112 combinaisons sans reconstruire le CSS)
 
 **Intégration sur site existant (`/dashboard/embed`) :**
+
 - Un client qui a déjà son propre site (WordPress, Wix, Squarespace, etc.) peut y ajouter le chatbot IA via un snippet JavaScript et/ou le tracking via les snippets GA4/Meta/GTM — sans refaire son site. Voir [`docs/site-internet.md`](docs/site-internet.md) pour le guide complet.
 
 **Ce que le professionnel ne gère pas :**
+
 - Hébergement (Vercel)
 - Maintenance technique
 - Renouvellement SSL
@@ -174,13 +177,14 @@ La plateforme intègre **3 agents visibles** et **1 worker de synthèse** couvra
 
 ### Agent 1 — Chatbot vitrine (côté prospect)
 
-| Attribut | Valeur |
-|---|---|
-| **Canal** | Widget embarqué sur le site vitrine |
-| **Utilisateur cible** | Visiteur anonyme / prospect |
-| **Déclencheur** | Visite du site public du tenant |
+| Attribut                    | Valeur                               |
+| --------------------------- | ------------------------------------ |
+| **Canal**             | Widget embarqué sur le site vitrine |
+| **Utilisateur cible** | Visiteur anonyme / prospect          |
+| **Déclencheur**      | Visite du site public du tenant      |
 
 **Capacités :**
+
 - Répond aux questions FAQ du domaine du tenant (tarifs, services, zone d'intervention, horaires)
 - Accède uniquement aux données publiques du tenant (non-sensibles)
 - Consulte les créneaux disponibles du calendrier
@@ -188,6 +192,7 @@ La plateforme intègre **3 agents visibles** et **1 worker de synthèse** couvra
 - Modifie un rendez-vous existant via son identifiant — **uniquement après vérification d'un code envoyé au contact** (email ou téléphone)
 
 **Limites strictes :**
+
 - Aucun accès aux données personnelles des autres contacts
 - Aucun accès aux données médicales
 - Périmètre limité au domaine métier du tenant (pas de réponses hors-sujet)
@@ -196,13 +201,14 @@ La plateforme intègre **3 agents visibles** et **1 worker de synthèse** couvra
 
 ### Agent 2 — Agent Support & RDV (côté client converti)
 
-| Attribut | Valeur |
-|---|---|
-| **Canal** | Telegram (lien unique signé) · WhatsApp (bloqué Meta, prévu V3) |
-| **Utilisateur cible** | Client converti (patient, client B2C ou contact B2B) |
-| **Déclencheur** | Remise du lien `/start?token=...` après conversion du prospect |
+| Attribut                    | Valeur                                                              |
+| --------------------------- | ------------------------------------------------------------------- |
+| **Canal**             | Telegram (lien unique signé) · WhatsApp (bloqué Meta, prévu V3) |
+| **Utilisateur cible** | Client converti (patient, client B2C ou contact B2B)                |
+| **Déclencheur**      | Remise du lien `/start?token=...` après conversion du prospect   |
 
 **Capacités :**
+
 - **Flux de réservation guidé (state machine Telegram)** : l'agent propose les jours disponibles, les créneaux, confirme le RDV en 3 étapes conversationnelles
 - Lecture de documents envoyés par le client (ordonnances, dossiers médicaux, images)
   - Traitement OCR en mémoire uniquement — **le document original n'est jamais persisté en base**
@@ -211,11 +217,13 @@ La plateforme intègre **3 agents visibles** et **1 worker de synthèse** couvra
 - Réponses aux questions opérationnelles post-conversion
 
 **Sécurité d'accès :**
+
 - Le lien Telegram embarque un **token JWT signé à usage unique**, lié au `contact_id`
 - Token expirant (durée configurable par le tenant, défaut 90 jours)
 - Un `chat_id` Telegram = un contact identifié — lié à la première connexion `/start`
 
 **Contraintes RGPD :**
+
 - Les résumés OCR contiennent potentiellement des données de santé (Article 9) → chiffrés en base via `pgcrypto`
 - Consentement explicite requis avant la première utilisation de l'agent
 
@@ -223,13 +231,14 @@ La plateforme intègre **3 agents visibles** et **1 worker de synthèse** couvra
 
 ### Agent 3 — Agent Assistant Tenant (côté professionnel)
 
-| Attribut | Valeur |
-|---|---|
-| **Canal** | Telegram + Dashboard back-office · WhatsApp (bloqué Meta, prévu V3) |
-| **Utilisateur cible** | Le tenant (indépendant ou collaborateur autorisé) |
-| **Déclencheur** | Disponible en continu après activation — accès Telegram via `/start?notify_{tenant_id}` |
+| Attribut                    | Valeur                                                                                       |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| **Canal**             | Telegram + Dashboard back-office · WhatsApp (bloqué Meta, prévu V3)                       |
+| **Utilisateur cible** | Le tenant (indépendant ou collaborateur autorisé)                                          |
+| **Déclencheur**      | Disponible en continu après activation — accès Telegram via `/start?notify_{tenant_id}` |
 
 **Capacités :**
+
 - **Notification Telegram** à chaque nouveau RDV en attente de confirmation (avec instructions de réponse directement dans le message)
 - **Confirmation/annulation de RDV par message** : l'agent détecte "confirme Prénom" / "annule Prénom" et met à jour la base + envoie l'email de confirmation au client
 - **Création de RDV par message** : "créer RDV Marie lundi à 14h" → détection NLP, création en base, réponse de confirmation
@@ -238,6 +247,7 @@ La plateforme intègre **3 agents visibles** et **1 worker de synthèse** couvra
 - Contexte opérationnel enrichi dans chaque réponse LLM : RDV en attente, prochains RDV 7 jours, leads récents, dernière synthèse
 
 **Mémoire partagée :**
+
 - La session de l'agent est **canal-agnostique** : le contexte est identique que le tenant réponde via Telegram ou depuis le Dashboard
 - Deux conversations actives distinctes : `channel=telegram` et `channel=dashboard` — même tenant, historiques séparés par canal
 
@@ -245,13 +255,14 @@ La plateforme intègre **3 agents visibles** et **1 worker de synthèse** couvra
 
 ### Worker 4 — Worker de synthèse (interne, non visible)
 
-| Attribut | Valeur |
-|---|---|
-| **Type** | Tâche planifiée (cron configurable par tenant) |
-| **Utilisateur cible** | Aucun (interne) |
-| **Déclencheur** | Schedule défini par le tenant (ex. : toutes les 3h) |
+| Attribut                    | Valeur                                               |
+| --------------------------- | ---------------------------------------------------- |
+| **Type**              | Tâche planifiée (cron configurable par tenant)     |
+| **Utilisateur cible** | Aucun (interne)                                      |
+| **Déclencheur**      | Schedule défini par le tenant (ex. : toutes les 3h) |
 
 **Fonctionnement :**
+
 1. Récupère toutes les conversations des agents 1 et 2 depuis la dernière synthèse
 2. Appelle le LLM pour produire un résumé consolidé
 3. Pousse le résumé à l'Agent 3 (notification tenant via WhatsApp + Dashboard)
@@ -294,80 +305,80 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 
 ### MVP — ✅ Livré
 
-| # | Fonctionnalité | Statut |
-|---|---|---|
-| 1 | Générateur de site par template métier | ✅ Déployé |
+| # | Fonctionnalité                             | Statut       |
+| - | ------------------------------------------- | ------------ |
+| 1 | Générateur de site par template métier   | ✅ Déployé |
 | 2 | Formulaire de contact → notification email | ✅ Déployé |
-| 3 | Prise de rendez-vous (Cal.com embed) | ✅ Déployé |
-| 4 | Rappel email automatique (APScheduler) | ✅ Déployé |
-| 5 | Back-office minimal (leads + RDV) | ✅ Déployé |
-| 6 | Abonnement Stripe | ✅ Déployé |
+| 3 | Prise de rendez-vous (Cal.com embed)        | ✅ Déployé |
+| 4 | Rappel email automatique (APScheduler)      | ✅ Déployé |
+| 5 | Back-office minimal (leads + RDV)           | ✅ Déployé |
+| 6 | Abonnement Stripe                           | ✅ Déployé |
 
 ### V1 — ✅ Livré (Mai 2026)
 
-| Fonctionnalité | Agent concerné | Statut |
-|---|---|---|
-| **Landing page publique** | — | ✅ Livré — présente le SaaS, CTA inscription/connexion |
-| **Site builder wizard (9 étapes)** | — | ✅ Livré — logo, couleurs, police, pages, photos avec guide visuel, zones, prestations, atouts, témoignages, tracking + publication |
-| **Template tenant enrichi** | — | ✅ Livré — inspiré EvaCare.be, couleurs/police/photos dynamiques, tracking injecté |
-| **Intégration site existant** | — | ✅ Livré — `/dashboard/embed` génère les snippets chatbot + GA4/Meta/GTM pour coller sur un site externe |
-| **Personnalisation CSS premium** | — | ✅ Livré — éditeur CSS libre à l'étape 9 (plan Business) |
-| **Agent 1 — Chatbot vitrine LLM (Gemini)** | Agent 1 | ✅ Livré — widget flottant, FAQ + RDV, retry 429/503 |
-| **Page de configuration des agents** | Dashboard | ✅ Livré — toggle actif/inactif, modèle LLM, prompt système |
-| **Calendrier dashboard (Outlook-style)** | — | ✅ Livré — vue jour/semaine/mois, cellules cliquables, création inline, panneaux disponibilités + blocages |
-| **Prise de RDV publique** | — | ✅ Livré — formulaire 2 modes (message/RDV), sélecteur date/créneau temps réel, jours sans dispo grisés |
-| **Page paramètres complète** | — | ✅ Livré — 10 sections : Profil, Sécurité, Mon site, Abonnement, Notifications, Préférences, Équipe, Intégrations, Export/RGPD, Activité |
-| CRM léger (liste contacts + historique) | — | ✅ Livré |
-| Mode absence | — | ✅ Livré |
+| Fonctionnalité                                   | Agent concerné | Statut                                                                                                                                            |
+| ------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Landing page publique**                   | —              | ✅ Livré — présente le SaaS, CTA inscription/connexion                                                                                         |
+| **Site builder wizard (9 étapes)**         | —              | ✅ Livré — logo, couleurs, police, pages, photos avec guide visuel, zones, prestations, atouts, témoignages, tracking + publication            |
+| **Template tenant enrichi**                 | —              | ✅ Livré — inspiré EvaCare.be, couleurs/police/photos dynamiques, tracking injecté                                                            |
+| **Intégration site existant**              | —              | ✅ Livré —`/dashboard/embed` génère les snippets chatbot + GA4/Meta/GTM pour coller sur un site externe                                     |
+| **Personnalisation CSS premium**            | —              | ✅ Livré — éditeur CSS libre à l'étape 9 (plan Business)                                                                                     |
+| **Agent 1 — Chatbot vitrine LLM (Gemini)** | Agent 1         | ✅ Livré — widget flottant, FAQ + RDV, retry 429/503                                                                                            |
+| **Page de configuration des agents**        | Dashboard       | ✅ Livré — toggle actif/inactif, modèle LLM, prompt système                                                                                   |
+| **Calendrier dashboard (Outlook-style)**    | —              | ✅ Livré — vue jour/semaine/mois, cellules cliquables, création inline, panneaux disponibilités + blocages                                    |
+| **Prise de RDV publique**                   | —              | ✅ Livré — formulaire 2 modes (message/RDV), sélecteur date/créneau temps réel, jours sans dispo grisés                                     |
+| **Page paramètres complète**              | —              | ✅ Livré — 10 sections : Profil, Sécurité, Mon site, Abonnement, Notifications, Préférences, Équipe, Intégrations, Export/RGPD, Activité |
+| CRM léger (liste contacts + historique)          | —              | ✅ Livré                                                                                                                                         |
+| Mode absence                                      | —              | ✅ Livré                                                                                                                                         |
 
 ### V2 — 🔄 En cours / Partiellement livré (Mai 2026)
 
-| Fonctionnalité | Agent concerné | Statut |
-|---|---|---|
-| **Agent 2 — Support & RDV Telegram** | Agent 2 | ✅ Livré — webhook Telegram, flux réservation guidé (state machine), OCR documents, résumé conversation attaché au RDV |
-| **Agent 3 — Assistant tenant Dashboard** | Agent 3 | ✅ Livré — chat inline page Agents, contexte opérationnel enrichi (RDV, leads, synthèses) |
-| **Agent 3 — Assistant tenant Telegram** | Agent 3 | ✅ Livré — routage par `chat_id`, confirm/annule/crée RDV par message, OCR documents |
-| **Worker 4 — Synthèse conversations** | Worker 4 | ✅ Livré — APScheduler toutes les 30 min, fréquence configurable par tenant |
-| **Rappels RDV 24h** | — | ✅ Livré — scheduler horaire, anti-doublon via `reminder_sent_at` |
-| **Invitation membres d'équipe** | — | ✅ Livré — table `team_invite`, token 7 jours, email Resend, page `/join`, gestion rôles (owner/admin/member) |
-| **Configuration agents enrichie** | Dashboard | ✅ Livré — token bot Telegram, webhook setup, activation chat personnel, fréquence synthèse, masquage champs selon rôle |
-| WhatsApp Business API | Agents 2 & 3 | ⏳ Bloqué — approbation Meta en attente |
-| Journaux d'activité complets | — | ⏳ Planifié — UI prête (section Paramètres), table `activity_log` à créer |
-| Notifications temps réel (push) | — | ⏳ Planifié — UI prête (section Paramètres), backend à implémenter |
-| ROI estimé simple | — | ⏳ Planifié |
-| Comptes partenaires B2B | — | ⏳ Planifié |
+| Fonctionnalité                                 | Agent concerné | Statut                                                                                                                        |
+| ----------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Agent 2 — Support & RDV Telegram**     | Agent 2         | ✅ Livré — webhook Telegram, flux réservation guidé (state machine), OCR documents, résumé conversation attaché au RDV |
+| **Agent 3 — Assistant tenant Dashboard** | Agent 3         | ✅ Livré — chat inline page Agents, contexte opérationnel enrichi (RDV, leads, synthèses)                                 |
+| **Agent 3 — Assistant tenant Telegram**  | Agent 3         | ✅ Livré — routage par `chat_id`, confirm/annule/crée RDV par message, OCR documents                                     |
+| **Worker 4 — Synthèse conversations**   | Worker 4        | ✅ Livré — APScheduler toutes les 30 min, fréquence configurable par tenant                                                |
+| **Rappels RDV 24h**                       | —              | ✅ Livré — scheduler horaire, anti-doublon via `reminder_sent_at`                                                         |
+| **Invitation membres d'équipe**          | —              | ✅ Livré — table `team_invite`, token 7 jours, email Resend, page `/join`, gestion rôles (owner/admin/member)          |
+| **Configuration agents enrichie**         | Dashboard       | ✅ Livré — token bot Telegram, webhook setup, activation chat personnel, fréquence synthèse, masquage champs selon rôle  |
+| WhatsApp Business API                           | Agents 2 & 3    | ⏳ Bloqué — approbation Meta en attente                                                                                     |
+| Journaux d'activité complets                   | —              | ⏳ Planifié — UI prête (section Paramètres), table `activity_log` à créer                                             |
+| Notifications temps réel (push)                | —              | ⏳ Planifié — UI prête (section Paramètres), backend à implémenter                                                      |
+| ROI estimé simple                              | —              | ⏳ Planifié                                                                                                                  |
+| Comptes partenaires B2B                         | —              | ⏳ Planifié                                                                                                                  |
 
 ### V3 — ⏳ Non commencé
 
-| Fonctionnalité | Agent concerné | Prérequis |
-|---|---|---|
-| **Agent 2 — Support & RDV client WhatsApp** | Agent 2 | WhatsApp Business API approuvé |
-| **Agent 3 — Assistant tenant sur WhatsApp** | Agent 3 | WhatsApp Business API approuvé |
-| Contenu SEO automatique | — | — |
-| Verticalisation sectorielle | — | — |
-| Parrainage B2B, facturation intégrée | — | — |
+| Fonctionnalité                                    | Agent concerné | Prérequis                      |
+| -------------------------------------------------- | --------------- | ------------------------------- |
+| **Agent 2 — Support & RDV client WhatsApp** | Agent 2         | WhatsApp Business API approuvé |
+| **Agent 3 — Assistant tenant sur WhatsApp** | Agent 3         | WhatsApp Business API approuvé |
+| Contenu SEO automatique                            | —              | —                              |
+| Verticalisation sectorielle                        | —              | —                              |
+| Parrainage B2B, facturation intégrée             | —              | —                              |
 
 ---
 
 ## 8. Indicateurs de succès (KPI du produit)
 
-| Indicateur | Objectif |
-|---|---|
-| Nombre d'indépendants actifs (site publié) | 100 en 6 mois |
-| Délai moyen de création d'un site | < 15 minutes |
-| Taux de conversion essai → abonnement payant | > 30 % |
-| NPS (satisfaction) | > 40 |
-| ROI moyen déclaré par les utilisateurs | > 3× le coût mensuel |
+| Indicateur                                    | Objectif               |
+| --------------------------------------------- | ---------------------- |
+| Nombre d'indépendants actifs (site publié)  | 100 en 6 mois          |
+| Délai moyen de création d'un site           | < 15 minutes           |
+| Taux de conversion essai → abonnement payant | > 30 %                 |
+| NPS (satisfaction)                            | > 40                   |
+| ROI moyen déclaré par les utilisateurs      | > 3× le coût mensuel |
 
 ---
 
 ## 9. Modèle économique (proposition)
 
-| Plan | Prix mensuel | Inclus |
-|---|---|---|
-| Starter | 29 €/mois | 1 site, 1 utilisateur, 200 messages/mois, calendrier basique |
-| Pro | 59 €/mois | 1 site, 3 utilisateurs, messages illimités, chatbot, CRM |
-| Business | 99 €/mois | 3 sites, 10 utilisateurs, ROI prédictif, partenaires B2B, intégrations avancées |
+| Plan     | Prix mensuel | Inclus                                                                             |
+| -------- | ------------ | ---------------------------------------------------------------------------------- |
+| Starter  | 29 €/mois   | 1 site, 1 utilisateur, 200 messages/mois, calendrier basique                       |
+| Pro      | 59 €/mois   | 1 site, 3 utilisateurs, messages illimités, chatbot, CRM                          |
+| Business | 99 €/mois   | 3 sites, 10 utilisateurs, ROI prédictif, partenaires B2B, intégrations avancées |
 
 > Essai gratuit 30 jours sans carte bancaire.
 
@@ -381,22 +392,22 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 
 ## 10. Acteurs du système
 
-| Acteur | Rôle |
-|---|---|
-| Super administrateur SaaS | Gère la plateforme, supervise tous les tenants, accède aux outils d'admin |
-| Administrateur interne / agence | Peut gérer plusieurs clients depuis un seul compte opérateur |
-| Client professionnel (tenant) | Indépendant ou structure ayant souscrit un abonnement |
-| Collaborateur du client | Employé ou associé du client, avec permissions restreintes |
-| Visiteur particulier | Patient, client final qui consulte le site du tenant |
-| Visiteur professionnel | Partenaire, prescripteur, établissement qui consulte le site du tenant |
-| Canal externe | WhatsApp Business API, Telegram Bot, SMTP, webhooks |
-| Service IA / chatbot | LLM (OpenAI / Mistral) appelé par le moteur chatbot |
-| Service de paiement | Stripe ou équivalent pour les abonnements |
-| Service de calendrier externe | Google Calendar API / Cal.com pour synchronisation |
-| **Agent 1 — Chatbot vitrine** | Widget LLM embarqué sur le site public, périmètre FAQ + calendrier |
-| **Agent 2 — Support & RDV client** | Agent WhatsApp post-conversion, avec capacité OCR documents |
-| **Agent 3 — Assistant Tenant** | Agent WhatsApp + Dashboard, secrétariat et pilotage opérationnel |
-| **Worker de synthèse** | Tâche cron interne, résume les conversations des agents 1 et 2 pour le tenant |
+| Acteur                                    | Rôle                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------- |
+| Super administrateur SaaS                 | Gère la plateforme, supervise tous les tenants, accède aux outils d'admin     |
+| Administrateur interne / agence           | Peut gérer plusieurs clients depuis un seul compte opérateur                  |
+| Client professionnel (tenant)             | Indépendant ou structure ayant souscrit un abonnement                          |
+| Collaborateur du client                   | Employé ou associé du client, avec permissions restreintes                    |
+| Visiteur particulier                      | Patient, client final qui consulte le site du tenant                            |
+| Visiteur professionnel                    | Partenaire, prescripteur, établissement qui consulte le site du tenant         |
+| Canal externe                             | WhatsApp Business API, Telegram Bot, SMTP, webhooks                             |
+| Service IA / chatbot                      | LLM (OpenAI / Mistral) appelé par le moteur chatbot                            |
+| Service de paiement                       | Stripe ou équivalent pour les abonnements                                      |
+| Service de calendrier externe             | Google Calendar API / Cal.com pour synchronisation                              |
+| **Agent 1 — Chatbot vitrine**      | Widget LLM embarqué sur le site public, périmètre FAQ + calendrier           |
+| **Agent 2 — Support & RDV client** | Agent WhatsApp post-conversion, avec capacité OCR documents                    |
+| **Agent 3 — Assistant Tenant**     | Agent WhatsApp + Dashboard, secrétariat et pilotage opérationnel              |
+| **Worker de synthèse**             | Tâche cron interne, résume les conversations des agents 1 et 2 pour le tenant |
 
 ---
 
@@ -522,14 +533,14 @@ graph TB
 
 **Lecture des deux diagrammes :**
 
-| Couche | MVP bootstrap | Architecture cible |
-|---|---|---|
-| Framework | Next.js monolithe | Next.js front + API séparée |
-| Base de données | Supabase (managé) | PostgreSQL dédié |
-| Workers | Edge Functions cron | Redis + BullMQ |
-| Messagerie | Email uniquement | Email + WhatsApp + Telegram |
-| Chatbot | FAQ statique | LLM Mistral |
-| Coût infra | 0–5 €/mois | 100–300 €/mois |
+| Couche           | MVP bootstrap       | Architecture cible            |
+| ---------------- | ------------------- | ----------------------------- |
+| Framework        | Next.js monolithe   | Next.js front + API séparée |
+| Base de données | Supabase (managé)  | PostgreSQL dédié            |
+| Workers          | Edge Functions cron | Redis + BullMQ                |
+| Messagerie       | Email uniquement    | Email + WhatsApp + Telegram   |
+| Chatbot          | FAQ statique        | LLM Mistral                   |
+| Coût infra      | 0–5 €/mois        | 100–300 €/mois              |
 
 ---
 
@@ -988,41 +999,41 @@ Le MCD décrit les entités métier et leurs relations, indépendamment de toute
 
 ### Entités principales
 
-| Entité | Description |
-|---|---|
-| TENANT | Organisation cliente du SaaS (l'indépendant ou la structure abonnée) |
-| UTILISATEUR | Personne accédant à l'espace d'un tenant (le professionnel ou un collaborateur) |
-| MEMBERSHIP | Lien entre un utilisateur et un tenant, avec son rôle |
-| PERMISSION | Droit d'accès associé à un membership |
-| PLAN_ABONNEMENT | Formule tarifaire (Starter, Pro, Business) |
-| ABONNEMENT | Souscription active d'un tenant à un plan |
-| FACTURE | Facture liée à un abonnement |
-| TEMPLATE | Modèle de site pré-configuré par métier |
-| SITE | Site web publié pour un tenant |
-| PAGE | Page composant un site |
-| OFFRE_SERVICE | Service proposé par le tenant (avec audience B2C ou B2B) |
-| ZONE_INTERVENTION | Zone géographique couverte par le tenant |
-| COMPTE_PARTENAIRE | Organisation externe avec laquelle le tenant collabore (B2B) |
-| CONTACT | Personne physique (patient, client, représentant d'un partenaire) |
-| LEAD | Demande ou opportunité entrante |
-| ETAPE_PIPELINE | Statut commercial d'un lead |
-| SOURCE_TRAFIC | Origine d'une visite ou d'un lead (Google, WhatsApp, etc.) |
-| CANAL | Canal connecté à la plateforme (email, WhatsApp, Telegram) |
-| CONVERSATION | Fil d'échanges avec un contact |
-| MESSAGE | Message individuel dans une conversation |
-| CHATBOT | Agent conversationnel configuré pour un tenant |
-| BASE_CONNAISSANCE | Ensemble documentaire utilisé par le chatbot |
-| DOCUMENT_CONNAISSANCE | Document indexé dans la base de connaissance |
-| CALENDRIER | Agenda d'un tenant |
-| CRENEAU_DISPONIBILITE | Plage horaire réservable |
-| RENDEZ_VOUS | Réservation, coordination ou rencontre planifiée |
-| NOTIFICATION | Message de rappel ou de confirmation envoyé automatiquement |
-| SESSION_VISITEUR | Visite d'un utilisateur anonyme ou identifié sur le site |
-| EVENEMENT_TRACKING | Action tracée sur le site (clic, formulaire, etc.) |
-| DASHBOARD | Tableau de bord d'un tenant |
-| KPI | Indicateur de pilotage calculé |
-| MODELE_ROI | Calcul d'estimation de retour sur investissement |
-| RECOMMANDATION | Suggestion générée automatiquement à partir des indicateurs |
+| Entité               | Description                                                                       |
+| --------------------- | --------------------------------------------------------------------------------- |
+| TENANT                | Organisation cliente du SaaS (l'indépendant ou la structure abonnée)            |
+| UTILISATEUR           | Personne accédant à l'espace d'un tenant (le professionnel ou un collaborateur) |
+| MEMBERSHIP            | Lien entre un utilisateur et un tenant, avec son rôle                            |
+| PERMISSION            | Droit d'accès associé à un membership                                          |
+| PLAN_ABONNEMENT       | Formule tarifaire (Starter, Pro, Business)                                        |
+| ABONNEMENT            | Souscription active d'un tenant à un plan                                        |
+| FACTURE               | Facture liée à un abonnement                                                    |
+| TEMPLATE              | Modèle de site pré-configuré par métier                                       |
+| SITE                  | Site web publié pour un tenant                                                   |
+| PAGE                  | Page composant un site                                                            |
+| OFFRE_SERVICE         | Service proposé par le tenant (avec audience B2C ou B2B)                         |
+| ZONE_INTERVENTION     | Zone géographique couverte par le tenant                                         |
+| COMPTE_PARTENAIRE     | Organisation externe avec laquelle le tenant collabore (B2B)                      |
+| CONTACT               | Personne physique (patient, client, représentant d'un partenaire)                |
+| LEAD                  | Demande ou opportunité entrante                                                  |
+| ETAPE_PIPELINE        | Statut commercial d'un lead                                                       |
+| SOURCE_TRAFIC         | Origine d'une visite ou d'un lead (Google, WhatsApp, etc.)                        |
+| CANAL                 | Canal connecté à la plateforme (email, WhatsApp, Telegram)                      |
+| CONVERSATION          | Fil d'échanges avec un contact                                                   |
+| MESSAGE               | Message individuel dans une conversation                                          |
+| CHATBOT               | Agent conversationnel configuré pour un tenant                                   |
+| BASE_CONNAISSANCE     | Ensemble documentaire utilisé par le chatbot                                     |
+| DOCUMENT_CONNAISSANCE | Document indexé dans la base de connaissance                                     |
+| CALENDRIER            | Agenda d'un tenant                                                                |
+| CRENEAU_DISPONIBILITE | Plage horaire réservable                                                         |
+| RENDEZ_VOUS           | Réservation, coordination ou rencontre planifiée                                |
+| NOTIFICATION          | Message de rappel ou de confirmation envoyé automatiquement                      |
+| SESSION_VISITEUR      | Visite d'un utilisateur anonyme ou identifié sur le site                         |
+| EVENEMENT_TRACKING    | Action tracée sur le site (clic, formulaire, etc.)                               |
+| DASHBOARD             | Tableau de bord d'un tenant                                                       |
+| KPI                   | Indicateur de pilotage calculé                                                   |
+| MODELE_ROI            | Calcul d'estimation de retour sur investissement                                  |
+| RECOMMANDATION        | Suggestion générée automatiquement à partir des indicateurs                   |
 
 ### Associations principales
 
@@ -1761,24 +1772,24 @@ CREATE POLICY tenant_isolation ON contact
 
 Les tenants du secteur santé (infirmiers, kinés, médecins) traitent des **données médicales sensibles**. Ces données bénéficient d'une protection renforcée sous le RGPD belge.
 
-| Exigence | Implémentation recommandée |
-|---|---|
-| Chiffrement at-rest des données médicales | `pgcrypto` pour les colonnes `message.content` et `contact.notes` |
-| Droit à l'oubli | Soft delete (`deleted_at`) + procédure d'anonymisation au bout de X jours |
-| Traçabilité des accès | Table d'audit log (qui a accédé à quoi, quand) |
-| Consentement | Champ `consent_given_at` sur `contact` à ajouter |
-| DPA (Data Processing Agreement) | Contrat à signer avec chaque tenant santé |
-| Données hors UE | Les appels LLM (OpenAI US) doivent passer par l'API EU ou être remplacés par Mistral (hébergement FR) |
+| Exigence                                    | Implémentation recommandée                                                                             |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Chiffrement at-rest des données médicales | `pgcrypto` pour les colonnes `message.content` et `contact.notes`                                  |
+| Droit à l'oubli                            | Soft delete (`deleted_at`) + procédure d'anonymisation au bout de X jours                             |
+| Traçabilité des accès                    | Table d'audit log (qui a accédé à quoi, quand)                                                        |
+| Consentement                                | Champ `consent_given_at` sur `contact` à ajouter                                                    |
+| DPA (Data Processing Agreement)             | Contrat à signer avec chaque tenant santé                                                              |
+| Données hors UE                            | Les appels LLM (OpenAI US) doivent passer par l'API EU ou être remplacés par Mistral (hébergement FR) |
 
 ### Agents IA — points spécifiques
 
-| Point | Implémentation recommandée |
-|---|---|
-| **OCR documents médicaux** | Traitement en mémoire uniquement (Mistral Vision ou Tesseract) — aucun stockage du fichier original. Seul `ocr_summary.summary_encrypted` est persisté, chiffré via `pgcrypto` |
-| **Token Agent 2 (client WhatsApp)** | JWT signé (HS256) embarquant `contact_id` + `tenant_id` + `exp`. Usage unique : marquer `used_at` à la première activation. Durée d'expiration configurable par le tenant |
-| **Mémoire canal-agnostique Agent 3** | Stocker la session de l'agent 3 en base (`conversation` liée au tenant, pas au canal) — WhatsApp et Dashboard lisent/écrivent dans la même ligne |
-| **Coût LLM Worker 4** | Monitorer les tokens consommés par tenant dès le premier déploiement. Prévoir un circuit-breaker si le coût/tenant dépasse un seuil |
-| **Consentement Agent 2** | Champ `consent_given_at` sur `contact` + bannière explicite avant première utilisation. Obligatoire RGPD Article 9 pour les secteurs santé |
+| Point                                       | Implémentation recommandée                                                                                                                                                           |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **OCR documents médicaux**           | Traitement en mémoire uniquement (Mistral Vision ou Tesseract) — aucun stockage du fichier original. Seul `ocr_summary.summary_encrypted` est persisté, chiffré via `pgcrypto` |
+| **Token Agent 2 (client WhatsApp)**   | JWT signé (HS256) embarquant `contact_id` + `tenant_id` + `exp`. Usage unique : marquer `used_at` à la première activation. Durée d'expiration configurable par le tenant  |
+| **Mémoire canal-agnostique Agent 3** | Stocker la session de l'agent 3 en base (`conversation` liée au tenant, pas au canal) — WhatsApp et Dashboard lisent/écrivent dans la même ligne                                 |
+| **Coût LLM Worker 4**                | Monitorer les tokens consommés par tenant dès le premier déploiement. Prévoir un circuit-breaker si le coût/tenant dépasse un seuil                                              |
+| **Consentement Agent 2**              | Champ `consent_given_at` sur `contact` + bannière explicite avant première utilisation. Obligatoire RGPD Article 9 pour les secteurs santé                                      |
 
 ### WhatsApp Business API
 
@@ -1818,18 +1829,18 @@ Backend Python (FastAPI)     ←→     Frontend Next.js (React)
          Supabase (PostgreSQL + Auth + Storage)
 ```
 
-| Couche | Choix | Coût | Notes |
-|---|---|---|---|
-| **API backend** | FastAPI (Python 3.12) | 0€ | Async natif, OpenAPI auto-généré, SDK Supabase Python disponible |
-| **Frontend public + back-office** | Next.js (App Router) | 0€ Vercel | Sites des tenants en SSG, back-office en SSR — minimal JS custom |
-| **Base de données** | Supabase | 0€ (500 MB) | PostgreSQL + RLS + Auth JWT + Storage — SDK Python officiel (`supabase-py`) |
-| **Hébergement backend** | Railway (Hobby 5€/mois) ou Render (free tier) | 0–5€ | Déploiement Docker ou Nixpacks depuis GitHub |
-| **Workers / tâches planifiées** | APScheduler dans FastAPI ou Railway cron | 0€ | Rappels email, calcul KPI — pas besoin de Redis au départ |
-| **Email** | Resend | 0€ (100/jour) | SDK Python disponible |
-| **Rendez-vous** | Cal.com (embed iframe) | 0€ | Zéro développement côté calendrier |
-| **Paiements** | Stripe | 0€ + % | SDK Python `stripe` |
-| **Monitoring erreurs** | Sentry | 0€ (5k erreurs/mois) | SDK Python `sentry-sdk` |
-| **Analytics** | Vercel Analytics | 0€ | RGPD-compliant |
+| Couche                                  | Choix                                          | Coût                 | Notes                                                                          |
+| --------------------------------------- | ---------------------------------------------- | --------------------- | ------------------------------------------------------------------------------ |
+| **API backend**                   | FastAPI (Python 3.12)                          | 0€                   | Async natif, OpenAPI auto-généré, SDK Supabase Python disponible            |
+| **Frontend public + back-office** | Next.js (App Router)                           | 0€ Vercel            | Sites des tenants en SSG, back-office en SSR — minimal JS custom              |
+| **Base de données**              | Supabase                                       | 0€ (500 MB)          | PostgreSQL + RLS + Auth JWT + Storage — SDK Python officiel (`supabase-py`) |
+| **Hébergement backend**          | Railway (Hobby 5€/mois) ou Render (free tier) | 0–5€                | Déploiement Docker ou Nixpacks depuis GitHub                                  |
+| **Workers / tâches planifiées** | APScheduler dans FastAPI ou Railway cron       | 0€                   | Rappels email, calcul KPI — pas besoin de Redis au départ                    |
+| **Email**                         | Resend                                         | 0€ (100/jour)        | SDK Python disponible                                                          |
+| **Rendez-vous**                   | Cal.com (embed iframe)                         | 0€                   | Zéro développement côté calendrier                                         |
+| **Paiements**                     | Stripe                                         | 0€ + %               | SDK Python `stripe`                                                          |
+| **Monitoring erreurs**            | Sentry                                         | 0€ (5k erreurs/mois) | SDK Python `sentry-sdk`                                                      |
+| **Analytics**                     | Vercel Analytics                               | 0€                   | RGPD-compliant                                                                 |
 
 **Coût total : 0–5 €/mois**
 
@@ -1864,11 +1875,13 @@ backend/
 ```
 
 **Endpoints publics (sans authentification) — router `booking` :**
+
 - `GET /api/v1/booking/{slug}/available-days?year=&month=` — jours du mois ayant des disponibilités
 - `GET /api/v1/booking/{slug}/slots?date=YYYY-MM-DD` — créneaux libres pour une date
 - `POST /api/v1/booking/{slug}/book` — réserve un créneau (crée contact + lead ou appointment)
 
 **Endpoints calendrier (authentifiés) — router `calendar` :**
+
 - `GET/PUT /api/v1/calendar/availability` — disponibilités récurrentes
 - `GET/POST/DELETE /api/v1/calendar/blocked` — blocages ponctuels
 - `GET /api/v1/calendar/contacts?q=` — recherche contact inline
@@ -1951,28 +1964,28 @@ graph TB
 
 Next.js gère le site public, le back-office ET les API routes dans un seul dépôt. Idéal pour démarrer très vite, au prix d'apprendre TypeScript si ce n'est pas déjà fait.
 
-| Couche | Choix | Coût |
-|---|---|---|
-| **Full-stack** | Next.js (App Router + API Routes) | 0€ Vercel |
-| **Base de données** | Supabase | 0€ |
-| **Workers** | Supabase Edge Functions (Deno) | 0€ |
-| **Email** | Resend | 0€ |
-| **Rendez-vous** | Cal.com embed | 0€ |
-| **Paiements** | Stripe | 0€ + % |
+| Couche                     | Choix                             | Coût      |
+| -------------------------- | --------------------------------- | ---------- |
+| **Full-stack**       | Next.js (App Router + API Routes) | 0€ Vercel |
+| **Base de données** | Supabase                          | 0€        |
+| **Workers**          | Supabase Edge Functions (Deno)    | 0€        |
+| **Email**            | Resend                            | 0€        |
+| **Rendez-vous**      | Cal.com embed                     | 0€        |
+| **Paiements**        | Stripe                            | 0€ + %    |
 
 ---
 
 ### Comparaison des deux options
 
-| Critère | Option A — Python (FastAPI) | Option B — JS (Next.js) |
-|---|---|---|
-| Langue backend | Python ✓ | TypeScript / JavaScript |
-| Projets à maintenir | 2 (backend + frontend) | 1 |
-| Déploiements | Railway + Vercel | Vercel uniquement |
-| Coût infra | 0–5 €/mois | 0 €/mois |
-| Appels API tiers | SDK Python natifs | SDK JS natifs |
-| Documentation auto | OpenAPI Swagger intégré (FastAPI) | Non (à ajouter manuellement) |
-| Recommandé si | Tu connais Python, tu veux une API claire et testable | Tu veux aller vite avec un seul dépôt |
+| Critère             | Option A — Python (FastAPI)                          | Option B — JS (Next.js)                |
+| -------------------- | ----------------------------------------------------- | --------------------------------------- |
+| Langue backend       | Python ✓                                             | TypeScript / JavaScript                 |
+| Projets à maintenir | 2 (backend + frontend)                                | 1                                       |
+| Déploiements        | Railway + Vercel                                      | Vercel uniquement                       |
+| Coût infra          | 0–5 €/mois                                          | 0 €/mois                               |
+| Appels API tiers     | SDK Python natifs                                     | SDK JS natifs                           |
+| Documentation auto   | OpenAPI Swagger intégré (FastAPI)                   | Non (à ajouter manuellement)           |
+| Recommandé si       | Tu connais Python, tu veux une API claire et testable | Tu veux aller vite avec un seul dépôt |
 
 **Conclusion : si Python est ton langage principal, choisis l'Option A.** FastAPI est l'un des frameworks les plus rapides à prendre en main pour une API REST propre, et Supabase dispose d'un SDK Python officiel qui couvre Auth, PostgreSQL et Storage.
 
@@ -1980,64 +1993,64 @@ Next.js gère le site public, le back-office ET les API routes dans un seul dép
 
 ### Ce qu'on ajoute quand les revenus le permettent (commun aux deux options)
 
-| Besoin | Solution | Déclencheur |
-|---|---|---|
-| LLM pour le chatbot | Mistral API (EU, RGPD) | Quand les FAQ statiques montrent leurs limites |
-| WhatsApp Business | Meta Cloud API via 360dialog | Quand les revenus couvrent ~50€/mois de coût fixe |
-| Base de données dédiée | Supabase Pro (25€/mois) | À 100+ tenants actifs |
-| Queue dédiée | Redis + ARQ (Python) ou BullMQ (JS) | Quand APScheduler / Edge Functions ne suffisent plus |
+| Besoin                    | Solution                            | Déclencheur                                         |
+| ------------------------- | ----------------------------------- | ---------------------------------------------------- |
+| LLM pour le chatbot       | Mistral API (EU, RGPD)              | Quand les FAQ statiques montrent leurs limites       |
+| WhatsApp Business         | Meta Cloud API via 360dialog        | Quand les revenus couvrent ~50€/mois de coût fixe  |
+| Base de données dédiée | Supabase Pro (25€/mois)            | À 100+ tenants actifs                               |
+| Queue dédiée            | Redis + ARQ (Python) ou BullMQ (JS) | Quand APScheduler / Edge Functions ne suffisent plus |
 
 ---
 
 ### Stack spécifique aux agents IA (V1 → V3)
 
-| Composant | Solution recommandée | Alternative | Notes |
-|---|---|---|---|
-| **LLM** | Mistral API (EU, RGPD-compliant) | OpenAI GPT-4o-mini | Mistral préféré pour les données de santé — hébergement FR/EU |
-| **OCR documents** | Mistral Vision (multimodal) | Tesseract + pré-processing | Mistral Vision évite un service OCR dédié |
-| **Orchestration agents** | LangChain (Python) ou appels directs Mistral API | LangGraph pour agents complexes | Commencer par des appels directs, LangChain si la logique se complexifie |
-| **Mémoire agent (court terme)** | `conversation` + `message` en PostgreSQL (déjà dans le schéma) | Redis pour sessions éphémères | PostgreSQL suffit au démarrage |
-| **Worker de synthèse** | APScheduler (déjà en place) → cron par tenant | Celery + Redis à plus grande échelle | Un job par tenant actif, déclenché selon `agent_config.synthesis_schedule_minutes` |
-| **Webhooks WhatsApp** | 360dialog (intermédiaire Meta) ou Twilio WhatsApp | Meta Cloud API directe | 360dialog simplifie l'approbation Meta |
-| **Signature tokens Agent 2** | `python-jose` (JWT HS256) | PyJWT | Token embarque `contact_id`, `tenant_id`, `exp` |
+| Composant                              | Solution recommandée                                                 | Alternative                            | Notes                                                                                  |
+| -------------------------------------- | --------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------- |
+| **LLM**                          | Mistral API (EU, RGPD-compliant)                                      | OpenAI GPT-4o-mini                     | Mistral préféré pour les données de santé — hébergement FR/EU                   |
+| **OCR documents**                | Mistral Vision (multimodal)                                           | Tesseract + pré-processing            | Mistral Vision évite un service OCR dédié                                           |
+| **Orchestration agents**         | LangChain (Python) ou appels directs Mistral API                      | LangGraph pour agents complexes        | Commencer par des appels directs, LangChain si la logique se complexifie               |
+| **Mémoire agent (court terme)** | `conversation` + `message` en PostgreSQL (déjà dans le schéma) | Redis pour sessions éphémères       | PostgreSQL suffit au démarrage                                                        |
+| **Worker de synthèse**          | APScheduler (déjà en place) → cron par tenant                      | Celery + Redis à plus grande échelle | Un job par tenant actif, déclenché selon `agent_config.synthesis_schedule_minutes` |
+| **Webhooks WhatsApp**            | 360dialog (intermédiaire Meta) ou Twilio WhatsApp                    | Meta Cloud API directe                 | 360dialog simplifie l'approbation Meta                                                 |
+| **Signature tokens Agent 2**     | `python-jose` (JWT HS256)                                           | PyJWT                                  | Token embarque `contact_id`, `tenant_id`, `exp`                                  |
 
 **Coût estimé agents en production (par tranche) :**
 
-| Tenants actifs | Coût LLM estimé/mois | Notes |
-|---|---|---|
-| 1–10 | < 5 € | Worker synthèse toutes les 3h, ~10 messages/client/jour |
-| 10–50 | 15–40 € | À surveiller — prévoir alertes budget Mistral |
-| 50–100 | 50–100 € | Envisager cache des réponses FAQ fréquentes |
-| 100+ | Négocier un plan volume Mistral | — |
+| Tenants actifs | Coût LLM estimé/mois           | Notes                                                    |
+| -------------- | -------------------------------- | -------------------------------------------------------- |
+| 1–10          | < 5 €                           | Worker synthèse toutes les 3h, ~10 messages/client/jour |
+| 10–50         | 15–40 €                        | À surveiller — prévoir alertes budget Mistral         |
+| 50–100        | 50–100 €                       | Envisager cache des réponses FAQ fréquentes            |
+| 100+           | Négocier un plan volume Mistral | —                                                       |
 
 ---
 
 ## 18. Glossaire
 
-| Terme | Définition |
-|---|---|
-| SaaS | Software as a Service — logiciel accessible en ligne par abonnement |
-| Tenant | Client du SaaS (un indépendant ou une structure) dans un système multi-tenant |
-| Multi-tenant | Architecture où plusieurs clients partagent la même application mais ont leurs données isolées |
-| MVP | Minimum Viable Product — version minimale du produit pour tester le marché |
-| ROI | Return On Investment — retour sur investissement |
-| B2C | Business to Consumer — relation directe avec des particuliers |
-| B2B | Business to Business — relation avec des entreprises ou structures |
-| Lead | Demande ou opportunité commerciale entrante |
-| Pipeline | Séquence d'étapes par lesquelles passe un lead (nouveau → converti) |
-| RLS | Row-Level Security — sécurité au niveau des lignes dans PostgreSQL |
-| Soft delete | Suppression logique (la donnée reste en base mais est marquée comme supprimée) |
-| UUID | Identifiant unique universel utilisé comme clé primaire |
-| BCE | Banque-Carrefour des Entreprises (numéro d'entreprise belge) |
-| RGPD | Règlement Général sur la Protection des Données (règlement européen sur la vie privée) |
-| INAMI | Institut National d'Assurance Maladie-Invalidité (Belgique) |
-| LLM | Large Language Model — modèle d'intelligence artificielle pour le traitement du langage |
-| Webhook | Mécanisme permettant à une API externe de notifier l'application d'un événement |
-| Agent IA | Programme autonome qui utilise un LLM pour répondre, agir et orchestrer des tâches (booking, OCR, notifications) |
-| OCR | Optical Character Recognition — reconnaissance de caractères dans une image ou un document |
-| Agent Link | Token JWT signé à usage unique remis au client converti pour accéder à l'Agent 2 via WhatsApp |
-| Worker de synthèse | Tâche cron interne qui résume périodiquement les conversations des agents 1 & 2 pour le tenant |
-| Canal-agnostique | Session d'agent dont le contexte est partagé entre plusieurs canaux (ex : WhatsApp + Dashboard) |
+| Terme               | Définition                                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| SaaS                | Software as a Service — logiciel accessible en ligne par abonnement                                               |
+| Tenant              | Client du SaaS (un indépendant ou une structure) dans un système multi-tenant                                    |
+| Multi-tenant        | Architecture où plusieurs clients partagent la même application mais ont leurs données isolées                 |
+| MVP                 | Minimum Viable Product — version minimale du produit pour tester le marché                                       |
+| ROI                 | Return On Investment — retour sur investissement                                                                  |
+| B2C                 | Business to Consumer — relation directe avec des particuliers                                                     |
+| B2B                 | Business to Business — relation avec des entreprises ou structures                                                |
+| Lead                | Demande ou opportunité commerciale entrante                                                                       |
+| Pipeline            | Séquence d'étapes par lesquelles passe un lead (nouveau → converti)                                             |
+| RLS                 | Row-Level Security — sécurité au niveau des lignes dans PostgreSQL                                              |
+| Soft delete         | Suppression logique (la donnée reste en base mais est marquée comme supprimée)                                  |
+| UUID                | Identifiant unique universel utilisé comme clé primaire                                                          |
+| BCE                 | Banque-Carrefour des Entreprises (numéro d'entreprise belge)                                                      |
+| RGPD                | Règlement Général sur la Protection des Données (règlement européen sur la vie privée)                      |
+| INAMI               | Institut National d'Assurance Maladie-Invalidité (Belgique)                                                       |
+| LLM                 | Large Language Model — modèle d'intelligence artificielle pour le traitement du langage                          |
+| Webhook             | Mécanisme permettant à une API externe de notifier l'application d'un événement                                |
+| Agent IA            | Programme autonome qui utilise un LLM pour répondre, agir et orchestrer des tâches (booking, OCR, notifications) |
+| OCR                 | Optical Character Recognition — reconnaissance de caractères dans une image ou un document                       |
+| Agent Link          | Token JWT signé à usage unique remis au client converti pour accéder à l'Agent 2 via WhatsApp                  |
+| Worker de synthèse | Tâche cron interne qui résume périodiquement les conversations des agents 1 & 2 pour le tenant                  |
+| Canal-agnostique    | Session d'agent dont le contexte est partagé entre plusieurs canaux (ex : WhatsApp + Dashboard)                   |
 
 ---
 

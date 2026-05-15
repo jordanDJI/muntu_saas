@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api, supabase } from "../../../lib/api";
-import { useLanguage, LangSelector, LANGUAGES } from "../../../contexts/LanguageContext";
+import { useLanguage, LANGUAGES } from "../../../contexts/LanguageContext";
 import DemandPotentialCard from "../analytics/DemandPotentialCard";
 import metiers from "../../../data/metiers.json";
 import villes from "../../../data/villes.json";
@@ -441,7 +441,7 @@ function SectionAbonnement() {
 
   const openPortal = async () => {
     try {
-      const { url } = await api.createCheckout({ mode: "portal" }) as any;
+      const { url } = await api.billingPortal();
       if (url) window.open(url, "_blank");
     } catch { alert("Portail de facturation indisponible."); }
   };
@@ -610,7 +610,14 @@ function SectionPreferences() {
       <Card>
         <h3 className="font-semibold text-sm text-gray-700 mb-2">Apparence</h3>
         <div className="space-y-3">
-          <Toggle checked={darkMode} onChange={setDarkMode} label="Mode sombre (bêta)" />
+          <Toggle
+            checked={darkMode}
+            onChange={(v) => {
+              setDarkMode(v);
+              window.dispatchEvent(new CustomEvent("klientys-darkmode", { detail: { darkMode: v } }));
+            }}
+            label="Mode sombre"
+          />
           <Toggle checked={compactView} onChange={setCompact} label="Vue compacte (listes condensées)" />
         </div>
       </Card>
@@ -1134,7 +1141,12 @@ function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!connectInput.trim()) return;
+    const cleaned = connectInput.trim();
+    if (!cleaned) return;
+    if (!cleaned.includes(".")) {
+      setConnectMsg("Erreur : entrez le domaine complet avec extension (ex: www.monsite.be)");
+      return;
+    }
     setConnectLoading(true); setConnectMsg("");
     try {
       const res = await api.connectDomain(connectInput.trim());

@@ -181,8 +181,9 @@ export default function LandingPage() {
               <ul className="l-feat-list">
                 <li>9 étapes guidées pas à pas</li>
                 <li>Éditeur visuel no-code</li>
-                <li>Publication en 1 clic</li>
                 <li>SEO automatique inclus</li>
+                <li>Domaine personnalisé (.be, .fr, .com…)</li>
+                <li>Annuaire professionnel public</li>
               </ul>
             </div>
 
@@ -192,9 +193,10 @@ export default function LandingPage() {
               <p>{t.lp_feat2_d}</p>
               <ul className="l-feat-list">
                 <li>Créneaux disponibles en temps réel</li>
-                <li>Confirmation + rappel email</li>
-                <li>Gestion des indisponibilités</li>
-                <li>Widget embarquable</li>
+                <li>Confirmation + rappel email automatique</li>
+                <li>Gestion des indisponibilités &amp; congés</li>
+                <li>Widget embarquable sur votre site actuel</li>
+                <li>Zéro no-show grâce aux rappels</li>
               </ul>
             </div>
 
@@ -204,9 +206,10 @@ export default function LandingPage() {
               <p>{t.lp_feat3_d}</p>
               <ul className="l-feat-list">
                 <li>Pipeline visuel de leads</li>
-                <li>Agents IA Telegram &amp; WhatsApp</li>
-                <li>Analytics comportementaux</li>
-                <li>Emails automatiques</li>
+                <li>Agents IA Telegram, WhatsApp &amp; email</li>
+                <li>Analytics comportementaux du site</li>
+                <li>Potentiel de demande locale (Google Trends)</li>
+                <li>Multi-utilisateurs &amp; gestion d&apos;équipe</li>
               </ul>
             </div>
 
@@ -273,14 +276,18 @@ export default function LandingPage() {
 
             <div className="l-price-card" data-r="" data-d="1">
               <div className="l-price-plan">{t.lp_plan1_n}</div>
-              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-text-3)", letterSpacing: "-.01em" }}>{t.lp_coming}</div>
+              <div className="l-price-amount">
+                <span style={{ fontSize: "38px", fontWeight: 700, letterSpacing: "-.02em" }}>29,90€</span>
+                <span style={{ fontSize: "14px", color: "var(--l-text-3)", marginLeft: "4px" }}>/mois</span>
+              </div>
               <p className="l-price-desc">{t.lp_plan1_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
-                <li>1 site vitrine</li>
+                <li>1 site vitrine (jusqu&apos;à 3 pages)</li>
                 <li>Réservations en ligne</li>
-                <li>50 contacts CRM</li>
+                <li>100 contacts CRM</li>
                 <li>Emails automatiques</li>
+                <li>Annuaire professionnel public</li>
                 <li>Support email</li>
               </ul>
               <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>{t.lp_waitlist}</Link>
@@ -289,15 +296,19 @@ export default function LandingPage() {
             <div className="l-price-card featured" data-r="" data-d="2">
               <div className="l-price-badge">{t.lp_popular}</div>
               <div className="l-price-plan">{t.lp_plan2_n}</div>
-              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-gold)", letterSpacing: "-.01em" }}>{t.lp_coming}</div>
+              <div className="l-price-amount">
+                <span style={{ fontSize: "38px", fontWeight: 700, color: "var(--l-gold)", letterSpacing: "-.02em" }}>59,90€</span>
+                <span style={{ fontSize: "14px", color: "var(--l-text-3)", marginLeft: "4px" }}>/mois</span>
+              </div>
               <p className="l-price-desc">{t.lp_plan2_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
-                <li>Site vitrine complet</li>
+                <li>Site vitrine multi-pages complet</li>
                 <li>Réservations illimitées</li>
-                <li>CRM complet + pipeline</li>
-                <li>Agents IA Telegram &amp; WhatsApp</li>
+                <li>CRM complet + pipeline illimité</li>
+                <li>Agent IA vitrine &amp; support client</li>
                 <li>Analytics comportementaux</li>
+                <li>Domaine personnalisé inclus</li>
                 <li>Widget embarquable</li>
                 <li>Support prioritaire 24/7</li>
               </ul>
@@ -306,21 +317,28 @@ export default function LandingPage() {
 
             <div className="l-price-card" data-r="" data-d="3">
               <div className="l-price-plan">{t.lp_plan3_n}</div>
-              <div className="l-price-amount" style={{ fontSize: "32px", color: "var(--l-text-3)", letterSpacing: "-.01em" }}>{t.lp_coming}</div>
+              <div className="l-price-amount">
+                <span style={{ fontSize: "38px", fontWeight: 700, letterSpacing: "-.02em" }}>99,90€</span>
+                <span style={{ fontSize: "14px", color: "var(--l-text-3)", marginLeft: "4px" }}>/mois</span>
+              </div>
               <p className="l-price-desc">{t.lp_plan3_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
-                <li>Multi-utilisateurs</li>
-                <li>Gestion d&apos;équipe</li>
-                <li>Calendriers séparés</li>
-                <li>API complète</li>
+                <li>Tout du plan Pro</li>
+                <li>Multi-espaces de travail</li>
+                <li>Gestion d&apos;équipe &amp; calendriers séparés</li>
+                <li>Agent IA assistant personnel</li>
+                <li>Potentiel de demande locale (Trends)</li>
                 <li>Onboarding personnalisé</li>
                 <li>Account manager dédié</li>
               </ul>
-              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>{t.lp_contact_us}</Link>
+              <a href="mailto:support@klientys.co" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>{t.lp_contact_us}</a>
             </div>
 
           </div>
+          <p style={{ textAlign: "center", fontSize: "13px", color: "var(--l-text-3)", marginTop: "24px" }}>
+            💳 Paiement sécurisé Stripe · Annulation à tout moment · Prix HT
+          </p>
         </div>
       </section>
 

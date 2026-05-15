@@ -406,17 +406,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [ready, setReady] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [tenantSlug, setTenantSlug] = useState("");
+  const [darkMode, setDarkMode] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useLanguage();
 
   const NAV = NAV_HREFS.map((n) => ({ ...n, label: t[n.tKey] }));
 
+  // Listen for live dark mode toggle from settings page
+  useEffect(() => {
+    const handler = (e: Event) => setDarkMode((e as CustomEvent<{ darkMode: boolean }>).detail.darkMode);
+    window.addEventListener("klientys-darkmode", handler);
+    return () => window.removeEventListener("klientys-darkmode", handler);
+  }, []);
+
   useEffect(() => {
     // Fast path: read session from localStorage immediately, no server roundtrip
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         setReady(true);
+        const prefs = session.user.user_metadata?.ui_prefs ?? {};
+        setDarkMode(prefs.darkMode ?? false);
         supabase.from("membership")
           .select("tenant:tenant_id(slug)")
           .eq("user_id", session.user.id)
@@ -454,7 +464,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <SubscriptionProvider>
       <OnbordaProvider>
         <Onborda steps={ALL_TOURS} cardComponent={OnboardingCard} shadowOpacity="0.6" shadowRgb="7,34,47">
-    <div data-dash-dark className="min-h-screen bg-gray-50">
+    <div {...(darkMode ? { "data-dash-dark": "" } : {})} className="min-h-screen bg-gray-50">
       {/* Ancre invisible fixée au centre du viewport — cible pour la card de bienvenue */}
       <div id="onboarding-center" style={{ position: "fixed", top: "38%", left: "50%", width: 0, height: 0, pointerEvents: "none" }} />
       <TourStarter />
