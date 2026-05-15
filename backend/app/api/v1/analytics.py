@@ -17,10 +17,11 @@ CREATE INDEX IF NOT EXISTS idx_site_event_tenant_created
 ──────────────────────────────────────────────────────────
 """
 
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+import httpx
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
 
@@ -253,3 +254,97 @@ async def get_roi_potential(
         pass
 
     return {**data, "cached_at": now_iso}
+
+
+# ── Google Analytics (GA4) connection ────────────────────────────────────────
+
+class GoogleConnectIn(BaseModel):
+    access_token: str
+    refresh_token: Optional[str] = None
+
+
+class GoogleConfigIn(BaseModel):
+    ga4_property_id: str
+
+
+@router.post("/google/connect")
+async def connect_google_analytics(body: GoogleConnectIn, tenant_id: str = Depends(get_current_tenant)):
+    sb = get_supabase()
+    sb.table("google_analytics_connection").upsert(
+        {"tenant_id": tenant_id, "access_token": body.access_token, "refresh_token": body.refresh_token},
+        on_conflict="tenant_id",
+    ).execute()
+    return {"status": "connected"}
+
+
+@router.get("/google/status")
+async def google_analytics_status(tenant_id: str = Depends(get_current_tenant)):
+    sb = get_supabase()
+    row = sb.table("google_analytics_connection").select("ga4_property_id, connected_at").eq("tenant_id", tenant_id).maybe_single().execute()
+    if not row.data:
+        return {"connected": False, "property_configured": False}
+    return {
+        "connected": True,
+        "property_configured": bool(row.data.get("ga4_property_id")),
+        "ga4_property_id": row.data.get("ga4_property_id"),
+        "connected_at": row.data.get("connected_at"),
+    }
+
+
+@router.patch("/google/configure")
+async def configure_google_analytics(body: GoogleConfigIn, tenant_id: str = Depends(get_current_tenant)):
+    sb = get_supabase()
+    sb.table("google_analytics_connection").upsert(
+        {"tenant_id": tenant_id, "ga4_property_id": body.ga4_property_id},
+        on_conflict="tenant_id",
+    ).execute()
+    return {"status": "ok"}
+
+
+@router.get("/google/data")
+async def get_google_analytics_data(days: int = 30, tenant_id: str = Depends(get_current_tenant)):
+    sb = get_supabase()
+    row = sb.table("google_analytics_connection").select("access_token, ga4_property_id").eq("tenant_id", tenant_id).maybe_single().execute()
+    if not row.data or not row.data.get("ga4_property_id"):
+        raise HTTPException(status_code=404, detail="Google Analytics non configuré")
+
+    access_token = row.data["access_token"]
+    property_id = row.data["ga4_property_id"]
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"https://analyticsdata.googleapis.com/v1beta/properties/{property_id}:runReport",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "dateRanges": [{"startDate": f"{days}daysAgo", "endDate": "today"}],
+                "metrics": [
+                    {"name": "sessions"},
+                    {"name": "activeUsers"},
+                    {"name": "screenPageViews"},
+                    {"name": "bounceRate"},
+                ],
+                "dimensions": [{"name": "date"}],
+                "orderBys": [{"dimension": {"dimensionName": "date"}}],
+            },
+            timeout=15.0,
+        )
+
+    if resp.status_code == 401:
+        raise HTTPException(status_code=401, detail="Token Google expiré — reconnectez-vous via Google")
+    if not resp.is_success:
+        raise HTTPException(status_code=502, detail=f"Erreur Google Analytics API : {resp.text[:200]}")
+
+    rows = resp.json().get("rows", [])
+    result = []
+    for r in rows:
+        dims = r.get("dimensionValues", [])
+        vals = r.get("metricValues", [])
+        result.append({
+            "date": dims[0]["value"] if dims else "",
+            "sessions": int(vals[0]["value"]) if len(vals) > 0 else 0,
+            "active_users": int(vals[1]["value"]) if len(vals) > 1 else 0,
+            "pageviews": int(vals[2]["value"]) if len(vals) > 2 else 0,
+            "bounce_rate": round(float(vals[3]["value"]) * 100, 1) if len(vals) > 3 else 0,
+        })
+
+    return {"rows": result, "property_id": property_id}

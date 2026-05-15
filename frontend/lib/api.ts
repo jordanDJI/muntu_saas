@@ -223,6 +223,11 @@ export const api = {
   getAnalyticsSummary: (days = 30) => apiFetch<any>(`/api/v1/analytics/summary?days=${days}`),
   getRoiPotential: (period = "month") => apiFetch<any>(`/api/v1/analytics/roi-potential?period=${period}`),
 
+  // Google Analytics (GA4)
+  getGoogleAnalyticsStatus: () => apiFetch<{ connected: boolean; property_configured: boolean; ga4_property_id: string | null; connected_at: string | null }>("/api/v1/analytics/google/status"),
+  configureGoogleAnalytics: (ga4_property_id: string) => apiFetch("/api/v1/analytics/google/configure", { method: "PATCH", body: JSON.stringify({ ga4_property_id }) }),
+  getGoogleAnalyticsData: (days = 30) => apiFetch<{ rows: any[]; property_id: string }>(`/api/v1/analytics/google/data?days=${days}`),
+
   // Domaines personnalisés
   getDomain: () => apiFetch<any>("/api/v1/domains/my"),
   connectDomain: (domain: string) =>

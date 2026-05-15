@@ -1,19 +1,23 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const MAIN_DOMAIN = process.env.NEXT_PUBLIC_MAIN_DOMAIN || "klientys.app";
+const MAIN_DOMAINS = [
+  process.env.NEXT_PUBLIC_MAIN_DOMAIN || "klientys.co",
+  "klientys.co",
+  "www.klientys.co",
+  "muntu-saas.vercel.app",
+];
 
 function isMainDomain(hostname: string): boolean {
-  return (
-    hostname === MAIN_DOMAIN ||
-    hostname.endsWith(`.${MAIN_DOMAIN}`) ||
-    hostname === "localhost" ||
-    hostname.startsWith("localhost:") ||
-    hostname.endsWith(".vercel.app") ||
-    hostname.endsWith(".localhost")
-  );
+  if (MAIN_DOMAINS.includes(hostname)) return true;
+  if (hostname === "localhost" || hostname.startsWith("localhost:")) return true;
+  if (hostname.endsWith(".vercel.app")) return true;
+  if (hostname.endsWith(".localhost")) return true;
+  const main = process.env.NEXT_PUBLIC_MAIN_DOMAIN || "klientys.co";
+  if (hostname === main || hostname.endsWith(`.${main}`)) return true;
+  return false;
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const host = request.headers.get("host") || "";
   const hostname = host.split(":")[0];
 
@@ -32,7 +36,7 @@ export async function proxy(request: NextRequest) {
         return NextResponse.rewrite(url);
       }
     } catch {
-      // Backend inaccessible — laisse passer (affichera 404)
+      // Backend inaccessible — laisse passer
     }
     return NextResponse.next();
   }
