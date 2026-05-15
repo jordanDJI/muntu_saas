@@ -520,12 +520,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           .eq("user_id", session.user.id)
           .single()
           .then(({ data }) => { if (data?.tenant) setTenantSlug((data.tenant as any).slug ?? ""); });
-      } else window.location.replace("/login");
+      } else {
+        // Vider les cookies locaux avant de rediriger — évite la boucle
+        // middleware→dashboard (middleware voit encore le cookie expiré et renvoie sur /dashboard)
+        supabase.auth.signOut({ scope: "local" }).finally(() => window.location.replace("/login"));
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT") window.location.replace("/login");
-      else if (event === "TOKEN_REFRESHED" && !session) window.location.replace("/login");
+      else if (event === "TOKEN_REFRESHED" && !session) {
+        supabase.auth.signOut({ scope: "local" }).finally(() => window.location.replace("/login"));
+      }
     });
     const interval = setInterval(async () => {
       const { error } = await supabase.auth.refreshSession();
