@@ -420,30 +420,71 @@ function SectionMetriques() {
 
 // ── Section Abonnement ────────────────────────────────────────────────────────
 
+const PLAN_LABELS: Record<string, { price: string; desc: string }> = {
+  "Essentiel": { price: "29,90", desc: "Site vitrine, réservations, 100 contacts" },
+  "Pro":       { price: "59,90", desc: "CRM complet, agents IA, analytics, domaine inclus" },
+  "Business":  { price: "99,90", desc: "Multi-espaces, équipe, account manager dédié" },
+};
+
 function SectionAbonnement() {
-  const [sub, setSub]     = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [sub, setSub]       = useState<any>(null);
+  const [plans, setPlans]   = useState<any[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading]     = useState(false);
+  const [portalError, setPortalError]         = useState("");
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
+    const loadData = async () => {
+      try {
+        const [plansData] = await Promise.all([api.getPlans()]);
+        setPlans(plansData);
+      } catch { /* plans non critiques */ }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
       const { data: mem } = await supabase.from("membership").select("tenant_id").eq("user_id", user.id).single();
-      if (!mem) return;
+      if (!mem) { setLoading(false); return; }
       const { data } = await supabase
         .from("subscription")
-        .select("*, plan:plan_id(name, price_eur)")
+        .select("*, plan:plan_id(name, price_monthly)")
         .eq("tenant_id", mem.tenant_id)
-        .eq("status", "active")
-        .single();
+        .in("status", ["active", "trialing"])
+        .maybeSingle();
       setSub(data);
-    }).finally(() => setLoading(false));
+      setLoading(false);
+    };
+    loadData();
   }, []);
 
+  const handleCheckout = async (planId: string) => {
+    setCheckoutLoading(planId);
+    setPortalError("");
+    try {
+      const base = window.location.origin;
+      const { checkout_url } = await api.createCheckout({
+        plan_id: planId,
+        success_url: `${base}/dashboard/settings?checkout_success=1`,
+        cancel_url:  `${base}/dashboard/settings`,
+      });
+      window.location.href = checkout_url;
+    } catch (e: any) {
+      setPortalError(e?.message ?? "Erreur lors de l'accès au paiement.");
+      setCheckoutLoading(null);
+    }
+  };
+
   const openPortal = async () => {
+    setPortalLoading(true);
+    setPortalError("");
     try {
       const { url } = await api.billingPortal();
       if (url) window.open(url, "_blank");
-    } catch { alert("Portail de facturation indisponible."); }
+    } catch (e: any) {
+      setPortalError(e?.message ?? "Portail indisponible.");
+    } finally {
+      setPortalLoading(false);
+    }
   };
 
   return (
@@ -451,17 +492,13 @@ function SectionAbonnement() {
       <SectionTitle title="Abonnement & facturation" subtitle="Votre offre actuelle, vos factures et vos moyens de paiement." />
       {loading ? <p className="text-sm text-gray-400">Chargement…</p> : (
         <>
+          {/* Plan actuel */}
           <Card>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-semibold text-gray-800">{sub?.plan?.name ?? "Aucun abonnement actif"}</p>
-                {sub?.plan?.price_eur && (
-                  <p className="text-sm text-gray-500 mt-0.5">{sub.plan.price_eur} € / mois</p>
-                )}
-                {sub?.current_period_end && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    Renouvellement le {new Date(sub.current_period_end).toLocaleDateString("fr-BE")}
-                  </p>
+                {sub?.plan?.price_monthly != null && (
+                  <p className="text-sm text-gray-500 mt-0.5">{Number(sub.plan.price_monthly).toFixed(2).replace(".", ",")} € / mois</p>
                 )}
               </div>
               <span className={`text-xs px-2 py-1 rounded-full font-medium ${sub ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
@@ -469,27 +506,61 @@ function SectionAbonnement() {
               </span>
             </div>
           </Card>
-          <Card>
-            <h3 className="font-semibold text-sm text-gray-700">Gérer mon abonnement</h3>
-            <p className="text-sm text-gray-500">Modifier votre plan, consulter les factures ou mettre à jour votre moyen de paiement.</p>
-            <div className="flex gap-3 flex-wrap">
-              <button onClick={openPortal}
-                className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-700">
-                Portail de facturation Stripe
+
+          {/* Choix de plan — affiché si pas d'abo actif */}
+          {!sub && plans.length > 0 && (
+            <Card>
+              <h3 className="font-semibold text-sm text-gray-700 mb-3">Choisir un plan</h3>
+              <div className="flex flex-col gap-3">
+                {plans.filter(p => p.stripe_price_id).map((plan) => {
+                  const label = PLAN_LABELS[plan.name];
+                  return (
+                    <div key={plan.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50">
+                      <div>
+                        <p className="font-medium text-sm text-gray-800">{plan.name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {label?.desc ?? ""} — {label?.price ?? Number(plan.price_monthly).toFixed(2).replace(".", ",")} €/mois
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleCheckout(plan.id)}
+                        disabled={checkoutLoading === plan.id}
+                        className="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-50 whitespace-nowrap ml-3"
+                      >
+                        {checkoutLoading === plan.id ? "Redirection…" : "S'abonner →"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
+
+          {/* Portail Stripe — affiché si abo actif */}
+          {sub && (
+            <Card>
+              <h3 className="font-semibold text-sm text-gray-700">Gérer mon abonnement</h3>
+              <p className="text-sm text-gray-500 mt-1">Modifier votre plan, consulter les factures ou mettre à jour votre moyen de paiement.</p>
+              <button
+                onClick={openPortal}
+                disabled={portalLoading}
+                className="mt-3 bg-primary-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50"
+              >
+                {portalLoading ? "Ouverture…" : "Portail de facturation Stripe →"}
               </button>
-              {!sub && (
-                <button onClick={() => window.location.href = "/dashboard"}
-                  className="border border-primary-300 text-primary-600 px-4 py-2 rounded-lg text-sm hover:bg-primary-50">
-                  Choisir un plan
-                </button>
-              )}
-            </div>
-          </Card>
+            </Card>
+          )}
+
+          {portalError && (
+            <p className="text-sm text-red-500 mt-1">{portalError}</p>
+          )}
+
+          {/* Résiliation */}
           {sub && (
             <Card className="border-red-100">
               <h3 className="font-semibold text-sm text-red-600">Résilier l'abonnement</h3>
-              <p className="text-sm text-gray-500">La résiliation est effective à la fin de la période en cours. Vos données sont conservées 30 jours.</p>
-              <button onClick={openPortal} className="text-red-500 text-sm hover:underline">
+              <p className="text-sm text-gray-500 mt-1">La résiliation est effective à la fin de la période en cours. Vos données sont conservées 30 jours.</p>
+              <button onClick={openPortal} disabled={portalLoading} className="mt-2 text-red-500 text-sm hover:underline disabled:opacity-50">
                 Résilier via le portail Stripe →
               </button>
             </Card>

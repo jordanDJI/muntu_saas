@@ -17,6 +17,14 @@ class CheckoutIn(BaseModel):
     cancel_url: str
 
 
+@router.get("/plans")
+async def list_plans():
+    """Retourne les plans disponibles (public)."""
+    supabase = get_supabase_admin()
+    plans = supabase.table("plan_subscription").select("id, name, price_monthly, stripe_price_id").order("price_monthly").execute()
+    return plans.data or []
+
+
 @router.post("/checkout")
 async def create_checkout(body: CheckoutIn, tenant_id: str = Depends(get_current_tenant)):
     supabase = get_supabase_admin()
@@ -155,9 +163,13 @@ async def billing_portal(tenant_id: str = Depends(get_current_tenant)):
     stripe_sub = stripe.Subscription.retrieve(sub.data[0]["stripe_subscription_id"])
     customer_id = stripe_sub["customer"]
 
+    return_url = "https://klientys.co/dashboard/settings"
+    if settings.app_env != "production":
+        return_url = f"{settings.frontend_url}/dashboard/settings"
+
     session = stripe.billing_portal.Session.create(
         customer=customer_id,
-        return_url=f"{settings.frontend_url_prod or settings.frontend_url}/dashboard/settings",
+        return_url=return_url,
     )
     return {"url": session.url}
 

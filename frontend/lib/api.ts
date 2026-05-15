@@ -76,7 +76,8 @@ export const api = {
   cancelAppointment: (id: string) => apiFetch<any>(`/api/v1/appointments/${id}/cancel`, { method: "POST" }),
 
   // Subscriptions
-  createCheckout: (body: object) => apiFetch("/api/v1/subscriptions/checkout", { method: "POST", body: JSON.stringify(body) }),
+  getPlans: () => apiFetch<{ id: string; name: string; price_monthly: number; stripe_price_id: string }[]>("/api/v1/subscriptions/plans"),
+  createCheckout: (body: object) => apiFetch<{ checkout_url: string }>("/api/v1/subscriptions/checkout", { method: "POST", body: JSON.stringify(body) }),
   billingPortal: () => apiFetch<{ url: string }>("/api/v1/subscriptions/billing-portal", { method: "POST" }),
 
   // Agents IA — config
