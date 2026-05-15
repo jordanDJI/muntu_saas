@@ -26,7 +26,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_cors_origins = [o for o in [settings.frontend_url, settings.frontend_url_prod] if o]
+_ALWAYS_ALLOWED = ["https://klientys.co", "https://www.klientys.co", "https://muntu-saas.vercel.app"]
+_cors_origins = list({
+    *_ALWAYS_ALLOWED,
+    *[o.strip() for o in [settings.frontend_url, settings.frontend_url_prod] if o],
+})
 
 app.add_middleware(
     CORSMiddleware,
