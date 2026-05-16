@@ -88,6 +88,9 @@ export async function generateMetadata({
   const activeDomain: string | null = site.tenant?.custom_domain ?? null;
   const canonical = activeDomain ? `https://${activeDomain}` : `${APP_URL}/${tenantSlug}`;
 
+  const primaryColor = site.site_style?.primary_color ?? "indigo";
+  const ogImageUrl = `${APP_URL}/api/og?title=${encodeURIComponent(titleTag.slice(0, 60))}&zone=${encodeURIComponent(zones[0] ?? "")}&color=${encodeURIComponent(primaryColor)}`;
+
   return {
     title: titleTag,
     description: desc,
@@ -99,8 +102,9 @@ export async function generateMetadata({
       type: "website",
       url: canonical,
       siteName: "Klientys",
+      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: titleTag }],
     },
-    twitter: { card: "summary_large_image", title: titleTag, description: desc },
+    twitter: { card: "summary_large_image", title: titleTag, description: desc, images: [ogImageUrl] },
   };
 }
 
@@ -451,6 +455,12 @@ export default async function TenantSitePage({
         <p className="font-semibold text-white mb-1">{site.title}</p>
         {site.tagline && <p className="mb-3" style={{ color: "rgba(255,255,255,0.6)" }}>{site.tagline}</p>}
         <p style={{ color: "rgba(255,255,255,0.4)" }}>© {new Date().getFullYear()} {site.title}. Tous droits réservés.</p>
+        <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px", marginTop: "8px" }}>
+          Créé avec{" "}
+          <a href="https://klientys.co" target="_blank" rel="noopener noreferrer" style={{ color: "rgba(255,255,255,0.35)", textDecoration: "underline" }}>
+            Klientys
+          </a>
+        </p>
       </footer>
 
       <ChatbotWidget tenantSlug={tenantSlug} />

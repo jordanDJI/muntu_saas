@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import metiers from "../data/metiers.json";
 import villes from "../data/villes.json";
+import { ARTICLES } from "./blog/_articles";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
@@ -44,7 +45,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: APP_URL,                            lastModified: now, changeFrequency: "weekly",  priority: 1.0 },
     { url: `${APP_URL}/annuaire`,              lastModified: now, changeFrequency: "weekly",  priority: 0.9 },
     { url: `${APP_URL}/site-internet-pour`,    lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${APP_URL}/blog`,                  lastModified: now, changeFrequency: "weekly",  priority: 0.8 },
   ];
+
+  // Articles de blog
+  const blogPages: MetadataRoute.Sitemap = ARTICLES.map((a) => ({
+    url: `${APP_URL}/blog/${a.slug}`,
+    lastModified: new Date(a.publishedAt),
+    changeFrequency: "monthly" as const,
+    priority: 0.75,
+  }));
 
   // Sites publiés des tenants
   const tenantPages: MetadataRoute.Sitemap = publishedSlugs.map((slug) => ({
@@ -92,6 +102,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [
     ...staticPages,
+    ...blogPages,
     ...tenantPages,
     ...sipMetierPages,
     ...sipPages,

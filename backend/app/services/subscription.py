@@ -80,6 +80,8 @@ async def get_tenant_plan(tenant_id: str) -> dict:
     if tenant and tenant.data and tenant.data.get("created_at"):
         raw = tenant.data["created_at"]
         created_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
         trial_end = created_at + timedelta(days=TRIAL_DAYS)
         now = datetime.now(timezone.utc)
 

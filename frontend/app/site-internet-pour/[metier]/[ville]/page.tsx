@@ -34,18 +34,23 @@ export async function generateMetadata({
 
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
   const canonical = `${APP_URL}/site-internet-pour/${mSlug}/${vSlug}`;
+  const title = `Site internet pour ${m.label} ${v.labelPrep} — Klientys`;
+  const description = `Créez votre site professionnel de ${m.label.toLowerCase()} ${v.labelPrep} en 10 min. Agenda en ligne, zones d'intervention, agents IA. Essai gratuit.`;
+  const ogImageUrl = `${APP_URL}/api/og?title=${encodeURIComponent(`${m.label} ${v.labelPrep}`)}&zone=${encodeURIComponent(v.label)}&color=indigo`;
 
   return {
-    title: `Site internet pour ${m.label} ${v.labelPrep} — Klientys`,
-    description: `Créez votre site professionnel de ${m.label.toLowerCase()} ${v.labelPrep} en 10 min. Agenda en ligne, zones d'intervention, agents IA. Essai gratuit.`,
+    title,
+    description,
     alternates: { canonical },
     openGraph: {
-      title: `Site internet ${m.label} ${v.labelPrep}`,
-      description: `La plateforme pour les ${m.labelPlural.toLowerCase()} qui couvrent ${v.label} et sa région.`,
+      title,
+      description,
       url: canonical,
       type: "website",
       siteName: "Klientys",
+      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: title }],
     },
+    twitter: { card: "summary_large_image", title, description, images: [ogImageUrl] },
   };
 }
 
@@ -89,130 +94,172 @@ export default async function ProgrammaticPage({
     },
   ];
 
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Accueil", item: APP_URL },
+      { "@type": "ListItem", position: 2, name: "Site internet par métier", item: `${APP_URL}/site-internet-pour` },
+      { "@type": "ListItem", position: 3, name: m.label, item: `${APP_URL}/site-internet-pour/${mSlug}` },
+      { "@type": "ListItem", position: 4, name: v.label, item: `${APP_URL}/site-internet-pour/${mSlug}/${vSlug}` },
+    ],
+  };
+
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqItems.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: { "@type": "Answer", text: item.a },
+    })),
+  };
+
   return (
-    <main className="min-h-screen bg-white text-gray-900">
-      {/* Schema.org */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+    <main className="min-h-screen">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
 
       {/* Breadcrumb */}
-      <div className="max-w-5xl mx-auto px-6 pt-6 text-sm text-gray-500 flex gap-2">
-        <Link href="/site-internet-pour" className="hover:text-indigo-600">Tous les métiers</Link>
+      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "24px 24px 0", fontSize: "13px", color: "var(--l-text-3)", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        <Link href="/site-internet-pour" style={{ color: "var(--l-text-3)", textDecoration: "none" }} className="hover:text-white">Tous les métiers</Link>
         <span>/</span>
-        <Link href={`/site-internet-pour/${mSlug}`} className="hover:text-indigo-600">{m.label}</Link>
+        <Link href={`/site-internet-pour/${mSlug}`} style={{ color: "var(--l-text-3)", textDecoration: "none" }} className="hover:text-white">{m.label}</Link>
         <span>/</span>
-        <span className="text-gray-800">{v.label}</span>
+        <span style={{ color: "var(--l-text-2)" }}>{v.label}</span>
       </div>
 
-      {/* ── Section 1 — Hero ── */}
-      <section className="bg-indigo-700 text-white py-20 px-6 text-center mt-4">
-        <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight max-w-3xl mx-auto">
+      {/* Hero */}
+      <section style={{
+        background: "linear-gradient(160deg, rgba(13,75,88,.55) 0%, var(--l-bg2) 70%)",
+        borderBottom: "1px solid var(--l-border)",
+        padding: "80px 24px 72px",
+        textAlign: "center",
+        marginTop: "8px",
+      }}>
+        <p style={{ fontSize: "11px", color: "var(--l-gold)", fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: "16px" }}>
+          ✦ Klientys — Site internet pour
+        </p>
+        <h1 style={{
+          fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif",
+          fontSize: "clamp(28px, 4.5vw, 48px)",
+          fontWeight: 800,
+          color: "var(--l-text)",
+          lineHeight: 1.15,
+          marginBottom: "20px",
+          maxWidth: "760px",
+          margin: "0 auto 20px",
+        }}>
           Site internet pour {m.label.toLowerCase()} {v.labelPrep}
         </h1>
-        <p className="mt-4 text-xl text-indigo-200 max-w-2xl mx-auto">
+        <p style={{ fontSize: "18px", color: "var(--l-text-2)", maxWidth: "560px", margin: "0 auto 12px", lineHeight: 1.6 }}>
           Prêt en 10 minutes. Visible sur Google sous 48h.
         </p>
-        <div className="mt-4 flex justify-center gap-6 text-indigo-300 text-sm">
+        <div style={{ display: "flex", justifyContent: "center", gap: "24px", flexWrap: "wrap", color: "var(--l-text-3)", fontSize: "13px", marginBottom: "32px" }}>
           <span>📍 Zones d'intervention affichées</span>
           <span>📅 Agenda en ligne inclus</span>
           <span>🤖 Agent IA WhatsApp</span>
         </div>
-        <Link
-          href="/"
-          className="mt-8 inline-block bg-white text-indigo-700 font-bold px-8 py-3 rounded-xl hover:bg-indigo-50 transition-colors"
-        >
+        <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">
           Créer mon site gratuitement →
         </Link>
       </section>
 
-      {/* ── Section 2 — Pourquoi ce métier dans cette ville ── */}
-      <section className="max-w-4xl mx-auto px-6 py-16">
-        <h2 className="text-2xl font-bold mb-8">
+      {/* Pourquoi ce métier dans cette ville */}
+      <section style={{ maxWidth: "900px", margin: "0 auto", padding: "64px 24px" }}>
+        <h2 style={{ fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", fontSize: "24px", fontWeight: 700, color: "var(--l-text)", marginBottom: "32px" }}>
           Pourquoi {m.labelArticle} {v.labelPrep} a besoin d'un site ?
         </h2>
-        <div className="grid sm:grid-cols-3 gap-6 mb-10">
-          {m.painPoints.map((p, i) => (
-            <div key={i} className="bg-red-50 border border-red-100 rounded-xl p-5">
-              <p className="text-sm text-red-700 leading-relaxed">❌ {p}</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+          {m.painPoints.map((p: string, i: number) => (
+            <div key={i} style={{ background: "rgba(220,38,38,.08)", border: "1px solid rgba(220,38,38,.18)", borderRadius: "12px", padding: "16px", fontSize: "14px", color: "#fca5a5" }}>
+              ❌ {p}
             </div>
           ))}
         </div>
-        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6">
-          <p className="text-gray-700 leading-relaxed">
+        <div style={{ background: "rgba(42,143,165,.08)", border: "1px solid rgba(42,143,165,.2)", borderRadius: "12px", padding: "24px" }}>
+          <p style={{ color: "var(--l-text-2)", lineHeight: 1.7, fontSize: "15px", margin: 0 }}>
             À {v.label} ({v.population.toLocaleString()} habitants), on estime à{" "}
-            <strong>{demandeEstimee.toLocaleString()} recherches annuelles</strong> les requêtes
-            du type &quot;{m.label.toLowerCase()} {v.label}&quot; et communes alentour.
+            <strong style={{ color: "var(--l-teal-xl)" }}>{demandeEstimee.toLocaleString()} recherches annuelles</strong>{" "}
+            les requêtes du type &quot;{m.label.toLowerCase()} {v.label}&quot; et communes alentour.
             Ces recherches ont une intention d'achat de 95 % — ce sont des clients prêts à vous appeler.
           </p>
         </div>
       </section>
 
-      {/* ── Section 3 — Ce que Klientys fait pour vous ── */}
-      <section className="bg-gray-50 py-16 px-6">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold mb-8 text-center">
+      {/* Ce que Klientys fait */}
+      <section style={{ background: "var(--l-bg2)", borderTop: "1px solid var(--l-border)", borderBottom: "1px solid var(--l-border)", padding: "64px 24px" }}>
+        <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+          <h2 style={{ fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", fontSize: "22px", fontWeight: 700, color: "var(--l-text)", marginBottom: "32px", textAlign: "center" }}>
             Ce que Klientys fait pour les {m.labelPlural.toLowerCase()} {v.labelPrep}
           </h2>
-          <div className="grid sm:grid-cols-3 gap-6">
-            {m.keyFeatures.map((f, i) => (
-              <div key={i} className="bg-white border rounded-xl p-5 shadow-sm">
-                <p className="text-green-600 font-bold mb-2">✓</p>
-                <p className="text-gray-700 text-sm leading-relaxed">{f}</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
+            {m.keyFeatures.map((f: string, i: number) => (
+              <div key={i} style={{ background: "var(--l-bg-card)", border: "1px solid var(--l-border)", borderRadius: "12px", padding: "20px" }}>
+                <p style={{ color: "var(--l-teal-xl)", fontWeight: 700, marginBottom: "8px" }}>✓</p>
+                <p style={{ color: "var(--l-text-2)", fontSize: "14px", lineHeight: 1.6, margin: 0 }}>{f}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Section 4 — 3 étapes ── */}
-      <section className="max-w-4xl mx-auto px-6 py-16">
-        <h2 className="text-2xl font-bold mb-8 text-center">Votre site en 3 étapes</h2>
-        <div className="grid sm:grid-cols-3 gap-6">
+      {/* 3 étapes */}
+      <section style={{ maxWidth: "900px", margin: "0 auto", padding: "64px 24px" }}>
+        <h2 style={{ fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", fontSize: "22px", fontWeight: 700, color: "var(--l-text)", marginBottom: "40px", textAlign: "center" }}>
+          Votre site en 3 étapes
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "24px" }}>
           {[
             { n: "1", title: "Choisissez votre template", desc: `Template optimisé pour les ${m.labelPlural.toLowerCase()}` },
             { n: "2", title: `Renseignez vos zones autour de ${v.label}`, desc: `Jusqu'à 10 communes dans un rayon de ~${rayonKm} km` },
             { n: "3", title: "Publiez", desc: "Votre site est indexé par Google sous 48h" },
           ].map((step) => (
-            <div key={step.n} className="text-center">
-              <div className="w-12 h-12 rounded-full bg-indigo-700 text-white font-bold text-xl flex items-center justify-center mx-auto mb-4">
+            <div key={step.n} style={{ textAlign: "center" }}>
+              <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "var(--l-teal)", color: "#fff", fontWeight: 800, fontSize: "20px", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
                 {step.n}
               </div>
-              <h3 className="font-semibold mb-2">{step.title}</h3>
-              <p className="text-sm text-gray-500">{step.desc}</p>
+              <h3 style={{ fontWeight: 600, color: "var(--l-text)", marginBottom: "8px", fontSize: "15px" }}>{step.title}</h3>
+              <p style={{ color: "var(--l-text-3)", fontSize: "13px" }}>{step.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── Section 5 — Témoignage ── */}
-      <section className="bg-indigo-700 text-white py-16 px-6">
-        <div className="max-w-2xl mx-auto text-center">
-          <div className="flex justify-center mb-4">
-            {[1,2,3,4,5].map((i) => <span key={i} className="text-yellow-400 text-2xl">★</span>)}
+      {/* Témoignage */}
+      <section style={{
+        background: "linear-gradient(160deg, rgba(13,75,88,.45) 0%, var(--l-bg2) 100%)",
+        borderTop: "1px solid var(--l-border)",
+        borderBottom: "1px solid var(--l-border)",
+        padding: "64px 24px",
+        textAlign: "center",
+      }}>
+        <div style={{ maxWidth: "640px", margin: "0 auto" }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: "4px", marginBottom: "24px" }}>
+            {[1,2,3,4,5].map((i) => <span key={i} style={{ color: "var(--l-gold)", fontSize: "22px" }}>★</span>)}
           </div>
-          <p className="text-xl text-indigo-100 italic leading-relaxed">
+          <p style={{ fontSize: "18px", fontStyle: "italic", color: "var(--l-text-2)", lineHeight: 1.7, marginBottom: "20px" }}>
             &quot;{m.testimonialQuote}&quot;
           </p>
-          <p className="mt-6 font-semibold text-indigo-200">
+          <p style={{ fontSize: "13px", color: "var(--l-text-3)", fontWeight: 600 }}>
             {m.testimonialName} — {m.label} à {m.testimonialCity}
           </p>
         </div>
       </section>
 
-      {/* ── Section 6 — Comparatif ── */}
-      <section className="max-w-4xl mx-auto px-6 py-16">
-        <h2 className="text-2xl font-bold mb-8 text-center">
+      {/* Comparatif */}
+      <section style={{ maxWidth: "900px", margin: "0 auto", padding: "64px 24px" }}>
+        <h2 style={{ fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", fontSize: "22px", fontWeight: 700, color: "var(--l-text)", marginBottom: "40px", textAlign: "center" }}>
           Klientys vs {m.comparatif}
         </h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
             <thead>
-              <tr className="bg-gray-50">
-                <th className="text-left p-3 border border-gray-200"></th>
-                <th className="p-3 border border-gray-200 text-indigo-700 font-bold">Klientys</th>
-                <th className="p-3 border border-gray-200 text-gray-500">{m.comparatif}</th>
+              <tr style={{ background: "var(--l-bg2)" }}>
+                <th style={{ textAlign: "left", padding: "12px 16px", border: "1px solid var(--l-border)", color: "var(--l-text-2)", fontWeight: 600 }}></th>
+                <th style={{ padding: "12px 16px", border: "1px solid var(--l-border)", color: "var(--l-teal-xl)", fontWeight: 700, textAlign: "center" }}>Klientys</th>
+                <th style={{ padding: "12px 16px", border: "1px solid var(--l-border)", color: "var(--l-text-3)", fontWeight: 600, textAlign: "center" }}>{m.comparatif}</th>
               </tr>
             </thead>
             <tbody>
@@ -225,10 +272,10 @@ export default async function ProgrammaticPage({
                 ["Prix mensuel", "Dès 29 €/mois", "~160 €/mois"],
                 ["Commission sur RDV", "0 %", "Oui"],
               ].map(([feature, klientys, comp]) => (
-                <tr key={feature} className="border-b border-gray-100">
-                  <td className="p-3 text-gray-700 font-medium">{feature}</td>
-                  <td className="p-3 text-center text-green-600 font-semibold">{klientys}</td>
-                  <td className="p-3 text-center text-gray-400">{comp}</td>
+                <tr key={feature} style={{ borderBottom: "1px solid var(--l-border)" }}>
+                  <td style={{ padding: "12px 16px", color: "var(--l-text-2)", fontWeight: 500 }}>{feature}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "center", color: "#86efac", fontWeight: 500 }}>{klientys}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "center", color: "var(--l-text-3)" }}>{comp}</td>
                 </tr>
               ))}
             </tbody>
@@ -236,50 +283,37 @@ export default async function ProgrammaticPage({
         </div>
       </section>
 
-      {/* ── Section 7 — FAQ locale ── */}
-      <section className="bg-gray-50 py-16 px-6">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-bold mb-8">Questions fréquentes</h2>
-          <div className="space-y-6">
+      {/* FAQ locale */}
+      <section style={{ background: "var(--l-bg2)", borderTop: "1px solid var(--l-border)", padding: "64px 24px" }}>
+        <div style={{ maxWidth: "760px", margin: "0 auto" }}>
+          <h2 style={{ fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", fontSize: "22px", fontWeight: 700, color: "var(--l-text)", marginBottom: "32px" }}>
+            Questions fréquentes
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {faqItems.map((item) => (
-              <div key={item.q} className="bg-white border rounded-xl p-6">
-                <h3 className="font-semibold text-gray-900 mb-3">{item.q}</h3>
-                <p className="text-gray-600 text-sm leading-relaxed">{item.a}</p>
+              <div key={item.q} style={{ background: "var(--l-bg-card)", border: "1px solid var(--l-border)", borderRadius: "12px", padding: "24px" }}>
+                <h3 style={{ fontWeight: 600, color: "var(--l-text)", marginBottom: "12px", fontSize: "15px" }}>{item.q}</h3>
+                <p style={{ color: "var(--l-text-2)", fontSize: "14px", lineHeight: 1.7, margin: 0 }}>{item.a}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* FAQ Schema.org */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "FAQPage",
-            mainEntity: faqItems.map((item) => ({
-              "@type": "Question",
-              name: item.q,
-              acceptedAnswer: { "@type": "Answer", text: item.a },
-            })),
-          }),
-        }}
-      />
-
       {/* CTA final */}
-      <section className="py-16 px-6 text-center">
-        <h2 className="text-2xl font-bold mb-4">
+      <section style={{
+        background: "linear-gradient(160deg, rgba(13,75,88,.45) 0%, var(--l-bg2) 100%)",
+        borderTop: "1px solid var(--l-border)",
+        padding: "80px 24px",
+        textAlign: "center",
+      }}>
+        <h2 style={{ fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", fontSize: "28px", fontWeight: 800, color: "var(--l-text)", marginBottom: "12px" }}>
           Prêt à être trouvé {v.labelPrep} ?
         </h2>
-        <p className="text-gray-600 mb-8 max-w-xl mx-auto">
-          Rejoignez les {m.labelPlural.toLowerCase()} qui utilisent Klientys pour
-          attirer des clients locaux sans dépendre des plateformes.
+        <p style={{ color: "var(--l-text-2)", marginBottom: "32px", fontSize: "15px", maxWidth: "480px", margin: "0 auto 32px" }}>
+          Rejoignez les {m.labelPlural.toLowerCase()} qui utilisent Klientys pour attirer des clients locaux sans dépendre des plateformes.
         </p>
-        <Link
-          href="/"
-          className="bg-indigo-700 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-800 transition-colors"
-        >
+        <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">
           Créer mon site — essai gratuit →
         </Link>
       </section>

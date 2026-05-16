@@ -19,8 +19,35 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Klientys",
-  description: "La plateforme tout-en-un pour indépendants et TPE",
+  title: {
+    default: "Klientys — Site + RDV + CRM pour indépendants",
+    template: "%s | Klientys",
+  },
+  description: "Créez votre site professionnel, gérez vos rendez-vous et clients depuis une seule plateforme. Sans compétences techniques. En 15 minutes.",
+  alternates: {
+    canonical: "https://klientys.co",
+    languages: {
+      fr: "https://klientys.co",
+      en: "https://klientys.co",
+      de: "https://klientys.co",
+      nl: "https://klientys.co",
+      "x-default": "https://klientys.co",
+    },
+  },
+  openGraph: {
+    type: "website",
+    url: "https://klientys.co",
+    siteName: "Klientys",
+    title: "Klientys — Site + RDV + CRM pour indépendants",
+    description: "Créez votre site professionnel, gérez vos rendez-vous et clients depuis une seule plateforme.",
+    locale: "fr_FR",
+    alternateLocale: ["en_GB", "de_DE", "nl_NL"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Klientys — Site + RDV + CRM pour indépendants",
+    description: "Créez votre site professionnel, gérez vos rendez-vous et clients depuis une seule plateforme.",
+  },
 };
 
 const orgJsonLd = {

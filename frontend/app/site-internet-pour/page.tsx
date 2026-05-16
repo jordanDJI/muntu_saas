@@ -2,15 +2,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import metiers from "../../data/metiers.json";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
+
 export const metadata: Metadata = {
   title: "Site internet pour indépendants — par métier | Klientys",
   description: "Créez votre site professionnel en 10 minutes. Choisissez votre métier et découvrez comment Klientys vous aide à être trouvé localement sur Google.",
-  alternates: { canonical: "/site-internet-pour" },
+  alternates: { canonical: `${APP_URL}/site-internet-pour` },
 };
 
 const FAMILLES: Record<string, { label: string; emoji: string }> = {
-  sante:    { label: "Santé libérale",    emoji: "🩺" },
-  artisan:  { label: "Artisanat & BTP",   emoji: "🔧" },
+  sante:    { label: "Santé libérale",     emoji: "🩺" },
+  artisan:  { label: "Artisanat & BTP",    emoji: "🔧" },
   services: { label: "Services & conseil", emoji: "💼" },
 };
 
@@ -21,44 +23,80 @@ export default function HubSiteInternetPour() {
   }, {});
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen">
+
       {/* Hero */}
-      <section className="bg-indigo-700 text-white py-20 px-6 text-center">
-        <h1 className="text-4xl sm:text-5xl font-extrabold">
-          Site internet pour indépendants
-        </h1>
-        <p className="mt-4 text-xl text-indigo-200 max-w-2xl mx-auto">
-          Choisissez votre métier. Créez votre site en 10 minutes.
-          Soyez trouvé par vos clients locaux sur Google.
-        </p>
-        <Link
-          href="/"
-          className="mt-8 inline-block bg-white text-indigo-700 font-bold px-8 py-3 rounded-xl hover:bg-indigo-50 transition-colors"
-        >
-          Créer mon site gratuitement →
-        </Link>
+      <section style={{
+        background: "linear-gradient(160deg, rgba(13,75,88,.4) 0%, var(--l-bg2) 60%)",
+        borderBottom: "1px solid var(--l-border)",
+        padding: "80px 24px 64px",
+        textAlign: "center",
+      }}>
+        <div style={{ maxWidth: "640px", margin: "0 auto" }}>
+          <p style={{ fontSize: "11px", color: "var(--l-gold)", fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: "16px" }}>
+            ✦ Par métier
+          </p>
+          <h1 style={{
+            fontFamily: "var(--font-bricolage), 'Bricolage Grotesque', sans-serif",
+            fontSize: "clamp(32px, 5vw, 48px)",
+            fontWeight: 800,
+            color: "var(--l-text)",
+            lineHeight: 1.15,
+            marginBottom: "20px",
+          }}>
+            Site internet pour{" "}
+            <span style={{ background: "linear-gradient(120deg, var(--l-teal-xl), var(--l-blue), var(--l-gold))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+              indépendants
+            </span>
+          </h1>
+          <p style={{ fontSize: "17px", color: "var(--l-text-2)", lineHeight: 1.6, marginBottom: "32px" }}>
+            Choisissez votre métier. Créez votre site en 10 minutes. Soyez trouvé par vos clients locaux sur Google.
+          </p>
+          <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">
+            Créer mon site gratuitement →
+          </Link>
+        </div>
       </section>
 
       {/* Familles de métiers */}
-      <section className="max-w-5xl mx-auto px-6 py-16">
+      <section style={{ maxWidth: "1100px", margin: "0 auto", padding: "64px 24px" }}>
         {Object.entries(grouped).map(([famille, list]) => (
-          <div key={famille} className="mb-14">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
+          <div key={famille} style={{ marginBottom: "56px" }}>
+            <h2 style={{
+              fontFamily: "var(--font-bricolage), 'Bricolage Grotesque', sans-serif",
+              fontSize: "20px",
+              fontWeight: 700,
+              color: "var(--l-text)",
+              marginBottom: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}>
               <span>{FAMILLES[famille]?.emoji}</span>
               <span>{FAMILLES[famille]?.label}</span>
             </h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "16px" }}>
               {list.map((m) => (
                 <Link
                   key={m.slug}
                   href={`/site-internet-pour/${m.slug}`}
-                  className="border border-gray-200 rounded-xl p-5 hover:border-indigo-300 hover:shadow-md transition-all group"
+                  className="l-link-card"
+                  style={{
+                    display: "block",
+                    background: "var(--l-bg-card)",
+                    border: "1px solid var(--l-border)",
+                    borderRadius: "12px",
+                    padding: "20px 24px",
+                    textDecoration: "none",
+                  }}
                 >
-                  <p className="font-semibold text-gray-900 group-hover:text-indigo-700 transition-colors">
+                  <p style={{ fontWeight: 600, color: "var(--l-text)", marginBottom: "6px", fontSize: "15px" }}>
                     {m.label}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">{m.description}</p>
-                  <p className="text-xs text-indigo-600 mt-3 font-medium">
+                  <p style={{ fontSize: "13px", color: "var(--l-text-3)", marginBottom: "12px", lineHeight: 1.5 }}>
+                    {m.description}
+                  </p>
+                  <p style={{ fontSize: "12px", color: "var(--l-teal-xl)", fontWeight: 600 }}>
                     {(m.kw_monthly_fr + m.kw_monthly_be).toLocaleString()} recherches/mois →
                   </p>
                 </Link>
@@ -69,15 +107,19 @@ export default function HubSiteInternetPour() {
       </section>
 
       {/* CTA bas de page */}
-      <section className="bg-gray-50 py-16 px-6 text-center">
-        <h2 className="text-2xl font-bold mb-4">Votre métier n'est pas dans la liste ?</h2>
-        <p className="text-gray-600 mb-8">
+      <section style={{
+        background: "linear-gradient(160deg, rgba(13,75,88,.25) 0%, var(--l-bg) 100%)",
+        borderTop: "1px solid var(--l-border)",
+        padding: "80px 24px",
+        textAlign: "center",
+      }}>
+        <h2 style={{ fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", fontSize: "26px", fontWeight: 800, color: "var(--l-text)", marginBottom: "12px" }}>
+          Votre métier n'est pas dans la liste ?
+        </h2>
+        <p style={{ color: "var(--l-text-2)", marginBottom: "32px", fontSize: "15px" }}>
           Klientys fonctionne pour tout indépendant qui couvre une zone géographique.
         </p>
-        <Link
-          href="/"
-          className="bg-indigo-700 text-white font-bold px-8 py-3 rounded-xl hover:bg-indigo-800 transition-colors"
-        >
+        <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">
           Essayer gratuitement →
         </Link>
       </section>

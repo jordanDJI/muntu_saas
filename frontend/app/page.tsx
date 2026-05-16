@@ -515,6 +515,7 @@ export default function LandingPage() {
               <h4>{t.lp_footer_access}</h4>
               <Link href="/login">{t.lp_nav_login}</Link>
               <Link href="/onboarding">{t.lp_footer_create}</Link>
+              <Link href="/blog">Blog</Link>
             </div>
             <div className="l-footer-col">
               <h4>{t.lp_footer_contact_h}</h4>
@@ -533,6 +534,49 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* ── FAQPage schema.org ── */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: [
+              {
+                "@type": "Question",
+                name: "Est-ce vraiment sans carte bancaire pour l'essai ?",
+                acceptedAnswer: { "@type": "Answer", text: "Oui, 14 jours d'essai complet sans aucune information de paiement. Vous entrez votre carte uniquement si vous décidez de continuer." },
+              },
+              {
+                "@type": "Question",
+                name: "En combien de temps mon site est-il en ligne ?",
+                acceptedAnswer: { "@type": "Answer", text: "En moyenne 15 minutes. Notre wizard vous guide étape par étape : logo, couleurs, services, disponibilités. À la fin, vous cliquez 'Publier' et c'est en ligne." },
+              },
+              {
+                "@type": "Question",
+                name: "Dois-je avoir des connaissances techniques ?",
+                acceptedAnswer: { "@type": "Answer", text: "Aucune. Klientys est conçu pour des non-techniciens : infirmières, artisans, kinés. Si vous savez utiliser WhatsApp, vous savez utiliser Klientys." },
+              },
+              {
+                "@type": "Question",
+                name: "Puis-je utiliser mon propre nom de domaine ?",
+                acceptedAnswer: { "@type": "Answer", text: "Oui. Sur le plan Pro vous pouvez connecter votre domaine existant (ex. www.mon-cabinet.fr) ou en acheter un nouveau directement depuis Klientys." },
+              },
+              {
+                "@type": "Question",
+                name: "Que se passe-t-il si j'annule mon abonnement ?",
+                acceptedAnswer: { "@type": "Answer", text: "Vous conservez l'accès jusqu'à la fin de la période payée. Aucun frais caché, aucune pénalité. Vos données sont exportables à tout moment." },
+              },
+              {
+                "@type": "Question",
+                name: "Les agents IA fonctionnent-ils vraiment 24h/24 ?",
+                acceptedAnswer: { "@type": "Answer", text: "Oui. Une fois configurés, l'agent vitrine répond aux visiteurs de votre site et l'agent support répond sur Telegram et WhatsApp, même quand vous dormez." },
+              },
+            ],
+          }),
+        }}
+      />
 
       {/* ── STICKY MOBILE CTA ── */}
       <div className="l-sticky-cta">

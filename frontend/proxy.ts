@@ -17,7 +17,7 @@ function isMainDomain(hostname: string): boolean {
   return false;
 }
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const host = request.headers.get("host") || "";
   const hostname = host.split(":")[0];
 
