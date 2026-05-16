@@ -103,6 +103,7 @@ export default function OnboardingPage() {
       email: form.email,
       password: form.password,
       options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
         data: {
           first_name: form.first_name, last_name: form.last_name,
           full_name: `${form.first_name} ${form.last_name}`.trim(), lang,

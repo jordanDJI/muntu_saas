@@ -918,91 +918,193 @@ function SectionMembres() {
   );
 }
 
+// ── Google Analytics Card ─────────────────────────────────────────────────────
+
+function GoogleAnalyticsCard() {
+  const [gaStatus, setGaStatus] = useState<{
+    connected: boolean; property_configured: boolean;
+    ga4_property_id: string | null; connected_at: string | null;
+  } | null>(null);
+  const [propertyId, setPropertyId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const [showHelp, setShowHelp] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+
+  useEffect(() => {
+    api.getGoogleAnalyticsStatus()
+      .then(s => { setGaStatus(s); if (s.ga4_property_id) setPropertyId(s.ga4_property_id.replace(/^properties\//, "")); })
+      .catch(() => setGaStatus({ connected: false, property_configured: false, ga4_property_id: null, connected_at: null }));
+  }, []);
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: "email profile https://www.googleapis.com/auth/analytics.readonly",
+        queryParams: { access_type: "offline", prompt: "consent" },
+      },
+    });
+  };
+
+  const handleSave = async () => {
+    const digits = propertyId.trim().replace(/^properties\//, "");
+    if (!digits) return;
+    setSaving(true); setError(""); setSaved(false);
+    try {
+      await api.configureGoogleAnalytics(`properties/${digits}`);
+      setSaved(true);
+      setGaStatus(prev => prev ? { ...prev, property_configured: true, ga4_property_id: `properties/${digits}` } : prev);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e: any) {
+      setError(e.message ?? "Erreur lors de l'enregistrement");
+    } finally { setSaving(false); }
+  };
+
+  const statusLabel = gaStatus === null ? "…"
+    : gaStatus.property_configured ? "Connecté ✓"
+    : gaStatus.connected ? "Compte lié, ID manquant"
+    : "Non connecté";
+  const statusColor = gaStatus?.property_configured ? "bg-green-50 text-green-600"
+    : gaStatus?.connected ? "bg-amber-50 text-amber-600"
+    : "bg-gray-50 text-gray-400";
+
+  return (
+    <Card>
+      {/* En-tête */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: "rgba(251,188,5,.12)" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M22 12C22 6.477 17.523 2 12 2S2 6.477 2 12s4.477 10 10 10 10-4.477 10-10z" fill="#FBBC05" opacity=".2"/>
+              <path d="M15 8.5A3.5 3.5 0 0 0 8.5 12v4" stroke="#FBBC05" strokeWidth="1.8" strokeLinecap="round"/>
+              <circle cx="15" cy="8.5" r="1.5" fill="#FBBC05"/>
+              <circle cx="8.5" cy="16" r="1.5" fill="#4285F4"/>
+            </svg>
+          </div>
+          <div>
+            <p className="font-semibold text-sm text-gray-800">Google Analytics 4</p>
+            <p className="text-xs text-gray-500 mt-0.5">Statistiques de visites de votre site vitrine</p>
+          </div>
+        </div>
+        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusColor}`}>{statusLabel}</span>
+      </div>
+
+      {/* Pas encore connecté */}
+      {gaStatus && !gaStatus.connected && (
+        <div className="border-t pt-4 space-y-3">
+          <p className="text-sm text-gray-600">
+            Connectez votre compte Google pour voir les statistiques de votre site directement dans votre tableau de bord.
+          </p>
+          <button
+            onClick={handleConnect}
+            disabled={connecting}
+            className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-lg border text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60"
+          >
+            <svg width="18" height="18" viewBox="0 0 48 48">
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.16C6.51 42.62 14.62 48 24 48z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.5-1.45-.78-3-.78-4.59s.27-3.14.78-4.59l-7.98-6.16C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.75l7.97-6.16z"/>
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.97 6.16C12.43 13.72 17.74 9.5 24 9.5z"/>
+            </svg>
+            {connecting ? "Redirection vers Google…" : "Connecter mon compte Google"}
+          </button>
+        </div>
+      )}
+
+      {/* Connecté — demander l'ID de propriété */}
+      {gaStatus?.connected && (
+        <div className="border-t pt-4 space-y-4">
+
+          {/* Guide visuel */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-medium text-gray-700">Identifiant de votre propriété GA4</p>
+              <button
+                onClick={() => setShowHelp(v => !v)}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                {showHelp ? "Masquer l'aide" : "Où trouver cet ID ?"}
+              </button>
+            </div>
+
+            {showHelp && (
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-3 text-sm">
+                <p className="font-semibold text-blue-800 mb-3">En 3 étapes :</p>
+                <div className="space-y-2.5">
+                  <div className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">1</span>
+                    <p className="text-blue-800">
+                      Ouvrez{" "}
+                      <a href="https://analytics.google.com" target="_blank" rel="noreferrer" className="font-semibold underline">
+                        analytics.google.com
+                      </a>
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">2</span>
+                    <p className="text-blue-800">
+                      En bas à gauche, cliquez sur <strong>⚙️ Administration</strong>
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">3</span>
+                    <p className="text-blue-800">
+                      Dans la colonne <strong>Propriété</strong>, cliquez sur{" "}
+                      <strong>Paramètres de la propriété</strong> — l&apos;ID (une suite de chiffres) est affiché en haut à droite.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 bg-blue-100 rounded-lg px-3 py-2 text-xs text-blue-700">
+                  Exemple : si vous voyez <strong>123456789</strong>, saisissez uniquement <strong>123456789</strong>.
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <div className="flex-1 flex items-center border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-300">
+                <span className="px-3 py-2 text-xs text-gray-400 bg-gray-50 border-r shrink-0 select-none">properties/</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={propertyId}
+                  onChange={e => setPropertyId(e.target.value.replace(/\D/g, ""))}
+                  placeholder="123456789"
+                  className="flex-1 px-3 py-2 text-sm outline-none bg-white"
+                />
+              </div>
+              <button
+                onClick={handleSave}
+                disabled={saving || !propertyId.trim()}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all disabled:opacity-50"
+                style={{ background: saved ? "#16a34a" : "var(--primary-600, #2563eb)" }}
+              >
+                {saving ? "…" : saved ? "Enregistré ✓" : "Enregistrer"}
+              </button>
+            </div>
+            {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
+            {gaStatus.property_configured && !saved && (
+              <p className="text-xs text-gray-400 mt-1.5">
+                ID actuel : <code className="bg-gray-100 px-1 rounded">{gaStatus.ga4_property_id}</code>
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Section Intégrations ──────────────────────────────────────────────────────
 
 function SectionIntegrations() {
-  const [status, setStatus] = useState<{ stripe: boolean; resend: boolean; gemini: boolean; whatsapp: boolean } | null>(null);
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [revealed, setRevealed] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    api.getIntegrationsStatus().then(setStatus).catch(() => {});
-    api.getTenantApiKey().then(r => setApiKey(r.api_key)).catch(() => {});
-  }, []);
-
-  const handleCopy = () => {
-    if (!apiKey) return;
-    navigator.clipboard.writeText(apiKey).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
-  };
-
-  const handleRegenerate = async () => {
-    if (!confirm("Régénérer la clé API ? L'ancienne clé sera immédiatement invalidée.")) return;
-    setRegenerating(true);
-    try {
-      const r = await api.regenerateTenantApiKey();
-      setApiKey(r.api_key);
-      setRevealed(true);
-    } finally { setRegenerating(false); }
-  };
-
-  const maskedKey = apiKey ? `${apiKey.slice(0, 8)}${"•".repeat(24)}` : "sk_••••••••••••••••••••••••••••••";
-
-  const integrations = [
-    { name: "Stripe",             desc: "Paiements et abonnements",          key: "stripe"   as const },
-    { name: "Resend",             desc: "Envoi d'emails transactionnels",     key: "resend"   as const },
-    { name: "Google Gemini (IA)", desc: "Agents IA et analyses",              key: "gemini"   as const },
-    { name: "WhatsApp Business",  desc: "Agent de conversion client",         key: "whatsapp" as const },
-  ];
-
   return (
     <>
-      <SectionTitle title="Intégrations & API" subtitle="Connectez votre espace à des services tiers." />
-      {integrations.map(item => {
-        const connected = status ? status[item.key] : null;
-        return (
-          <Card key={item.name}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-sm text-gray-800">{item.name}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{item.desc}</p>
-              </div>
-              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                connected === null ? "bg-gray-50 text-gray-400" :
-                connected ? "bg-green-50 text-green-600" : "bg-amber-50 text-amber-600"
-              }`}>
-                {connected === null ? "…" : connected ? "Connecté" : "Non configuré"}
-              </span>
-            </div>
-          </Card>
-        );
-      })}
-      <Card>
-        <p className="text-xs text-gray-400 bg-gray-50 border rounded px-2 py-1 inline-block">À venir</p>
-        <p className="font-semibold text-sm text-gray-500 mt-1">Google Calendar · Zapier / Make</p>
-        <p className="text-xs text-gray-400">Synchronisation des rendez-vous et automatisations no-code.</p>
-      </Card>
-      <Card>
-        <h3 className="font-semibold text-sm text-gray-700">Clé API</h3>
-        <p className="text-sm text-gray-500">Accès programmatique à votre espace Klientys.</p>
-        <div className="flex gap-2">
-          <input
-            value={revealed && apiKey ? apiKey : maskedKey}
-            readOnly
-            className="border rounded-lg px-3 py-2 text-sm flex-1 font-mono bg-gray-50 text-gray-600"
-          />
-          <button onClick={() => setRevealed(v => !v)} className="border px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50 shrink-0">
-            {revealed ? "Masquer" : "Révéler"}
-          </button>
-          <button onClick={handleCopy} className="border px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50 shrink-0">
-            {copied ? "Copié ✓" : "Copier"}
-          </button>
-        </div>
-        <button onClick={handleRegenerate} disabled={regenerating} className="text-xs text-red-500 hover:underline disabled:opacity-50">
-          {regenerating ? "Régénération…" : "Régénérer la clé (invalide l'ancienne)"}
-        </button>
-      </Card>
+      <SectionTitle title="Intégrations" subtitle="Connectez votre espace à des services tiers." />
+      <GoogleAnalyticsCard />
     </>
   );
 }
