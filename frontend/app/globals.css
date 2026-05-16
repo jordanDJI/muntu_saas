@@ -356,6 +356,7 @@
   .l-dash-sidebar { display:none; }
   .l-nav-links { display:none; }
   .l-nav-hamburger { display:flex; }
+  .l-nav-cta .l-btn { display:none; }
   .l-sticky-cta { display:flex; }
   .l-float-1,.l-float-2 { display:none; }
   .l-footer-top { grid-template-columns:1fr 1fr;gap:32px; }

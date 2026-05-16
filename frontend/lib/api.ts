@@ -32,6 +32,19 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     const detail = err.detail;
+    if (res.status === 403 && typeof detail === "string") {
+      if (typeof window !== "undefined") {
+        // Stale X-Tenant-Id — clear it so subsequent calls use JWT fallback
+        if (detail.includes("Accès refusé à ce tenant")) {
+          localStorage.removeItem("klientys_tenant_id");
+        }
+        // No tenant at all — redirect to onboarding to complete setup
+        if (detail.includes("Aucun tenant associé") && window.location.pathname.startsWith("/dashboard")) {
+          window.location.replace("/onboarding");
+          return new Promise(() => {}); // never resolves — page is navigating away
+        }
+      }
+    }
     const msg = typeof detail === "string" ? detail : `HTTP ${res.status}`;
     throw new Error(msg);
   }

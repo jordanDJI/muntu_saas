@@ -112,7 +112,13 @@ export default function OnboardingPage() {
     });
 
     if (authError) {
-      if (authError.message.toLowerCase().includes("already")) {
+      const msg = authError.message.toLowerCase();
+      if (msg.includes("rate limit") || msg.includes("too many") || msg.includes("over_email")) {
+        setError("Trop d'emails envoyés. Attendez 1 à 2 minutes puis réessayez.");
+        setLoading(false);
+        return;
+      }
+      if (msg.includes("already")) {
         const { error: loginError } = await supabase.auth.signInWithPassword({
           email: form.email, password: form.password,
         });

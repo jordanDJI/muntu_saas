@@ -56,22 +56,9 @@ export default function AuthCallbackPage() {
         .maybeSingle();
 
       if (membership) {
-        // Compte complet — vérifier s'il y a un setup en attente (email confirmation)
-        const pending = localStorage.getItem("klientys_pending_setup");
-        if (pending) {
-          try {
-            const setup = JSON.parse(pending);
-            await fetch(`${API}/api/v1/onboarding/setup`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify(setup),
-            });
-          } catch { /* si déjà créé, ignore */ }
-          localStorage.removeItem("klientys_pending_setup");
-        }
+        // Compte complet — vider le localStorage et aller au dashboard
+        localStorage.removeItem("klientys_pending_setup");
+        localStorage.removeItem("klientys_tenant_id");
         router.replace("/dashboard");
       } else {
         // Pas de tenant → compléter l'onboarding
@@ -89,12 +76,14 @@ export default function AuthCallbackPage() {
             });
             if (res.ok) {
               localStorage.removeItem("klientys_pending_setup");
+              localStorage.removeItem("klientys_tenant_id");
               await supabase.auth.refreshSession();
               router.replace("/dashboard");
               return;
             }
           } catch { /* fallback */ }
           localStorage.removeItem("klientys_pending_setup");
+          localStorage.removeItem("klientys_tenant_id");
         }
         // Connexion Google sans compte → compléter l'onboarding
         router.replace("/onboarding?from=google");

@@ -28,10 +28,18 @@ async def setup_tenant(body: TenantSetupIn, user: dict = Depends(get_current_use
     if existing.data:
         raise HTTPException(status_code=400, detail="Ce slug est déjà pris")
 
-    # Vérifier que l'utilisateur n'a pas déjà un tenant
-    already = supabase.table("membership").select("id").eq("user_id", user_id).execute()
+    # Vérifier que l'utilisateur n'a pas déjà un tenant (idempotent — renvoie le tenant existant)
+    already = (
+        supabase.table("membership")
+        .select("tenant_id, tenant:tenant_id(id, slug)")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
     if already.data:
-        raise HTTPException(status_code=400, detail="Cet utilisateur a déjà un espace")
+        row = already.data[0]
+        existing_slug = row["tenant"]["slug"] if row.get("tenant") else body.tenant_slug
+        return {"tenant_id": row["tenant_id"], "slug": existing_slug}
 
     # Créer le tenant
     try:
