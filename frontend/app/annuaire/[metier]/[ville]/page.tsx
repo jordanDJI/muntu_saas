@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import metiers from "../../../../data/metiers.json";
 import villes from "../../../../data/villes.json";
@@ -38,7 +39,13 @@ export async function generateMetadata({
     title: `${m.labelPlural} ${v.labelPrep} — Annuaire Klientys`,
     description: `Trouvez ${m.labelArticle} ${v.labelPrep}. Profils vérifiés, prise de RDV directe. Annuaire gratuit Klientys.`,
     alternates: { canonical },
-    openGraph: { title: `${m.labelPlural} ${v.labelPrep}`, url: canonical, siteName: "Klientys" },
+    openGraph: {
+      title: `${m.labelPlural} ${v.labelPrep}`,
+      description: `Trouvez ${m.labelArticle} ${v.labelPrep}. Profils vérifiés, prise de RDV directe.`,
+      url: canonical,
+      siteName: "Klientys",
+      images: [{ url: `${APP_URL}/annuaire/${mSlug}/${vSlug}/opengraph-image`, width: 1200, height: 630 }],
+    },
   };
 }
 
@@ -53,6 +60,18 @@ export default async function AnnuaireVillePage({
   if (!m || !v) notFound();
 
   const listings = await getListings(mSlug, v.label);
+
+  const canonical = `${APP_URL}/annuaire/${mSlug}/${vSlug}`;
+
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Accueil", item: APP_URL },
+      { "@type": "ListItem", position: 2, name: "Annuaire", item: `${APP_URL}/annuaire` },
+      { "@type": "ListItem", position: 3, name: `${m.labelPlural} ${v.labelPrep}`, item: canonical },
+    ],
+  };
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -73,6 +92,7 @@ export default async function AnnuaireVillePage({
 
   return (
     <main className="min-h-screen bg-white">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       {/* Breadcrumb */}
@@ -123,9 +143,11 @@ export default async function AnnuaireVillePage({
               >
                 <div className="flex items-start gap-3 mb-3">
                   {l.profile_photo_url ? (
-                    <img
+                    <Image
                       src={l.profile_photo_url}
                       alt={l.display_name}
+                      width={48}
+                      height={48}
                       className="w-12 h-12 rounded-full object-cover shrink-0"
                     />
                   ) : (

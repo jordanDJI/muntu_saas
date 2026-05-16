@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import metiers from "../../../../../data/metiers.json";
 import villes from "../../../../../data/villes.json";
@@ -57,7 +58,9 @@ export async function generateMetadata({
       url: canonical,
       type: "profile",
       siteName: "Klientys",
-      ...(listing.profile_photo_url && { images: [listing.profile_photo_url] }),
+      images: listing.profile_photo_url
+        ? [{ url: listing.profile_photo_url, width: 400, height: 400 }]
+        : [{ url: `${APP_URL}/annuaire/${mSlug}/${vSlug}/opengraph-image`, width: 1200, height: 630 }],
     },
   };
 }
@@ -77,6 +80,19 @@ export default async function FicheProPage({
 
   const offers: any[] = site?.service_offer ?? [];
   const testimonials: any[] = site?.testimonial ?? [];
+
+  const canonical = `${APP_URL}/annuaire/${mSlug}/${vSlug}/${slug}`;
+
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Accueil", item: APP_URL },
+      { "@type": "ListItem", position: 2, name: "Annuaire", item: `${APP_URL}/annuaire` },
+      { "@type": "ListItem", position: 3, name: m ? `${m.labelPlural} ${v?.labelPrep ?? ""}` : "Annuaire", item: `${APP_URL}/annuaire/${mSlug}/${vSlug}` },
+      { "@type": "ListItem", position: 4, name: listing.display_name, item: canonical },
+    ],
+  };
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -99,6 +115,7 @@ export default async function FicheProPage({
 
   return (
     <main className="min-h-screen bg-white">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       {/* Breadcrumb */}
@@ -117,9 +134,11 @@ export default async function FicheProPage({
           {/* Header */}
           <div className="flex items-start gap-5 mb-6">
             {listing.profile_photo_url ? (
-              <img
+              <Image
                 src={listing.profile_photo_url}
                 alt={listing.display_name}
+                width={80}
+                height={80}
                 className="w-20 h-20 rounded-full object-cover shrink-0 border-2 border-indigo-100"
               />
             ) : (

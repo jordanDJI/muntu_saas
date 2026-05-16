@@ -23,10 +23,29 @@ export const metadata: Metadata = {
   description: "La plateforme tout-en-un pour indépendants et TPE",
 };
 
+const orgJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Klientys",
+  url: "https://klientys.co",
+  logo: "https://klientys.co/logo.png",
+  description: "La plateforme tout-en-un pour indépendants et TPE",
+  contactPoint: {
+    "@type": "ContactPoint",
+    email: "support@klientys.co",
+    contactType: "customer service",
+    availableLanguage: "French",
+  },
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={`${bricolage.variable} ${dmSans.variable}`}>
       <body className="text-gray-900 antialiased">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+        />
         <LanguageProvider>{children}</LanguageProvider>
       </body>
     </html>

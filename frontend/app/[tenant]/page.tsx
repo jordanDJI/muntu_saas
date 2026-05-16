@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import Image from "next/image";
 import ContactForm from "./contact-form";
 import ChatbotWidget from "../../components/ChatbotWidget";
 import PreviewBanner from "./preview-banner";
@@ -244,12 +245,15 @@ export default async function TenantSitePage({
       {/* Hero */}
       <section
         id="hero"
-        className="text-white py-24 px-6 text-center relative"
-        style={photoUrls.hero
-          ? { backgroundImage: `url(${photoUrls.hero})`, backgroundSize: "cover", backgroundPosition: "center" }
-          : { backgroundColor: colors.hero }}
+        className="text-white py-24 px-6 text-center relative overflow-hidden"
+        style={!photoUrls.hero ? { backgroundColor: colors.hero } : {}}
       >
-        {photoUrls.hero && <div className="absolute inset-0" style={{ backgroundColor: `${colors.hero}cc` }} />}
+        {photoUrls.hero && (
+          <>
+            <Image src={photoUrls.hero} alt="" fill className="object-cover object-center" priority sizes="100vw" />
+            <div className="absolute inset-0" style={{ backgroundColor: `${colors.hero}cc` }} />
+          </>
+        )}
         <div className="relative z-10">
           <h1 className="text-4xl sm:text-5xl font-extrabold">{site.title}</h1>
           {site.tagline && (
@@ -276,7 +280,7 @@ export default async function TenantSitePage({
         <section id="a-propos" className="py-16 px-6">
           <div className={`max-w-3xl mx-auto text-center${photoUrls.about ? " sm:grid sm:grid-cols-2 sm:gap-10 sm:text-left sm:max-w-5xl sm:items-center" : ""}`}>
             {photoUrls.about && (
-              <img src={photoUrls.about} alt={`${site.title} — présentation`} className="w-full h-64 object-cover rounded-2xl shadow-md mb-6 sm:mb-0" />
+              <Image src={photoUrls.about} alt={`${site.title} — présentation`} width={600} height={256} className="w-full h-64 object-cover rounded-2xl shadow-md mb-6 sm:mb-0" />
             )}
             <div>
               <h2 className="text-2xl font-bold mb-6">À propos</h2>
@@ -288,15 +292,20 @@ export default async function TenantSitePage({
 
       {/* Prestations */}
       {showServices && site.service_offer?.length > 0 && (
-        <section id="prestations" className="py-16 px-6 relative" style={photoUrls.services ? { backgroundImage: `url(${photoUrls.services})`, backgroundSize: "cover", backgroundPosition: "center" } : { backgroundColor: "#f9fafb" }}>
-          {photoUrls.services && <div className="absolute inset-0 bg-white/80" />}
+        <section id="prestations" className="py-16 px-6 relative overflow-hidden" style={!photoUrls.services ? { backgroundColor: "#f9fafb" } : {}}>
+          {photoUrls.services && (
+            <>
+              <Image src={photoUrls.services} alt="" fill className="object-cover object-center" sizes="100vw" />
+              <div className="absolute inset-0 bg-white/80" />
+            </>
+          )}
           <div className="relative z-10 max-w-5xl mx-auto">
             <h2 className="text-2xl font-bold mb-8 text-center">Nos prestations</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {site.service_offer.map((offer: any) => (
                 <div key={offer.id} className="bg-white border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                   {offer.image_url && (
-                    <img src={offer.image_url} alt={offer.name} className="w-full h-36 object-cover" />
+                    <Image src={offer.image_url} alt={offer.name} width={400} height={144} className="w-full h-36 object-cover" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" />
                   )}
                   <div className="p-5">
                     <h3 className="font-semibold text-lg">{offer.name}</h3>
@@ -390,7 +399,7 @@ export default async function TenantSitePage({
           <h2 className="text-2xl font-bold mb-8 text-center">Prendre contact</h2>
           <div className={`grid gap-10 ${photoUrls.contact ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
             {photoUrls.contact && (
-              <img src={photoUrls.contact} alt={`Contacter ${site.title}`} className="w-full h-48 sm:h-full object-cover rounded-2xl shadow-md" />
+              <Image src={photoUrls.contact} alt={`Contacter ${site.title}`} width={400} height={192} className="w-full h-48 sm:h-full object-cover rounded-2xl shadow-md" />
             )}
             <div className="space-y-4">
               {site.phone && (
@@ -506,6 +515,9 @@ export default async function TenantSitePage({
                     },
                   })),
                 },
+              }),
+              ...(Object.values(social).some(Boolean) && {
+                sameAs: [social.facebook, social.instagram, social.linkedin].filter(Boolean),
               }),
             }),
           }}
