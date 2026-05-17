@@ -85,7 +85,7 @@ export default function LandingPage() {
             <Link href="/dashboard" className="l-btn l-btn-primary" style={{ justifyContent: "center" }} onClick={closeMobile}>{t.nav_dashboard}</Link>
           ) : (
             <>
-              <Link href="/onboarding" className="l-btn l-btn-primary" style={{ justifyContent: "center" }} onClick={closeMobile}>{t.lp_nav_start}</Link>
+              <Link href="/onboarding" className="l-btn l-btn-primary" style={{ justifyContent: "center" }} onClick={() => { closeMobile(); trackLead(); }}>{t.lp_nav_start}</Link>
               <Link href="/login" className="l-btn l-btn-ghost" style={{ justifyContent: "center" }} onClick={closeMobile}>{t.lp_nav_login}</Link>
             </>
           )}
@@ -112,7 +112,7 @@ export default function LandingPage() {
             ) : (
               <>
                 <Link href="/login" className="l-btn l-btn-ghost" style={{ padding: "9px 20px", fontSize: "14px" }}>{t.lp_nav_login}</Link>
-                <Link href="/onboarding" className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }}>{t.lp_nav_start}</Link>
+                <Link href="/onboarding" className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }} onClick={trackLead}>{t.lp_nav_start}</Link>
               </>
             )}
             <button className="l-nav-hamburger" onClick={() => setMobileMenuOpen(true)} aria-label="Menu">

@@ -89,6 +89,9 @@ export default function AuthCallbackPage() {
             if (res.ok) {
               localStorage.removeItem("klientys_pending_setup");
               localStorage.removeItem("klientys_tenant_id");
+              if (typeof window !== "undefined" && (window as any).fbq) {
+                (window as any).fbq("track", "CompleteRegistration");
+              }
               await supabase.auth.refreshSession();
               router.replace("/dashboard");
               return;
