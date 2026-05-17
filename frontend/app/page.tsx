@@ -64,6 +64,12 @@ export default function LandingPage() {
 
   const closeMobile = () => setMobileMenuOpen(false);
 
+  const trackLead = () => {
+    if (typeof window !== "undefined" && (window as any).fbq) {
+      (window as any).fbq("track", "Lead");
+    }
+  };
+
   return (
     <div className="l-page">
 
@@ -128,7 +134,7 @@ export default function LandingPage() {
           <h1>{t.lp_h1}<br /><span className="l-gradient-text">{t.lp_h1b}</span></h1>
           <p className="l-hero-sub">{t.lp_sub}</p>
           <div className="l-hero-ctas">
-            <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">
+            <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg" onClick={trackLead}>
               {t.lp_cta}
             </Link>
             <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">{t.lp_cta2}</Link>
@@ -485,7 +491,7 @@ export default function LandingPage() {
             <h2>{t.lp_final_h2a}<br /><span className="l-gradient-text">{t.lp_final_h2b}</span></h2>
             <p style={{ whiteSpace: "pre-line" }}>{t.lp_final_sub}</p>
             <div className="l-cta-group">
-              <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg">{t.lp_final_cta}</Link>
+              <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg" onClick={trackLead}>{t.lp_final_cta}</Link>
               <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">{t.lp_cta2}</Link>
             </div>
             <p className="l-cta-note">{t.lp_final_note}</p>

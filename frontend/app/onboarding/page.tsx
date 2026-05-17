@@ -88,6 +88,10 @@ export default function OnboardingPage() {
       setLoading(false);
       return;
     }
+    // Pixel Meta — compte créé avec succès
+    if (typeof window !== "undefined" && (window as any).fbq) {
+      (window as any).fbq("track", "CompleteRegistration");
+    }
     await supabase.auth.refreshSession();
     router.push("/dashboard");
   };
