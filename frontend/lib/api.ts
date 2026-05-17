@@ -40,7 +40,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
         }
         // No tenant at all — redirect to onboarding to complete setup
         if (detail.includes("Aucun tenant associé") && window.location.pathname.startsWith("/dashboard")) {
-          window.location.replace("/onboarding");
+          window.location.replace("/onboarding?no_tenant=1");
           return new Promise(() => {}); // never resolves — page is navigating away
         }
       }

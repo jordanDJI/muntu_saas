@@ -66,6 +66,44 @@ async def refresh_token(body: RefreshIn):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session invalide ou expirée")
 
 
+@router.post("/ensure-profile")
+async def ensure_profile(user: dict = Depends(get_current_user)):
+    """Crée ou met à jour app_user depuis les métadonnées Supabase Auth (utile après Google OAuth)."""
+    import httpx
+    from app.core.config import settings
+
+    user_id = user["sub"]
+    email = user.get("email", "")
+    sb = get_supabase_admin()
+
+    # Récupérer user_metadata depuis l'Admin API (contient les données Google)
+    first_name, last_name = "", ""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{settings.supabase_url}/auth/v1/admin/users/{user_id}",
+                headers={
+                    "apikey": settings.supabase_service_role_key,
+                    "Authorization": f"Bearer {settings.supabase_service_role_key}",
+                },
+            )
+            if resp.status_code == 200:
+                meta = resp.json().get("user_metadata", {})
+                full_name = meta.get("full_name") or meta.get("name") or ""
+                parts = full_name.strip().split(" ", 1)
+                first_name = parts[0] if parts else ""
+                last_name = parts[1] if len(parts) > 1 else ""
+    except Exception:
+        pass
+
+    sb.table("app_user").upsert(
+        {"id": user_id, "email": email, "first_name": first_name, "last_name": last_name},
+        on_conflict="id",
+    ).execute()
+
+    return {"ok": True}
+
+
 @router.get("/me/tenant")
 async def get_my_tenant(tenant_id: str = Depends(get_current_tenant)):
     """Retourne le slug et le nom du tenant courant — utilisé par le dashboard."""

@@ -404,9 +404,13 @@ function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: 
 
 function TrialBanner() {
   const { status, trialDaysLeft, loading } = useSubscription();
+  const pathname = usePathname();
   if (loading) return null;
 
-  if (status === "trial_expired") {
+  // Laisser l'utilisateur accéder à la page d'abonnement même si l'essai est expiré
+  const onBillingPage = pathname === "/dashboard/settings";
+
+  if (status === "trial_expired" && !onBillingPage) {
     return (
       <div style={{
         position: "fixed", inset: 0, zIndex: 200,

@@ -16,7 +16,6 @@ export default function OnboardingPage() {
   const [error, setError] = useState("");
   const [honeypot, setHoneypot] = useState("");
   const [isFromGoogle, setIsFromGoogle] = useState(false);
-  const [googleToken, setGoogleToken] = useState<string | null>(null);
   const [emailPending, setEmailPending] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -39,18 +38,23 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("from") === "google") {
+    const fromGoogle = params.get("from") === "google";
+    const noTenant = params.get("no_tenant") === "1";
+
+    if (fromGoogle || noTenant) {
+      // Passer immédiatement à l'étape 2 — ne pas attendre la session
       setIsFromGoogle(true);
       setStep(2);
+
+      // Récupérer le token et pré-remplir les champs en arrière-plan
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
-          setGoogleToken(session.access_token);
-          const meta = session.user.user_metadata;
+          const meta = session.user.user_metadata || {};
           const fullName = meta.full_name || meta.name || "";
           const parts = fullName.trim().split(" ");
-          set("first_name", meta.given_name || parts[0] || "");
-          set("last_name", meta.family_name || parts.slice(1).join(" ") || "");
-          set("email", session.user.email || "");
+          if (!form.first_name) set("first_name", meta.given_name || parts[0] || "");
+          if (!form.last_name)  set("last_name",  meta.family_name || parts.slice(1).join(" ") || "");
+          if (!form.email)      set("email",       session.user.email || "");
         }
       });
     }
@@ -94,8 +98,15 @@ export default function OnboardingPage() {
     setError("");
     setLoading(true);
 
-    if (isFromGoogle && googleToken) {
-      await submitSetup(googleToken);
+    if (isFromGoogle) {
+      // Re-fetcher la session au moment du submit (plus fiable que le state)
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession) {
+        setError("Session expirée. Veuillez recommencer.");
+        setLoading(false);
+        return;
+      }
+      await submitSetup(currentSession.access_token);
       return;
     }
 

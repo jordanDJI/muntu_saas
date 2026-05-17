@@ -47,21 +47,33 @@ export default function AuthCallbackPage() {
         } catch { /* non bloquant */ }
       }
 
-      // Vérifier si l'utilisateur a déjà un tenant
-      const { data: membership } = await supabase
-        .from("membership")
-        .select("id")
-        .eq("user_id", session.user.id)
-        .limit(1)
-        .maybeSingle();
+      // Vérifier si l'utilisateur a déjà un tenant via le backend (bypasse la RLS)
+      let hasTenant = false;
+      try {
+        const res = await fetch(`${API}/api/v1/auth/me/tenants`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const tenants = await res.json();
+          hasTenant = Array.isArray(tenants) && tenants.length > 0;
+        }
+      } catch { /* fallback : pas de tenant */ }
 
-      if (membership) {
-        // Compte complet — vider le localStorage et aller au dashboard
+      if (hasTenant) {
         localStorage.removeItem("klientys_pending_setup");
         localStorage.removeItem("klientys_tenant_id");
+        // Assure que app_user existe (Google OAuth peut bypasser le formulaire d'onboarding)
+        if (session.user.app_metadata?.provider === "google") {
+          try {
+            await fetch(`${API}/api/v1/auth/ensure-profile`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+          } catch { /* non bloquant */ }
+        }
         router.replace("/dashboard");
       } else {
-        // Pas de tenant → compléter l'onboarding
+        // Pas de tenant — vérifier si un setup email est en attente
         const pending = localStorage.getItem("klientys_pending_setup");
         if (pending) {
           try {
@@ -85,7 +97,7 @@ export default function AuthCallbackPage() {
           localStorage.removeItem("klientys_pending_setup");
           localStorage.removeItem("klientys_tenant_id");
         }
-        // Connexion Google sans compte → compléter l'onboarding
+        // Pas de tenant → compléter l'onboarding (nouveau compte Google ou email sans setup)
         router.replace("/onboarding?from=google");
       }
     };
