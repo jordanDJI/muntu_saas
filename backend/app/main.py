@@ -64,4 +64,10 @@ app.include_router(directory.router, prefix="/api/v1")
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "env": settings.app_env}
+    return {
+        "status": "ok",
+        "env": settings.app_env,
+        "vercel_token_set": bool(settings.vercel_api_token),
+        "vercel_project_set": bool(settings.vercel_project_id),
+        "vercel_token_prefix": settings.vercel_api_token[:8] if settings.vercel_api_token else None,
+    }
