@@ -64,6 +64,8 @@ const fmtDate   = (d: Date)            => d.toLocaleDateString("fr-BE",{day:"num
 const hhmm      = (h: number, m: number) => `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
 const topPx     = (iso: string) => { const d=new Date(iso); return (d.getHours()+d.getMinutes()/60-HOUR_START)*SLOT_H; };
 const heightPx  = (s: string, e: string) => Math.max(((new Date(e).getTime()-new Date(s).getTime())/3600000)*SLOT_H, 24);
+// Sends local time as naive ISO (no UTC shift) — appointment table uses TIMESTAMP (no tz)
+const toLocalISO = (d: Date) => { const p=(n:number)=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:00`; };
 
 // ── ContactSearch ─────────────────────────────────────────────────────────────
 
@@ -223,8 +225,8 @@ function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose
       const base = new Date(day); base.setHours(startH, startM, 0, 0);
       const end  = new Date(base.getTime() + dur * 60000);
       const body: any = {
-        scheduled_at: base.toISOString(),
-        end_at: end.toISOString(),
+        scheduled_at: toLocalISO(base),
+        end_at: toLocalISO(end),
         service_offer_id: serviceId || undefined,
       };
       if (contact) {
@@ -466,10 +468,13 @@ function BlockPanel({ blocked, onSave, onClose }: {
     if (new Date(endAt) <= new Date(startAt)) { setErr("La date de fin doit être après la date de début."); return; }
     setErr(""); setSaving(true);
     try {
+      // datetime-local gives local time; TIMESTAMPTZ needs UTC
+      const startUTC = new Date(startAt).toISOString();
+      const endUTC   = new Date(endAt).toISOString();
       if (editTarget) {
-        await api.updateBlocked(editTarget.id, { start_at: startAt, end_at: endAt, reason: reason || undefined, color });
+        await api.updateBlocked(editTarget.id, { start_at: startUTC, end_at: endUTC, reason: reason || undefined, color });
       } else {
-        await api.createBlocked({ start_at: startAt, end_at: endAt, reason: reason || undefined, color });
+        await api.createBlocked({ start_at: startUTC, end_at: endUTC, reason: reason || undefined, color });
       }
       onSave(); resetForm();
     } catch (e: any) {
@@ -635,7 +640,7 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
       const [h, m]     = editTime.split(":").map(Number);
       const base = new Date(y, mo - 1, d, h, m, 0, 0);
       const end  = new Date(base.getTime() + editDur * 60000);
-      const body: any = { scheduled_at: base.toISOString(), end_at: end.toISOString() };
+      const body: any = { scheduled_at: toLocalISO(base), end_at: toLocalISO(end) };
       if (editService !== (appt.service_offer_id ?? "")) {
         body.service_offer_id = editService || null;
       }
