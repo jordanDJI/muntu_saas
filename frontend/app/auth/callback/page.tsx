@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/api";
 
@@ -8,8 +8,12 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export default function AuthCallbackPage() {
   const router = useRouter();
   const [msg, setMsg] = useState("Connexion en cours…");
+  const ran = useRef(false); // empêche la double-exécution (StrictMode + router dep)
 
   useEffect(() => {
+    if (ran.current) return;
+    ran.current = true;
+
     const handle = async () => {
       // Échange le code PKCE contre une session (email confirmation + Google OAuth)
       const url = new URL(window.location.href);
@@ -47,6 +51,8 @@ export default function AuthCallbackPage() {
         } catch { /* non bloquant */ }
       }
 
+      setMsg("Vérification de votre espace…");
+
       // Vérifier si l'utilisateur a déjà un tenant via le backend (bypasse la RLS)
       let hasTenant = false;
       try {
@@ -72,41 +78,16 @@ export default function AuthCallbackPage() {
           } catch { /* non bloquant */ }
         }
         router.replace("/dashboard");
-      } else {
-        // Pas de tenant — vérifier si un setup email est en attente
-        const pending = localStorage.getItem("klientys_pending_setup");
-        if (pending) {
-          try {
-            const setup = JSON.parse(pending);
-            const res = await fetch(`${API}/api/v1/onboarding/setup`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify(setup),
-            });
-            if (res.ok) {
-              localStorage.removeItem("klientys_pending_setup");
-              localStorage.removeItem("klientys_tenant_id");
-              if (typeof window !== "undefined" && (window as any).fbq) {
-                (window as any).fbq("track", "CompleteRegistration");
-              }
-              await supabase.auth.refreshSession();
-              router.replace("/dashboard");
-              return;
-            }
-          } catch { /* fallback */ }
-          localStorage.removeItem("klientys_pending_setup");
-          localStorage.removeItem("klientys_tenant_id");
-        }
-        // Pas de tenant → compléter l'onboarding (nouveau compte Google ou email sans setup)
-        router.replace("/onboarding?from=google");
+        return;
       }
+
+      // Pas de tenant → step 2 de l'onboarding (informations professionnelles)
+      localStorage.removeItem("klientys_pending_setup");
+      router.replace("/onboarding?no_tenant=1");
     };
 
     handle();
-  }, [router]);
+  }, []); // [] — s'exécute une seule fois, évite la double-exécution au changement de router
 
   return (
     <div className="d-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>

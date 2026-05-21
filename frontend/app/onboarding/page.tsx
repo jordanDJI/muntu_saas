@@ -29,12 +29,16 @@ export default function OnboardingPage() {
   ];
 
   const [form, setForm] = useState({
-    first_name: "", last_name: "", email: "", password: "",
+    first_name: "", last_name: "", email: "", password: "", confirm_password: "",
     tenant_name: "", tenant_slug: "", sector: "other", country: "BE",
   });
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const slugify = (v: string) => v.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -42,11 +46,10 @@ export default function OnboardingPage() {
     const noTenant = params.get("no_tenant") === "1";
 
     if (fromGoogle || noTenant) {
-      // Passer immédiatement à l'étape 2 — ne pas attendre la session
       setIsFromGoogle(true);
       setStep(2);
+      if (noTenant) setEmailConfirmed(true);
 
-      // Récupérer le token et pré-remplir les champs en arrière-plan
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
           const meta = session.user.user_metadata || {};
@@ -55,6 +58,13 @@ export default function OnboardingPage() {
           if (!form.first_name) set("first_name", meta.given_name || parts[0] || "");
           if (!form.last_name)  set("last_name",  meta.family_name || parts.slice(1).join(" ") || "");
           if (!form.email)      set("email",       session.user.email || "");
+          // Pré-remplir les données business depuis user_metadata si disponibles
+          if (meta.pending_tenant_name && !form.tenant_name) {
+            set("tenant_name", meta.pending_tenant_name);
+            set("tenant_slug", meta.pending_tenant_slug || slugify(meta.pending_tenant_name));
+          }
+          if (meta.pending_sector)  set("sector",  meta.pending_sector);
+          if (meta.pending_country) set("country", meta.pending_country);
         }
       });
     }
@@ -102,8 +112,8 @@ export default function OnboardingPage() {
     setError("");
     setLoading(true);
 
+    // Flux post-confirmation email ou Google OAuth : créer le tenant directement
     if (isFromGoogle) {
-      // Re-fetcher la session au moment du submit (plus fiable que le state)
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       if (!currentSession) {
         setError("Session expirée. Veuillez recommencer.");
@@ -114,14 +124,23 @@ export default function OnboardingPage() {
       return;
     }
 
+    // Flux email step 1 : créer le compte, l'utilisateur remplira step 2 après confirmation
+    if (form.password !== form.confirm_password) {
+      setError("Les mots de passe ne correspondent pas.");
+      setLoading(false);
+      return;
+    }
+
     const { error: authError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
         data: {
-          first_name: form.first_name, last_name: form.last_name,
-          full_name: `${form.first_name} ${form.last_name}`.trim(), lang,
+          first_name: form.first_name,
+          last_name: form.last_name,
+          full_name: `${form.first_name} ${form.last_name}`.trim(),
+          lang,
         },
       },
     });
@@ -130,42 +149,21 @@ export default function OnboardingPage() {
       const msg = authError.message.toLowerCase();
       if (msg.includes("rate limit") || msg.includes("too many") || msg.includes("over_email")) {
         setError("Trop d'emails envoyés. Attendez 1 à 2 minutes puis réessayez.");
-        setLoading(false);
-        return;
-      }
-      if (msg.includes("already")) {
-        const { error: loginError } = await supabase.auth.signInWithPassword({
-          email: form.email, password: form.password,
-        });
-        if (loginError) {
-          setError("Email déjà utilisé. Connectez-vous ou utilisez un autre email.");
-          setLoading(false);
-          return;
-        }
+      } else if (msg.includes("already")) {
+        setError("Cet email est déjà utilisé. Connectez-vous ou utilisez un autre email.");
       } else {
         setError(authError.message);
-        setLoading(false);
-        return;
       }
-    }
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      localStorage.setItem("klientys_pending_setup", JSON.stringify({
-        first_name: form.first_name, last_name: form.last_name,
-        tenant_name: form.tenant_name, tenant_slug: form.tenant_slug,
-        sector: form.sector, country: form.country,
-      }));
-      setEmailPending(true);
       setLoading(false);
       return;
     }
 
-    await submitSetup(sessionData.session.access_token);
+    // Email de confirmation envoyé — step 2 se fera après confirmation
+    setEmailPending(true);
+    setLoading(false);
   };
 
-  const totalSteps = isFromGoogle ? 1 : 2;
-  const currentDisplayStep = isFromGoogle ? 1 : step;
+  const totalSteps = 1; // step 2 (business) se fait après confirmation email, pas ici
 
   return (
     <>
@@ -239,11 +237,24 @@ export default function OnboardingPage() {
                 <h2 style={{ fontSize:"22px", fontWeight:800, fontFamily:"var(--font-bricolage),'Bricolage Grotesque',sans-serif", marginBottom:"12px", color:"var(--l-text)" }}>
                   Confirmez votre email
                 </h2>
-                <p style={{ color:"var(--l-text-2)", fontSize:"14px", lineHeight:1.6, marginBottom:"12px" }}>
+                <p style={{ color:"var(--l-text-2)", fontSize:"14px", lineHeight:1.6, marginBottom:"20px" }}>
                   Un email de confirmation a été envoyé à{" "}
                   <strong style={{ color:"var(--l-text)" }}>{form.email}</strong>.
                   Cliquez sur le lien pour activer votre compte.
                 </p>
+                <button
+                  onClick={async () => {
+                    setResending(true);
+                    await supabase.auth.resend({ type: "signup", email: form.email, options: { emailRedirectTo: `${window.location.origin}/auth/callback` } });
+                    setResending(false);
+                    setResent(true);
+                    setTimeout(() => setResent(false), 5000);
+                  }}
+                  disabled={resending || resent}
+                  style={{ fontSize:"13px", color: resent ? "var(--l-teal-xl)" : "var(--l-text-2)", background:"none", border:"1px solid rgba(170,189,216,.2)", borderRadius:"8px", padding:"8px 16px", cursor: resent ? "default" : "pointer", marginBottom:"16px" }}
+                >
+                  {resent ? "✓ Email renvoyé !" : resending ? "Envoi…" : "Renvoyer l'email de confirmation"}
+                </button>
                 <p style={{ color:"var(--l-text-3)", fontSize:"13px", margin:0 }}>
                   Votre espace sera créé automatiquement dès la confirmation.
                 </p>
@@ -256,7 +267,7 @@ export default function OnboardingPage() {
                     <img src="/logo.png" alt="Klientys" style={{ height:"36px", width:"auto" }} />
                     <div>
                       <span style={{ display:"block", fontFamily:"var(--font-bricolage),'Bricolage Grotesque',sans-serif", fontWeight:700, fontSize:"18px", color:"var(--l-text)" }}>Klientys</span>
-                      <span style={{ fontSize:"12px", color:"var(--l-text-3)" }}>{t.ob_step} {currentDisplayStep} {t.ob_of} {totalSteps}</span>
+                      <span style={{ fontSize:"12px", color:"var(--l-text-3)" }}>{isFromGoogle ? "Votre espace professionnel" : "Créer votre compte"}</span>
                     </div>
                   </div>
                   <LangSelector />
@@ -264,18 +275,15 @@ export default function OnboardingPage() {
 
                 {/* Barre de progression */}
                 <div style={{ height:"3px", background:"rgba(170,189,216,.1)", borderRadius:"2px", marginBottom:"28px", overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:isFromGoogle ? "100%" : (step === 1 ? "50%" : "100%"), background:"linear-gradient(90deg,var(--l-teal-xl),var(--l-gold))", borderRadius:"2px", transition:"width .4s" }} />
+                  <div style={{ height:"100%", width:"100%", background:"linear-gradient(90deg,var(--l-teal-xl),var(--l-gold))", borderRadius:"2px" }} />
                 </div>
 
                 <h1 style={{ fontSize:"22px", fontWeight:800, fontFamily:"var(--font-bricolage),'Bricolage Grotesque',sans-serif", marginBottom:"24px", color:"var(--l-text)", letterSpacing:"-.02em" }}>
                   {t.ob_title}
                 </h1>
 
-                <form
-                  onSubmit={step === 1 && !isFromGoogle ? (e) => { e.preventDefault(); setStep(2); } : handleSubmit}
-                  style={{ display:"flex", flexDirection:"column", gap:"14px" }}
-                >
-                  {step === 1 && !isFromGoogle && (
+                <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
+                  {!isFromGoogle && (
                     <>
                       <div style={{ position:"absolute", opacity:0, height:0, overflow:"hidden", pointerEvents:"none" }} aria-hidden="true">
                         <input type="text" name="website" tabIndex={-1} autoComplete="off" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
@@ -308,15 +316,31 @@ export default function OnboardingPage() {
                       </div>
                       <input className="d-input" type="email" placeholder={t.ob_email} value={form.email} onChange={(e) => set("email", e.target.value)} required />
                       <input className="d-input" type="password" placeholder={t.ob_password} value={form.password} onChange={(e) => set("password", e.target.value)} required minLength={8} />
+                      <input className="d-input" type="password" placeholder={t.ob_confirm_password} value={form.confirm_password} onChange={(e) => { set("confirm_password", e.target.value); setError(""); }} required minLength={8} />
 
-                      <button type="submit" className="l-btn l-btn-primary" style={{ width:"100%", justifyContent:"center", marginTop:"4px" }}>
-                        {t.ob_continue}
+                      {error && (
+                        <p style={{ color:"#FC8181", fontSize:"13px", margin:0, background:"rgba(191,51,51,.1)", border:"1px solid rgba(191,51,51,.25)", borderRadius:"8px", padding:"8px 12px" }}>
+                          {error}
+                        </p>
+                      )}
+
+                      <button type="submit" disabled={loading} className="l-btn l-btn-primary" style={{ width:"100%", justifyContent:"center", marginTop:"4px", opacity:loading ? 0.6 : 1 }}>
+                        {loading ? t.ob_creating : t.ob_create}
                       </button>
                     </>
                   )}
 
-                  {(step === 2 || isFromGoogle) && (
+                  {isFromGoogle && (
                     <>
+                      {emailConfirmed && (
+                        <div style={{ display:"flex", alignItems:"center", gap:"10px", padding:"10px 14px", borderRadius:"10px", background:"rgba(13,75,88,.25)", border:"1px solid rgba(13,75,88,.5)", marginBottom:"4px" }}>
+                          <span style={{ fontSize:"18px" }}>✅</span>
+                          <div>
+                            <p style={{ margin:0, fontSize:"13px", fontWeight:600, color:"var(--l-teal-xl)" }}>Email confirmé !</p>
+                            <p style={{ margin:0, fontSize:"12px", color:"var(--l-text-2)" }}>Complétez votre profil pour accéder à votre espace.</p>
+                          </div>
+                        </div>
+                      )}
                       <div>
                         <label className="d-label">{t.ob_biz}</label>
                         <input className="d-input" placeholder="Ex: Muntu Cura" value={form.tenant_name} onChange={(e) => { set("tenant_name", e.target.value); set("tenant_slug", slugify(e.target.value)); }} required />
@@ -325,7 +349,7 @@ export default function OnboardingPage() {
                       <div>
                         <label className="d-label">{t.ob_url}</label>
                         <div className="d-input-prefix">
-                          <span>votre-domaine.com/</span>
+                          <span>klientys.co/</span>
                           <input value={form.tenant_slug} onChange={(e) => set("tenant_slug", slugify(e.target.value))} required />
                         </div>
                       </div>
@@ -338,7 +362,7 @@ export default function OnboardingPage() {
                       </div>
 
                       <div>
-                        <label className="d-label">Pays</label>
+                        <label className="d-label">{t.ob_country}</label>
                         <select className="d-select" value={form.country} onChange={(e) => set("country", e.target.value)}>
                           {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
                         </select>
@@ -364,12 +388,14 @@ export default function OnboardingPage() {
                   )}
                 </form>
 
-                <p style={{ textAlign:"center", fontSize:"13px", color:"var(--l-text-2)", marginTop:"24px", marginBottom:0 }}>
-                  {t.ob_already}{" "}
-                  <Link href="/login" style={{ color:"var(--l-teal-xl)", textDecoration:"none", fontWeight:600 }}>
-                    {t.ob_login}
-                  </Link>
-                </p>
+                {!isFromGoogle && (
+                  <p style={{ textAlign:"center", fontSize:"13px", color:"var(--l-text-2)", marginTop:"24px", marginBottom:0 }}>
+                    {t.ob_already}{" "}
+                    <Link href="/login" style={{ color:"var(--l-teal-xl)", textDecoration:"none", fontWeight:600 }}>
+                      {t.ob_login}
+                    </Link>
+                  </p>
+                )}
 
                 <p style={{ textAlign:"center", fontSize:"12px", color:"var(--l-text-3)", marginTop:"16px", marginBottom:0, display:"flex", alignItems:"center", justifyContent:"center", gap:"8px" }}>
                   <span>✓ Sans carte bancaire</span>

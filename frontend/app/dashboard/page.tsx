@@ -344,7 +344,7 @@ export default function DashboardPage() {
         <nav className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {NAV_ITEMS.map((item) => (
             <Link key={item.href} href={item.href}
-              className={`flex items-center gap-3 p-4 rounded-xl border transition-all active:scale-95 ${
+              className={`relative flex items-center gap-3 p-4 rounded-xl border shadow-lg transition-all active:scale-95 hover:shadow-xl ${
                 item.accent
                   ? "bg-primary-600 border-primary-600 text-white hover:bg-primary-700"
                   : "bg-white border-gray-200 text-gray-700 hover:border-primary-300 hover:bg-primary-50"
@@ -352,12 +352,17 @@ export default function DashboardPage() {
               <span className={item.accent ? "text-white opacity-90" : "text-primary-500"}>
                 {item.icon}
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold leading-tight">{item.label}</p>
                 <p className={`text-xs leading-tight mt-0.5 truncate ${item.accent ? "text-primary-200" : "text-gray-400"}`}>
                   {item.desc}
                 </p>
               </div>
+              <svg
+                className={`absolute bottom-2.5 right-2.5 w-3.5 h-3.5 ${item.accent ? "text-primary-300" : "text-gray-300"}`}
+                fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
             </Link>
           ))}
         </nav>

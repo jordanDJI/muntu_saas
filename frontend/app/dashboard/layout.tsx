@@ -516,14 +516,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Fast path: read session from localStorage immediately, no server roundtrip
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        setReady(true);
         const prefs = session.user.user_metadata?.ui_prefs ?? {};
         setDarkMode(prefs.darkMode ?? false);
         supabase.from("membership")
           .select("tenant:tenant_id(slug)")
           .eq("user_id", session.user.id)
           .single()
-          .then(({ data }) => { if (data?.tenant) setTenantSlug((data.tenant as any).slug ?? ""); });
+          .then(({ data }) => {
+            if (data?.tenant) {
+              setTenantSlug((data.tenant as any).slug ?? "");
+              setReady(true);
+            } else {
+              // Utilisateur connecté mais sans tenant (confirmation email sur autre appareil,
+              // navigation privée, setup interrompu…) → compléter l'onboarding
+              window.location.replace("/onboarding?no_tenant=1");
+            }
+          });
       } else {
         // Vider les cookies locaux avant de rediriger — évite la boucle
         // middleware→dashboard (middleware voit encore le cookie expiré et renvoie sur /dashboard)

@@ -11,7 +11,8 @@ type Appointment = {
   scheduled_at: string;
   end_at: string;
   service_offer_id?: string;
-  contact?: { first_name: string; last_name: string; email: string };
+  notes?: string;
+  contact?: { first_name: string; last_name: string; email: string; phone?: string };
   service_offer?: { name: string };
 };
 
@@ -661,11 +662,18 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
 
         {!editing ? (
           <>
+            {appt.contact?.phone && <p className="text-sm text-gray-400">{appt.contact.phone}</p>}
             {appt.service_offer?.name && <p className="text-sm font-medium text-primary-600">{appt.service_offer.name}</p>}
             <div className="bg-gray-50 rounded-lg p-3 text-sm">
               <p>{new Date(appt.scheduled_at).toLocaleString("fr-BE",{dateStyle:"full",timeStyle:"short"})}</p>
               <p className="text-gray-400 text-xs mt-1">→ {fmtTime(appt.end_at)}</p>
             </div>
+            {appt.notes && (
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-1">Message du client</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{appt.notes}</p>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className={`inline-block text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLOR[appt.status]??"bg-gray-100"}`}>
                 {STATUS_LABELS_APPT[appt.status] ?? appt.status}
@@ -1047,9 +1055,14 @@ export default function AppointmentsPage() {
           <div className="flex flex-wrap gap-2">
             {appointments.filter(a => a.status === "pending").map(a => (
               <div key={a.id} className="flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-xs shadow-sm">
-                <span className="font-medium text-gray-800">
-                  {a.contact?.first_name} {a.contact?.last_name}
-                </span>
+                <button onClick={() => setSelectedAppt(a)} className="flex items-center gap-1.5 hover:underline text-left">
+                  <span className="font-medium text-gray-800">
+                    {a.contact?.first_name} {a.contact?.last_name}
+                  </span>
+                  {a.notes && (
+                    <span className="text-blue-400" title={a.notes}>✉</span>
+                  )}
+                </button>
                 <span className="text-gray-400">
                   {new Date(a.scheduled_at).toLocaleString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                 </span>

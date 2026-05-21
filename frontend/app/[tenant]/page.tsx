@@ -4,6 +4,7 @@ import Image from "next/image";
 import ContactForm from "./contact-form";
 import ChatbotWidget from "../../components/ChatbotWidget";
 import PreviewBanner from "./preview-banner";
+import { AtoutIconSVG } from "../../lib/atout-icons";
 
 // Palettes de couleurs applicables via CSS inline (évite les problèmes de purge Tailwind)
 const COLOR_HEX: Record<string, { hero: string; accent: string; light: string }> = {
@@ -89,7 +90,8 @@ export async function generateMetadata({
   const canonical = activeDomain ? `https://${activeDomain}` : `${APP_URL}/${tenantSlug}`;
 
   const primaryColor = site.site_style?.primary_color ?? "indigo";
-  const ogImageUrl = `${APP_URL}/api/og?title=${encodeURIComponent(titleTag.slice(0, 60))}&zone=${encodeURIComponent(zones[0] ?? "")}&color=${encodeURIComponent(primaryColor)}`;
+  const ogColor = primaryColor === "custom" ? (site.site_style?.custom_color_hex ?? "indigo") : primaryColor;
+  const ogImageUrl = `${APP_URL}/api/og?title=${encodeURIComponent(titleTag.slice(0, 60))}&zone=${encodeURIComponent(zones[0] ?? "")}&color=${encodeURIComponent(ogColor)}`;
 
   return {
     title: titleTag,
@@ -140,7 +142,14 @@ export default async function TenantSitePage({
 
   // Styles dynamiques depuis site_style
   const siteStyle = site.site_style ?? {};
-  const colors = COLOR_HEX[siteStyle.primary_color ?? "indigo"] ?? COLOR_HEX.indigo;
+  const resolvedColors = (() => {
+    if (siteStyle.primary_color === "custom" && siteStyle.custom_color_hex) {
+      const hex = siteStyle.custom_color_hex as string;
+      return { hero: hex, accent: hex, light: hex + "22" };
+    }
+    return COLOR_HEX[siteStyle.primary_color ?? "indigo"] ?? COLOR_HEX.indigo;
+  })();
+  const colors = resolvedColors;
   const font = FONT_FAMILY[siteStyle.font_style ?? "modern"] ?? FONT_FAMILY.modern;
   const tracking = siteStyle.tracking ?? {};
   const photoUrls = siteStyle.photo_urls ?? {};
@@ -362,7 +371,9 @@ export default async function TenantSitePage({
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {values.map((v: any, i: number) => (
                 <div key={i} className="bg-white rounded-xl p-5 shadow-sm space-y-2">
-                  <span className="text-3xl">{v.icon}</span>
+                  <span className="flex items-center justify-start" style={{ color: colors.hero }}>
+                    <AtoutIconSVG icon={v.icon || "star"} className="w-7 h-7" color={colors.hero} />
+                  </span>
                   <h3 className="font-semibold text-gray-900">{v.title}</h3>
                   {v.description && <p className="text-sm text-gray-500 leading-relaxed">{v.description}</p>}
                 </div>

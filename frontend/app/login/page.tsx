@@ -1,18 +1,55 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/api";
+import { useLanguage, LangSelector } from "../../contexts/LanguageContext";
+
+const LOCKOUT_KEY = "klientys_login_lockout";
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 30 * 60 * 1000;
+
+function getLockout(): { attempts: number; until: number } {
+  try {
+    return JSON.parse(localStorage.getItem(LOCKOUT_KEY) || "{}");
+  } catch { return { attempts: 0, until: 0 }; }
+}
+function setLockout(data: { attempts: number; until: number }) {
+  localStorage.setItem(LOCKOUT_KEY, JSON.stringify(data));
+}
 
 export default function LoginPage() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [lockedMins, setLockedMins] = useState(0);
 
+  useEffect(() => {
+    const check = () => {
+      const { until } = getLockout();
+      const remaining = until - Date.now();
+      if (remaining > 0) {
+        setLockedMins(Math.ceil(remaining / 60000));
+      } else {
+        setLockedMins(0);
+      }
+    };
+    check();
+    const iv = setInterval(check, 10000);
+    return () => clearInterval(iv);
+  }, []);
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const lockout = getLockout();
+    if (lockout.until > Date.now()) {
+      const mins = Math.ceil((lockout.until - Date.now()) / 60000);
+      setLockedMins(mins);
+      setError(t.login_locked.replace("{m}", String(mins)));
+      return;
+    }
     setError("");
     setLoading(true);
     const timeout = new Promise<never>((_, reject) =>
@@ -24,8 +61,18 @@ export default function LoginPage() {
         timeout,
       ]) as Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
       if (error) {
-        setError(error.message);
+        const attempts = (lockout.attempts || 0) + 1;
+        if (attempts >= MAX_ATTEMPTS) {
+          const until = Date.now() + LOCKOUT_MS;
+          setLockout({ attempts, until });
+          setLockedMins(30);
+          setError(t.login_locked.replace("{m}", "30"));
+        } else {
+          setLockout({ attempts, until: 0 });
+          setError(error.message);
+        }
       } else {
+        setLockout({ attempts: 0, until: 0 });
         window.location.replace("/dashboard");
       }
     } catch (err: any) {
@@ -232,6 +279,9 @@ export default function LoginPage() {
 
             {/* Header */}
             <div style={{ textAlign: "center", marginBottom: "32px" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+                <LangSelector />
+              </div>
               <Link href="/" style={{ display: "inline-flex", alignItems: "center", gap: "10px", textDecoration: "none", marginBottom: "24px" }}>
                 <img src="/logo.png" alt="Klientys" style={{ height: "36px", width: "auto" }} />
                 <span style={{
@@ -244,10 +294,10 @@ export default function LoginPage() {
                 fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif",
                 marginBottom: "6px", color: "var(--l-text)", letterSpacing: "-.02em",
               }}>
-                Connexion
+                {t.login_title}
               </h1>
               <p style={{ color: "var(--l-text-2)", fontSize: "14px", margin: 0 }}>
-                Accédez à votre tableau de bord
+                {t.login_subtitle}
               </p>
             </div>
 
@@ -273,7 +323,7 @@ export default function LoginPage() {
                 <path fill="#FBBC05" d="M10.53 28.59c-.5-1.45-.78-3-.78-4.59s.27-3.14.78-4.59l-7.98-6.16C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.75l7.97-6.16z"/>
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.97 6.16C12.43 13.72 17.74 9.5 24 9.5z"/>
               </svg>
-              {googleLoading ? "Redirection…" : "Continuer avec Google"}
+              {googleLoading ? "…" : t.login_google}
             </button>
 
             {/* Divider */}
@@ -287,7 +337,7 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <input
                 type="email"
-                placeholder="Email"
+                placeholder={t.login_email}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -309,7 +359,7 @@ export default function LoginPage() {
               />
               <input
                 type="password"
-                placeholder="Mot de passe"
+                placeholder={t.login_password}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -344,14 +394,19 @@ export default function LoginPage() {
                 className="l-btn l-btn-primary"
                 style={{ width: "100%", justifyContent: "center", marginTop: "4px", opacity: loading ? 0.7 : 1 }}
               >
-                {loading ? "Connexion…" : "Se connecter →"}
+                {loading ? t.login_loading : t.login_submit}
               </button>
             </form>
 
+            {lockedMins > 0 && (
+              <p style={{ textAlign: "center", fontSize: "12px", color: "#FC8181", marginTop: "8px", marginBottom: 0 }}>
+                🔒 {t.login_locked.replace("{m}", String(lockedMins))}
+              </p>
+            )}
             <p style={{ textAlign: "center", fontSize: "13px", color: "var(--l-text-2)", marginTop: "24px", marginBottom: 0 }}>
-              Pas encore de compte ?{" "}
+              {t.login_no_account}{" "}
               <Link href="/onboarding" style={{ color: "var(--l-teal-xl)", textDecoration: "none", fontWeight: 600 }}>
-                Créer mon espace →
+                {t.login_signup}
               </Link>
             </p>
           </div>
