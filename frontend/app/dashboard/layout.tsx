@@ -518,19 +518,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (session) {
         const prefs = session.user.user_metadata?.ui_prefs ?? {};
         setDarkMode(prefs.darkMode ?? false);
-        supabase.from("membership")
-          .select("tenant:tenant_id(slug)")
-          .eq("user_id", session.user.id)
-          .single()
-          .then(({ data }) => {
-            if (data?.tenant) {
-              setTenantSlug((data.tenant as any).slug ?? "");
-              setReady(true);
-            } else {
-              // Utilisateur connecté mais sans tenant (confirmation email sur autre appareil,
-              // navigation privée, setup interrompu…) → compléter l'onboarding
-              window.location.replace("/onboarding?no_tenant=1");
-            }
+        api.getMyTenant()
+          .then((tenant) => {
+            setTenantSlug(tenant.slug ?? "");
+            setReady(true);
+          })
+          .catch(() => {
+            // Pas de tenant → setup non terminé (email confirmé sur autre appareil, etc.)
+            window.location.replace("/onboarding?no_tenant=1");
           });
       } else {
         // Vider les cookies locaux avant de rediriger — évite la boucle
