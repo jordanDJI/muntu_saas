@@ -235,21 +235,38 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
 
     # Prise de contact simple → lead
     if body.request_type == "contact":
-        lead = sb.table("lead").insert({
+        lead_row: dict = {
             "tenant_id": tenant["id"],
             "contact_id": contact_id,
             "source": "website",
             "status": "new",
             "request_type": "contact",
             "audience_type": "b2c",
-            "notes": body.message,
-        }).execute().data[0]
+        }
+        if body.message and body.message.strip():
+            lead_row["notes"] = body.message.strip()
+        lead = sb.table("lead").insert(lead_row).execute().data[0]
+        contact_name = f"{body.first_name} {body.last_name}".strip()
+        # Accusé de réception au visiteur
         try:
             from app.services.email import send_lead_acknowledgement
-            contact_name = f"{body.first_name} {body.last_name}".strip()
             send_lead_acknowledgement(body.email, contact_name, tenant.get("name", ""))
         except Exception as exc:
             logger.error("Email client lead ack failed: %s", exc)
+        # Notification au tenant avec le message du visiteur
+        try:
+            from app.services.email import send_lead_notification
+            site_res = sb.table("site").select("email_contact").eq("tenant_id", tenant["id"]).execute()
+            tenant_email = (site_res.data or [{}])[0].get("email_contact") if site_res.data else None
+            if tenant_email:
+                send_lead_notification(
+                    tenant_email,
+                    lead,
+                    {"first_name": body.first_name, "last_name": body.last_name,
+                     "email": body.email, "phone": body.phone},
+                )
+        except Exception as exc:
+            logger.error("Email tenant lead notification failed: %s", exc)
         return {"type": "lead", "id": lead["id"]}
 
     # Prise de rendez-vous
@@ -261,9 +278,7 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
 
     end_at = body.scheduled_at + timedelta(minutes=body.slot_duration_min)
 
-    # Le RDV est créé en attente — la confirmation (et l'email client) sont déclenchés
-    # manuellement par le tenant depuis son dashboard ou via l'Agent 3.
-    appt = sb.table("appointment").insert({
+    appt_row: dict = {
         "calendar_id": cal_id,
         "contact_id": contact_id,
         "service_offer_id": str(body.service_offer_id) if body.service_offer_id else None,
@@ -272,10 +287,15 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
         "status": "pending",
         "type": "b2c_appointment",
         "audience_type": "b2c",
-    }).execute().data[0]
+    }
+    if body.message and body.message.strip():
+        appt_row["notes"] = body.message.strip()
 
-    # Notifier le tenant via Telegram/WhatsApp + email
-    _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name, body.scheduled_at.isoformat())
+    appt = sb.table("appointment").insert(appt_row).execute().data[0]
+
+    # Notifier le tenant via Telegram/WhatsApp + email (avec le message du visiteur)
+    _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name,
+                           body.scheduled_at.isoformat(), message=body.message)
     _email_tenant_pending(sb, tenant, {"first_name": body.first_name, "last_name": body.last_name,
                                         "email": body.email, "phone": body.phone}, appt,
                           message=body.message)
@@ -328,7 +348,8 @@ def _email_client_booking_received(tenant: dict, first_name: str, last_name: str
         logger.error("Email client booking received failed: %s", exc)
 
 
-def _notify_tenant_pending(sb, tenant_id: str, first_name: str, last_name: str, scheduled_at: str) -> None:
+def _notify_tenant_pending(sb, tenant_id: str, first_name: str, last_name: str,
+                            scheduled_at: str, message: str | None = None) -> None:
     """Notifie le tenant via Telegram/WhatsApp qu'un nouveau RDV est en attente de confirmation."""
     cfg_res = (
         sb.table("agent_config")
@@ -352,8 +373,10 @@ def _notify_tenant_pending(sb, tenant_id: str, first_name: str, last_name: str, 
     msg = (
         f"Nouveau RDV en attente de confirmation :\n"
         f"{contact_name} — {date_str}\n"
-        f"Répondez 'confirme {first_name}' ou 'annule {first_name}' pour traiter ce RDV."
     )
+    if message and message.strip():
+        msg += f"Message : {message.strip()}\n"
+    msg += f"Répondez 'confirme {first_name}' ou 'annule {first_name}' pour traiter ce RDV."
 
     if cfg.get("whatsapp_number"):
         from app.services.whatsapp import send_text
