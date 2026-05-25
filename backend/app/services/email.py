@@ -33,6 +33,7 @@ def send_appointment_pending_tenant(
     contact: dict,
     appointment: dict,
     dashboard_url: str,
+    message: str | None = None,
 ) -> None:
     """Email au professionnel : nouveau RDV en attente de validation."""
     from datetime import datetime
@@ -43,6 +44,15 @@ def send_appointment_pending_tenant(
         date_str = appointment.get("scheduled_at", "—")
 
     contact_name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip()
+
+    message_block = ""
+    if message and message.strip():
+        message_block = f"""
+        <div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border-left:4px solid #4f46e5;border-radius:4px">
+          <p style="margin:0 0 4px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Message du client</p>
+          <p style="margin:0;color:#1e293b;white-space:pre-wrap">{message.strip()}</p>
+        </div>"""
+
     resend.Emails.send({
         "from": f"{settings.email_from_name} <{settings.email_from}>",
         "to": [tenant_email],
@@ -57,6 +67,7 @@ def send_appointment_pending_tenant(
           <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Téléphone</td><td>{contact.get('phone', '—')}</td></tr>
           <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Date</td><td><strong>{date_str}</strong></td></tr>
         </table>
+        {message_block}
         <p>Connectez-vous à votre espace <strong>{tenant_name}</strong> pour confirmer ou refuser ce rendez-vous.</p>
         <br>
         <a href="{dashboard_url}" style="{_BTN}">Gérer ce rendez-vous →</a>

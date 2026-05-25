@@ -256,7 +256,8 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
     if not body.scheduled_at:
         raise HTTPException(status_code=400, detail="scheduled_at requis pour un rendez-vous")
 
-    ensure_lead(sb, tenant["id"], contact_id, "website", status="scheduled", request_type="b2c_appointment")
+    ensure_lead(sb, tenant["id"], contact_id, "website", status="scheduled",
+                request_type="b2c_appointment", notes=body.message or None)
 
     end_at = body.scheduled_at + timedelta(minutes=body.slot_duration_min)
 
@@ -276,7 +277,8 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
     # Notifier le tenant via Telegram/WhatsApp + email
     _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name, body.scheduled_at.isoformat())
     _email_tenant_pending(sb, tenant, {"first_name": body.first_name, "last_name": body.last_name,
-                                        "email": body.email, "phone": body.phone}, appt)
+                                        "email": body.email, "phone": body.phone}, appt,
+                          message=body.message)
 
     # Accusé de réception au client
     _email_client_booking_received(tenant, body.first_name, body.last_name, body.email, appt)
@@ -284,7 +286,7 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
     return {"type": "appointment", "id": appt["id"]}
 
 
-def _email_tenant_pending(sb, tenant: dict, contact: dict, appointment: dict) -> None:
+def _email_tenant_pending(sb, tenant: dict, contact: dict, appointment: dict, message: str | None = None) -> None:
     """Envoie un email au professionnel pour lui signaler le nouveau RDV en attente."""
     try:
         site_res = (
@@ -305,6 +307,7 @@ def _email_tenant_pending(sb, tenant: dict, contact: dict, appointment: dict) ->
             contact=contact,
             appointment=appointment,
             dashboard_url=dashboard_url,
+            message=message,
         )
     except Exception as exc:
         logger.error("Email tenant pending failed: %s", exc)
