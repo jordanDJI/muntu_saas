@@ -368,6 +368,7 @@ export default function SiteBuilderPage() {
     photo_urls: photoUrls,
     tracking: { ga4_id: ga4Id, meta_pixel_id: metaPixelId, gtm_id: gtmId },
     ...(customCss ? { custom_css: customCss } : {}),
+    address_parts: { street: addressStreet, postal_code: addressPostal, city: addressCity, country: addressCountry },
   });
 
   // ── Sauvegarde par étape ────────────────────────────────────────────────────
@@ -386,12 +387,11 @@ export default function SiteBuilderPage() {
           await api.updateSite(siteId, { title, tagline, description });
           break;
         case 3: {
-          const addrParts = { street: addressStreet, postal_code: addressPostal, city: addressCity, country: addressCountry };
           const fullAddress = [addressStreet, addressPostal, addressCity].filter(Boolean).join(", ");
           await api.updateSite(siteId, {
             phone, email_contact: emailContact, address: fullAddress,
             social_links: { facebook, instagram, linkedin, ...(phone2 ? { phone2 } : {}) },
-            site_style: { ...buildSiteStyle(), address_parts: addrParts },
+            site_style: buildSiteStyle(),
           });
           break;
         }

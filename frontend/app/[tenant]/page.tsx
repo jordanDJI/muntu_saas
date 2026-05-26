@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import Image from "next/image";
 import ContactForm from "./contact-form";
+import SiteFooter from "./site-footer";
 import ChatbotWidget from "../../components/ChatbotWidget";
 import PreviewBanner from "./preview-banner";
+import NavBar from "./navbar";
 import { AtoutIconSVG } from "../../lib/atout-icons";
 
 // Palettes de couleurs applicables via CSS inline (évite les problèmes de purge Tailwind)
@@ -155,8 +157,8 @@ export default async function TenantSitePage({
   const photoUrls = siteStyle.photo_urls ?? {};
   const customCss: string = siteStyle.custom_css ?? "";
   const pagesEnabled: string[] = siteStyle.pages_enabled ?? ["home", "about", "services", "contact"];
-  const showAbout = pagesEnabled.includes("about");
-  const showServices = pagesEnabled.includes("services");
+  const showAbout = pagesEnabled.includes("about") && (isPreview || !!site.description);
+  const showServices = pagesEnabled.includes("services") && (isPreview || (site.service_offer?.length > 0));
 
   return (
     <main className="min-h-screen bg-white text-gray-900" style={{ fontFamily: font }}>
@@ -192,6 +194,13 @@ export default async function TenantSitePage({
         `}</Script>
       )}
 
+      {/* ── Fonts + scroll anchors ────────────────────────────────────────── */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,400&display=swap');
+        .tc-s { font-family: 'Cormorant Garamond', Georgia, serif; letter-spacing: -0.01em; }
+        section[id], div[id] { scroll-margin-top: 80px; }
+      ` }} />
+
       {/* ── CSS personnalisé premium ───────────────────────────────────────── */}
       {customCss && <style dangerouslySetInnerHTML={{ __html: customCss }} />}
 
@@ -203,23 +212,17 @@ export default async function TenantSitePage({
       )}
 
       {/* Nav */}
-      <nav className="sticky z-40 bg-white/90 backdrop-blur border-b border-gray-100" style={{ top: isPreview ? "40px" : "0" }}>
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <span className="font-bold text-lg" style={{ color: colors.hero }}>{site.title}</span>
-          <div className="hidden sm:flex items-center gap-6 text-sm font-medium text-gray-600">
-            {showServices && site.service_offer?.length > 0 && <a href="#prestations" className="hover:opacity-80 transition-opacity" style={{ color: colors.accent }}>Prestations</a>}
-            {showAbout && site.description && <a href="#a-propos" className="hover:opacity-80 transition-opacity" style={{ color: colors.accent }}>À propos</a>}
-            <a href="#contact" className="hover:opacity-80 transition-opacity" style={{ color: colors.accent }}>Contact</a>
-          </div>
-          <a
-            href="#contact"
-            className="text-white text-sm font-semibold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: colors.accent }}
-          >
-            Nous contacter
-          </a>
-        </div>
-      </nav>
+      <NavBar
+        logoOption={siteStyle.logo_option ?? "text_only"}
+        logoUrl={siteStyle.logo_url ?? ""}
+        title={site.title}
+        colors={colors}
+        showServices={showServices}
+        hasServices={(site.service_offer?.length ?? 0) > 0}
+        showAbout={showAbout}
+        hasDescription={!!site.description}
+        isPreview={isPreview}
+      />
 
       {/* ── Behaviour tracker ────────────────────────────────────────────── */}
       <Script id="pp-tracker" strategy="afterInteractive">{`
@@ -255,90 +258,215 @@ export default async function TenantSitePage({
         })();
       `}</Script>
 
-      {/* Hero */}
+      {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section
         id="hero"
-        className="text-white py-24 px-6 text-center relative overflow-hidden"
-        style={!photoUrls.hero ? { backgroundColor: colors.hero } : {}}
+        className="relative min-h-[88vh] flex flex-col justify-center items-center text-center px-6 overflow-hidden"
       >
-        {photoUrls.hero && (
+        {/* Background */}
+        {photoUrls.hero ? (
           <>
             <Image src={photoUrls.hero} alt="" fill className="object-cover object-center" priority sizes="100vw" />
-            <div className="absolute inset-0" style={{ backgroundColor: `${colors.hero}cc` }} />
+            <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${colors.hero}e6 0%, ${colors.accent}bb 100%)` }} />
           </>
+        ) : (
+          <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${colors.hero} 0%, ${colors.accent} 100%)` }} />
         )}
-        <div className="relative z-10">
-          <h1 className="text-4xl sm:text-5xl font-extrabold">{site.title}</h1>
-          {site.tagline && (
-            <p className="mt-4 text-xl max-w-2xl mx-auto" style={{ color: "rgba(255,255,255,0.8)" }}>{site.tagline}</p>
-          )}
+        {/* Decorative orbs */}
+        <div className="absolute top-16 right-8 w-80 h-80 rounded-full blur-3xl opacity-20 pointer-events-none" style={{ backgroundColor: "white" }} />
+        <div className="absolute bottom-10 left-4 w-60 h-60 rounded-full blur-3xl opacity-10 pointer-events-none" style={{ backgroundColor: "white" }} />
+
+        <div className="relative z-10 max-w-3xl mx-auto">
+          {/* Location badge */}
           {zones.length > 0 && (
-            <p className="mt-3 text-sm" style={{ color: "rgba(255,255,255,0.6)" }}>
-              {zones.join(" · ")}
+            <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm text-white/90 text-xs font-medium px-4 py-1.5 rounded-full mb-6 border border-white/20">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+              {zones.slice(0, 3).join(" · ")}
+            </div>
+          )}
+
+          <h1 className="tc-s text-5xl sm:text-7xl font-bold text-white leading-tight">
+            {site.title}
+          </h1>
+
+          {site.tagline && (
+            <p className="tc-s mt-5 text-xl sm:text-2xl max-w-2xl mx-auto leading-relaxed italic font-normal" style={{ color: "rgba(255,255,255,0.82)" }}>
+              {site.tagline}
             </p>
           )}
-          <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <a href="#contact" className="bg-white font-semibold px-8 py-3 rounded-xl hover:opacity-90 transition-opacity" style={{ color: colors.hero }}>
-              Prendre rendez-vous
+
+          <div className="mt-8 flex flex-wrap gap-3 justify-center">
+            <a
+              href="#rdv"
+              className="bg-white font-semibold px-7 py-3.5 rounded-2xl hover:scale-105 transition-transform shadow-lg text-base"
+              style={{ color: colors.hero }}
+            >
+              Prendre rendez-vous →
             </a>
-            <a href="#prestations" className="border border-white/50 text-white font-semibold px-8 py-3 rounded-xl hover:bg-white/10 transition-colors">
-              Nos prestations
-            </a>
+            {showServices && (
+              <a
+                href="#prestations"
+                className="border-2 border-white/40 text-white font-semibold px-7 py-3.5 rounded-2xl hover:bg-white/10 transition-colors backdrop-blur-sm text-base"
+              >
+                Nos prestations
+              </a>
+            )}
           </div>
+
+          {/* Trust signal */}
+          {testimonials.length > 0 && (
+            <div className="mt-8 flex items-center justify-center gap-2" style={{ color: "rgba(255,255,255,0.65)" }}>
+              <div className="flex">
+                {[1,2,3,4,5].map((i) => <span key={i} className="text-yellow-300 text-sm">★</span>)}
+              </div>
+              <span className="text-sm">{testimonials.length} avis client{testimonials.length > 1 ? "s" : ""}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Scroll arrow */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 opacity-50">
+          <div className="w-px h-8 bg-white/60" />
+          <svg width="12" height="8" viewBox="0 0 12 8" fill="none"><path d="M1 1l5 5 5-5" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>
         </div>
       </section>
 
-      {/* À propos */}
-      {showAbout && site.description && (
-        <section id="a-propos" className="py-16 px-6">
-          <div className={`max-w-3xl mx-auto text-center${photoUrls.about ? " sm:grid sm:grid-cols-2 sm:gap-10 sm:text-left sm:max-w-5xl sm:items-center" : ""}`}>
+      {/* ── À PROPOS ─────────────────────────────────────────────────────── */}
+      {showAbout && (
+        <section id="a-propos" className="py-20 px-6 bg-white" data-reveal>
+          <div className={`max-w-5xl mx-auto${photoUrls.about ? " grid sm:grid-cols-2 gap-12 items-center" : " max-w-3xl"}`}>
             {photoUrls.about && (
-              <Image src={photoUrls.about} alt={`${site.title} — présentation`} width={600} height={256} className="w-full h-64 object-cover rounded-2xl shadow-md mb-6 sm:mb-0" />
+              <div className="relative">
+                <Image
+                  src={photoUrls.about}
+                  alt={`${site.title} — présentation`}
+                  width={600}
+                  height={420}
+                  className="w-full h-72 sm:h-96 object-cover rounded-3xl shadow-xl"
+                />
+                <div className="absolute -bottom-4 -right-4 w-24 h-24 rounded-2xl opacity-30 -z-10" style={{ backgroundColor: colors.accent }} />
+              </div>
             )}
-            <div>
-              <h2 className="text-2xl font-bold mb-6">À propos</h2>
-              <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{site.description}</p>
+            <div className={photoUrls.about ? "" : "text-center"}>
+              <span className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ backgroundColor: colors.light, color: colors.hero }}>
+                À propos
+              </span>
+              <h2 className="tc-s text-3xl sm:text-5xl font-bold text-gray-900 mb-5 leading-snug">
+                Qui sommes-nous ?
+              </h2>
+              {site.description ? (
+                <p className="text-gray-500 leading-relaxed text-base whitespace-pre-wrap">{site.description}</p>
+              ) : isPreview ? (
+                <p className="text-gray-400 italic text-sm">Description non configurée — complétez l'étape 2 du site-builder.</p>
+              ) : null}
+              {(site.phone || site.email_contact) && (
+                <a
+                  href="#contact"
+                  className="inline-flex items-center gap-2 mt-7 font-semibold text-sm px-5 py-2.5 rounded-xl transition-opacity hover:opacity-80"
+                  style={{ backgroundColor: colors.light, color: colors.hero }}
+                >
+                  Nous contacter
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </a>
+              )}
             </div>
           </div>
         </section>
       )}
 
-      {/* Prestations */}
-      {showServices && site.service_offer?.length > 0 && (
-        <section id="prestations" className="py-16 px-6 relative overflow-hidden" style={!photoUrls.services ? { backgroundColor: "#f9fafb" } : {}}>
+      {/* ── PRESTATIONS ──────────────────────────────────────────────────── */}
+      {showServices && (
+        <section id="prestations" className="py-20 px-6 relative overflow-hidden" data-reveal style={{ backgroundColor: "#f8fafc" }}>
           {photoUrls.services && (
             <>
               <Image src={photoUrls.services} alt="" fill className="object-cover object-center" sizes="100vw" />
-              <div className="absolute inset-0 bg-white/80" />
+              <div className="absolute inset-0 bg-white/85 backdrop-blur-sm" />
             </>
           )}
           <div className="relative z-10 max-w-5xl mx-auto">
-            <h2 className="text-2xl font-bold mb-8 text-center">Nos prestations</h2>
+            <div className="text-center mb-12">
+              <span className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ backgroundColor: colors.light, color: colors.hero }}>
+                Prestations
+              </span>
+              <h2 className="tc-s text-3xl sm:text-5xl font-bold text-gray-900">Nos services</h2>
+            </div>
+            {site.service_offer?.length > 0 ? (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {site.service_offer.map((offer: any) => (
+                  <div
+                    key={offer.id}
+                    className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all hover:-translate-y-1 border border-gray-100/80"
+                  >
+                    {offer.image_url ? (
+                      <Image src={offer.image_url} alt={offer.name} width={400} height={160} className="w-full h-40 object-cover" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" />
+                    ) : (
+                      <div className="h-2 w-full" style={{ backgroundColor: colors.accent }} />
+                    )}
+                    <div className="p-5">
+                      <h3 className="font-semibold text-gray-900 text-lg leading-snug">{offer.name}</h3>
+                      {offer.description && (
+                        <p className="text-gray-500 mt-2 text-sm leading-relaxed">{offer.description}</p>
+                      )}
+                      {((offer.duration_min ?? offer.duration_minutes) || (offer.price_eur ?? offer.price_from)) && (
+                        <div className="flex gap-2 mt-4 flex-wrap">
+                          {(offer.duration_min ?? offer.duration_minutes) && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white" style={{ backgroundColor: colors.accent }}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                              {offer.duration_min ?? offer.duration_minutes} min
+                            </span>
+                          )}
+                          {(offer.price_eur ?? offer.price_from) && (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: colors.light, color: colors.hero }}>
+                              {offer.price_eur ?? offer.price_from} €
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : isPreview ? (
+              <p className="text-center text-gray-400 italic text-sm">Prestations non configurées — complétez l'étape 5 du site-builder.</p>
+            ) : null}
+          </div>
+        </section>
+      )}
+
+      {/* ── ZONES ────────────────────────────────────────────────────────── */}
+      {zones.length > 0 && (
+        <div className="py-8 px-6 border-y border-gray-100 bg-white">
+          <div className="max-w-3xl mx-auto flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+            <span className="text-xs font-semibold uppercase tracking-widest text-gray-400 mr-2">Zones d'intervention</span>
+            {zones.map((z: string) => (
+              <span key={z} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: colors.light, color: colors.hero }}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+                {z}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── ATOUTS ───────────────────────────────────────────────────────── */}
+      {values.length > 0 && (
+        <section className="py-20 px-6" data-reveal style={{ backgroundColor: colors.light }}>
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-12">
+              <span className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4 bg-white/60" style={{ color: colors.hero }}>
+                Nos atouts
+              </span>
+              <h2 className="tc-s text-3xl sm:text-5xl font-bold" style={{ color: colors.hero }}>Pourquoi nous choisir ?</h2>
+            </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {site.service_offer.map((offer: any) => (
-                <div key={offer.id} className="bg-white border rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                  {offer.image_url && (
-                    <Image src={offer.image_url} alt={offer.name} width={400} height={144} className="w-full h-36 object-cover" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" />
-                  )}
-                  <div className="p-5">
-                    <h3 className="font-semibold text-lg">{offer.name}</h3>
-                    {offer.description && (
-                      <p className="text-gray-500 mt-2 text-sm leading-relaxed">{offer.description}</p>
-                    )}
-                    {((offer.duration_min ?? offer.duration_minutes) || (offer.price_eur ?? offer.price_from)) && (
-                      <div className="flex gap-3 mt-4 text-sm flex-wrap">
-                        {(offer.duration_min ?? offer.duration_minutes) && (
-                          <span className="px-3 py-1 rounded-full text-white" style={{ backgroundColor: colors.accent }}>
-                            {offer.duration_min ?? offer.duration_minutes} min
-                          </span>
-                        )}
-                        {(offer.price_eur ?? offer.price_from) && (
-                          <span className="px-3 py-1 rounded-full font-medium" style={{ backgroundColor: colors.light, color: colors.hero }}>
-                            {offer.price_eur ?? offer.price_from} €
-                          </span>
-                        )}
-                      </div>
-                    )}
+              {values.map((v: any, i: number) => (
+                <div key={i} className="bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow flex gap-4">
+                  <div className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center" style={{ backgroundColor: colors.light }}>
+                    <AtoutIconSVG icon={v.icon || "star"} className="w-5 h-5" color={colors.hero} />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-1">{v.title}</h3>
+                    {v.description && <p className="text-sm text-gray-500 leading-relaxed">{v.description}</p>}
                   </div>
                 </div>
               ))}
@@ -347,59 +475,37 @@ export default async function TenantSitePage({
         </section>
       )}
 
-      {/* Zones d'intervention */}
-      {zones.length > 0 && (
-        <section className="py-12 px-6">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-xl font-bold mb-4 text-gray-700">Zones d'intervention</h2>
-            <div className="flex flex-wrap justify-center gap-2">
-              {zones.map((z: string) => (
-                <span key={z} className="px-4 py-1.5 rounded-full text-sm font-medium" style={{ backgroundColor: colors.light, color: colors.hero }}>
-                  {z}
-                </span>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Nos atouts */}
-      {values.length > 0 && (
-        <section className="py-16 px-6" style={{ backgroundColor: colors.light }}>
-          <div className="max-w-5xl mx-auto">
-            <h2 className="text-2xl font-bold mb-10 text-center">Pourquoi nous choisir ?</h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {values.map((v: any, i: number) => (
-                <div key={i} className="bg-white rounded-xl p-5 shadow-sm space-y-2">
-                  <span className="flex items-center justify-start" style={{ color: colors.hero }}>
-                    <AtoutIconSVG icon={v.icon || "star"} className="w-7 h-7" color={colors.hero} />
-                  </span>
-                  <h3 className="font-semibold text-gray-900">{v.title}</h3>
-                  {v.description && <p className="text-sm text-gray-500 leading-relaxed">{v.description}</p>}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Témoignages */}
+      {/* ── TÉMOIGNAGES ──────────────────────────────────────────────────── */}
       {testimonials.length > 0 && (
-        <section className="py-16 px-6">
-          <div className="max-w-4xl mx-auto">
-            <h2 className="text-2xl font-bold mb-8 text-center">Ce que disent nos clients</h2>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <section className="py-20 px-6 bg-white" data-reveal>
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-12">
+              <span className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ backgroundColor: colors.light, color: colors.hero }}>
+                Témoignages
+              </span>
+              <h2 className="tc-s text-3xl sm:text-5xl font-bold text-gray-900">Ce que disent nos clients</h2>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {testimonials.map((t: any) => (
-                <div key={t.id} className="bg-white border rounded-xl p-5 shadow-sm space-y-3">
-                  <div className="flex">
+                <div key={t.id} className="rounded-2xl p-6 border border-gray-100 hover:border-transparent hover:shadow-lg transition-all" style={{ backgroundColor: "#fafafa" }}>
+                  <div className="text-4xl leading-none mb-3 font-serif" style={{ color: colors.accent }}>"</div>
+                  <div className="flex mb-3">
                     {Array.from({ length: t.rating ?? 5 }).map((_, i) => (
                       <span key={i} className="text-yellow-400 text-sm">★</span>
                     ))}
+                    {Array.from({ length: 5 - (t.rating ?? 5) }).map((_, i) => (
+                      <span key={i} className="text-gray-200 text-sm">★</span>
+                    ))}
                   </div>
-                  <p className="text-sm text-gray-600 leading-relaxed italic">"{t.content}"</p>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-800">{t.author_name}</p>
-                    {t.author_role && <p className="text-xs text-gray-400">{t.author_role}</p>}
+                  <p className="text-gray-600 text-sm leading-relaxed mb-4">{t.content}</p>
+                  <div className="flex items-center gap-3 pt-3 border-t border-gray-100">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: colors.accent }}>
+                      {t.author_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">{t.author_name}</p>
+                      {t.author_role && <p className="text-xs text-gray-400">{t.author_role}</p>}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -408,71 +514,117 @@ export default async function TenantSitePage({
         </section>
       )}
 
-      {/* Contact */}
-      <section id="contact" className="bg-gray-50 py-16 px-6">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl font-bold mb-8 text-center">Prendre contact</h2>
-          <div className={`grid gap-10 ${photoUrls.contact ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+      {/* ── CONTACT ──────────────────────────────────────────────────────── */}
+      <section id="contact" className="py-20 px-6 relative overflow-hidden" data-reveal>
+        <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${colors.hero}08 0%, ${colors.accent}10 100%)` }} />
+        <div className="relative z-10 max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <span className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ backgroundColor: colors.light, color: colors.hero }}>
+              Contact
+            </span>
+            <h2 className="tc-s text-3xl sm:text-5xl font-bold text-gray-900">Prenons contact</h2>
+            <p className="mt-3 text-gray-500">Nous vous répondons dans les plus brefs délais.</p>
+          </div>
+
+          <div className={`grid gap-10 ${photoUrls.contact ? "sm:grid-cols-[auto_1fr_1fr]" : "sm:grid-cols-2"} items-start`}>
             {photoUrls.contact && (
-              <Image src={photoUrls.contact} alt={`Contacter ${site.title}`} width={400} height={192} className="w-full h-48 sm:h-full object-cover rounded-2xl shadow-md" />
+              <Image src={photoUrls.contact} alt={`Contacter ${site.title}`} width={320} height={280} className="w-full h-56 sm:h-auto object-cover rounded-3xl shadow-lg" />
             )}
+
+            {/* Infos */}
             <div className="space-y-4">
+              <h3 className="font-semibold text-gray-800 text-lg mb-5">Nos coordonnées</h3>
               {site.phone && (
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">📞</span>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Téléphone</p>
-                    <a href={`tel:${site.phone}`} data-track="phone" className="hover:underline text-sm" style={{ color: colors.accent }}>{site.phone}</a>
+                <a href={`tel:${site.phone}`} data-track="phone" className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow group border border-gray-100">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: colors.light }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: colors.hero }}><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.5 3.18 2 2 0 012.18 1h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.91 8.09a16 16 0 006 6l.56-.56a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
                   </div>
-                </div>
+                  <div>
+                    <p className="text-xs text-gray-400 font-medium">Téléphone</p>
+                    <p className="text-sm font-semibold group-hover:underline" style={{ color: colors.accent }}>{site.phone}</p>
+                  </div>
+                </a>
               )}
               {site.email_contact && (
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">✉️</span>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Email</p>
-                    <a href={`mailto:${site.email_contact}`} data-track="email" className="hover:underline text-sm" style={{ color: colors.accent }}>{site.email_contact}</a>
+                <a href={`mailto:${site.email_contact}`} data-track="email" className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow group border border-gray-100">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: colors.light }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: colors.hero }}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                   </div>
-                </div>
+                  <div>
+                    <p className="text-xs text-gray-400 font-medium">Email</p>
+                    <p className="text-sm font-semibold group-hover:underline truncate max-w-[180px]" style={{ color: colors.accent }}>{site.email_contact}</p>
+                  </div>
+                </a>
               )}
               {site.address && (
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">📍</span>
+                <div className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: colors.light }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ color: colors.hero }}><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                  </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-700">Adresse</p>
-                    <p className="text-sm text-gray-500">{site.address}</p>
+                    <p className="text-xs text-gray-400 font-medium">Adresse</p>
+                    <p className="text-sm text-gray-600">{site.address}</p>
                   </div>
                 </div>
               )}
               {(social.facebook || social.instagram || social.linkedin) && (
-                <div className="flex gap-3 pt-2">
-                  {social.facebook && <a href={social.facebook} data-track="social_facebook" target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline" style={{ color: colors.accent }}>Facebook</a>}
-                  {social.instagram && <a href={social.instagram} data-track="social_instagram" target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline" style={{ color: colors.accent }}>Instagram</a>}
-                  {social.linkedin && <a href={social.linkedin} data-track="social_linkedin" target="_blank" rel="noreferrer" className="text-sm font-medium hover:underline" style={{ color: colors.accent }}>LinkedIn</a>}
+                <div className="flex gap-2 pt-1">
+                  {social.facebook && (
+                    <a href={social.facebook} data-track="social_facebook" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold hover:scale-110 transition-transform" style={{ backgroundColor: colors.accent }}>f</a>
+                  )}
+                  {social.instagram && (
+                    <a href={social.instagram} data-track="social_instagram" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold hover:scale-110 transition-transform" style={{ backgroundColor: colors.accent }}>ig</a>
+                  )}
+                  {social.linkedin && (
+                    <a href={social.linkedin} data-track="social_linkedin" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold hover:scale-110 transition-transform" style={{ backgroundColor: colors.accent }}>in</a>
+                  )}
                 </div>
               )}
             </div>
-            <ContactForm
-              tenantSlug={tenantSlug}
-              accentColor={colors.accent}
-              offers={(site.service_offer ?? []).map((o: any) => ({ id: o.id, name: o.name }))}
-            />
+
+            {/* Formulaire */}
+            <div id="rdv">
+              <ContactForm
+                tenantSlug={tenantSlug}
+                accentColor={colors.accent}
+                offers={(site.service_offer ?? []).map((o: any) => ({ id: o.id, name: o.name }))}
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="text-gray-400 py-8 px-6 text-center text-sm" style={{ backgroundColor: colors.hero }}>
-        <p className="font-semibold text-white mb-1">{site.title}</p>
-        {site.tagline && <p className="mb-3" style={{ color: "rgba(255,255,255,0.6)" }}>{site.tagline}</p>}
-        <p style={{ color: "rgba(255,255,255,0.4)" }}>© {new Date().getFullYear()} {site.title}. Tous droits réservés.</p>
-        <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "11px", marginTop: "8px" }}>
-          Créé avec{" "}
-          <a href="https://klientys.co" target="_blank" rel="noopener noreferrer" style={{ color: "rgba(255,255,255,0.35)", textDecoration: "underline" }}>
-            Klientys
-          </a>
-        </p>
-      </footer>
+      {/* ── FOOTER ───────────────────────────────────────────────────────── */}
+      <SiteFooter
+        site={site}
+        colors={colors}
+        showAbout={showAbout}
+        showServices={showServices}
+        tracking={tracking}
+      />
+
+      {/* Scroll-reveal animation */}
+      <Script id="reveal" strategy="afterInteractive">{`
+        (function(){
+          var els=document.querySelectorAll('[data-reveal]');
+          if(!els.length||!window.IntersectionObserver)return;
+          els.forEach(function(el){
+            el.style.opacity='0';
+            el.style.transform='translateY(28px)';
+            el.style.transition='opacity 0.6s ease, transform 0.6s ease';
+          });
+          var obs=new IntersectionObserver(function(entries){
+            entries.forEach(function(e){
+              if(e.isIntersecting){
+                e.target.style.opacity='1';
+                e.target.style.transform='none';
+                obs.unobserve(e.target);
+              }
+            });
+          },{threshold:0.1});
+          els.forEach(function(el){obs.observe(el);});
+        })();
+      `}</Script>
 
       <ChatbotWidget tenantSlug={tenantSlug} />
 

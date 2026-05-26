@@ -266,6 +266,12 @@ export default function ContactForm({
 
   const [mode, setMode] = useState<Mode>("contact");
   const [step, setStep] = useState<"date" | "slot" | "form">("date");
+
+  useEffect(() => {
+    if (window.location.hash === "#rdv") {
+      setMode("appointment");
+    }
+  }, []);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
