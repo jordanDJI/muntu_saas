@@ -72,9 +72,7 @@ export async function generateMetadata({
   if (!site) return { title: "Site introuvable — Klientys" };
 
   const title: string = site.title ?? "Site professionnel";
-  const zones: string[] = site.coverage_zones?.length
-    ? site.coverage_zones
-    : (site.service_area ?? []).map((a: any) => a.city).filter(Boolean);
+  const zones: string[] = (site.coverage_zones ?? []).filter(Boolean);
 
   const titleTag = zones.length > 0
     ? `${title} — ${zones.slice(0, 3).join(", ")}`
@@ -136,9 +134,7 @@ export default async function TenantSitePage({
   const previewBanner = isPreview ? <PreviewBanner siteId={site.id} /> : null;
 
   const social = site.social_links ?? {};
-  const zones: string[] = site.coverage_zones?.length
-    ? site.coverage_zones
-    : (site.service_area ?? []).map((a: any) => a.city).filter(Boolean);
+  const zones: string[] = (site.coverage_zones ?? []).filter(Boolean);
   const values: any[] = site.values_list ?? [];
   const testimonials: any[] = site.testimonial ?? [];
 

@@ -21,6 +21,9 @@ export default function LoginPage() {
   const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const redirectAfterLogin = typeof window !== "undefined"
+    ? (new URLSearchParams(window.location.search).get("redirect") ?? "/dashboard")
+    : "/dashboard";
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -73,7 +76,7 @@ export default function LoginPage() {
         }
       } else {
         setLockout({ attempts: 0, until: 0 });
-        window.location.replace("/dashboard");
+        window.location.replace(redirectAfterLogin);
       }
     } catch (err: any) {
       setError(err?.message ?? "Erreur de connexion. Vérifiez votre réseau.");

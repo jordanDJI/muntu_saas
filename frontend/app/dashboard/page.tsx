@@ -36,6 +36,7 @@ export default function DashboardPage() {
   const [leads, setLeads]             = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [tenantSlug, setTenantSlug]   = useState<string>("");
+  const [sitePublished, setSitePublished] = useState(false);
   const [contactsCount, setContactsCount] = useState<number | null>(null);
   const [loading, setLoading]         = useState(true);
   const [actioning, setActioning]     = useState<string | null>(null);
@@ -73,6 +74,10 @@ export default function DashboardPage() {
           const tenant = await api.getMyTenant();
           if (tenant?.slug) setTenantSlug(tenant.slug);
         } catch { /* slug reste vide */ }
+        try {
+          const sites = await api.getSites() as any[];
+          if (sites?.[0]?.status === "published") setSitePublished(true);
+        } catch { /* statut reste false */ }
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     };
@@ -342,7 +347,7 @@ export default function DashboardPage() {
       <div id="dash-nav">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{t.dash_quick_access}</p>
         <nav className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter(item => !(sitePublished && item.href === "/dashboard/embed")).map((item) => (
             <Link key={item.href} href={item.href}
               className={`relative flex items-center gap-3 p-4 rounded-xl border shadow-lg transition-all active:scale-95 hover:shadow-xl ${
                 item.accent
@@ -454,30 +459,42 @@ export default function DashboardPage() {
       {/* Lien site */}
       {!loading && (
         tenantSlug ? (
-          <div className="flex gap-2">
+          <div className={`grid gap-2 ${sitePublished ? "grid-cols-2" : "grid-cols-3"}`}>
             <a
               href={`/${tenantSlug}?preview=1`}
               target="_blank"
               rel="noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors text-sm font-medium"
+              className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl border-2 border-dashed border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-400 transition-colors text-xs font-medium text-center"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
               </svg>
-              Prévisualiser mon site
+              Prévisualiser
             </a>
             <a
               href={`/${tenantSlug}`}
               target="_blank"
               rel="noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-primary-200 text-primary-600 hover:bg-primary-50 hover:border-primary-400 transition-colors text-sm font-medium"
+              className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl border-2 border-dashed border-primary-200 text-primary-600 hover:bg-primary-50 hover:border-primary-400 transition-colors text-xs font-medium text-center"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
               </svg>
-              Voir le site publié
+              Voir le site
             </a>
+            {!sitePublished && (
+              <Link
+                href="/dashboard/embed"
+                className="flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl border-2 border-dashed border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-400 hover:text-gray-700 transition-colors text-xs font-medium text-center"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <polyline points="16 18 22 12 16 6" strokeLinecap="round" strokeLinejoin="round"/>
+                  <polyline points="8 6 2 12 8 18" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Intégrer
+              </Link>
+            )}
           </div>
         ) : (
           <div className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed border-gray-200 text-gray-400 text-sm">

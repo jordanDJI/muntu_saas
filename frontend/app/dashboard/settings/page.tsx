@@ -247,10 +247,13 @@ function SectionSite() {
   const [site, setSite]                   = useState<any>(null);
   const [loading, setLoading]             = useState(true);
   const [saving, setSaving]               = useState(false);
+  const [publishing, setPublishing]       = useState(false);
+  const [confirmDepublish, setConfirmDepublish] = useState(false);
   const [title, setTitle]                 = useState("");
   const [absenceMode, setAbsenceMode]     = useState(false);
   const [absenceMessage, setAbsenceMessage] = useState("");
   const [msg, setMsg]                     = useState("");
+  const [publishMsg, setPublishMsg]       = useState("");
   const [tenantSlug, setTenantSlug]       = useState("");
   const [origin, setOrigin]               = useState("");
 
@@ -276,12 +279,28 @@ function SectionSite() {
     finally { setSaving(false); }
   };
 
-  const togglePublish = async () => {
+  const handlePublish = async () => {
     if (!site) return;
+    setPublishing(true); setPublishMsg("");
     try {
-      if (site.status === "published") { await api.unpublishSite(site.id); setSite({ ...site, status: "draft" }); }
-      else { await api.publishSite(site.id); setSite({ ...site, status: "published" }); }
-    } catch { setMsg("Erreur lors du changement de statut."); }
+      await api.publishSite(site.id);
+      setSite({ ...site, status: "published" });
+      setPublishMsg("✓ Site publié — visible par vos visiteurs.");
+    } catch (err: any) {
+      setPublishMsg(err?.message ?? "Erreur lors de la publication.");
+    } finally { setPublishing(false); }
+  };
+
+  const handleUnpublish = async () => {
+    if (!site) return;
+    setPublishing(true); setConfirmDepublish(false); setPublishMsg("");
+    try {
+      await api.unpublishSite(site.id);
+      setSite({ ...site, status: "draft" });
+      setPublishMsg("Site dépublié — plus visible en ligne.");
+    } catch (err: any) {
+      setPublishMsg(err?.message ?? "Erreur lors de la dépublication.");
+    } finally { setPublishing(false); }
   };
 
   if (loading) return <p className="text-gray-400 text-sm">Chargement…</p>;
@@ -309,25 +328,36 @@ function SectionSite() {
         </form>
       </Card>
       <Card>
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="font-semibold text-sm text-gray-700">Publication</p>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Statut : <span className={site?.status === "published" ? "text-green-600 font-medium" : "text-gray-400"}>
-                {site?.status === "published" ? "Publié" : "Brouillon"}
-              </span>
-            </p>
-            {tenantSlug && (
-              <a href={`${origin}/${tenantSlug}`} target="_blank" rel="noreferrer"
-                className="text-xs text-primary-500 hover:underline mt-1 block">
-                {origin.replace(/^https?:\/\//, "")}/{tenantSlug}
-              </a>
-            )}
-          </div>
-          <div className="flex flex-col items-end gap-2 shrink-0">
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <p className="font-semibold text-sm text-gray-700">Publication</p>
+              <div className="flex items-center gap-2">
+                {site?.status === "published" ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    Publié — visible en ligne
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 border border-gray-200 px-2.5 py-1 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                    Brouillon — non visible
+                  </span>
+                )}
+              </div>
+              {tenantSlug && site?.status === "published" && (
+                <a href={`${origin}/${tenantSlug}`} target="_blank" rel="noreferrer"
+                  className="text-xs text-primary-500 hover:underline flex items-center gap-1 mt-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                  </svg>
+                  {origin.replace(/^https?:\/\//, "")}/{tenantSlug}
+                </a>
+              )}
+            </div>
             {tenantSlug && (
               <a href={`${origin}/${tenantSlug}?preview=1`} target="_blank" rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-sm bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200">
+                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
@@ -335,11 +365,53 @@ function SectionSite() {
                 Prévisualiser
               </a>
             )}
-            <button onClick={togglePublish}
-              className={`px-4 py-2 rounded-lg font-medium text-sm ${site?.status === "published" ? "bg-red-100 text-red-700 hover:bg-red-200 border border-red-200" : "bg-green-600 text-white hover:bg-green-700"}`}>
-              {site?.status === "published" ? "Dépublier" : "Publier"}
-            </button>
           </div>
+
+          {/* Publier */}
+          {site?.status !== "published" && (
+            <button onClick={handlePublish} disabled={publishing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 transition-colors">
+              {publishing ? (
+                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Publication en cours…</>
+              ) : (
+                <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>Publier le site</>
+              )}
+            </button>
+          )}
+
+          {/* Dépublier avec confirmation */}
+          {site?.status === "published" && !confirmDepublish && (
+            <button onClick={() => setConfirmDepublish(true)} disabled={publishing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 disabled:opacity-60 transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+              </svg>
+              Dépublier le site
+            </button>
+          )}
+
+          {site?.status === "published" && confirmDepublish && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+              <p className="text-sm font-semibold text-red-800">Confirmer la dépublication ?</p>
+              <p className="text-xs text-red-600">Votre site ne sera plus accessible en ligne. Vos données sont conservées et vous pourrez le republier à tout moment.</p>
+              <div className="flex gap-2">
+                <button onClick={handleUnpublish} disabled={publishing}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-60">
+                  {publishing ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : "Confirmer"}
+                </button>
+                <button onClick={() => setConfirmDepublish(false)}
+                  className="flex-1 px-3 py-2 rounded-lg font-medium text-sm bg-white text-gray-600 border border-gray-200 hover:bg-gray-50">
+                  Annuler
+                </button>
+              </div>
+            </div>
+          )}
+
+          {publishMsg && (
+            <p className={`text-xs font-medium ${publishMsg.startsWith("✓") ? "text-green-600" : "text-red-500"}`}>
+              {publishMsg}
+            </p>
+          )}
         </div>
       </Card>
     </>

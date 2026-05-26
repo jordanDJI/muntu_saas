@@ -8,8 +8,6 @@ import json
 import logging
 
 import httpx
-from google.oauth2 import service_account
-import google.auth.transport.requests
 
 from app.core.config import settings
 
@@ -23,12 +21,18 @@ def _get_token() -> str | None:
     raw = settings.google_service_account_json.strip()
     if not raw:
         return None
-    creds_dict = json.loads(raw)
-    credentials = service_account.Credentials.from_service_account_info(
-        creds_dict, scopes=_SCOPES
-    )
-    credentials.refresh(google.auth.transport.requests.Request())
-    return credentials.token
+    try:
+        from google.oauth2 import service_account
+        import google.auth.transport.requests
+        creds_dict = json.loads(raw)
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict, scopes=_SCOPES
+        )
+        credentials.refresh(google.auth.transport.requests.Request())
+        return credentials.token
+    except Exception as exc:
+        logger.warning("Google Indexing API — impossible d'obtenir un token : %s", exc)
+        return None
 
 
 async def notify_url_updated(url: str) -> None:

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "../../../lib/api";
+import { api, supabase } from "../../../lib/api";
 
 function CopyBlock({ label, code, id }: { label: string; code: string; id: string }) {
   const [copied, setCopied] = useState(false);
@@ -64,12 +64,9 @@ export default function EmbedPage() {
       const slug = (membership?.tenant as any)?.slug ?? "";
       setTenantSlug(slug);
 
-      const { data: site } = await supabase
-        .from("site")
-        .select("site_style")
-        .eq("status", "published")
-        .single();
-      if (site?.site_style?.tracking) setSiteData(site.site_style.tracking);
+      const sites = await api.getSites().catch(() => []) as any[];
+      const tracking = sites?.[0]?.site_style?.tracking;
+      if (tracking) setSiteData(tracking);
     };
     load();
   }, []);

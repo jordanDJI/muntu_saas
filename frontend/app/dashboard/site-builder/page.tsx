@@ -387,7 +387,7 @@ export default function SiteBuilderPage() {
           await api.updateSite(siteId, { title, tagline, description });
           break;
         case 3: {
-          const fullAddress = [addressStreet, addressPostal, addressCity].filter(Boolean).join(", ");
+          const fullAddress = [addressStreet, addressPostal, addressCity, addressCountry].filter(Boolean).join(", ");
           await api.updateSite(siteId, {
             phone, email_contact: emailContact, address: fullAddress,
             social_links: { facebook, instagram, linkedin, ...(phone2 ? { phone2 } : {}) },

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "../../lib/api";
+import { api, supabase } from "../../lib/api";
 
 export default function PreviewBanner({ siteId }: { siteId: string }) {
   const router = useRouter();
@@ -10,11 +10,20 @@ export default function PreviewBanner({ siteId }: { siteId: string }) {
   const handlePublish = async () => {
     setPublishing(true);
     try {
+      // Vérifier la session avant d'appeler l'API — sur la page publique
+      // la session peut ne pas être disponible si l'utilisateur n'est pas connecté.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // Session absente (cookie cross-subdomain ou expirée) → login puis retour site-builder
+        router.push(`/login?redirect=/dashboard/site-builder`);
+        return;
+      }
       await api.publishSite(siteId);
-      router.push("/dashboard/appointments");
-    } catch {
+      router.push("/dashboard/site-builder");
+    } catch (err: any) {
       setPublishing(false);
-      alert("Erreur lors de la publication. Veuillez réessayer.");
+      const msg = err?.message ?? "Erreur inconnue";
+      alert(`Erreur lors de la publication : ${msg}`);
     }
   };
 

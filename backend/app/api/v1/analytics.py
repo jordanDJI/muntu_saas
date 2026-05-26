@@ -226,15 +226,15 @@ async def get_roi_potential(
 
     # ── Site + zones + offers ─────────────────────────────────────────────────
     site_row = (
-        sb.table("site").select("id").eq("tenant_id", tenant_id).single().execute()
+        sb.table("site").select("id, coverage_zones").eq("tenant_id", tenant_id).single().execute()
     ).data
 
     zones: list[str] = []
     offer_names: list[str] = []
     if site_row:
         site_id = site_row["id"]
-        areas = sb.table("service_area").select("city").eq("site_id", site_id).execute()
-        zones = [a["city"] for a in (areas.data or []) if a.get("city")]
+        raw_zones = site_row.get("coverage_zones") or []
+        zones = [z for z in raw_zones if z and str(z).strip()]
         offers = sb.table("service_offer").select("name").eq("site_id", site_id).execute()
         offer_names = [o["name"] for o in (offers.data or []) if o.get("name")]
 
