@@ -225,18 +225,20 @@ async def get_roi_potential(
     country = tenant_row.get("country", "BE") or "BE"
 
     # ── Site + zones + offers ─────────────────────────────────────────────────
-    site_row = (
-        sb.table("site").select("id, coverage_zones").eq("tenant_id", tenant_id).single().execute()
-    ).data
-
     zones: list[str] = []
     offer_names: list[str] = []
-    if site_row:
-        site_id = site_row["id"]
-        raw_zones = site_row.get("coverage_zones") or []
-        zones = [z for z in raw_zones if z and str(z).strip()]
-        offers = sb.table("service_offer").select("name").eq("site_id", site_id).execute()
-        offer_names = [o["name"] for o in (offers.data or []) if o.get("name")]
+    try:
+        sites_res = sb.table("site").select("id, coverage_zones").eq("tenant_id", tenant_id).execute()
+        site_row = sites_res.data[0] if sites_res.data else None
+        if site_row:
+            site_id = site_row["id"]
+            raw_zones = site_row.get("coverage_zones") or []
+            zones = [str(z).strip() for z in raw_zones if z and str(z).strip()]
+            offers = sb.table("service_offer").select("name").eq("site_id", site_id).execute()
+            offer_names = [o["name"] for o in (offers.data or []) if o.get("name")]
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("roi-potential: erreur lecture site/zones: %s", e)
 
     # ── Fetch from pytrends ───────────────────────────────────────────────────
     from app.services.trends import get_demand_data
