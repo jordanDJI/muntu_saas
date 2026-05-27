@@ -3,11 +3,14 @@ Annuaire public Klientys — opt-in par tenant.
 Routes publiques : GET /directory/listings, GET /directory/listing/{slug}
 Routes auth      : GET|POST|PATCH|DELETE /directory/my-listing
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/directory", tags=["Directory"])
 
@@ -29,42 +32,53 @@ class ListingUpsertIn(BaseModel):
 
 @router.get("/listings")
 async def list_listings(
-    metier: str = Query(...),
-    ville:  str = Query(...),
-    page:   int = Query(1, ge=1),
+    ville:   str = Query(...),
+    metier:  Optional[str] = Query(None),
+    page:    int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=50),
 ):
     sb = get_supabase()
     offset = (page - 1) * per_page
+    ville_title = ville.strip().title()
 
-    rows = (
-        sb.table("directory_listing")
-        .select("*, tenant!inner(slug, country)")
-        .eq("is_listed", True)
-        .eq("metier_slug", metier)
-        .contains("zones", [ville.title()])
-        .range(offset, offset + per_page - 1)
-        .execute()
-    )
+    _log.info("directory/listings — metier=%s ville=%s ville_title=%s", metier, ville, ville_title)
 
-    # Si pas de résultats exacts sur zones, fallback sur primary_zone
-    if not rows.data:
-        rows = (
+    def _base_query():
+        q = (
             sb.table("directory_listing")
-            .select("*, tenant!inner(slug, country)")
+            .select("*, tenant(slug)")
             .eq("is_listed", True)
-            .eq("metier_slug", metier)
-            .ilike("primary_zone", f"%{ville}%")
-            .range(offset, offset + per_page - 1)
-            .execute()
         )
+        if metier:
+            q = q.eq("metier_slug", metier)
+        return q
 
+    rows = _base_query().contains("zones", [ville_title]).range(offset, offset + per_page - 1).execute()
+
+    _log.info("directory/listings — zones match: %d rows", len(rows.data or []))
+
+    # Fallback sur primary_zone (ilike) si pas de résultat par zones
+    if not rows.data:
+        rows = _base_query().ilike("primary_zone", f"%{ville}%").range(offset, offset + per_page - 1).execute()
+        _log.info("directory/listings — primary_zone fallback: %d rows", len(rows.data or []))
+
+    # Résoudre les slugs manquants si le join a retourné null
+    tenant_ids = [r["tenant_id"] for r in (rows.data or []) if not r.get("tenant")]
+    slug_map: dict = {}
+    if tenant_ids:
+        t_rows = sb.table("tenant").select("id, slug").in_("id", tenant_ids).execute()
+        slug_map = {t["id"]: t["slug"] for t in (t_rows.data or [])}
+
+    ville_slug = ville.lower().replace(" ", "-")
     listings = []
-    for r in rows.data:
-        slug = r.get("tenant", {}).get("slug", "")
+    for r in (rows.data or []):
+        tenant_info = r.get("tenant") or {}
+        slug = tenant_info.get("slug") or slug_map.get(r["tenant_id"], "")
+        m_slug = r.get("metier_slug", "")
         listings.append({
             "id": r["id"],
             "slug": slug,
+            "metier_slug": m_slug,
             "display_name": r["display_name"],
             "tagline": r["tagline"],
             "zones": r["zones"],
@@ -73,7 +87,7 @@ async def list_listings(
             "accepts_booking": r["accepts_booking"],
             "metier_label": r.get("metier_label"),
             "site_url": f"/{slug}",
-            "directory_url": f"/annuaire/{metier}/{ville}/{slug}",
+            "directory_url": f"/annuaire/{m_slug}/{ville_slug}/{slug}",
         })
 
     return {"metier": metier, "ville": ville, "page": page, "per_page": per_page, "listings": listings}

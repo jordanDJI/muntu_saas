@@ -1927,6 +1927,9 @@ function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
 
 // ── Section Annuaire ──────────────────────────────────────────────────────────
 
+const titleCaseZone = (s: string) =>
+  s.replace(/(?:^|[\s-])\S/g, c => c.toUpperCase());
+
 function SectionAnnuaire() {
   const [listing, setListing]         = useState<any>(null);
   const [loading, setLoading]         = useState(true);
@@ -1942,6 +1945,8 @@ function SectionAnnuaire() {
   const [primaryZone, setPrimaryZone]     = useState("");
   const [acceptsBooking, setAcceptsBooking] = useState(true);
   const [zoneInput, setZoneInput]         = useState("");
+  const [zoneSuggestions, setZoneSuggestions] = useState<string[]>([]);
+  const zoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     api.getDirectoryListing()
@@ -1958,8 +1963,8 @@ function SectionAnnuaire() {
           }
           setDisplayName(data.display_name ?? "");
           setTagline(data.tagline ?? "");
-          setZones(data.zones ?? []);
-          setPrimaryZone(data.primary_zone ?? "");
+          setZones((data.zones ?? []).map((z: string) => titleCaseZone(z.trim())));
+          setPrimaryZone(titleCaseZone((data.primary_zone ?? "").trim()));
           setAcceptsBooking(data.accepts_booking ?? true);
         }
       })
@@ -1967,17 +1972,15 @@ function SectionAnnuaire() {
       .finally(() => setLoading(false));
   }, []);
 
-  const titleCase = (s: string) =>
-    s.replace(/(?:^|[\s-])\S/g, c => c.toUpperCase());
-
-  const addZone = () => {
-    const z = titleCase(zoneInput.trim());
+  const addZone = (val?: string) => {
+    const z = titleCaseZone((val ?? zoneInput).trim());
     if (z && !zones.includes(z)) {
       const next = [...zones, z];
       setZones(next);
       if (!primaryZone) setPrimaryZone(z);
     }
     setZoneInput("");
+    setZoneSuggestions([]);
   };
 
   const removeZone = (z: string) => {
@@ -2104,17 +2107,53 @@ function SectionAnnuaire() {
             <div>
               <label className="block text-sm font-medium mb-1">Zones d'intervention</label>
               <div className="flex gap-2">
-                <input
-                  value={zoneInput}
-                  onChange={e => setZoneInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addZone(); } }}
-                  placeholder="Ex: Bruxelles"
-                  className="border rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
-                />
+                <div className="relative flex-1">
+                  <input
+                    value={zoneInput}
+                    onChange={e => {
+                      const v = e.target.value;
+                      setZoneInput(v);
+                      if (zoneTimerRef.current) clearTimeout(zoneTimerRef.current);
+                      if (v.length < 2) { setZoneSuggestions([]); return; }
+                      zoneTimerRef.current = setTimeout(async () => {
+                        try {
+                          const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(v)}&format=json&limit=6&addressdetails=1`);
+                          const data = await res.json();
+                          const items: string[] = [];
+                          for (const d of data) {
+                            const a = d.address ?? {};
+                            const name = a.city || a.town || a.village || a.county || a.state || d.display_name.split(",")[0];
+                            if (name && !items.includes(name)) items.push(name);
+                          }
+                          setZoneSuggestions(items);
+                        } catch {}
+                      }, 350);
+                    }}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addZone(); } }}
+                    onBlur={() => setTimeout(() => setZoneSuggestions([]), 150)}
+                    placeholder="Ex: Bruxelles, Rennes, Lyon…"
+                    className="border rounded-lg px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-primary-400"
+                  />
+                  {zoneSuggestions.length > 0 && (
+                    <ul className="absolute z-40 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden text-sm">
+                      {zoneSuggestions.map(s => (
+                        <li key={s}>
+                          <button
+                            type="button"
+                            className="w-full text-left px-4 py-2 hover:bg-primary-50 hover:text-primary-700 transition-colors"
+                            onMouseDown={() => addZone(s)}
+                          >
+                            📍 {s}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 <button
                   type="button"
-                  onClick={addZone}
-                  className="border px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                  onClick={() => addZone()}
+                  className="border px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50 shrink-0"
                 >
                   Ajouter
                 </button>

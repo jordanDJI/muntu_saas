@@ -15,7 +15,7 @@ async function getListings(metier: string, ville: string) {
   try {
     const res = await fetch(
       `${API_URL}/api/v1/directory/listings?metier=${encodeURIComponent(metier)}&ville=${encodeURIComponent(ville)}`,
-      { next: { revalidate: 3600 } }
+      { cache: "no-store" }
     );
     if (!res.ok) return [];
     const data = await res.json();

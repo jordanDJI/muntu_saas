@@ -88,7 +88,7 @@ export default function AnnuaireHub() {
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">🇫🇷 France</p>
           <div className="flex flex-wrap gap-2">
             {TOP_VILLES_FR.map((v) => (
-              <Link key={v.slug} href={`/annuaire/kinesitherapeute/${v.slug}`}
+              <Link key={v.slug} href={`/annuaire/ville/${v.slug}`}
                 className="border border-gray-200 bg-white rounded-full px-4 py-1.5 text-sm hover:border-primary-400 hover:text-primary-600 transition-colors">
                 📍 {v.label}
               </Link>
@@ -100,7 +100,7 @@ export default function AnnuaireHub() {
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">🇧🇪 Belgique</p>
           <div className="flex flex-wrap gap-2">
             {TOP_VILLES_BE.map((v) => (
-              <Link key={v.slug} href={`/annuaire/kinesitherapeute/${v.slug}`}
+              <Link key={v.slug} href={`/annuaire/ville/${v.slug}`}
                 className="border border-gray-200 bg-white rounded-full px-4 py-1.5 text-sm hover:border-primary-400 hover:text-primary-600 transition-colors">
                 📍 {v.label}
               </Link>
@@ -112,7 +112,7 @@ export default function AnnuaireHub() {
           <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2">🇩🇪 Allemagne</p>
           <div className="flex flex-wrap gap-2">
             {TOP_VILLES_DE.map((v) => (
-              <Link key={v.slug} href={`/annuaire/kinesitherapeute/${v.slug}`}
+              <Link key={v.slug} href={`/annuaire/ville/${v.slug}`}
                 className="border border-gray-200 bg-white rounded-full px-4 py-1.5 text-sm hover:border-primary-400 hover:text-primary-600 transition-colors">
                 📍 {v.label}
               </Link>
