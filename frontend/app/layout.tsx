@@ -49,6 +49,11 @@ export const metadata: Metadata = {
     title: "Klientys — Site + RDV + CRM pour indépendants",
     description: "Créez votre site professionnel, gérez vos rendez-vous et clients depuis une seule plateforme.",
   },
+  verification: {
+    other: {
+      "msvalidate.01": "E44F6C24EA512692866812B24A7A98A7",
+    },
+  },
 };
 
 const orgJsonLd = {
@@ -88,3 +93,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
+
