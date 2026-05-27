@@ -33,8 +33,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { metier: mSlug, ville: vSlug } = await params;
   const m = metiers.find((x) => x.slug === mSlug);
-  const v = villes.find((x) => x.slug === vSlug);
-  if (!m || !v) return { title: "Annuaire — Klientys" };
+  if (!m) return { title: "Annuaire — Klientys" };
+
+  const vKnown = villes.find((x) => x.slug === vSlug);
+  const villeLabel = vKnown?.label ?? vSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const villePrep  = vKnown?.labelPrep ?? `à ${villeLabel}`;
 
   const canonical = `${APP_URL}/annuaire/${mSlug}/${vSlug}`;
   return {
