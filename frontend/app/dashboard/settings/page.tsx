@@ -1061,18 +1061,42 @@ function GoogleAnalyticsCard() {
     connected: boolean; property_configured: boolean;
     ga4_property_id: string | null; connected_at: string | null;
   } | null>(null);
-  const [propertyId, setPropertyId] = useState("");
+  const [properties, setProperties] = useState<{ id: string; name: string; account: string }[]>([]);
+  const [selectedProperty, setSelectedProperty] = useState("");
+  const [loadingProps, setLoadingProps] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
-  const [showHelp, setShowHelp] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
   useEffect(() => {
     api.getGoogleAnalyticsStatus()
-      .then(s => { setGaStatus(s); if (s.ga4_property_id) setPropertyId(s.ga4_property_id.replace(/^properties\//, "")); })
+      .then(s => {
+        setGaStatus(s);
+        if (s.ga4_property_id) setSelectedProperty(s.ga4_property_id);
+        if (s.connected) loadProperties();
+      })
       .catch(() => setGaStatus({ connected: false, property_configured: false, ga4_property_id: null, connected_at: null }));
+
+    // Après retour du flux OAuth, charger les propriétés automatiquement
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("ga_connected") === "1") {
+      setLoadingProps(true);
+      api.getGoogleAnalyticsProperties()
+        .then(d => { setProperties(d.properties); setGaStatus(prev => prev ? { ...prev, connected: true } : { connected: true, property_configured: false, ga4_property_id: null, connected_at: null }); })
+        .catch(() => {})
+        .finally(() => setLoadingProps(false));
+    }
   }, []);
+
+  const loadProperties = async () => {
+    setLoadingProps(true);
+    try {
+      const d = await api.getGoogleAnalyticsProperties();
+      setProperties(d.properties);
+    } catch { /* silencieux */ }
+    finally { setLoadingProps(false); }
+  };
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -1085,13 +1109,12 @@ function GoogleAnalyticsCard() {
   };
 
   const handleSave = async () => {
-    const digits = propertyId.trim().replace(/^properties\//, "");
-    if (!digits) return;
+    if (!selectedProperty) return;
     setSaving(true); setError(""); setSaved(false);
     try {
-      await api.configureGoogleAnalytics(`properties/${digits}`);
+      await api.configureGoogleAnalytics(selectedProperty);
       setSaved(true);
-      setGaStatus(prev => prev ? { ...prev, property_configured: true, ga4_property_id: `properties/${digits}` } : prev);
+      setGaStatus(prev => prev ? { ...prev, property_configured: true, ga4_property_id: selectedProperty } : prev);
       setTimeout(() => setSaved(false), 3000);
     } catch (e: any) {
       setError(e.message ?? "Erreur lors de l'enregistrement");
@@ -1149,83 +1172,54 @@ function GoogleAnalyticsCard() {
         </div>
       )}
 
-      {/* Connecté — demander l'ID de propriété */}
+      {/* Connecté — sélectionner la propriété GA4 */}
       {gaStatus?.connected && (
-        <div className="border-t pt-4 space-y-4">
+        <div className="border-t pt-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-gray-700">Propriété GA4</p>
+            <button onClick={loadProperties} className="text-xs text-blue-600 hover:underline">
+              Actualiser la liste
+            </button>
+          </div>
 
-          {/* Guide visuel */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-gray-700">Identifiant de votre propriété GA4</p>
-              <button
-                onClick={() => setShowHelp(v => !v)}
-                className="text-xs text-blue-600 hover:underline"
-              >
-                {showHelp ? "Masquer l'aide" : "Où trouver cet ID ?"}
-              </button>
-            </div>
-
-            {showHelp && (
-              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-3 text-sm">
-                <p className="font-semibold text-blue-800 mb-3">En 3 étapes :</p>
-                <div className="space-y-2.5">
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">1</span>
-                    <p className="text-blue-800">
-                      Ouvrez{" "}
-                      <a href="https://analytics.google.com" target="_blank" rel="noreferrer" className="font-semibold underline">
-                        analytics.google.com
-                      </a>
-                    </p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">2</span>
-                    <p className="text-blue-800">
-                      En bas à gauche, cliquez sur <strong>⚙️ Administration</strong>
-                    </p>
-                  </div>
-                  <div className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">3</span>
-                    <p className="text-blue-800">
-                      Dans la colonne <strong>Propriété</strong>, cliquez sur{" "}
-                      <strong>Paramètres de la propriété</strong> — l&apos;ID (une suite de chiffres) est affiché en haut à droite.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 bg-blue-100 rounded-lg px-3 py-2 text-xs text-blue-700">
-                  Exemple : si vous voyez <strong>123456789</strong>, saisissez uniquement <strong>123456789</strong>.
-                </div>
-              </div>
-            )}
-
+          {loadingProps ? (
+            <p className="text-sm text-gray-400">Chargement des propriétés…</p>
+          ) : properties.length > 0 ? (
             <div className="flex gap-2">
-              <div className="flex-1 flex items-center border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-300">
-                <span className="px-3 py-2 text-xs text-gray-400 bg-gray-50 border-r shrink-0 select-none">properties/</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={propertyId}
-                  onChange={e => setPropertyId(e.target.value.replace(/\D/g, ""))}
-                  placeholder="123456789"
-                  className="flex-1 px-3 py-2 text-sm outline-none bg-white"
-                />
-              </div>
+              <select
+                value={selectedProperty}
+                onChange={e => setSelectedProperty(e.target.value)}
+                className="flex-1 px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                <option value="">— Sélectionner une propriété —</option>
+                {properties.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} {p.account ? `(${p.account})` : ""}
+                  </option>
+                ))}
+              </select>
               <button
                 onClick={handleSave}
-                disabled={saving || !propertyId.trim()}
+                disabled={saving || !selectedProperty}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all disabled:opacity-50"
                 style={{ background: saved ? "#16a34a" : "var(--primary-600, #2563eb)" }}
               >
                 {saving ? "…" : saved ? "Enregistré ✓" : "Enregistrer"}
               </button>
             </div>
-            {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
-            {gaStatus.property_configured && !saved && (
-              <p className="text-xs text-gray-400 mt-1.5">
-                ID actuel : <code className="bg-gray-100 px-1 rounded">{gaStatus.ga4_property_id}</code>
-              </p>
-            )}
-          </div>
+          ) : (
+            <p className="text-sm text-gray-400">
+              Aucune propriété GA4 trouvée.{" "}
+              <button onClick={loadProperties} className="text-blue-600 hover:underline">Réessayer</button>
+            </p>
+          )}
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          {gaStatus.property_configured && !saved && (
+            <p className="text-xs text-gray-400">
+              Propriété active : <code className="bg-gray-100 px-1 rounded">{gaStatus.ga4_property_id}</code>
+            </p>
+          )}
         </div>
       )}
     </Card>

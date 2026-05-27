@@ -364,6 +364,53 @@ async def connect_google_analytics(body: GoogleConnectIn, tenant_id: str = Depen
     return {"status": "connected"}
 
 
+@router.get("/google/properties")
+async def list_google_properties(tenant_id: str = Depends(get_current_tenant)):
+    """Liste les propriétés GA4 accessibles avec le compte connecté."""
+    sb = get_supabase()
+    row = sb.table("google_analytics_connection").select("access_token, refresh_token").eq("tenant_id", tenant_id).maybe_single().execute()
+    if not row.data or not row.data.get("access_token"):
+        raise HTTPException(status_code=404, detail="Compte Google non connecté")
+
+    access_token = row.data["access_token"]
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://analyticsadmin.googleapis.com/v1beta/accountSummaries",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        # Token expiré → essayer de le rafraîchir
+        if resp.status_code == 401 and row.data.get("refresh_token"):
+            refresh_resp = await client.post("https://oauth2.googleapis.com/token", data={
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "refresh_token": row.data["refresh_token"],
+                "grant_type": "refresh_token",
+            })
+            if refresh_resp.status_code == 200:
+                new_token = refresh_resp.json().get("access_token")
+                sb.table("google_analytics_connection").update({"access_token": new_token}).eq("tenant_id", tenant_id).execute()
+                resp = await client.get(
+                    "https://analyticsadmin.googleapis.com/v1beta/accountSummaries",
+                    headers={"Authorization": f"Bearer {new_token}"},
+                )
+
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Impossible de récupérer les propriétés GA4")
+
+        summaries = resp.json().get("accountSummaries", [])
+
+    properties = []
+    for account in summaries:
+        for prop in account.get("propertySummaries", []):
+            properties.append({
+                "id": prop["property"],          # ex: "properties/123456789"
+                "name": prop.get("displayName", prop["property"]),
+                "account": account.get("displayName", ""),
+            })
+    return {"properties": properties}
+
+
 @router.get("/google/status")
 async def google_analytics_status(tenant_id: str = Depends(get_current_tenant)):
     sb = get_supabase()
