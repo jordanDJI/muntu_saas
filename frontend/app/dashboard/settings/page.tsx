@@ -1077,7 +1077,7 @@ function GoogleAnalyticsCard() {
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      const data = await api.apiFetch<{ url: string }>("/api/v1/analytics/google/auth-url");
+      const data = await api.getGoogleAnalyticsAuthUrl();
       window.location.href = data.url;
     } catch {
       setConnecting(false);

@@ -239,6 +239,7 @@ export const api = {
 
   // Google Analytics (GA4)
   getGoogleAnalyticsStatus: () => apiFetch<{ connected: boolean; property_configured: boolean; ga4_property_id: string | null; connected_at: string | null }>("/api/v1/analytics/google/status"),
+  getGoogleAnalyticsAuthUrl: () => apiFetch<{ url: string }>("/api/v1/analytics/google/auth-url"),
   configureGoogleAnalytics: (ga4_property_id: string) => apiFetch("/api/v1/analytics/google/configure", { method: "PATCH", body: JSON.stringify({ ga4_property_id }) }),
   getGoogleAnalyticsData: (days = 30) => apiFetch<{ rows: any[]; property_id: string }>(`/api/v1/analytics/google/data?days=${days}`),
 
