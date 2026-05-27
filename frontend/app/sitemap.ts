@@ -100,6 +100,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.75,
   }));
 
+  // Pages listing pour les villes hors villes.json (ex: Arlon, Heidelberg…)
+  // On dédoublonne par {metier, ville} et on exclut les combos déjà couverts par annuairePages
+  const villesSlugsConnus = new Set(villes.map((v) => v.slug));
+  const extraListingKeys = new Set<string>();
+  const extraListingPages: MetadataRoute.Sitemap = [];
+  for (const { metier, ville } of directorySlugs) {
+    const key = `${metier}/${ville}`;
+    if (!villesSlugsConnus.has(ville) && !extraListingKeys.has(key)) {
+      extraListingKeys.add(key);
+      extraListingPages.push({
+        url: `${APP_URL}/annuaire/${metier}/${ville}`,
+        lastModified: now,
+        changeFrequency: "weekly" as const,
+        priority: 0.7,
+      });
+    }
+  }
+
   return [
     ...staticPages,
     ...blogPages,
@@ -107,6 +125,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...sipMetierPages,
     ...sipPages,
     ...annuairePages,
+    ...extraListingPages,
     ...fichePages,
   ];
 }

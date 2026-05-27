@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { supabase } from "../lib/api";
 import { LangSelector, useLanguage } from "../contexts/LanguageContext";
 
@@ -96,7 +97,7 @@ export default function LandingPage() {
       <nav className={`l-nav${navScrolled ? " scrolled" : ""}`}>
         <div className="l-nav-inner">
           <Link href="/" className="l-nav-logo">
-            <img src="/logo.png" alt="Klientys" style={{ height: "30px", width: "auto" }} />
+            <Image src="/logo.png" alt="Klientys" width={120} height={30} priority />
             Klientys
           </Link>
           <ul className="l-nav-links">
@@ -505,7 +506,7 @@ export default function LandingPage() {
           <div className="l-footer-top">
             <div>
               <Link href="/" className="l-footer-logo">
-                <img src="/logo.png" alt="Klientys" style={{ height: "28px", width: "auto" }} />
+                <Image src="/logo.png" alt="Klientys" width={112} height={28} />
                 Klientys
               </Link>
               <p className="l-footer-desc">{t.lp_footer_desc}</p>

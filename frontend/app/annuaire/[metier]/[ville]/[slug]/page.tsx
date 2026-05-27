@@ -4,6 +4,8 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import metiers from "../../../../../data/metiers.json";
 import villes from "../../../../../data/villes.json";
+import MarketingNav from "../../../../../components/MarketingNav";
+import MarketingFooter from "../../../../../components/MarketingFooter";
 
 export const revalidate = 3600;
 
@@ -114,16 +116,17 @@ export default async function FicheProPage({
   };
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-[#F4F8FA]">
+      <MarketingNav />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       {/* Breadcrumb */}
-      <div className="max-w-4xl mx-auto px-6 pt-6 text-sm text-gray-500 flex flex-wrap gap-2">
-        <Link href="/annuaire" className="hover:text-indigo-600">Annuaire</Link>
+      <div className="max-w-4xl mx-auto px-6 pt-28 text-sm text-gray-500 flex flex-wrap gap-2">
+        <Link href="/annuaire" className="hover:text-primary-600">Annuaire</Link>
         <span>/</span>
-        {m && <Link href={`/annuaire/${mSlug}/${vSlug}`} className="hover:text-indigo-600">{m.labelPlural}</Link>}
-        {v && <><span>/</span><Link href={`/annuaire/${mSlug}/${vSlug}`} className="hover:text-indigo-600">{v.label}</Link></>}
+        {m && <Link href={`/annuaire/${mSlug}/${vSlug}`} className="hover:text-primary-600">{m.labelPlural}</Link>}
+        {v && <><span>/</span><Link href={`/annuaire/${mSlug}/${vSlug}`} className="hover:text-primary-600">{v.label}</Link></>}
         <span>/</span>
         <span className="text-gray-800 truncate">{listing.display_name}</span>
       </div>
@@ -139,16 +142,16 @@ export default async function FicheProPage({
                 alt={listing.display_name}
                 width={80}
                 height={80}
-                className="w-20 h-20 rounded-full object-cover shrink-0 border-2 border-indigo-100"
+                className="w-20 h-20 rounded-full object-cover shrink-0 border-2 border-primary-100"
               />
             ) : (
-              <div className="w-20 h-20 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-3xl shrink-0">
+              <div className="w-20 h-20 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-3xl shrink-0">
                 {listing.display_name[0]?.toUpperCase()}
               </div>
             )}
             <div className="min-w-0">
               <h1 className="text-2xl font-extrabold text-gray-900">{listing.display_name}</h1>
-              {m && <p className="text-indigo-600 font-medium text-sm mt-0.5">{m.label}</p>}
+              {m && <p className="text-primary-600 font-medium text-sm mt-0.5">{m.label}</p>}
               {listing.tagline && <p className="text-gray-500 mt-2 text-sm">{listing.tagline}</p>}
               {listing.accepts_booking && (
                 <span className="inline-block mt-3 text-xs text-green-700 bg-green-50 border border-green-200 px-3 py-1 rounded-full">
@@ -164,7 +167,7 @@ export default async function FicheProPage({
               <p className="text-sm font-semibold text-gray-700 mb-2">Zones d'intervention</p>
               <div className="flex flex-wrap gap-2">
                 {listing.zones.map((z: string) => (
-                  <span key={z} className="text-sm bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full">
+                  <span key={z} className="text-sm bg-primary-50 text-primary-700 px-3 py-1 rounded-full">
                     📍 {z}
                   </span>
                 ))}
@@ -190,7 +193,7 @@ export default async function FicheProPage({
                     <p className="font-medium text-gray-800 text-sm">{o.name}</p>
                     <div className="flex gap-2 mt-1.5">
                       {o.duration_min && <span className="text-xs text-gray-500">{o.duration_min} min</span>}
-                      {o.price_eur && <span className="text-xs text-indigo-600 font-medium">{o.price_eur} €</span>}
+                      {o.price_eur && <span className="text-xs text-primary-600 font-medium">{o.price_eur} €</span>}
                     </div>
                   </div>
                 ))}
@@ -202,14 +205,14 @@ export default async function FicheProPage({
           <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
             <Link
               href={`/${slug}`}
-              className="flex-1 bg-indigo-700 text-white font-bold px-6 py-3 rounded-xl text-center hover:bg-indigo-800 transition-colors"
+              className="flex-1 bg-primary-700 text-white font-bold px-6 py-3 rounded-xl text-center hover:bg-primary-800 transition-colors"
             >
               Voir le site complet →
             </Link>
             {listing.accepts_booking && (
               <Link
                 href={`/${slug}#contact`}
-                className="flex-1 border border-indigo-300 text-indigo-700 font-semibold px-6 py-3 rounded-xl text-center hover:bg-indigo-50 transition-colors"
+                className="flex-1 border border-primary-300 text-primary-700 font-semibold px-6 py-3 rounded-xl text-center hover:bg-primary-50 transition-colors"
               >
                 Prendre RDV
               </Link>
@@ -237,6 +240,8 @@ export default async function FicheProPage({
           </div>
         )}
       </section>
+
+      <MarketingFooter />
     </main>
   );
 }

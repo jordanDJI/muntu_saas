@@ -184,9 +184,14 @@ _CACHE_TTL = timedelta(hours=24)
 _VALID_PERIODS = {"week", "month", "quarter", "year"}
 
 
+import logging as _logging
+_roi_logger = _logging.getLogger(__name__)
+
+
 @router.get("/roi-potential")
 async def get_roi_potential(
     period: str = "month",
+    force: bool = False,
     tenant_id: str = Depends(get_current_tenant),
 ):
     if period not in _VALID_PERIODS:
@@ -195,23 +200,24 @@ async def get_roi_potential(
     sb = get_supabase()
 
     # ── Cache lookup ──────────────────────────────────────────────────────────
-    try:
-        cached = (
-            sb.table("tenant_roi_cache")
-            .select("data, computed_at")
-            .eq("tenant_id", tenant_id)
-            .eq("period", period)
-            .single()
-            .execute()
-        )
-        if cached.data:
-            computed_at = datetime.fromisoformat(
-                cached.data["computed_at"].replace("Z", "+00:00")
+    if not force:
+        try:
+            cached = (
+                sb.table("tenant_roi_cache")
+                .select("data, computed_at")
+                .eq("tenant_id", tenant_id)
+                .eq("period", period)
+                .single()
+                .execute()
             )
-            if datetime.now(timezone.utc) - computed_at < _CACHE_TTL:
-                return {**cached.data["data"], "cached_at": cached.data["computed_at"]}
-    except Exception:
-        pass
+            if cached.data:
+                computed_at = datetime.fromisoformat(
+                    cached.data["computed_at"].replace("Z", "+00:00")
+                )
+                if datetime.now(timezone.utc) - computed_at < _CACHE_TTL:
+                    return {**cached.data["data"], "cached_at": cached.data["computed_at"]}
+        except Exception:
+            pass
 
     # ── Tenant info ───────────────────────────────────────────────────────────
     tenant_row = (
@@ -230,15 +236,16 @@ async def get_roi_potential(
     try:
         sites_res = sb.table("site").select("id, coverage_zones").eq("tenant_id", tenant_id).execute()
         site_row = sites_res.data[0] if sites_res.data else None
+        _roi_logger.info("roi-potential tenant=%s site_row=%s", tenant_id, site_row)
         if site_row:
             site_id = site_row["id"]
             raw_zones = site_row.get("coverage_zones") or []
             zones = [str(z).strip() for z in raw_zones if z and str(z).strip()]
+            _roi_logger.info("roi-potential zones trouvées: %s", zones)
             offers = sb.table("service_offer").select("name").eq("site_id", site_id).execute()
             offer_names = [o["name"] for o in (offers.data or []) if o.get("name")]
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning("roi-potential: erreur lecture site/zones: %s", e)
+        _roi_logger.warning("roi-potential: erreur lecture site/zones: %s", e)
 
     # ── Fetch from pytrends ───────────────────────────────────────────────────
     from app.services.trends import get_demand_data

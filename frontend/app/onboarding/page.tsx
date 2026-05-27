@@ -125,6 +125,11 @@ export default function OnboardingPage() {
     }
 
     // Flux email step 1 : créer le compte, l'utilisateur remplira step 2 après confirmation
+    if (form.password.length < 8 || !/\d/.test(form.password) || !/[^a-zA-Z0-9]/.test(form.password)) {
+      setError("Le mot de passe doit contenir au moins 8 caractères, 1 chiffre et 1 caractère spécial.");
+      setLoading(false);
+      return;
+    }
     if (form.password !== form.confirm_password) {
       setError("Les mots de passe ne correspondent pas.");
       setLoading(false);
@@ -315,7 +320,22 @@ export default function OnboardingPage() {
                         <input className="d-input" placeholder={t.ob_lastname} value={form.last_name} onChange={(e) => set("last_name", e.target.value)} required />
                       </div>
                       <input className="d-input" type="email" placeholder={t.ob_email} value={form.email} onChange={(e) => set("email", e.target.value)} required />
-                      <input className="d-input" type="password" placeholder={t.ob_password} value={form.password} onChange={(e) => set("password", e.target.value)} required minLength={8} />
+                      <div>
+                        <input className="d-input" type="password" placeholder={t.ob_password} value={form.password} onChange={(e) => { set("password", e.target.value); setError(""); }} required minLength={8} />
+                        {form.password.length > 0 && (
+                          <div style={{ display:"flex", gap:"8px", marginTop:"6px", flexWrap:"wrap" }}>
+                            {[
+                              { ok: form.password.length >= 8,          label: "8 caractères" },
+                              { ok: /\d/.test(form.password),           label: "1 chiffre" },
+                              { ok: /[^a-zA-Z0-9]/.test(form.password), label: "1 caractère spécial" },
+                            ].map(({ ok, label }) => (
+                              <span key={label} style={{ fontSize:"11px", padding:"2px 8px", borderRadius:"99px", background: ok ? "rgba(52,211,153,.15)" : "rgba(255,255,255,.07)", color: ok ? "#6ee7b7" : "#9ca3af", border: `1px solid ${ok ? "rgba(52,211,153,.3)" : "rgba(255,255,255,.1)"}` }}>
+                                {ok ? "✓" : "·"} {label}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <input className="d-input" type="password" placeholder={t.ob_confirm_password} value={form.confirm_password} onChange={(e) => { set("confirm_password", e.target.value); setError(""); }} required minLength={8} />
 
                       {error && (
