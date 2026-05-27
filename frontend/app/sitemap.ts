@@ -82,15 +82,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }))
   );
 
-  // Annuaire — {metier}/{ville}  (800 pages)
-  const annuairePages: MetadataRoute.Sitemap = metiers.flatMap((m) =>
-    villes.map((v) => ({
-      url: `${APP_URL}/annuaire/${m.slug}/${v.slug}`,
+  // Annuaire — {metier}/{ville}  — uniquement les combos avec au moins une fiche réelle
+  const annuaireCombosWithContent = new Set(directorySlugs.map(({ metier, ville }) => `${metier}/${ville}`));
+  const annuairePages: MetadataRoute.Sitemap = [...annuaireCombosWithContent].map((key) => {
+    const [metier, ville] = key.split("/");
+    return {
+      url: `${APP_URL}/annuaire/${metier}/${ville}`,
       lastModified: now,
       changeFrequency: "weekly" as const,
       priority: 0.7,
-    }))
-  );
+    };
+  });
 
   // Fiches pros listées dans l'annuaire
   const fichePages: MetadataRoute.Sitemap = directorySlugs.map(({ metier, ville, slug }) => ({

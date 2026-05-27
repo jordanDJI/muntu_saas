@@ -45,6 +45,16 @@ export async function generateMetadata({
   const metierArticle = m?.labelArticle ?? `un ${formatMetierLabel(mSlug).toLowerCase()}`;
 
   const canonical = `${APP_URL}/annuaire/${mSlug}/${vSlug}`;
+
+  // noindex si aucune fiche — évite l'indexation de pages au contenu trop mince
+  const listings = await getListings(mSlug, villeLabel);
+  if (listings.length === 0) {
+    return {
+      title: `${metierLabel} ${villePrep} — Annuaire Klientys`,
+      robots: { index: false },
+    };
+  }
+
   return {
     title: `${metierLabel} ${villePrep} — Annuaire Klientys`,
     description: `Trouvez ${metierArticle} ${villePrep}. Profils vérifiés, prise de RDV directe. Annuaire gratuit Klientys.`,
