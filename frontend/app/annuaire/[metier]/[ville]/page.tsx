@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { notFound } from "next/navigation";
 import metiers from "../../../../data/metiers.json";
 import villes from "../../../../data/villes.json";
 import MarketingNav from "../../../../components/MarketingNav";
@@ -26,6 +25,10 @@ async function getListings(metier: string, ville: string) {
   }
 }
 
+function formatMetierLabel(slug: string) {
+  return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -33,20 +36,22 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { metier: mSlug, ville: vSlug } = await params;
   const m = metiers.find((x) => x.slug === mSlug);
-  if (!m) return { title: "Annuaire — Klientys" };
 
   const vKnown = villes.find((x) => x.slug === vSlug);
   const villeLabel = vKnown?.label ?? vSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const villePrep  = vKnown?.labelPrep ?? `à ${villeLabel}`;
 
+  const metierLabel  = m?.labelPlural ?? formatMetierLabel(mSlug);
+  const metierArticle = m?.labelArticle ?? `un ${formatMetierLabel(mSlug).toLowerCase()}`;
+
   const canonical = `${APP_URL}/annuaire/${mSlug}/${vSlug}`;
   return {
-    title: `${m.labelPlural} ${villePrep} — Annuaire Klientys`,
-    description: `Trouvez ${m.labelArticle} ${villePrep}. Profils vérifiés, prise de RDV directe. Annuaire gratuit Klientys.`,
+    title: `${metierLabel} ${villePrep} — Annuaire Klientys`,
+    description: `Trouvez ${metierArticle} ${villePrep}. Profils vérifiés, prise de RDV directe. Annuaire gratuit Klientys.`,
     alternates: { canonical },
     openGraph: {
-      title: `${m.labelPlural} ${villePrep}`,
-      description: `Trouvez ${m.labelArticle} ${villePrep}. Profils vérifiés, prise de RDV directe.`,
+      title: `${metierLabel} ${villePrep}`,
+      description: `Trouvez ${metierArticle} ${villePrep}. Profils vérifiés, prise de RDV directe.`,
       url: canonical,
       siteName: "Klientys",
       images: [{ url: `${APP_URL}/annuaire/${mSlug}/${vSlug}/opengraph-image`, width: 1200, height: 630 }],
@@ -61,7 +66,6 @@ export default async function AnnuaireVillePage({
 }) {
   const { metier: mSlug, ville: vSlug } = await params;
   const m = metiers.find((x) => x.slug === mSlug);
-  if (!m) notFound();
 
   // Ville connue (villes.json) ou inconnue : on accepte les deux
   const vKnown = villes.find((x) => x.slug === vSlug);
@@ -69,6 +73,11 @@ export default async function AnnuaireVillePage({
   const villePrep  = vKnown?.labelPrep ?? `à ${villeLabel}`;
 
   const listings = await getListings(mSlug, villeLabel);
+
+  // Métier connu (metiers.json) ou inconnu : dériver le label depuis les fiches ou le slug
+  const customMetierLabel = listings[0]?.metier_label as string | undefined;
+  const metierLabelPlural = m?.labelPlural ?? customMetierLabel ?? formatMetierLabel(mSlug);
+  const metierLabelArticle = m?.labelArticle ?? `un ${(customMetierLabel ?? formatMetierLabel(mSlug)).toLowerCase()}`;
 
   const canonical = `${APP_URL}/annuaire/${mSlug}/${vSlug}`;
 
@@ -78,14 +87,14 @@ export default async function AnnuaireVillePage({
     itemListElement: [
       { "@type": "ListItem", position: 1, name: "Accueil", item: APP_URL },
       { "@type": "ListItem", position: 2, name: "Annuaire", item: `${APP_URL}/annuaire` },
-      { "@type": "ListItem", position: 3, name: `${m.labelPlural} ${villePrep}`, item: canonical },
+      { "@type": "ListItem", position: 3, name: `${metierLabelPlural} ${villePrep}`, item: canonical },
     ],
   };
 
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    name: `${m.labelPlural} ${villePrep}`,
+    name: `${metierLabelPlural} ${villePrep}`,
     numberOfItems: listings.length,
     itemListElement: listings.map((l: any, i: number) => ({
       "@type": "ListItem",
@@ -109,7 +118,7 @@ export default async function AnnuaireVillePage({
       <div className="max-w-5xl mx-auto px-6 pt-28 text-sm text-gray-500 flex gap-2">
         <Link href="/annuaire" className="hover:text-primary-600">Annuaire</Link>
         <span>/</span>
-        <Link href={`/annuaire/${mSlug}/${vSlug}`} className="text-gray-800">{m.labelPlural}</Link>
+        <Link href={`/annuaire/${mSlug}/${vSlug}`} className="text-gray-800">{metierLabelPlural}</Link>
         <span>/</span>
         <span className="text-gray-800">{villeLabel}</span>
       </div>
@@ -117,7 +126,7 @@ export default async function AnnuaireVillePage({
       {/* Header */}
       <section className="max-w-5xl mx-auto px-6 py-8">
         <h1 className="text-3xl font-extrabold text-gray-900">
-          {m.labelPlural} {villePrep}
+          {metierLabelPlural} {villePrep}
         </h1>
         <p className="text-gray-500 mt-2">
           {listings.length > 0
@@ -131,7 +140,7 @@ export default async function AnnuaireVillePage({
         {listings.length === 0 ? (
           <div className="bg-primary-50 border border-primary-100 rounded-xl p-8 text-center">
             <p className="text-primary-800 font-semibold mb-2">
-              Vous êtes {m.labelArticle} {villePrep} ?
+              Vous êtes {metierLabelArticle} {villePrep} ?
             </p>
             <p className="text-primary-600 text-sm mb-4">
               Soyez le premier à apparaître dans cet annuaire — gratuitement.
@@ -211,15 +220,15 @@ export default async function AnnuaireVillePage({
             mainEntity: [
               {
                 "@type": "Question",
-                name: `Comment trouver ${m.labelArticle} ${villePrep} ?`,
+                name: `Comment trouver ${metierLabelArticle} ${villePrep} ?`,
                 acceptedAnswer: {
                   "@type": "Answer",
-                  text: `L'annuaire Klientys liste les ${m.labelPlural.toLowerCase()} ${villePrep} avec prise de RDV directe. Chaque professionnel a vérifié ses zones d'intervention.`,
+                  text: `L'annuaire Klientys liste les ${metierLabelPlural.toLowerCase()} ${villePrep} avec prise de RDV directe. Chaque professionnel a vérifié ses zones d'intervention.`,
                 },
               },
               {
                 "@type": "Question",
-                name: `Comment s'inscrire en tant que ${m.labelArticle} ${villePrep} ?`,
+                name: `Comment s'inscrire en tant que ${metierLabelArticle} ${villePrep} ?`,
                 acceptedAnswer: {
                   "@type": "Answer",
                   text: `Créez votre site professionnel sur Klientys (essai gratuit), puis activez l'option "Apparaître dans l'annuaire" dans vos paramètres.`,
@@ -233,7 +242,7 @@ export default async function AnnuaireVillePage({
       {/* CTA pro bas de page */}
       <section className="bg-primary-50 border-t border-primary-100 py-12 px-6 text-center">
         <p className="text-primary-900 font-semibold mb-4">
-          Vous êtes {m.labelArticle} {villePrep} et vous n'êtes pas listé ?
+          Vous êtes {metierLabelArticle} {villePrep} et vous n'êtes pas listé ?
         </p>
         <Link
           href="/onboarding"

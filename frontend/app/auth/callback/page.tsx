@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../../lib/api";
+import { supabase, api } from "../../../lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -68,14 +68,15 @@ export default function AuthCallbackPage() {
       if (hasTenant) {
         localStorage.removeItem("klientys_pending_setup");
         localStorage.removeItem("klientys_tenant_id");
-        // Assure que app_user existe (Google OAuth peut bypasser le formulaire d'onboarding)
-        if (session.user.app_metadata?.provider === "google") {
+        const provider = session.user.app_metadata?.provider;
+        if (provider === "google") {
           try {
             await fetch(`${API}/api/v1/auth/ensure-profile`, {
               method: "POST",
               headers: { Authorization: `Bearer ${session.access_token}` },
             });
           } catch { /* non bloquant */ }
+          api.logActivity({ action: "Connexion", detail: "Via Google" }).catch(() => {});
         }
         router.replace("/dashboard");
         return;

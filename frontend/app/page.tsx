@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { supabase } from "../lib/api";
 import { LangSelector, useLanguage } from "../contexts/LanguageContext";
+import CookieBanner from "../components/CookieBanner";
 
 const FAQ_KEYS = [
   ["lp_faq1_q", "lp_faq1_a"],
@@ -590,6 +591,8 @@ export default function LandingPage() {
         <Link href="/onboarding" className="l-btn l-btn-primary" style={{ flex: 1, justifyContent: "center" }}>{t.lp_nav_start}</Link>
         <Link href="/login" className="l-btn l-btn-ghost" style={{ padding: "12px 20px" }}>{t.lp_nav_login}</Link>
       </div>
+
+      <CookieBanner privacyUrl="/legal/privacy" />
 
     </div>
   );

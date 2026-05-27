@@ -16,6 +16,7 @@ router = APIRouter(prefix="/directory", tags=["Directory"])
 
 class ListingUpsertIn(BaseModel):
     metier_slug:      str
+    metier_label:     Optional[str] = None
     display_name:     str
     tagline:          Optional[str] = None
     zones:            list[str]
@@ -70,6 +71,7 @@ async def list_listings(
             "primary_zone": r["primary_zone"],
             "profile_photo_url": r["profile_photo_url"],
             "accepts_booking": r["accepts_booking"],
+            "metier_label": r.get("metier_label"),
             "site_url": f"/{slug}",
             "directory_url": f"/annuaire/{metier}/{ville}/{slug}",
         })
@@ -117,6 +119,7 @@ async def opt_in(body: ListingUpsertIn, tenant_id: str = Depends(get_current_ten
         "is_listed":        True,
         "listed_at":        now,
         "metier_slug":      body.metier_slug,
+        "metier_label":     body.metier_label,
         "display_name":     body.display_name,
         "tagline":          body.tagline,
         "zones":            body.zones,

@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api, supabase } from "../../../lib/api";
 import { useLanguage, LANGUAGES } from "../../../contexts/LanguageContext";
@@ -76,15 +77,17 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
 
 function SectionProfil() {
   const { lang: ctxLang, setLang: ctxSetLang, t } = useLanguage();
-  const [user, setUser]     = useState<any>(null);
-  const [name, setName]     = useState("");
-  const [tz, setTz]         = useState("Europe/Brussels");
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg]       = useState("");
+  const [user, setUser]               = useState<any>(null);
+  const [name, setName]               = useState("");
+  const [tz, setTz]                   = useState("Europe/Brussels");
+  const [saving, setSaving]           = useState(false);
+  const [msg, setMsg]                 = useState("");
+  const [avatarUrl, setAvatarUrl]     = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const load = async () => {
-      // Try server-validated user first, fall back to session (localStorage)
       const { data: { user: u } } = await supabase.auth.getUser();
       const sessionUser = u ?? (await supabase.auth.getSession()).data.session?.user;
       if (!sessionUser) return;
@@ -93,14 +96,34 @@ function SectionProfil() {
       const fullName = m.full_name ?? [m.first_name, m.last_name].filter(Boolean).join(" ");
       setName(fullName);
       setTz(m.timezone ?? "Europe/Brussels");
+      setAvatarUrl(m.avatar_url ?? null);
     };
     load();
   }, []);
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    setMsg("");
+    try {
+      const { url } = await api.uploadSitePhoto(file, "avatar");
+      await supabase.auth.updateUser({ data: { avatar_url: url } });
+      setAvatarUrl(url);
+      api.logActivity({ action: "Photo de profil mise à jour" }).catch(() => {});
+    } catch (err: any) {
+      setMsg(`Erreur upload : ${err.message}`);
+    } finally {
+      setUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const save = async (e: React.SyntheticEvent) => {
     e.preventDefault(); setSaving(true); setMsg("");
     try {
       await supabase.auth.updateUser({ data: { full_name: name, lang: ctxLang, timezone: tz } });
+      api.logActivity({ action: "Profil mis à jour", detail: name || undefined }).catch(() => {});
       setMsg(t.sett_saved);
     } catch { setMsg("Erreur lors de la sauvegarde."); }
     finally { setSaving(false); }
@@ -114,14 +137,41 @@ function SectionProfil() {
       <Card>
         <form onSubmit={save} className="space-y-4">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-primary-100 flex items-center justify-center text-2xl font-bold text-primary-600 shrink-0">
-              {initials}
+            {/* Avatar avec overlay upload */}
+            <div className="relative w-16 h-16 shrink-0 group">
+              {avatarUrl ? (
+                <Image src={avatarUrl} alt={name || "Avatar"} width={64} height={64}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-primary-100" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-primary-100 flex items-center justify-center text-2xl font-bold text-primary-600">
+                  {initials}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-wait"
+                title="Changer la photo"
+              >
+                {uploadingAvatar ? (
+                  <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  </svg>
+                )}
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp"
+                className="hidden" onChange={handleAvatarChange} />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700">{user?.email}</p>
               <p className="text-xs text-gray-400 mt-0.5">
                 Compte créé le {user?.created_at ? new Date(user.created_at).toLocaleDateString("fr-BE") : "—"}
               </p>
+              <p className="text-xs text-gray-400 mt-0.5">Survolez la photo pour la modifier</p>
             </div>
           </div>
           <div>
@@ -169,12 +219,20 @@ function SectionProfil() {
 // ── Section Sécurité ──────────────────────────────────────────────────────────
 
 function SectionSecurite() {
-  const [current, setCurrent]   = useState("");
-  const [next, setNext]         = useState("");
-  const [confirm, setConfirm]   = useState("");
-  const [saving, setSaving]     = useState(false);
-  const [msg, setMsg]           = useState("");
+  const [current, setCurrent]     = useState("");
+  const [next, setNext]           = useState("");
+  const [confirm, setConfirm]     = useState("");
+  const [saving, setSaving]       = useState(false);
+  const [msg, setMsg]             = useState("");
   const [resetSent, setResetSent] = useState(false);
+  const [isOAuth, setIsOAuth]     = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      const provider = user?.app_metadata?.provider;
+      setIsOAuth(provider === "google" || provider === "github");
+    });
+  }, []);
 
   const changePassword = async (e: React.FormEvent) => {
     e.preventDefault(); setMsg("");
@@ -206,25 +264,31 @@ function SectionSecurite() {
       <SectionTitle title="Sécurité" subtitle="Gérez votre mot de passe et la sécurité de votre compte." />
       <Card>
         <h3 className="font-semibold text-gray-700 text-sm">Modifier le mot de passe</h3>
-        <form onSubmit={changePassword} className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium mb-1">Mot de passe actuel</label>
-            <input type="password" value={current} onChange={e => setCurrent(e.target.value)} required
-              className="border rounded-lg px-3 py-2 w-full text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Nouveau mot de passe</label>
-            <input type="password" value={next} onChange={e => setNext(e.target.value)} required minLength={8}
-              className="border rounded-lg px-3 py-2 w-full text-sm" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Confirmer le nouveau mot de passe</label>
-            <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required
-              className="border rounded-lg px-3 py-2 w-full text-sm" />
-          </div>
-          <Feedback msg={msg} />
-          <SaveBtn loading={saving} label="Modifier le mot de passe" />
-        </form>
+        {isOAuth ? (
+          <p className="text-sm text-gray-500 bg-gray-50 border rounded-lg px-4 py-3">
+            Votre compte est connecté via Google. La modification du mot de passe n'est pas disponible pour les connexions OAuth.
+          </p>
+        ) : (
+          <form onSubmit={changePassword} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">Mot de passe actuel</label>
+              <input type="password" value={current} onChange={e => setCurrent(e.target.value)} required
+                className="border rounded-lg px-3 py-2 w-full text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Nouveau mot de passe</label>
+              <input type="password" value={next} onChange={e => setNext(e.target.value)} required minLength={8}
+                className="border rounded-lg px-3 py-2 w-full text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Confirmer le nouveau mot de passe</label>
+              <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required
+                className="border rounded-lg px-3 py-2 w-full text-sm" />
+            </div>
+            <Feedback msg={msg} />
+            <SaveBtn loading={saving} label="Modifier le mot de passe" />
+          </form>
+        )}
       </Card>
       <Card>
         <h3 className="font-semibold text-gray-700 text-sm">Mot de passe oublié ?</h3>
@@ -1197,6 +1261,7 @@ function SectionExport() {
     try {
       await api.exportData();
       setExportDone(true);
+      api.logActivity({ action: "Export données RGPD" }).catch(() => {});
     } catch (e: any) {
       setExportError(e.message ?? "Erreur lors de l'export.");
     } finally { setExporting(false); }
@@ -1235,9 +1300,12 @@ function SectionExport() {
       <Card>
         <h3 className="font-semibold text-sm text-gray-700">Droit à l'oubli</h3>
         <p className="text-sm text-gray-500">Vous pouvez demander la suppression de toutes vos données conformément au RGPD. Cette action est irréversible.</p>
-        <button className="text-sm text-gray-500 hover:underline border px-4 py-2 rounded-lg">
-          Contacter le DPO : privacy@example.com
-        </button>
+        <a
+          href="mailto:support@klientys.co?subject=Droit à l'oubli — suppression de mes données"
+          className="inline-block text-sm text-primary-600 hover:underline border border-primary-200 px-4 py-2 rounded-lg hover:bg-primary-50 transition-colors"
+        >
+          Contacter le support : support@klientys.co
+        </a>
       </Card>
       <Card className="border-red-100">
         <h3 className="font-semibold text-sm text-red-600">Supprimer mon compte</h3>
@@ -1272,27 +1340,60 @@ function SectionExport() {
 // ── Section Activité ──────────────────────────────────────────────────────────
 
 const ACTION_ICON: Record<string, string> = {
-  "Connexion":          "🔑",
-  "Site publié":        "🌐",
-  "Site dépublié":      "🌐",
-  "Mot de passe modifié": "🔐",
-  "Membre invité":      "👥",
-  "Membre retiré":      "👥",
-  "Nouvel espace créé": "🏢",
-  "Clé API régénérée":  "🔑",
-  "Compte désactivé":   "⚠️",
+  "Connexion":                    "🔑",
+  "Site publié":                  "🌐",
+  "Site dépublié":                "🌐",
+  "Mot de passe modifié":         "🔐",
+  "Membre invité":                "👥",
+  "Membre retiré":                "👥",
+  "Nouvel espace créé":           "🏢",
+  "Clé API régénérée":            "🔑",
+  "Compte désactivé":             "⚠️",
+  "Profil mis à jour":            "👤",
+  "Photo de profil mise à jour":  "📷",
+  "Export données RGPD":          "📤",
 };
 
+const PAGE_SIZE = 10;
+
 function SectionActivite() {
-  const [logs, setLogs]       = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [logs, setLogs]           = useState<any[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore]     = useState(true);
+  const offsetRef                 = useRef(0);
+  const busyRef                   = useRef(false);
+  const sentinelRef               = useRef<HTMLDivElement>(null);
+
+  const fetchMore = useCallback(async () => {
+    if (busyRef.current || !hasMore) return;
+    busyRef.current = true;
+    setLoadingMore(true);
+    try {
+      const data = await api.getActivityLog(PAGE_SIZE, offsetRef.current);
+      setLogs(prev => [...prev, ...data]);
+      offsetRef.current += data.length;
+      if (data.length < PAGE_SIZE) setHasMore(false);
+    } catch {
+      setHasMore(false);
+    } finally {
+      busyRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [hasMore]);
 
   useEffect(() => {
-    api.getActivityLog(50)
-      .then(setLogs)
-      .catch(() => setLogs([]))
-      .finally(() => setLoading(false));
-  }, []);
+    fetchMore().finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!sentinelRef.current || !hasMore) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) fetchMore();
+    }, { rootMargin: "100px" });
+    obs.observe(sentinelRef.current);
+    return () => obs.disconnect();
+  }, [fetchMore, hasMore]);
 
   return (
     <>
@@ -1316,6 +1417,17 @@ function SectionActivite() {
                 </p>
               </div>
             ))}
+            {/* Sentinel pour l'infinite scroll */}
+            <div ref={sentinelRef} className="pt-1">
+              {loadingMore && (
+                <div className="flex justify-center py-3">
+                  <div className="w-5 h-5 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+                </div>
+              )}
+              {!hasMore && logs.length > PAGE_SIZE && (
+                <p className="text-xs text-gray-400 text-center py-2">Tout l'historique est chargé.</p>
+              )}
+            </div>
           </div>
         )}
       </Card>
@@ -1829,14 +1941,15 @@ function SectionAnnuaire() {
   const [saving, setSaving]           = useState(false);
   const [msg, setMsg]                 = useState("");
 
-  const [isListed, setIsListed]       = useState(false);
-  const [metierSlug, setMetierSlug]   = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [tagline, setTagline]         = useState("");
-  const [zones, setZones]             = useState<string[]>([]);
-  const [primaryZone, setPrimaryZone] = useState("");
+  const [isListed, setIsListed]           = useState(false);
+  const [metierSlug, setMetierSlug]       = useState("");
+  const [customMetierLabel, setCustomMetierLabel] = useState("");
+  const [displayName, setDisplayName]     = useState("");
+  const [tagline, setTagline]             = useState("");
+  const [zones, setZones]                 = useState<string[]>([]);
+  const [primaryZone, setPrimaryZone]     = useState("");
   const [acceptsBooking, setAcceptsBooking] = useState(true);
-  const [zoneInput, setZoneInput]     = useState("");
+  const [zoneInput, setZoneInput]         = useState("");
 
   useEffect(() => {
     api.getDirectoryListing()
@@ -1844,7 +1957,13 @@ function SectionAnnuaire() {
         if (data) {
           setListing(data);
           setIsListed(data.is_listed ?? false);
-          setMetierSlug(data.metier_slug ?? "");
+          const knownMetier = metiers.find(m => m.slug === data.metier_slug);
+          if (knownMetier) {
+            setMetierSlug(data.metier_slug ?? "");
+          } else if (data.metier_slug) {
+            setMetierSlug("autre");
+            setCustomMetierLabel(data.metier_label ?? data.metier_slug);
+          }
           setDisplayName(data.display_name ?? "");
           setTagline(data.tagline ?? "");
           setZones(data.zones ?? []);
@@ -1872,13 +1991,19 @@ function SectionAnnuaire() {
     if (primaryZone === z) setPrimaryZone(next[0] ?? "");
   };
 
+  const slugify = (s: string) =>
+    s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true); setMsg("");
     try {
       if (isListed) {
+        const finalSlug = metierSlug === "autre" ? slugify(customMetierLabel) : metierSlug;
+        const finalLabel = metierSlug === "autre" ? customMetierLabel.trim() : null;
         await api.directoryOptIn({
-          metier_slug: metierSlug,
+          metier_slug: finalSlug,
+          metier_label: finalLabel,
           display_name: displayName,
           tagline: tagline || null,
           zones,
@@ -1901,8 +2026,10 @@ function SectionAnnuaire() {
   const villeSlug = villes.find(v => v.label.toLowerCase() === primaryZone.toLowerCase())?.slug
     ?? primaryZone.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, "-");
 
-  const previewUrl = isListed && metierSlug && primaryZone
-    ? `/annuaire/${metierSlug}/${villeSlug}`
+  const effectiveMetierSlug = metierSlug === "autre" ? slugify(customMetierLabel) : metierSlug;
+
+  const previewUrl = isListed && effectiveMetierSlug && primaryZone
+    ? `/annuaire/${effectiveMetierSlug}/${villeSlug}`
     : null;
 
   if (loading) return <p className="text-sm text-gray-400">Chargement…</p>;
@@ -1942,7 +2069,18 @@ function SectionAnnuaire() {
                 {metiers.map(m => (
                   <option key={m.slug} value={m.slug}>{m.label}</option>
                 ))}
+                <option value="autre">Autre (précisez)</option>
               </select>
+              {metierSlug === "autre" && (
+                <input
+                  value={customMetierLabel}
+                  onChange={e => setCustomMetierLabel(e.target.value)}
+                  placeholder="Ex: Ergothérapeute, Coach de vie…"
+                  required
+                  maxLength={80}
+                  className="mt-2 border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                />
+              )}
             </div>
 
             <div>
@@ -1989,12 +2127,12 @@ function SectionAnnuaire() {
               {zones.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   {zones.map(z => (
-                    <span key={z} className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full">
+                    <span key={z} className="flex items-center gap-1 text-xs bg-primary-50 text-primary-700 px-2 py-1 rounded-full">
                       📍 {z}
                       <button
                         type="button"
                         onClick={() => removeZone(z)}
-                        className="text-indigo-400 hover:text-indigo-600 leading-none ml-0.5"
+                        className="text-primary-400 hover:text-primary-600 leading-none ml-0.5"
                       >
                         ×
                       </button>
@@ -2034,17 +2172,17 @@ function SectionAnnuaire() {
       </form>
 
       {previewUrl && (
-        <Card className="border-indigo-100 bg-indigo-50">
+        <Card className="border-primary-100 bg-primary-50">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-indigo-800">Voir ma fiche dans l'annuaire</p>
-              <p className="text-xs text-indigo-600 mt-0.5">Votre profil est visible publiquement à cette adresse.</p>
+              <p className="text-sm font-semibold text-primary-800">Voir ma fiche dans l'annuaire</p>
+              <p className="text-xs text-primary-600 mt-0.5">Votre profil est visible publiquement à cette adresse.</p>
             </div>
             <a
               href={previewUrl}
               target="_blank"
               rel="noreferrer"
-              className="bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-indigo-800 transition-colors shrink-0"
+              className="bg-primary-700 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary-800 transition-colors shrink-0"
             >
               Voir ma fiche →
             </a>

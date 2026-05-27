@@ -26,7 +26,8 @@ class ActivityIn(BaseModel):
 @router.get("/activity-log")
 async def get_activity_log(
     tenant_id: str = Depends(get_current_tenant),
-    limit: int = 50,
+    limit: int = 10,
+    offset: int = 0,
 ):
     try:
         sb = get_supabase_admin()
@@ -35,7 +36,7 @@ async def get_activity_log(
             .select("id, action, detail, created_at")
             .eq("tenant_id", tenant_id)
             .order("created_at", desc=True)
-            .limit(limit)
+            .range(offset, offset + limit - 1)
             .execute()
         )
         return res.data or []

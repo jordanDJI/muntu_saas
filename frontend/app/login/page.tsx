@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { supabase } from "../../lib/api";
+import { supabase, api } from "../../lib/api";
 import { useLanguage, LangSelector } from "../../contexts/LanguageContext";
 
 const LOCKOUT_KEY = "klientys_login_lockout";
@@ -76,6 +76,7 @@ export default function LoginPage() {
         }
       } else {
         setLockout({ attempts: 0, until: 0 });
+        api.logActivity({ action: "Connexion", detail: "Via email/mot de passe" }).catch(() => {});
         window.location.replace(redirectAfterLogin);
       }
     } catch (err: any) {

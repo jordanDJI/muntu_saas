@@ -213,7 +213,7 @@ export const api = {
   regenerateTenantApiKey: () => apiFetch<{ api_key: string }>("/api/v1/tenants/api-key/regenerate", { method: "POST" }),
 
   // Users — journal d'activité, export, suppression
-  getActivityLog: (limit = 50) => apiFetch<any[]>(`/api/v1/users/activity-log?limit=${limit}`),
+  getActivityLog: (limit = 10, offset = 0) => apiFetch<any[]>(`/api/v1/users/activity-log?limit=${limit}&offset=${offset}`),
   logActivity: (body: { action: string; detail?: string }) =>
     apiFetch("/api/v1/users/log-activity", { method: "POST", body: JSON.stringify(body) }),
   exportData: async (): Promise<void> => {
