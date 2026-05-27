@@ -1967,8 +1967,11 @@ function SectionAnnuaire() {
       .finally(() => setLoading(false));
   }, []);
 
+  const titleCase = (s: string) =>
+    s.replace(/(?:^|[\s-])\S/g, c => c.toUpperCase());
+
   const addZone = () => {
-    const z = zoneInput.trim();
+    const z = titleCase(zoneInput.trim());
     if (z && !zones.includes(z)) {
       const next = [...zones, z];
       setZones(next);

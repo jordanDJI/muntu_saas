@@ -122,8 +122,8 @@ async def opt_in(body: ListingUpsertIn, tenant_id: str = Depends(get_current_ten
         "metier_label":     body.metier_label,
         "display_name":     body.display_name,
         "tagline":          body.tagline,
-        "zones":            body.zones,
-        "primary_zone":     body.primary_zone,
+        "zones":            [z.strip().title() for z in body.zones if z.strip()],
+        "primary_zone":     body.primary_zone.strip().title(),
         "profile_photo_url": body.profile_photo_url,
         "accepts_booking":  body.accepts_booking,
         "updated_at":       now,
@@ -142,7 +142,12 @@ async def opt_in(body: ListingUpsertIn, tenant_id: str = Depends(get_current_ten
 async def update_my_listing(body: ListingUpsertIn, tenant_id: str = Depends(get_current_tenant)):
     sb = get_supabase()
     from datetime import datetime, timezone
-    updates = {**body.model_dump(exclude_none=True), "updated_at": datetime.now(timezone.utc).isoformat()}
+    raw = body.model_dump(exclude_none=True)
+    if "zones" in raw:
+        raw["zones"] = [z.strip().title() for z in raw["zones"] if z.strip()]
+    if "primary_zone" in raw:
+        raw["primary_zone"] = raw["primary_zone"].strip().title()
+    updates = {**raw, "updated_at": datetime.now(timezone.utc).isoformat()}
     result = sb.table("directory_listing").update(updates).eq("tenant_id", tenant_id).execute()
     if not result.data:
         raise HTTPException(404, "Fiche introuvable")
