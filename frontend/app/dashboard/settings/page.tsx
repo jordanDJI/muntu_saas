@@ -1076,6 +1076,7 @@ function GoogleAnalyticsCard() {
 
   const handleConnect = async () => {
     setConnecting(true);
+    localStorage.setItem("klientys_ga_connect", "1");
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

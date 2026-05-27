@@ -49,6 +49,13 @@ export default function AuthCallbackPage() {
             }),
           });
         } catch { /* non bloquant */ }
+
+        // Flux de connexion GA depuis les settings : retour direct sans vérifier le tenant
+        if (localStorage.getItem("klientys_ga_connect") === "1") {
+          localStorage.removeItem("klientys_ga_connect");
+          router.replace("/dashboard/settings?section=integrations");
+          return;
+        }
       }
 
       setMsg("Vérification de votre espace…");
