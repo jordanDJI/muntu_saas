@@ -1076,21 +1076,12 @@ function GoogleAnalyticsCard() {
 
   const handleConnect = async () => {
     setConnecting(true);
-    // Sauvegarder la session originale pour la restaurer après le flux OAuth Google
-    const { data: { session: currentSession } } = await supabase.auth.getSession();
-    localStorage.setItem("klientys_ga_connect", "1");
-    if (currentSession?.access_token) {
-      localStorage.setItem("klientys_orig_access", currentSession.access_token);
-      localStorage.setItem("klientys_orig_refresh", currentSession.refresh_token ?? "");
+    try {
+      const data = await api.apiFetch<{ url: string }>("/api/v1/analytics/google/auth-url");
+      window.location.href = data.url;
+    } catch {
+      setConnecting(false);
     }
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: "email profile https://www.googleapis.com/auth/analytics.readonly",
-        queryParams: { access_type: "offline", prompt: "consent" },
-      },
-    });
   };
 
   const handleSave = async () => {

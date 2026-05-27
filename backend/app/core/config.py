@@ -57,5 +57,9 @@ class Settings(BaseSettings):
     # Google Indexing API — service account JSON (stringifié)
     google_service_account_json: str = ""
 
+    # Google OAuth — connexion GA4 tenant (backend OAuth flow)
+    google_client_id: str = ""
+    google_client_secret: str = ""
+
 
 settings = Settings()

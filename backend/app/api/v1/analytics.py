@@ -17,13 +17,15 @@ CREATE INDEX IF NOT EXISTS idx_site_event_tenant_created
 ──────────────────────────────────────────────────────────
 """
 
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-import httpx
+import httpx, hmac, hashlib, json, base64
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
+from app.core.config import settings
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -263,6 +265,82 @@ async def get_roi_potential(
         pass
 
     return {**data, "cached_at": now_iso}
+
+
+# ── Google Analytics (GA4) — backend OAuth flow ──────────────────────────────
+
+def _ga_redirect_uri() -> str:
+    return f"{settings.app_url}/api/v1/analytics/google/oauth-callback"
+
+def _sign_state(tenant_id: str) -> str:
+    payload = json.dumps({"tenant_id": tenant_id})
+    sig = hmac.new(settings.agent_link_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return base64.urlsafe_b64encode(f"{payload}|{sig}".encode()).decode()
+
+def _verify_state(state: str) -> str:
+    try:
+        decoded = base64.urlsafe_b64decode(state.encode()).decode()
+        payload, sig = decoded.rsplit("|", 1)
+        expected = hmac.new(settings.agent_link_secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            raise ValueError
+        return json.loads(payload)["tenant_id"]
+    except Exception:
+        raise HTTPException(status_code=400, detail="State invalide")
+
+
+@router.get("/google/auth-url")
+async def get_google_auth_url(tenant_id: str = Depends(get_current_tenant)):
+    from urllib.parse import urlencode
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": _ga_redirect_uri(),
+        "response_type": "code",
+        "scope": "https://www.googleapis.com/auth/analytics.readonly email profile",
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": _sign_state(tenant_id),
+    }
+    return {"url": f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"}
+
+
+@router.get("/google/oauth-callback")
+async def google_oauth_callback(
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+):
+    frontend = settings.frontend_url_prod or settings.frontend_url
+    fail_url = f"{frontend}/dashboard/settings?section=integrations&ga_error=1"
+
+    if error or not code or not state:
+        return RedirectResponse(fail_url)
+
+    tenant_id = _verify_state(state)
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post("https://oauth2.googleapis.com/token", data={
+            "code": code,
+            "client_id": settings.google_client_id,
+            "client_secret": settings.google_client_secret,
+            "redirect_uri": _ga_redirect_uri(),
+            "grant_type": "authorization_code",
+        })
+        if resp.status_code != 200:
+            return RedirectResponse(fail_url)
+        tokens = resp.json()
+
+    sb = get_supabase()
+    sb.table("google_analytics_connection").upsert(
+        {
+            "tenant_id": tenant_id,
+            "access_token": tokens.get("access_token"),
+            "refresh_token": tokens.get("refresh_token"),
+        },
+        on_conflict="tenant_id",
+    ).execute()
+
+    return RedirectResponse(f"{frontend}/dashboard/settings?section=integrations&ga_connected=1")
 
 
 # ── Google Analytics (GA4) connection ────────────────────────────────────────
