@@ -34,7 +34,29 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      // Sauvegarder les tokens Google Analytics si connexion via Google
+      // Flux de connexion GA depuis les settings : court-circuit avant toute vérification tenant
+      if (localStorage.getItem("klientys_ga_connect") === "1") {
+        localStorage.removeItem("klientys_ga_connect");
+        if (session.provider_token) {
+          try {
+            await fetch(`${API}/api/v1/analytics/google/connect`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                access_token: session.provider_token,
+                refresh_token: session.provider_refresh_token ?? null,
+              }),
+            });
+          } catch { /* non bloquant */ }
+        }
+        router.replace("/dashboard/settings?section=integrations");
+        return;
+      }
+
+      // Sauvegarder les tokens Google Analytics si connexion via Google (flux login)
       if (session.provider_token && session.user.app_metadata?.provider === "google") {
         try {
           await fetch(`${API}/api/v1/analytics/google/connect`, {
@@ -49,13 +71,6 @@ export default function AuthCallbackPage() {
             }),
           });
         } catch { /* non bloquant */ }
-
-        // Flux de connexion GA depuis les settings : retour direct sans vérifier le tenant
-        if (localStorage.getItem("klientys_ga_connect") === "1") {
-          localStorage.removeItem("klientys_ga_connect");
-          router.replace("/dashboard/settings?section=integrations");
-          return;
-        }
       }
 
       setMsg("Vérification de votre espace…");
