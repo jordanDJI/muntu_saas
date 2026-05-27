@@ -1076,7 +1076,13 @@ function GoogleAnalyticsCard() {
 
   const handleConnect = async () => {
     setConnecting(true);
+    // Sauvegarder la session originale pour la restaurer après le flux OAuth Google
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
     localStorage.setItem("klientys_ga_connect", "1");
+    if (currentSession?.access_token) {
+      localStorage.setItem("klientys_orig_access", currentSession.access_token);
+      localStorage.setItem("klientys_orig_refresh", currentSession.refresh_token ?? "");
+    }
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

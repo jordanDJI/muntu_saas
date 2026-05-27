@@ -37,13 +37,19 @@ export default function AuthCallbackPage() {
       // Flux de connexion GA depuis les settings : court-circuit avant toute vérification tenant
       if (localStorage.getItem("klientys_ga_connect") === "1") {
         localStorage.removeItem("klientys_ga_connect");
-        if (session.provider_token) {
+        const origAccess  = localStorage.getItem("klientys_orig_access") ?? "";
+        const origRefresh = localStorage.getItem("klientys_orig_refresh") ?? "";
+        localStorage.removeItem("klientys_orig_access");
+        localStorage.removeItem("klientys_orig_refresh");
+
+        // Sauvegarder les tokens GA avec le token du tenant d'origine
+        if (session.provider_token && origAccess) {
           try {
             await fetch(`${API}/api/v1/analytics/google/connect`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${session.access_token}`,
+                Authorization: `Bearer ${origAccess}`,
               },
               body: JSON.stringify({
                 access_token: session.provider_token,
@@ -52,6 +58,14 @@ export default function AuthCallbackPage() {
             });
           } catch { /* non bloquant */ }
         }
+
+        // Restaurer la session originale (tenant) avant de retourner au dashboard
+        if (origAccess && origRefresh) {
+          try {
+            await supabase.auth.setSession({ access_token: origAccess, refresh_token: origRefresh });
+          } catch { /* non bloquant */ }
+        }
+
         router.replace("/dashboard/settings?section=integrations");
         return;
       }
