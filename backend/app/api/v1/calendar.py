@@ -11,12 +11,19 @@ router = APIRouter(prefix="/calendar", tags=["Calendar"])
 
 
 def _ensure_calendar(sb, tenant_id: str) -> str:
-    """Retourne le calendar_id du tenant, le crée si absent."""
+    """Retourne le calendar_id du tenant, le crée si absent avec des créneaux par défaut."""
     res = sb.table("calendar").select("id").eq("tenant_id", tenant_id).execute()
     if res.data:
         return res.data[0]["id"]
     new = sb.table("calendar").insert({"tenant_id": tenant_id, "name": "Principal"}).execute()
-    return new.data[0]["id"]
+    cal_id = new.data[0]["id"]
+    default_slots = [
+        {"calendar_id": cal_id, "day_of_week": day, "start_time": start, "end_time": end, "slot_duration_min": 30, "is_active": True}
+        for day in range(5)  # 0=Lun … 4=Ven
+        for start, end in [("09:00", "12:00"), ("13:00", "17:00")]
+    ]
+    sb.table("availability_slot").insert(default_slots).execute()
+    return cal_id
 
 
 # ── Disponibilités ────────────────────────────────────────────────────────────

@@ -245,7 +245,7 @@ function ContactFields({
         rows={3}
         value={fields.message}
         onChange={(e) => onChange({ message: e.target.value })}
-        className="border rounded-lg px-3 py-2 text-sm w-full resize-none"
+        className="border rounded-lg px-3 py-2 text-sm w-full resize-y min-h-[80px]"
       />
     </div>
   );

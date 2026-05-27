@@ -471,13 +471,13 @@ export default async function TenantSitePage({
             <p className="mt-3 text-gray-500">Nous vous répondons dans les plus brefs délais.</p>
           </div>
 
-          <div className={`grid gap-10 ${photoUrls.contact ? "sm:grid-cols-[auto_1fr_1fr]" : "sm:grid-cols-2"} items-start`}>
-            {photoUrls.contact && (
-              <Image src={photoUrls.contact} alt={`Contacter ${site.title}`} width={320} height={280} className="w-full h-56 sm:h-auto object-cover rounded-3xl shadow-lg" />
-            )}
+          <div className="grid gap-10 sm:grid-cols-2 items-start">
 
-            {/* Infos */}
+            {/* Infos + photo éventuelle dans la même colonne */}
             <div className="space-y-4">
+              {photoUrls.contact && (
+                <Image src={photoUrls.contact} alt={`Contacter ${site.title}`} width={600} height={360} className="w-full h-56 object-cover rounded-3xl shadow-lg mb-2" />
+              )}
               <h3 className="font-semibold text-gray-800 text-lg mb-5">Nos coordonnées</h3>
               {site.phone && (
                 <a href={`tel:${site.phone}`} data-track="phone" className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow group border border-gray-100">
