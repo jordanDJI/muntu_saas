@@ -47,7 +47,7 @@ export default async function proxy(request: NextRequest) {
     (c) => c.name.startsWith("sb-") && c.name.includes("-auth-token")
   );
 
-  if (!hasSession && pathname.startsWith("/dashboard")) {
+  if (!hasSession && (pathname.startsWith("/dashboard") || pathname.startsWith("/admin"))) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

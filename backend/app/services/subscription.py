@@ -54,11 +54,27 @@ PLAN_FEATURES: dict = {
 TRIAL_DAYS = 14
 
 
+def _apply_overrides(features: dict, overrides: list) -> dict:
+    """Applique les tenant_feature_override sur le dict de features."""
+    if not overrides:
+        return features
+    result = dict(features)
+    for o in overrides:
+        key = o.get("feature_key")
+        if key in result and isinstance(result[key], bool):
+            result[key] = o["enabled"]
+    return result
+
+
 async def get_tenant_plan(tenant_id: str) -> dict:
     from app.core.supabase import get_supabase_admin
     from datetime import datetime, timezone, timedelta
 
     sb = get_supabase_admin()
+
+    # Overrides admin pour ce tenant (appliqués quelle que soit la source du plan)
+    ov_res = sb.table("tenant_feature_override").select("feature_key, enabled").eq("tenant_id", tenant_id).execute()
+    overrides = ov_res.data or []
 
     # 1. Abonnement actif ou en période de grâce Stripe
     res = (
@@ -73,38 +89,43 @@ async def get_tenant_plan(tenant_id: str) -> dict:
         row = res.data[0]
         plan = row["plan"]
         features = plan.get("features") or PLAN_FEATURES.get(plan["name"], ESSENTIEL_FEATURES)
-        return {"plan_name": plan["name"], "status": row["status"], "features": features, "trial_days_left": None}
+        return {"plan_name": plan["name"], "status": row["status"], "features": _apply_overrides(features, overrides), "trial_days_left": None}
 
-    # 2. Pas d'abonnement → vérifier la fenêtre d'essai de 14 jours
-    tenant = sb.table("tenant").select("created_at").eq("id", tenant_id).maybe_single().execute()
+    # 2. Pas d'abonnement → vérifier la fenêtre d'essai
+    tenant = sb.table("tenant").select("created_at, trial_extended_until").eq("id", tenant_id).maybe_single().execute()
     if tenant and tenant.data and tenant.data.get("created_at"):
-        raw = tenant.data["created_at"]
-        created_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
-        trial_end = created_at + timedelta(days=TRIAL_DAYS)
         now = datetime.now(timezone.utc)
+
+        # Utilise trial_extended_until si l'admin a étendu le trial
+        ext = tenant.data.get("trial_extended_until")
+        if ext:
+            trial_end = datetime.fromisoformat(ext.replace("Z", "+00:00"))
+            if trial_end.tzinfo is None:
+                trial_end = trial_end.replace(tzinfo=timezone.utc)
+        else:
+            raw = tenant.data["created_at"]
+            created_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            trial_end = created_at + timedelta(days=TRIAL_DAYS)
 
         if now < trial_end:
             days_left = max(1, (trial_end - now).days)
             return {
                 "plan_name": "Essentiel",
                 "status": "trial",
-                "features": ESSENTIEL_FEATURES,
+                "features": _apply_overrides(ESSENTIEL_FEATURES, overrides),
                 "trial_days_left": days_left,
             }
 
-        # Essai expiré — tout verrouillé
-        expired_features = {
-            k: (False if isinstance(v, bool) else 0)
-            for k, v in ESSENTIEL_FEATURES.items()
-        }
+        # Essai expiré — tout verrouillé (les overrides s'appliquent quand même)
+        expired_features = {k: (False if isinstance(v, bool) else 0) for k, v in ESSENTIEL_FEATURES.items()}
         return {
             "plan_name": None,
             "status": "trial_expired",
-            "features": expired_features,
+            "features": _apply_overrides(expired_features, overrides),
             "trial_days_left": 0,
         }
 
-    # Fallback (tenant sans created_at) → essai par défaut
-    return {"plan_name": "Essentiel", "status": "trial", "features": ESSENTIEL_FEATURES, "trial_days_left": TRIAL_DAYS}
+    # Fallback
+    return {"plan_name": "Essentiel", "status": "trial", "features": _apply_overrides(ESSENTIEL_FEATURES, overrides), "trial_days_left": TRIAL_DAYS}

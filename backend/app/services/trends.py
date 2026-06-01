@@ -17,6 +17,18 @@ SECTOR_KEYWORDS: dict[str, list[str]] = {
     "other":    ["prestataire de service", "indépendant"],
 }
 
+
+def get_sector_keywords() -> dict[str, list[str]]:
+    """Retourne les mots-clés depuis system_config (admin panel), avec fallback sur SECTOR_KEYWORDS."""
+    try:
+        from app.core.supabase import get_supabase_admin
+        row = get_supabase_admin().table("system_config").select("value").eq("key", "sector_keywords").limit(1).execute().data
+        if row and isinstance(row[0]["value"], dict):
+            return {**SECTOR_KEYWORDS, **row[0]["value"]}
+    except Exception:
+        pass
+    return SECTOR_KEYWORDS
+
 TIMEFRAMES: dict[str, str] = {
     "week":    "now 7-d",
     "month":   "today 1-m",
@@ -112,7 +124,8 @@ async def get_demand_data(
     for name in offer_names[:2]:
         if name:
             kws.append(name)
-    for kw in SECTOR_KEYWORDS.get(sector, SECTOR_KEYWORDS["other"]):
+    _kw_map = get_sector_keywords()
+    for kw in _kw_map.get(sector, _kw_map.get("other", [])):
         if kw not in kws:
             kws.append(kw)
     kws = kws[:5]
