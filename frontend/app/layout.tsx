@@ -79,6 +79,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
         />
+        {/* GA4 Klientys */}
+        <Script src="https://www.googletagmanager.com/gtag/js?id=G-C04SHMVM34" strategy="afterInteractive" />
+        <Script id="ga4-klientys" strategy="afterInteractive">{`
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-C04SHMVM34');
+        `}</Script>
+
         {/* Meta Pixel */}
         <Script id="meta-pixel" strategy="afterInteractive">{`
           !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?

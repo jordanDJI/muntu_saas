@@ -98,9 +98,10 @@ export default function OnboardingPage() {
       setLoading(false);
       return;
     }
-    // Pixel Meta — compte créé avec succès
-    if (typeof window !== "undefined" && (window as any).fbq) {
-      (window as any).fbq("track", "CompleteRegistration");
+    // Conversions — compte créé avec succès
+    if (typeof window !== "undefined") {
+      if ((window as any).fbq) (window as any).fbq("track", "CompleteRegistration");
+      if ((window as any).gtag) (window as any).gtag("event", "sign_up", { method: "email" });
     }
     await supabase.auth.refreshSession();
     router.push("/dashboard");

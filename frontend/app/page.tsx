@@ -77,9 +77,9 @@ export default function LandingPage() {
   const closeMobile = () => setMobileMenuOpen(false);
 
   const trackLead = () => {
-    if (typeof window !== "undefined" && (window as any).fbq) {
-      (window as any).fbq("track", "Lead");
-    }
+    if (typeof window === "undefined") return;
+    if ((window as any).fbq)  (window as any).fbq("track", "Lead");
+    if ((window as any).gtag) (window as any).gtag("event", "generate_lead");
   };
 
   return (
