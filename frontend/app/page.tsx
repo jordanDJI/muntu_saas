@@ -15,15 +15,25 @@ const FAQ_KEYS = [
   ["lp_faq6_q", "lp_faq6_a"],
 ] as const;
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
 export default function LandingPage() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [navScrolled, setNavScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [tenantCount, setTenantCount] = useState<number | null>(null);
   const { t } = useLanguage();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setLoggedIn(!!session));
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/public/stats`)
+      .then((r) => r.json())
+      .then((d) => setTenantCount(d.tenant_count ?? null))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -149,7 +159,7 @@ export default function LandingPage() {
             <span>✓ Annulation à tout moment</span>
           </div>
           <div className="l-hero-stats">
-            <div className="l-hero-stat"><strong>500+</strong><span>{t.lp_stat1}</span></div>
+            <div className="l-hero-stat"><strong>{tenantCount !== null ? `${tenantCount}+` : "500+"}</strong><span>{t.lp_stat1}</span></div>
             <div className="l-hero-stat"><strong>15 min</strong><span>{t.lp_stat2}</span></div>
             <div className="l-hero-stat"><strong>3×</strong><span>{t.lp_stat3}</span></div>
             <div className="l-hero-stat"><strong>97%</strong><span>{t.lp_stat4}</span></div>
@@ -309,7 +319,7 @@ export default function LandingPage() {
         <div className="l-container">
           <div className="l-stats-grid" data-r="">
             <div className="l-stat-item">
-              <div className="l-stat-num l-gradient-text">500+</div>
+              <div className="l-stat-num l-gradient-text">{tenantCount !== null ? `${tenantCount}+` : "500+"}</div>
               <div className="l-stat-label" style={{ whiteSpace: "pre-line" }}>{t.lp_sstat1}</div>
             </div>
             <div className="l-stat-item">

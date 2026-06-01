@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      {
+        source: "/blog/cout-site-internet-independant-:year(\\d+)",
+        destination: "/blog/cout-site-internet-independant",
+        permanent: true,
+      },
+    ];
+  },
   compress: true,
   images: {
     remotePatterns: [{ protocol: "https", hostname: "**" }],

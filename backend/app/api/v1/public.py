@@ -9,6 +9,13 @@ from app.core.supabase import get_supabase_admin as get_supabase
 router = APIRouter(prefix="/public", tags=["Public"])
 
 
+@router.get("/stats")
+async def get_public_stats():
+    sb = get_supabase()
+    res = sb.table("tenant").select("id", count="exact").eq("is_active", True).execute()
+    return {"tenant_count": res.count or 0}
+
+
 @router.get("/published-slugs")
 async def get_published_slugs():
     sb = get_supabase()

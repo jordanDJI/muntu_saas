@@ -19,8 +19,8 @@ export const ARTICLES: Article[] = [
     metier: "Santé",
   },
   {
-    slug: "cout-site-internet-independant-2025",
-    title: "Combien coûte vraiment un site internet pour indépendant en 2025 ?",
+    slug: "cout-site-internet-independant",
+    title: `Combien coûte vraiment un site internet pour indépendant en ${new Date().getFullYear()} ?`,
     description: "Wix, Squarespace, site sur mesure, tout-en-un : comparaison honnête des coûts réels. Avec le calcul que personne ne fait.",
     publishedAt: "2025-05-16",
     readingMinutes: 7,
