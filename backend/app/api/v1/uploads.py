@@ -5,6 +5,9 @@ from PIL import Image
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin
 
+# Limite à ~25 mégapixels (≈5000×5000) pour bloquer les decompression bombs
+Image.MAX_IMAGE_PIXELS = 25_000_000
+
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
 BUCKET = "site-assets"

@@ -6,8 +6,9 @@ POST /api/v1/booking/{tenant_slug}/book                   → créer contact + R
 import logging
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone, time as dtime, date
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from app.core.supabase import get_supabase_admin
+from app.middleware.rate_limit import check_rate
 from app.models.calendar import PublicBookIn
 from app.services.lead import ensure_lead
 
@@ -16,11 +17,17 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/{tenant_slug}/available-days")
-async def get_available_days(tenant_slug: str, year: int, month: int):
+async def get_available_days(tenant_slug: str, year: int, month: int, request: Request):
     """
     Retourne les numéros de jours du mois ayant des créneaux disponibles.
     Utilisé par le calendrier public pour griser les jours sans disponibilité.
     """
+    check_rate(request, "available_days", max_calls=60, window_seconds=60)
+
+    now_year = datetime.now(timezone.utc).year
+    if not (now_year <= year <= now_year + 2) or not (1 <= month <= 12):
+        raise HTTPException(status_code=400, detail="Paramètres year/month invalides")
+
     sb = get_supabase_admin()
     _, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
 
@@ -96,8 +103,9 @@ def _get_tenant_and_calendar(sb, tenant_slug: str) -> tuple[dict, str]:
 
 
 @router.get("/{tenant_slug}/slots")
-async def get_available_slots(tenant_slug: str, date: str):
+async def get_available_slots(tenant_slug: str, date: str, request: Request):
     """Retourne les créneaux libres pour une date donnée (YYYY-MM-DD)."""
+    check_rate(request, "slots", max_calls=60, window_seconds=60)
     sb = get_supabase_admin()
     _, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
 
@@ -204,7 +212,8 @@ _TEAM_EMAIL_ERROR = (
 
 
 @router.post("/{tenant_slug}/book", status_code=status.HTTP_201_CREATED)
-async def book_appointment(tenant_slug: str, body: PublicBookIn):
+async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Request):
+    check_rate(request, "book", max_calls=5, window_seconds=300)  # 5 résa / IP / 5 min
     sb = get_supabase_admin()
     tenant, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
 
@@ -277,6 +286,23 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn):
                 request_type="b2c_appointment", notes=body.message or None)
 
     end_at = body.scheduled_at + timedelta(minutes=body.slot_duration_min)
+
+    # Vérification anti-double réservation (TOCTOU) : le créneau est-il encore libre ?
+    conflict = (
+        sb.table("appointment")
+        .select("id")
+        .eq("calendar_id", cal_id)
+        .neq("status", "cancelled")
+        .lt("scheduled_at", end_at.isoformat())
+        .gt("end_at", body.scheduled_at.isoformat())
+        .limit(1)
+        .execute()
+    )
+    if conflict.data:
+        raise HTTPException(
+            status_code=409,
+            detail="Ce créneau vient d'être réservé. Veuillez choisir un autre horaire.",
+        )
 
     appt_row: dict = {
         "calendar_id": cal_id,

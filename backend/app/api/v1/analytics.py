@@ -17,31 +17,74 @@ CREATE INDEX IF NOT EXISTS idx_site_event_tenant_created
 ──────────────────────────────────────────────────────────
 """
 
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query
+import re
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import httpx, hmac, hashlib, json, base64
 from app.middleware.tenant import get_current_tenant
+from app.middleware.rate_limit import check_rate
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.core.config import settings
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
+_VALID_EVENT_TYPES = frozenset({
+    "pageview", "section_view", "cta_click",
+    "form_open", "form_submit",
+    "chatbot_open", "chatbot_message",
+})
+_VALID_SECTIONS = frozenset({
+    "hero", "a-propos", "prestations", "contact",
+    "services", "about", "footer",
+})
+_SLUG_RE = re.compile(r'^[a-z0-9\-]{1,80}$')
+_SESSION_RE = re.compile(r'^[a-zA-Z0-9\-_]{8,100}$')
+
 
 # ── Public event tracking ─────────────────────────────────────────────────────
 
 class EventIn(BaseModel):
-    tenant_slug: str
-    session_id: str
-    event_type: str
-    section: Optional[str] = None
+    tenant_slug: str = Field(max_length=80)
+    session_id: str = Field(max_length=100)
+    event_type: str = Field(max_length=50)
+    section: Optional[str] = Field(default=None, max_length=50)
     data: Optional[dict] = None
+
+    @field_validator("tenant_slug")
+    @classmethod
+    def validate_slug(cls, v: str) -> str:
+        if not _SLUG_RE.match(v):
+            raise ValueError("slug invalide")
+        return v
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session(cls, v: str) -> str:
+        if not _SESSION_RE.match(v):
+            raise ValueError("session_id invalide")
+        return v
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_event_type(cls, v: str) -> str:
+        if v not in _VALID_EVENT_TYPES:
+            raise ValueError(f"event_type '{v}' non reconnu")
+        return v
+
+    @field_validator("section")
+    @classmethod
+    def validate_section(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _VALID_SECTIONS:
+            return None  # ignore silencieusement les sections inconnues
+        return v
 
 
 @router.post("/event", status_code=204)
-async def track_event(body: EventIn, background_tasks: BackgroundTasks):
+async def track_event(body: EventIn, request: Request, background_tasks: BackgroundTasks):
+    check_rate(request, "analytics_event", max_calls=60, window_seconds=60)
     background_tasks.add_task(_do_track, body)
 
 
@@ -51,12 +94,16 @@ async def _do_track(body: EventIn):
         res = sb.table("tenant").select("id").eq("slug", body.tenant_slug).single().execute()
         if not res.data:
             return
+        # Tronquer data pour éviter les abus de stockage
+        safe_data = {}
+        if body.data:
+            safe_data = {k: str(v)[:200] for k, v in list(body.data.items())[:10]}
         sb.table("site_event").insert({
             "tenant_id": res.data["id"],
             "session_id": body.session_id,
             "event_type": body.event_type,
             "section": body.section,
-            "data": body.data or {},
+            "data": safe_data,
         }).execute()
     except Exception:
         pass

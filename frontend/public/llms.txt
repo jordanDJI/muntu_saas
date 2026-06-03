@@ -1,0 +1,22 @@
+# Klientys
+
+> SaaS tout-en-un pour indépendants et TPE (kinés, infirmiers, artisans, coachs…). Crée un site vitrine SEO, un système de réservation en ligne, un CRM léger, des agents IA de communication, et des analytics de demande locale.
+
+Klientys permet à chaque professionnel indépendant de créer son site internet en 15 minutes, d'activer la prise de rendez-vous en ligne, de gérer ses clients et d'automatiser sa communication — sans dépendre des plateformes intermédiaires (Doctolib, Habitatpresto, Superprof).
+
+Tarif : dès 29,90 €/mois, essai gratuit 14 jours sans carte bancaire.
+
+Fondé en Belgique. Cible principale : France et Belgique.
+
+## Pages principales
+
+- [Accueil](https://klientys.co/): Présentation, tarifs, témoignages, FAQ
+- [Blog](https://klientys.co/blog): Guides pratiques pour indépendants et TPE
+- [Annuaire](https://klientys.co/annuaire): Annuaire des professionnels inscrits sur Klientys
+- [Sites par métier](https://klientys.co/site-internet-pour): Pages SEO par métier et par ville
+
+## Articles de blog
+
+- [Doctolib vs Klientys : ce que les kinés et infirmiers ne savent pas](https://klientys.co/blog/doctolib-vs-klientys-kine-infirmier.md): Comparatif prix, visibilité Google et fonctionnalités — Doctolib (160 €/mois) vs Klientys (29,90 €/mois)
+- [Combien coûte vraiment un site internet pour indépendant ?](https://klientys.co/blog/cout-site-internet-independant.md): Wix + Calendly + CRM vs solution tout-en-un — le vrai calcul mensuel
+- [Comment remplir son agenda en ligne sans Habitatpresto ni Superprof](https://klientys.co/blog/remplir-agenda-en-ligne-sans-plateforme.md): Alternatives aux plateformes qui prennent 15–20 % de commission sur chaque mission

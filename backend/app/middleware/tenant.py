@@ -1,5 +1,5 @@
 import logging
-from functools import lru_cache
+import time
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 import httpx
@@ -12,14 +12,23 @@ from app.core.supabase import get_supabase_admin
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 logger = logging.getLogger(__name__)
 
+_JWKS_TTL = 300  # 5 minutes — force refresh si Supabase tourne ses clés
+_jwks_cache: tuple = ()
+_jwks_fetched_at: float = 0.0
 
-@lru_cache(maxsize=1)
+
 def _fetch_jwks() -> tuple:
+    global _jwks_cache, _jwks_fetched_at
+    now = time.monotonic()
+    if _jwks_cache and (now - _jwks_fetched_at) < _JWKS_TTL:
+        return _jwks_cache
     url = f"{settings.supabase_url}/auth/v1/.well-known/jwks.json"
     resp = httpx.get(url, timeout=10)
     resp.raise_for_status()
     keys = tuple(resp.json().get("keys", []))
-    logger.info(f"JWKS fetched: {len(keys)} key(s)")
+    _jwks_cache = keys
+    _jwks_fetched_at = now
+    logger.info("JWKS refreshed: %d key(s)", len(keys))
     return keys
 
 

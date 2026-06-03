@@ -100,8 +100,10 @@ export default function OnboardingPage() {
     }
     // Conversions — compte créé avec succès
     if (typeof window !== "undefined") {
+      const provider = (await supabase.auth.getSession()).data.session?.user?.app_metadata?.provider;
+      const method = provider === "google" ? "google" : "email";
       if ((window as any).fbq) (window as any).fbq("track", "CompleteRegistration");
-      if ((window as any).gtag) (window as any).gtag("event", "sign_up", { method: "email" });
+      if ((window as any).gtag) (window as any).gtag("event", "sign_up", { method });
     }
     await supabase.auth.refreshSession();
     router.push("/dashboard");

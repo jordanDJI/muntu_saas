@@ -417,7 +417,7 @@ export default function LandingPage() {
                 <li>Annuaire professionnel public</li>
                 <li>Support email</li>
               </ul>
-              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>{t.lp_waitlist}</Link>
+              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={trackLead}>{t.lp_waitlist}</Link>
             </div>
 
             <div className="l-price-card featured" data-r="" data-d="2">
@@ -439,7 +439,7 @@ export default function LandingPage() {
                 <li>Widget embarquable</li>
                 <li>Support prioritaire 24/7</li>
               </ul>
-              <Link href="/onboarding" className="l-btn l-btn-primary" style={{ width: "100%", justifyContent: "center" }}>{t.lp_waitlist_arr}</Link>
+              <Link href="/onboarding" className="l-btn l-btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={trackLead}>{t.lp_waitlist_arr}</Link>
             </div>
 
             <div className="l-price-card" data-r="" data-d="3">
@@ -459,7 +459,7 @@ export default function LandingPage() {
                 <li>Onboarding personnalisé</li>
                 <li>Account manager dédié</li>
               </ul>
-              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }}>{t.lp_waitlist}</Link>
+              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={trackLead}>{t.lp_waitlist}</Link>
             </div>
 
           </div>
@@ -598,7 +598,7 @@ export default function LandingPage() {
 
       {/* ── STICKY MOBILE CTA ── */}
       <div className="l-sticky-cta">
-        <Link href="/onboarding" className="l-btn l-btn-primary" style={{ flex: 1, justifyContent: "center" }}>{t.lp_nav_start}</Link>
+        <Link href="/onboarding" className="l-btn l-btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={trackLead}>{t.lp_nav_start}</Link>
         <Link href="/login" className="l-btn l-btn-ghost" style={{ padding: "12px 20px" }}>{t.lp_nav_login}</Link>
       </div>
 

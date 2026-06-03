@@ -47,15 +47,20 @@ def download_file(bot_token: str, file_id: str) -> tuple[bytes, str]:
     return dl_res.content, mime_map.get(ext, "application/octet-stream")
 
 
-def register_webhook(bot_token: str, webhook_url: str) -> tuple[bool, str]:
+def register_webhook(bot_token: str, webhook_url: str, secret_token: str = "") -> tuple[bool, str]:
     """
     Enregistre l'URL de webhook auprès de Telegram.
+    secret_token : si fourni, Telegram inclut X-Telegram-Bot-Api-Secret-Token
+    dans chaque update — permet de rejeter les appels non-Telegram.
     Retourne (True, "") en cas de succès, (False, description) en cas d'échec.
     """
     try:
+        payload: dict = {"url": webhook_url, "allowed_updates": ["message"]}
+        if secret_token:
+            payload["secret_token"] = secret_token
         r = requests.post(
             f"{_BASE}/bot{bot_token}/setWebhook",
-            json={"url": webhook_url, "allowed_updates": ["message"]},
+            json=payload,
             timeout=10,
         )
         data = r.json()

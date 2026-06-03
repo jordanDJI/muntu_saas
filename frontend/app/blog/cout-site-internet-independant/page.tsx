@@ -15,7 +15,7 @@ const OG_IMAGE = `${APP_URL}/api/og?title=${encodeURIComponent("Coût site inter
 export const metadata: Metadata = {
   title: `${TITLE} | Klientys`,
   description: DESCRIPTION,
-  alternates: { canonical: `${APP_URL}/blog/${SLUG}` },
+  alternates: { canonical: `${APP_URL}/blog/${SLUG}`, types: { "text/markdown": `${APP_URL}/blog/${SLUG}.md` } },
   openGraph: { title: TITLE, description: DESCRIPTION, url: `${APP_URL}/blog/${SLUG}`, type: "article", siteName: "Klientys", images: [{ url: OG_IMAGE, width: 1200, height: 630 }], publishedTime: PUBLISHED, modifiedTime: DATE_MODIFIED },
   twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: [OG_IMAGE] },
 };

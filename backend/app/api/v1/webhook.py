@@ -22,6 +22,28 @@ from app.services.whatsapp import download_media, send_text, verify_signature
 router = APIRouter(prefix="/webhook", tags=["webhook"])
 logger = logging.getLogger(__name__)
 
+
+# ── Prompt injection guard ────────────────────────────────────────────────────
+
+_INJECTION_RE = re.compile(
+    r"(ignore\s+(les?\s+)?instructions?|oublie\s+(les?\s+)?instructions?|"
+    r"ignore\s+previous\s+instructions?|disregard\s+previous|new\s+persona|"
+    r"<\s*system\s*>|\[INST\]|###\s*(system|instruction)|"
+    r"r[eé]v[eè]le\s+(le\s+)?prompt|affiche\s+(le\s+)?prompt|"
+    r"r[eé]p[eè]te\s+(tes?\s+)?instructions?|what\s+are\s+your\s+instructions?)",
+    re.IGNORECASE,
+)
+_MAX_USER_INPUT = 4000
+
+
+def _sanitize_input(text: str) -> str:
+    """Tronque et neutralise les tentatives de prompt injection."""
+    text = text[:_MAX_USER_INPUT]
+    if _INJECTION_RE.search(text):
+        logger.warning("Prompt injection détectée, message neutralisé")
+        return "[Message non conforme aux règles d'utilisation]"
+    return text
+
 # ── Regex ─────────────────────────────────────────────────────────────────────
 
 _BOOKING_RE = re.compile(
@@ -84,6 +106,9 @@ _CALENDAR_STOPWORDS = {
 
 @router.post("/telegram/{bot_token}", status_code=200)
 async def telegram_inbound(bot_token: str, request: Request):
+    # Vérifier la signature Telegram (X-Telegram-Bot-Api-Secret-Token)
+    _verify_telegram_secret(request, bot_token)
+
     payload = await request.json()
     msg = payload.get("message")
     if not msg:
@@ -93,6 +118,22 @@ async def telegram_inbound(bot_token: str, request: Request):
     except Exception as exc:
         logger.error("Erreur traitement message Telegram : %s", exc, exc_info=True)
     return {"status": "ok"}
+
+
+def _verify_telegram_secret(request: Request, bot_token: str) -> None:
+    """Rejette les appels webhook non signés par Telegram."""
+    import hmac as _hmac, hashlib as _hashlib
+    received = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not received:
+        # Webhook non encore re-enregistré avec secret_token → tolérance temporaire
+        logger.warning("Webhook Telegram sans secret_token (bot ...%s)", bot_token[-6:])
+        return
+    _secret = settings.agent_link_secret or settings.secret_key
+    expected = _hmac.new(
+        _secret.encode(), bot_token.encode(), _hashlib.sha256
+    ).hexdigest()[:64]
+    if not _hmac.compare_digest(received, expected):
+        raise HTTPException(status_code=403, detail="Signature webhook Telegram invalide")
 
 
 async def _process_telegram_message(msg: dict, bot_token: str) -> None:
@@ -161,6 +202,7 @@ async def _process_telegram_message(msg: dict, bot_token: str) -> None:
     if user_text is None:
         return
 
+    user_text = _sanitize_input(user_text)
     _save_message(sb, conv_id, "user", user_text + ocr_ctx, {"telegram_chat_id": chat_id})
 
     # Charger l'historique une seule fois — partagé entre la state machine et le LLM
@@ -693,7 +735,7 @@ async def _process_agent3_telegram(
     ocr_ctx = ""
 
     if "text" in msg:
-        user_text = msg["text"]
+        user_text = msg["text"]  # Agent 3 = tenant de confiance, pas de filtre injection
     elif "photo" in msg or "document" in msg:
         from app.services.telegram import download_file
         caption = msg.get("caption", "")
@@ -1122,6 +1164,7 @@ async def _process_message(msg: dict, waba_number: str, contacts_meta: list) -> 
     if user_text is None:
         return
 
+    user_text = _sanitize_input(user_text)
     _save_message(sb, conv_id, "user", user_text + ocr_ctx, {"wa_message_id": wa_msg_id})
 
     if _BOOKING_RE.search(user_text):

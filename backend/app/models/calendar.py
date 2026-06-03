@@ -1,5 +1,6 @@
-from pydantic import BaseModel
-from typing import Optional
+import re
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, Literal
 from uuid import UUID
 from datetime import datetime
 
@@ -53,13 +54,26 @@ class CalendarApptIn(BaseModel):
 
 
 class PublicBookIn(BaseModel):
-    first_name: str
-    last_name: str
-    email: str
-    phone: Optional[str] = None
-    message: Optional[str] = None
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
+    email: str = Field(max_length=200)
+    phone: Optional[str] = Field(default=None, max_length=50)
+    message: Optional[str] = Field(default=None, max_length=2000)
     service_offer_id: Optional[UUID] = None
-    scheduled_at: Optional[datetime] = None   # None si request_type == "contact"
-    slot_duration_min: int = 30
-    request_type: str = "appointment"          # "contact" ou "appointment"
-    contact_type: str = "individual"           # individual | company
+    scheduled_at: Optional[datetime] = None
+    slot_duration_min: int = Field(default=30, ge=5, le=480)  # 5 min → 8h max
+    request_type: Literal["contact", "appointment"] = "appointment"
+    contact_type: Literal["individual", "company"] = "individual"
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', v):
+            raise ValueError("Adresse email invalide")
+        return v
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def strip_name(cls, v: str) -> str:
+        return v.strip()

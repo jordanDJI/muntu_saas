@@ -76,9 +76,16 @@ async def setup_telegram_webhook(tenant_id: str = Depends(get_current_tenant)):
         )
 
     webhook_url = f"{settings.app_url}/api/v1/webhook/telegram/{bot_token}"
-    logger.info("Telegram webhook setup — URL : %s", webhook_url)
+    logger.info("Telegram webhook setup — URL : %s (token masqué)", webhook_url.rsplit("/", 1)[0] + "/***")
 
-    ok, err = register_webhook(bot_token, webhook_url)
+    # Dériver un secret_token depuis le bot_token pour que Telegram signe ses updates
+    import hmac as _hmac, hashlib as _hashlib
+    _secret = settings.agent_link_secret or settings.secret_key
+    webhook_secret = _hmac.new(
+        _secret.encode(), bot_token.encode(), _hashlib.sha256
+    ).hexdigest()[:64]
+
+    ok, err = register_webhook(bot_token, webhook_url, secret_token=webhook_secret)
     if not ok:
         detail = f"Échec Telegram : {err}" if err else "Échec de l'enregistrement du webhook Telegram"
         raise HTTPException(status_code=502, detail=detail)
