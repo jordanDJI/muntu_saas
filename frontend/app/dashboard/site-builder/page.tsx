@@ -6,6 +6,8 @@ import { api, supabase } from "../../../lib/api";
 import { useLanguage } from "../../../contexts/LanguageContext";
 import type { T as TranslationT } from "../../../lib/i18n";
 import { COUNTRIES } from "../../../lib/countries";
+import { UpgradeGate } from "../components/UpgradeGate";
+import { useSubscription } from "../../../contexts/SubscriptionContext";
 
 // ── Constantes statiques (sans texte) ────────────────────────────────────────
 
@@ -151,6 +153,7 @@ function isUnsupportedPhotoUrl(url: string): string | null {
 export default function SiteBuilderPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const { hasFeature } = useSubscription();
 
   const STEPS = STEP_KEYS.map((k) => ({ label: t[k] }));
   const COLOR_PALETTES = COLOR_PALETTE_DEFS.map((c) => ({ ...c, label: t[c.tKey] as string }));
@@ -1436,6 +1439,23 @@ export default function SiteBuilderPage() {
               <p className="text-xs text-gray-400 mt-1">{t.sb_gtm_hint}</p>
             </div>
           </div>
+
+          {/* CSS personnalisé — Business uniquement */}
+          <UpgradeGate feature="custom_css">
+            <div className="bg-white rounded-xl shadow p-6 space-y-3">
+              <div>
+                <h2 className="font-semibold text-gray-800">CSS personnalisé</h2>
+                <p className="text-sm text-gray-500 mt-1">Ajoutez votre propre CSS pour personnaliser l&apos;apparence de votre site au-delà des options du wizard.</p>
+              </div>
+              <textarea
+                rows={8}
+                value={customCss}
+                onChange={(e) => setCustomCss(e.target.value)}
+                className="inp font-mono text-xs"
+                placeholder={`.btn-primary {\n  background: linear-gradient(135deg, #667eea, #764ba2);\n}\n\nh1 {\n  letter-spacing: -0.03em;\n}`}
+              />
+            </div>
+          </UpgradeGate>
 
           {/* Publication */}
           <div className="bg-green-50 border border-green-100 rounded-xl p-6 space-y-3">

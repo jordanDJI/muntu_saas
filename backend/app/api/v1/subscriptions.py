@@ -164,22 +164,26 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
 async def billing_portal(tenant_id: str = Depends(get_current_tenant)):
     """Ouvre le portail de facturation Stripe pour le tenant courant."""
     supabase = get_supabase_admin()
-    sub = supabase.table("subscription").select("stripe_subscription_id").eq("tenant_id", tenant_id).eq("status", "active").limit(1).execute()
+    sub = supabase.table("subscription").select("stripe_subscription_id").eq("tenant_id", tenant_id).in_("status", ["active", "trialing"]).limit(1).execute()
     if not sub.data or not sub.data[0].get("stripe_subscription_id"):
-        raise HTTPException(status_code=404, detail="Aucun abonnement actif")
-
-    stripe_sub = stripe.Subscription.retrieve(sub.data[0]["stripe_subscription_id"])
-    customer_id = stripe_sub["customer"]
+        raise HTTPException(status_code=404, detail="Aucun abonnement actif trouvé")
 
     return_url = "https://klientys.co/dashboard/settings"
     if settings.app_env != "production":
         return_url = f"{settings.frontend_url}/dashboard/settings"
 
-    session = stripe.billing_portal.Session.create(
-        customer=customer_id,
-        return_url=return_url,
-    )
-    return {"url": session.url}
+    try:
+        stripe_sub = stripe.Subscription.retrieve(sub.data[0]["stripe_subscription_id"])
+        customer_id = stripe_sub["customer"]
+        session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=return_url,
+        )
+        return {"url": session.url}
+    except stripe.error.InvalidRequestError as e:
+        raise HTTPException(status_code=400, detail=f"Erreur Stripe : {e.user_message or str(e)}")
+    except stripe.error.StripeError as e:
+        raise HTTPException(status_code=502, detail=f"Service de paiement indisponible : {e.user_message or str(e)}")
 
 
 @router.get("/plan")

@@ -55,6 +55,7 @@ const KNOWN_FEATURES = ["analytics", "agent_vitrine", "agent_support", "agent_as
 export default function TenantDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
+  const [userLevel, setUserLevel] = useState<"viewer"|"support"|"super_admin"|null>(null);
   const [data,   setData]   = useState<any>(null);
   const [tab,    setTab]    = useState<"actions"|"overrides"|"log">("actions");
   const [toast,  setToast]  = useState("");
@@ -63,6 +64,8 @@ export default function TenantDetailPage() {
   const [busy,   setBusy]   = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const [impersonateLink, setImpersonateLink] = useState<string | null>(null);
+  const [linkCopied,      setLinkCopied]      = useState(false);
   const [trialDays,      setTrialDays]      = useState(7);
   const [suspendReason,  setSuspendReason]  = useState("");
   const [editField,      setEditField]      = useState<"name"|"slug"|"sector"|"country"|null>(null);
@@ -81,6 +84,14 @@ export default function TenantDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.app_metadata?.is_super_admin) setUserLevel("super_admin");
+      else if (user?.app_metadata?.support_role === "support") setUserLevel("support");
+      else if (user?.app_metadata?.support_role === "viewer") setUserLevel("viewer");
+    });
+  }, []);
+
   const showToast = (msg: string, ok = true) => {
     setToast(msg); setToastOk(ok); setTimeout(() => setToast(""), 3000);
   };
@@ -98,11 +109,19 @@ export default function TenantDetailPage() {
   const impersonate = async () => {
     setBusy(true);
     try {
-      const r = await adminFetch<{ link: string }>(`/api/v1/admin/tenants/${id}/impersonate`, { method: "POST", body: JSON.stringify({}) });
-      window.open(r.link, "_blank", "noopener,noreferrer");
-      showToast("Lien d'impersonation ouvert ✓", true);
+      const r = await adminFetch<{ email: string; otp: string }>(`/api/v1/admin/tenants/${id}/impersonate`, { method: "POST", body: JSON.stringify({}) });
+      const relayUrl = `${window.location.origin}/auth/impersonate#email=${encodeURIComponent(r.email)}&otp=${encodeURIComponent(r.otp)}`;
+      setImpersonateLink(relayUrl);
+      setLinkCopied(false);
     } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
     finally { setBusy(false); }
+  };
+
+  const copyImpersonateLink = () => {
+    if (!impersonateLink) return;
+    navigator.clipboard.writeText(impersonateLink);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2500);
   };
 
   const changeOwnerEmail = async () => {
@@ -172,6 +191,10 @@ export default function TenantDetailPage() {
   const st = tenant.computed_status;
   const badge = STATUS_BADGE[st] ?? STATUS_BADGE.suspended;
 
+  // Permissions selon le niveau de l'utilisateur connecté
+  const canWrite  = userLevel === "support" || userLevel === "super_admin"; // L2+
+  const canDanger = userLevel === "super_admin";                            // L3 uniquement
+
   return (
     <div className="p-8 max-w-5xl">
       {/* Toast */}
@@ -179,6 +202,39 @@ export default function TenantDetailPage() {
         <div className="fixed top-4 right-4 z-50 text-sm px-4 py-2 rounded-lg shadow-lg"
           style={{ background: toastOk ? K.teal : "#7A1A1A", color: "#fff", border: `1px solid ${toastOk ? K.tealL : "#E06060"}` }}>
           {toast}
+        </div>
+      )}
+
+      {/* Modal impersonation */}
+      {impersonateLink && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.65)" }}>
+          <div className="w-full max-w-lg rounded-2xl p-6" style={{ background: K.card, border: "1px solid rgba(170,189,216,0.15)" }}>
+            <h2 className="text-sm font-semibold mb-1" style={{ color: K.text }}>Connexion en tant que {tenant.name}</h2>
+            <div className="flex items-start gap-2 mb-4 p-3 rounded-lg" style={{ background: "rgba(221,170,64,0.08)", border: "1px solid rgba(221,170,64,0.2)" }}>
+              <span style={{ fontSize: 16 }}>⚠️</span>
+              <p className="text-xs leading-relaxed" style={{ color: K.gold }}>
+                Ce lien est à usage unique. Ouvre-le dans une <strong>fenêtre de navigation privée</strong> (Ctrl+Shift+N) pour ne pas perdre ta session admin.
+              </p>
+            </div>
+            <div className="rounded-lg px-3 py-2 mb-4 font-mono text-xs break-all select-all"
+              style={{ background: K.card2, border: "1px solid rgba(170,189,216,0.12)", color: "rgba(170,189,216,0.6)" }}>
+              {impersonateLink}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={copyImpersonateLink}
+                className="flex-1 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                style={{ background: linkCopied ? "rgba(74,202,122,0.15)" : "rgba(13,75,88,0.35)", color: linkCopied ? K.success : K.tealXL, border: `1px solid ${linkCopied ? "rgba(74,202,122,0.3)" : "rgba(42,143,165,0.3)"}` }}>
+                {linkCopied ? "✓ Copié !" : "Copier le lien"}
+              </button>
+              <button
+                onClick={() => setImpersonateLink(null)}
+                className="px-4 py-2 rounded-xl text-sm transition-colors"
+                style={{ background: "rgba(170,189,216,0.07)", color: K.muted }}>
+                Fermer
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -289,12 +345,14 @@ export default function TenantDetailPage() {
             </ABtn>
           </ActionBlock>
 
-          <ActionBlock title="Forcer l'activation" accent={K.tealXL}>
-            <p className="text-xs mb-2" style={{ color: K.muted }}>Active le compte sans paiement Stripe (plan Pro).</p>
-            <ABtn onClick={() => action("force-activate", {})} busy={busy} accent={K.tealXL}>Activer gratuitement</ABtn>
-          </ActionBlock>
+          {canDanger && (
+            <ActionBlock title="Forcer l'activation" accent={K.tealXL}>
+              <p className="text-xs mb-2" style={{ color: K.muted }}>Active le compte sans paiement Stripe (plan Pro).</p>
+              <ABtn onClick={() => action("force-activate", {})} busy={busy} accent={K.tealXL}>Activer gratuitement</ABtn>
+            </ActionBlock>
+          )}
 
-          {st !== "suspended" ? (
+          {canDanger && (st !== "suspended" ? (
             <ActionBlock title="Suspendre" accent={K.danger}>
               <input type="text" placeholder="Raison (optionnel)" value={suspendReason}
                 onChange={(e) => setSuspendReason(e.target.value)}
@@ -306,46 +364,59 @@ export default function TenantDetailPage() {
             <ActionBlock title="Réactiver" accent={K.tealXL}>
               <ABtn onClick={() => action("unsuspend")} busy={busy} accent={K.tealXL}>Réactiver le compte</ABtn>
             </ActionBlock>
+          ))}
+
+          {canDanger && (
+            <ActionBlock title="Se connecter en tant que" accent={K.tealXL}>
+              <p className="text-xs mb-2" style={{ color: K.muted }}>Ouvre une session propriétaire dans un nouvel onglet.</p>
+              <ABtn onClick={impersonate} busy={busy} accent={K.tealXL}>Impersonate →</ABtn>
+            </ActionBlock>
           )}
 
-          <ActionBlock title="Se connecter en tant que" accent={K.tealXL}>
-            <p className="text-xs mb-2" style={{ color: K.muted }}>Ouvre une session propriétaire dans un nouvel onglet.</p>
-            <ABtn onClick={impersonate} busy={busy} accent={K.tealXL}>Impersonate →</ABtn>
-          </ActionBlock>
+          {canDanger && (
+            <ActionBlock title="Email propriétaire" accent={K.blue}>
+              <input
+                type="email"
+                placeholder={owner.email ?? "Nouvel email"}
+                value={newOwnerEmail}
+                onChange={(e) => setNewOwnerEmail(e.target.value)}
+                className="w-full rounded px-2 py-1 text-xs mb-2 focus:outline-none"
+                style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.2)`, color: K.text }}
+              />
+              <ABtn onClick={changeOwnerEmail} busy={busy || !newOwnerEmail.trim()} accent={K.blue}>Changer l'email</ABtn>
+            </ActionBlock>
+          )}
 
-          <ActionBlock title="Email propriétaire" accent={K.blue}>
-            <input
-              type="email"
-              placeholder={owner.email ?? "Nouvel email"}
-              value={newOwnerEmail}
-              onChange={(e) => setNewOwnerEmail(e.target.value)}
-              className="w-full rounded px-2 py-1 text-xs mb-2 focus:outline-none"
-              style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.2)`, color: K.text }}
-            />
-            <ABtn onClick={changeOwnerEmail} busy={busy || !newOwnerEmail.trim()} accent={K.blue}>Changer l'email</ABtn>
-          </ActionBlock>
+          {canWrite && (
+            <ActionBlock title="Authentification" accent={K.tealXL}>
+              <div className="space-y-2">
+                <ABtn onClick={() => action("confirm-email")} busy={busy} accent={K.tealXL}>Confirmer l'email</ABtn>
+                <ABtn onClick={() => action("reset-password")} busy={busy} accent={K.tealXL}>Envoyer reset mot de passe</ABtn>
+              </div>
+            </ActionBlock>
+          )}
 
-          <ActionBlock title="Authentification" accent={K.tealXL}>
-            <div className="space-y-2">
-              <ABtn onClick={() => action("confirm-email")} busy={busy} accent={K.tealXL}>Confirmer l'email</ABtn>
-              <ABtn onClick={() => action("reset-password")} busy={busy} accent={K.tealXL}>Envoyer reset mot de passe</ABtn>
-            </div>
-          </ActionBlock>
+          {canWrite && (
+            <ActionBlock title="Stripe" accent={K.muted}>
+              <p className="text-xs mb-2" style={{ color: K.muted }}>Resynchronise le statut depuis Stripe.</p>
+              <ABtn onClick={() => action("sync-stripe")} busy={busy} accent={K.muted}>Sync Stripe</ABtn>
+            </ActionBlock>
+          )}
 
-          <ActionBlock title="Stripe" accent={K.muted}>
-            <p className="text-xs mb-2" style={{ color: K.muted }}>Resynchronise le statut depuis Stripe.</p>
-            <ABtn onClick={() => action("sync-stripe")} busy={busy} accent={K.muted}>Sync Stripe</ABtn>
-          </ActionBlock>
+          {canWrite && (
+            <ActionBlock title="Domaine personnalisé" accent={K.muted}>
+              <p className="text-xs mb-2" style={{ color: K.muted }}>Déconnecte le domaine custom (status → pending).</p>
+              <ABtn onClick={() => action("reset-domain")} busy={busy} accent={K.muted}>Reset domaine</ABtn>
+            </ActionBlock>
+          )}
 
-          <ActionBlock title="Domaine personnalisé" accent={K.muted}>
-            <p className="text-xs mb-2" style={{ color: K.muted }}>Déconnecte le domaine custom (status → pending).</p>
-            <ABtn onClick={() => action("reset-domain")} busy={busy} accent={K.muted}>Reset domaine</ABtn>
-          </ActionBlock>
+          {canWrite && (
+            <ActionBlock title="Cache" accent={K.muted}>
+              <ABtn onClick={() => action("clear-cache")} busy={busy} accent={K.muted}>Vider cache ROI</ABtn>
+            </ActionBlock>
+          )}
 
-          <ActionBlock title="Cache" accent={K.muted}>
-            <ABtn onClick={() => action("clear-cache")} busy={busy} accent={K.muted}>Vider cache ROI</ABtn>
-          </ActionBlock>
-
+          {canDanger && (
           <ActionBlock title="Supprimer définitivement" accent={K.danger}>
             <p className="text-xs mb-2" style={{ color: "rgba(224,96,96,0.7)" }}>Irréversible — supprime toutes les données.</p>
             {!confirmDelete ? (
@@ -368,6 +439,7 @@ export default function TenantDetailPage() {
               </div>
             )}
           </ActionBlock>
+          )}
         </div>
       </div>
 

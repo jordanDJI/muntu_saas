@@ -191,6 +191,74 @@ def send_lead_acknowledgement(contact_email: str, contact_name: str, tenant_name
     })
 
 
+def send_support_account_invite(email: str, role: str, setup_link: str) -> None:
+    role_labels = {"viewer": "Observateur (lecture seule)", "support": "Support opérationnel"}
+    role_label = role_labels.get(role, role)
+    role_perms = {
+        "viewer":  "Vous pouvez consulter les informations des tenants et les logs.",
+        "support": "Vous pouvez consulter les informations des tenants, confirmer les emails, réinitialiser les mots de passe, prolonger les périodes d'essai, synchroniser Stripe et réinitialiser les domaines.",
+    }
+    perms_text = role_perms.get(role, "")
+    resend.Emails.send({
+        "from": f"Klientys Admin <{settings.email_from}>",
+        "to": [email],
+        "subject": "Votre accès support Klientys",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+          <h2 style="font-size:20px;font-weight:700;color:#111;margin-bottom:8px">
+            Accès support Klientys
+          </h2>
+          <p style="color:#444;line-height:1.65;margin-bottom:16px">
+            Un compte support vous a été créé sur la plateforme Klientys avec le niveau
+            <strong>{role_label}</strong>.
+          </p>
+          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px 18px;margin-bottom:24px">
+            <p style="margin:0;font-size:13px;color:#0369a1;line-height:1.6">
+              <strong>Vos permissions :</strong><br>{perms_text}
+            </p>
+          </div>
+          {"" if not setup_link else f'<p style="color:#444;margin-bottom:20px">Définissez votre mot de passe pour accéder au panel :</p><a href="{setup_link}" style="{_BTN}">Définir mon mot de passe →</a><br><br><p style="font-size:12px;color:#9ca3af">Ce lien est valable 24h.</p>'}
+        </div>
+        """,
+    })
+
+
+def send_impersonation_notice(tenant_email: str, tenant_name: str, admin_email: str, accessed_at: str) -> None:
+    """Notifie le tenant qu'un administrateur Klientys a accédé à son compte."""
+    resend.Emails.send({
+        "from": f"Klientys Sécurité <{settings.email_from}>",
+        "to": [tenant_email],
+        "subject": "Accès administrateur à votre compte Klientys",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
+          <h2 style="font-size:20px;font-weight:700;color:#111;margin-bottom:8px">
+            Accès administrateur à votre compte
+          </h2>
+          <p style="color:#444;line-height:1.65;margin-bottom:16px">
+            Un administrateur Klientys a accédé à votre espace <strong>{tenant_name}</strong>
+            le <strong>{accessed_at}</strong> à des fins de support ou de maintenance.
+          </p>
+          <div style="background:#fef9ec;border:1px solid #f5d87a;border-radius:8px;padding:14px 18px;margin-bottom:24px">
+            <p style="margin:0;font-size:13px;color:#7a5800;line-height:1.6">
+              Cet accès est strictement encadré par nos
+              <a href="https://klientys.co/legal/cgu" style="color:#7a5800">Conditions Générales d'Utilisation</a>
+              (article 13). Il est tracé et auditable. Aucune donnée bancaire n'est accessible par ce biais.
+            </p>
+          </div>
+          <p style="color:#444;line-height:1.65;margin-bottom:24px">
+            Si vous n'avez pas sollicité de support et que cet accès vous semble anormal,
+            contactez-nous immédiatement à
+            <a href="mailto:support@klientys.co" style="color:#4f46e5">support@klientys.co</a>.
+          </p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin-bottom:24px">
+          <p style="font-size:12px;color:#9ca3af;line-height:1.6">
+            Klientys SRL — Ce message est généré automatiquement, merci de ne pas y répondre directement.
+          </p>
+        </div>
+        """,
+    })
+
+
 def send_booking_request_received(
     contact_email: str,
     contact_name: str,
@@ -240,5 +308,57 @@ def send_appointment_reminder(contact_email: str, contact_name: str, appointment
         <p>Votre rendez-vous avec <strong>{tenant_name}</strong> est prévu
         le <strong>{date_str}</strong>.</p>
         <p>En cas d'empêchement, merci de nous prévenir dès que possible.</p>
+        """,
+    })
+
+
+def send_reactivation_relance(email: str, tenant_name: str, tenant_slug: str, dashboard_url: str, site_url: str) -> None:
+    """Email de réengagement envoyé au propriétaire d'un tenant inactif depuis 30+ jours."""
+    resend.Emails.send({
+        "from": f"{settings.email_from_name} <{settings.email_from}>",
+        "to": [email],
+        "subject": f"Votre espace {tenant_name} vous attend sur Klientys",
+        "html": f"""
+        <div style="font-family:Inter,Arial,sans-serif;background:#f4f6f8;padding:40px 20px">
+          <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.06)">
+            <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:32px 40px">
+              <h1 style="color:#fff;font-size:20px;margin:0;font-weight:700">On a pensé à vous 👋</h1>
+              <p style="color:rgba(255,255,255,0.7);margin:6px 0 0;font-size:13px">Klientys — Votre espace professionnel</p>
+            </div>
+            <div style="padding:32px 40px">
+              <p style="color:#1a2733;font-size:16px;line-height:1.6;margin:0 0 16px">Bonjour,</p>
+              <p style="color:#4a5568;font-size:15px;line-height:1.6;margin:0 0 16px">
+                Votre espace <strong style="color:#0D4B58">{tenant_name}</strong> n'a pas été consulté depuis un moment.
+                Vos clients, vos rendez-vous et votre site vitrine vous attendent !
+              </p>
+              <p style="color:#4a5568;font-size:15px;line-height:1.6;margin:0 0 20px">
+                Besoin d'aide pour reprendre en main votre espace ?
+                Notre équipe support est disponible pour vous accompagner.
+              </p>
+
+              <div style="background:#fff8ed;border:1px solid #f59e0b;border-radius:8px;padding:14px 16px;margin-bottom:24px">
+                <p style="color:#92400e;font-size:13px;line-height:1.6;margin:0">
+                  ⚠️ <strong>Important :</strong> sans connexion de votre part dans les 10 prochains jours,
+                  votre site vitrine sera automatiquement dépublié et ne sera plus accessible au public.
+                </p>
+              </div>
+
+              <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+                <a href="{dashboard_url}" style="display:inline-block;background:#1A6E82;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">
+                  Accéder à mon espace →
+                </a>
+                <a href="{site_url}" style="display:inline-block;background:#f4f6f8;color:#0D4B58;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;border:1px solid #d1d9e0">
+                  Voir mon site vitrine →
+                </a>
+              </div>
+
+              <hr style="border:none;border-top:1px solid #e8ecf0;margin:28px 0 16px">
+              <p style="color:#9ca3af;font-size:12px;line-height:1.6;margin:0">
+                Vous recevez cet email car vous avez un compte sur Klientys.
+                Pour toute question : <a href="mailto:support@klientys.co" style="color:#1A6E82">support@klientys.co</a>
+              </p>
+            </div>
+          </div>
+        </div>
         """,
     })

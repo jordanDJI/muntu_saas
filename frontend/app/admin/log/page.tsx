@@ -27,6 +27,8 @@ const ACTION_TYPES = [
   "confirm_email", "reset_password", "clear_cache", "delete_tenant",
   "patch_tenant", "create_tenant", "impersonate", "change_owner_email",
   "sync_stripe", "reset_domain", "set_override", "remove_override",
+  "create_support_account", "update_support_account", "delete_support_account",
+  "relance", "unpublish_site", "auto_unpublish_site",
 ];
 
 export default function LogPage() {

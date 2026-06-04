@@ -47,25 +47,50 @@ export default function OnboardingPage() {
 
     if (fromGoogle || noTenant) {
       setIsFromGoogle(true);
-      setStep(2);
       if (noTenant) setEmailConfirmed(true);
 
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          const meta = session.user.user_metadata || {};
-          const fullName = meta.full_name || meta.name || "";
-          const parts = fullName.trim().split(" ");
-          if (!form.first_name) set("first_name", meta.given_name || parts[0] || "");
-          if (!form.last_name)  set("last_name",  meta.family_name || parts.slice(1).join(" ") || "");
-          if (!form.email)      set("email",       session.user.email || "");
-          // Pré-remplir les données business depuis user_metadata si disponibles
-          if (meta.pending_tenant_name && !form.tenant_name) {
-            set("tenant_name", meta.pending_tenant_name);
-            set("tenant_slug", meta.pending_tenant_slug || slugify(meta.pending_tenant_name));
-          }
-          if (meta.pending_sector)  set("sector",  meta.pending_sector);
-          if (meta.pending_country) set("country", meta.pending_country);
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (!session) { setStep(2); return; }
+
+        // Filet de sécurité : les comptes support n'ont jamais de tenant à créer
+        const appMeta = session.user.app_metadata ?? {};
+        if (appMeta.support_role || appMeta.is_super_admin) {
+          window.location.replace("/admin");
+          return;
         }
+
+        // Re-vérifier si le tenant existe déjà (le renvoi sur /onboarding peut être
+        // dû à une erreur transitoire du backend au moment du login, pas à une vraie absence)
+        if (noTenant) {
+          try {
+            const res = await fetch(`${API}/api/v1/auth/me/tenants`, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (res.ok) {
+              const tenants = await res.json();
+              if (Array.isArray(tenants) && tenants.length > 0) {
+                // Le tenant existe — c'était une fausse alerte, on redirige vers le dashboard
+                window.location.replace("/dashboard");
+                return;
+              }
+            }
+          } catch { /* backend inaccessible — on continue vers le formulaire */ }
+        }
+
+        // Pré-remplir le formulaire avec les données disponibles
+        setStep(2);
+        const meta = session.user.user_metadata || {};
+        const fullName = meta.full_name || meta.name || "";
+        const parts = fullName.trim().split(" ");
+        if (!form.first_name) set("first_name", meta.given_name || parts[0] || "");
+        if (!form.last_name)  set("last_name",  meta.family_name || parts.slice(1).join(" ") || "");
+        if (!form.email)      set("email",       session.user.email || "");
+        if (meta.pending_tenant_name && !form.tenant_name) {
+          set("tenant_name", meta.pending_tenant_name);
+          set("tenant_slug", meta.pending_tenant_slug || slugify(meta.pending_tenant_name));
+        }
+        if (meta.pending_sector)  set("sector",  meta.pending_sector);
+        if (meta.pending_country) set("country", meta.pending_country);
       });
     }
   }, []);

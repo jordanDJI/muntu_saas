@@ -3,10 +3,12 @@ ESSENTIEL_FEATURES: dict = {
     "max_team_members": 1,
     "analytics": False,
     "analytics_roi": False,
-    "agent_vitrine": False,
+    "agent_vitrine": True,
     "agent_support": False,
     "agent_assistant": False,
-    "multi_page_site": False,
+    "embed_widget": False,
+    "custom_css": False,
+    "multi_page_site": True,
     "multi_tenant": False,
     "booking": True,
     "crm": True,
@@ -21,6 +23,8 @@ BUSINESS_FEATURES: dict = {
     "agent_vitrine": True,
     "agent_support": True,
     "agent_assistant": True,
+    "embed_widget": True,
+    "custom_css": True,
     "multi_page_site": True,
     "multi_tenant": True,
     "booking": True,
@@ -30,13 +34,15 @@ BUSINESS_FEATURES: dict = {
 
 
 PRO_FEATURES: dict = {
-    "max_contacts": -1,
+    "max_contacts": 1000,
     "max_team_members": 1,
     "analytics": True,
-    "analytics_roi": False,
+    "analytics_roi": True,
     "agent_vitrine": True,
     "agent_support": True,
-    "agent_assistant": False,
+    "agent_assistant": True,
+    "embed_widget": True,
+    "custom_css": False,
     "multi_page_site": True,
     "multi_tenant": False,
     "booking": True,
@@ -54,16 +60,36 @@ PLAN_FEATURES: dict = {
 TRIAL_DAYS = 14
 
 
+def _apply_global_flags(features: dict, flags: list) -> dict:
+    """Applique les feature_flag globaux (admin/config) sur le dict de features.
+    Seules les clés booléennes présentes dans features sont affectées.
+    Un flag global désactivé écrase le plan — utile pour couper une feature pendant une panne."""
+    if not flags:
+        return features
+    result = dict(features)
+    for f in flags:
+        key = f.get("key")
+        if key in result and isinstance(result[key], bool):
+            result[key] = bool(f["enabled"])
+    return result
+
+
 def _apply_overrides(features: dict, overrides: list) -> dict:
-    """Applique les tenant_feature_override sur le dict de features."""
+    """Applique les tenant_feature_override sur le dict de features.
+    Priorité maximale : écrase les feature flags globaux pour ce tenant spécifique."""
     if not overrides:
         return features
     result = dict(features)
     for o in overrides:
         key = o.get("feature_key")
         if key in result and isinstance(result[key], bool):
-            result[key] = o["enabled"]
+            result[key] = bool(o["enabled"])
     return result
+
+
+def _build_features(base: dict, global_flags: list, overrides: list) -> dict:
+    """Pipeline complet : plan → flags globaux → overrides par tenant."""
+    return _apply_overrides(_apply_global_flags(base, global_flags), overrides)
 
 
 async def get_tenant_plan(tenant_id: str) -> dict:
@@ -72,7 +98,11 @@ async def get_tenant_plan(tenant_id: str) -> dict:
 
     sb = get_supabase_admin()
 
-    # Overrides admin pour ce tenant (appliqués quelle que soit la source du plan)
+    # Feature flags globaux (désactivent une feature pour tous les tenants)
+    flags_res = sb.table("feature_flag").select("key, enabled").execute()
+    global_flags = flags_res.data or []
+
+    # Overrides par tenant (priorité maximale, écrase les flags globaux)
     ov_res = sb.table("tenant_feature_override").select("feature_key, enabled").eq("tenant_id", tenant_id).execute()
     overrides = ov_res.data or []
 
@@ -88,15 +118,19 @@ async def get_tenant_plan(tenant_id: str) -> dict:
     if res.data:
         row = res.data[0]
         plan = row["plan"]
-        features = plan.get("features") or PLAN_FEATURES.get(plan["name"], ESSENTIEL_FEATURES)
-        return {"plan_name": plan["name"], "status": row["status"], "features": _apply_overrides(features, overrides), "trial_days_left": None}
+        base = plan.get("features") or PLAN_FEATURES.get(plan["name"], ESSENTIEL_FEATURES)
+        return {
+            "plan_name": plan["name"],
+            "status": row["status"],
+            "features": _build_features(base, global_flags, overrides),
+            "trial_days_left": None,
+        }
 
     # 2. Pas d'abonnement → vérifier la fenêtre d'essai
     tenant = sb.table("tenant").select("created_at, trial_extended_until").eq("id", tenant_id).maybe_single().execute()
     if tenant and tenant.data and tenant.data.get("created_at"):
         now = datetime.now(timezone.utc)
 
-        # Utilise trial_extended_until si l'admin a étendu le trial
         ext = tenant.data.get("trial_extended_until")
         if ext:
             trial_end = datetime.fromisoformat(ext.replace("Z", "+00:00"))
@@ -114,11 +148,12 @@ async def get_tenant_plan(tenant_id: str) -> dict:
             return {
                 "plan_name": "Essentiel",
                 "status": "trial",
-                "features": _apply_overrides(ESSENTIEL_FEATURES, overrides),
+                "features": _build_features(ESSENTIEL_FEATURES, global_flags, overrides),
                 "trial_days_left": days_left,
             }
 
-        # Essai expiré — tout verrouillé (les overrides s'appliquent quand même)
+        # Essai expiré — tout verrouillé. Les flags globaux n'ont pas d'effet ici
+        # (tout est déjà False), mais les overrides par tenant s'appliquent toujours.
         expired_features = {k: (False if isinstance(v, bool) else 0) for k, v in ESSENTIEL_FEATURES.items()}
         return {
             "plan_name": None,
@@ -128,4 +163,9 @@ async def get_tenant_plan(tenant_id: str) -> dict:
         }
 
     # Fallback
-    return {"plan_name": "Essentiel", "status": "trial", "features": _apply_overrides(ESSENTIEL_FEATURES, overrides), "trial_days_left": TRIAL_DAYS}
+    return {
+        "plan_name": "Essentiel",
+        "status": "trial",
+        "features": _build_features(ESSENTIEL_FEATURES, global_flags, overrides),
+        "trial_days_left": TRIAL_DAYS,
+    }

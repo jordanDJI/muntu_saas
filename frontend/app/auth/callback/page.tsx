@@ -15,7 +15,21 @@ export default function AuthCallbackPage() {
     ran.current = true;
 
     const handle = async () => {
-      // Échange le code PKCE contre une session (email confirmation + Google OAuth)
+      // Gère les erreurs Supabase dans le hash (#error=access_denied&error_code=otp_expired...)
+      const hash = window.location.hash;
+      if (hash.includes("error=")) {
+        const hp = new URLSearchParams(hash.slice(1));
+        const code = hp.get("error_code") ?? "";
+        const desc = hp.get("error_description") ?? "Erreur d'authentification";
+        const msg = code === "otp_expired"
+          ? "Ce lien de confirmation a expiré. Reconnectez-vous pour en recevoir un nouveau."
+          : decodeURIComponent(desc.replace(/\+/g, " "));
+        window.history.replaceState(null, "", "/auth/callback");
+        router.replace(`/login?auth_error=${encodeURIComponent(msg)}`);
+        return;
+      }
+
+      // Échange le code PKCE contre une session (email confirmation + Google OAuth + magic link)
       const url = new URL(window.location.href);
       const code = url.searchParams.get("code");
       if (code) {
@@ -34,19 +48,31 @@ export default function AuthCallbackPage() {
         return;
       }
 
+      // Compte support → accès direct au panel admin, jamais d'onboarding
+      const meta = session.user.app_metadata ?? {};
+      if (meta.support_role === "viewer" || meta.support_role === "support" || meta.is_super_admin) {
+        router.replace("/admin");
+        return;
+      }
+
       setMsg("Vérification de votre espace…");
 
-      // Vérifier si l'utilisateur a déjà un tenant via le backend (bypasse la RLS)
+      // Vérifier si l'utilisateur a déjà un tenant — avec retry (backend froid, JWKS, réseau)
       let hasTenant = false;
-      try {
-        const res = await fetch(`${API}/api/v1/auth/me/tenants`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (res.ok) {
-          const tenants = await res.json();
-          hasTenant = Array.isArray(tenants) && tenants.length > 0;
-        }
-      } catch { /* fallback : pas de tenant */ }
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 800 * attempt));
+          const res = await fetch(`${API}/api/v1/auth/me/tenants`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          if (res.ok) {
+            const tenants = await res.json();
+            hasTenant = Array.isArray(tenants) && tenants.length > 0;
+            break; // succès — on sort de la boucle
+          }
+          if (res.status === 401) break; // token invalide — inutile de retenter
+        } catch { /* réseau — on retente */ }
+      }
 
       if (hasTenant) {
         localStorage.removeItem("klientys_pending_setup");

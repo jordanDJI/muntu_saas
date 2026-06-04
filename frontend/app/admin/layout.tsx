@@ -4,10 +4,29 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../lib/api";
 
-const NAV = [
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+type SupportLevel = "viewer" | "support" | "super_admin";
+
+function getUserLevel(user: any): SupportLevel | null {
+  if (!user) return null;
+  if (user.app_metadata?.is_super_admin) return "super_admin";
+  const role = user.app_metadata?.support_role;
+  if (role === "viewer" || role === "support") return role;
+  return null;
+}
+
+const ROLE_LABELS: Record<SupportLevel, string> = {
+  viewer:      "Observateur",
+  support:     "Support",
+  super_admin: "Super Admin",
+};
+
+const NAV_ALL = [
   {
     href: "/admin",
     label: "Métriques",
+    minLevel: "viewer" as SupportLevel,
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -17,6 +36,7 @@ const NAV = [
   {
     href: "/admin/tenants",
     label: "Tenants",
+    minLevel: "viewer" as SupportLevel,
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-4a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -26,6 +46,7 @@ const NAV = [
   {
     href: "/admin/log",
     label: "Log",
+    minLevel: "viewer" as SupportLevel,
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -35,6 +56,7 @@ const NAV = [
   {
     href: "/admin/analytics",
     label: "Analytics",
+    minLevel: "super_admin" as SupportLevel,
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
@@ -42,8 +64,30 @@ const NAV = [
     ),
   },
   {
+    id: "relances",
+    href: "/admin/relances",
+    label: "Relances",
+    minLevel: "viewer" as SupportLevel,
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+      </svg>
+    ),
+  },
+  {
+    href: "/admin/support",
+    label: "Support",
+    minLevel: "super_admin" as SupportLevel,
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+      </svg>
+    ),
+  },
+  {
     href: "/admin/config",
     label: "Config",
+    minLevel: "super_admin" as SupportLevel,
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -53,20 +97,42 @@ const NAV = [
   },
 ];
 
+const LEVEL_ORDER: Record<SupportLevel, number> = { viewer: 1, support: 2, super_admin: 3 };
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const pathname = usePathname();
-  const [ready, setReady] = useState(false);
+  const [ready,         setReady]         = useState(false);
+  const [userLevel,     setUserLevel]     = useState<SupportLevel | null>(null);
+  const [inactiveCount, setInactiveCount] = useState<number | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user?.app_metadata?.is_super_admin) {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      const level = getUserLevel(user);
+      if (!level) {
         router.replace("/dashboard");
         return;
       }
+      setUserLevel(level);
       setReady(true);
+
+      // Badge inactifs — non bloquant
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`${API}/api/v1/admin/inactive-tenants?days=30`, {
+          headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setInactiveCount(Array.isArray(data) ? data.length : 0);
+        }
+      } catch { /* non bloquant */ }
     });
   }, [router]);
+
+  const nav = NAV_ALL.filter((item) =>
+    userLevel && LEVEL_ORDER[userLevel] >= LEVEL_ORDER[item.minLevel]
+  );
 
   if (!ready) {
     return (
@@ -87,14 +153,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span className="text-sm font-bold tracking-wide" style={{ color: "#DDAA40" }}>Klientys</span>
           </div>
           <p className="text-[10px]" style={{ color: "rgba(170,189,216,0.45)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            Admin panel
+            {userLevel === "super_admin" ? "Admin panel" : "Support panel"}
           </p>
+          {userLevel && userLevel !== "super_admin" && (
+            <span className="inline-block mt-1.5 px-2 py-0.5 rounded text-[10px] font-medium"
+              style={{ background: "rgba(221,170,64,0.12)", color: "#DDAA40", border: "1px solid rgba(221,170,64,0.25)" }}>
+              {ROLE_LABELS[userLevel]}
+            </span>
+          )}
         </div>
 
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-0.5">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+            const badge  = (item as any).id === "relances" && inactiveCount ? inactiveCount : null;
             return (
               <Link
                 key={item.href}
@@ -112,26 +185,49 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 onMouseLeave={(e) => { if (!active) (e.currentTarget as HTMLElement).style.color = "rgba(170,189,216,0.55)"; }}
               >
                 {item.icon}
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {badge !== null && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"
+                    style={{ background: "rgba(224,96,96,0.18)", color: "#E06060" }}>
+                    {badge}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
 
         {/* Footer */}
-        <div className="p-3" style={{ borderTop: "1px solid rgba(170,189,216,0.08)" }}>
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors"
+        <div className="p-3 space-y-0.5" style={{ borderTop: "1px solid rgba(170,189,216,0.08)" }}>
+          {userLevel === "super_admin" && (
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors"
+              style={{ color: "rgba(170,189,216,0.35)" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(170,189,216,0.7)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(170,189,216,0.35)"; }}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Dashboard tenant
+            </Link>
+          )}
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut();
+              window.location.replace("/login");
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors"
             style={{ color: "rgba(170,189,216,0.35)" }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(170,189,216,0.7)"; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(224,96,96,0.7)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "rgba(170,189,216,0.35)"; }}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
             </svg>
-            Dashboard tenant
-          </Link>
+            Se déconnecter
+          </button>
         </div>
       </aside>
 

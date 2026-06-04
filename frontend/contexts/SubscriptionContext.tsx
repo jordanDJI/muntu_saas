@@ -10,6 +10,8 @@ export type PlanFeatures = {
   agent_vitrine: boolean;
   agent_support: boolean;
   agent_assistant: boolean;
+  embed_widget: boolean;
+  custom_css: boolean;
   multi_page_site: boolean;
   multi_tenant: boolean;
   booking: boolean;
@@ -23,10 +25,12 @@ const ESSENTIEL_FEATURES: PlanFeatures = {
   max_team_members: 1,
   analytics: false,
   analytics_roi: false,
-  agent_vitrine: false,
+  agent_vitrine: true,
   agent_support: false,
   agent_assistant: false,
-  multi_page_site: false,
+  embed_widget: false,
+  custom_css: false,
+  multi_page_site: true,
   multi_tenant: false,
   booking: true,
   crm: true,

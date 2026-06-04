@@ -14,117 +14,71 @@ async function adminFetch<T>(path: string): Promise<T> {
   return res.json();
 }
 
-// Couleurs Klientys
 const K = {
-  teal:    "#0D4B58",
-  tealL:   "#1A6E82",
-  tealXL:  "#2A8FA5",
-  gold:    "#DDAA40",
-  goldL:   "#F0CC68",
-  blue:    "#AABDD8",
-  card:    "#0D1B25",
-  card2:   "#0A1520",
-  border:  "rgba(170,189,216,0.10)",
-  text:    "#EEF2F5",
-  muted:   "#8BA5B0",
+  teal:   "#0D4B58", tealL: "#1A6E82", tealXL: "#2A8FA5",
+  gold:   "#DDAA40", goldL: "#F0CC68",
+  blue:   "#AABDD8",
+  red:    "#E06060",
+  green:  "#4ACA7A",
+  card:   "#0D1B25", card2: "#0A1520",
+  border: "rgba(170,189,216,0.10)",
+  text:   "#EEF2F5", muted: "#8BA5B0",
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  active:        { label: "Payants actifs",  color: K.tealXL   },
-  trialing:      { label: "Stripe trial",    color: K.blue     },
-  trial:         { label: "Essai en cours",  color: K.gold     },
-  trial_expired: { label: "Essai expiré",    color: "#E06060"  },
-  suspended:     { label: "Suspendus",       color: "rgba(170,189,216,0.3)" },
+  active:        { label: "Payants actifs", color: K.tealXL },
+  trialing:      { label: "Stripe trial",   color: K.blue   },
+  trial:         { label: "Essai en cours", color: K.gold   },
+  trial_expired: { label: "Essai expiré",   color: K.red    },
+  suspended:     { label: "Suspendus",      color: "rgba(170,189,216,0.3)" },
 };
 
+// ── Sparkline ──────────────────────────────────────────────────────────────────
 function Sparkline({ data }: { data: { date: string; count: number }[] }) {
   const [hover, setHover] = useState<number | null>(null);
   if (!data.length) return null;
-
   const max = Math.max(...data.map(d => d.count), 1);
   const W = 400; const H = 80; const padX = 4; const padY = 12;
-
   const pts = data.map((d, i) => ({
     x: padX + (i / (data.length - 1)) * (W - padX * 2),
-    y: H - padY - ((d.count / max) * (H - padY * 2)),
+    y: H - padY - (d.count / max) * (H - padY * 2),
     ...d,
   }));
-
   const polyline = pts.map(p => `${p.x},${p.y}`).join(" ");
-
-  // aire sous la courbe
   const area = `${pts[0].x},${H} ` + pts.map(p => `${p.x},${p.y}`).join(" ") + ` ${pts[pts.length - 1].x},${H}`;
-
   const hov = hover !== null ? pts[hover] : null;
-
   return (
     <div className="relative select-none">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 80 }} preserveAspectRatio="none">
         <defs>
           <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#2A8FA5" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#2A8FA5" stopOpacity="0.0"  />
+            <stop offset="0%" stopColor="#2A8FA5" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#2A8FA5" stopOpacity="0" />
           </linearGradient>
         </defs>
-
-        {/* Aire */}
         <polygon points={area} fill="url(#spark-fill)" />
-
-        {/* Ligne */}
         <polyline points={polyline} fill="none" stroke="#2A8FA5" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
-
-        {/* Ligne verticale hover */}
-        {hov && (
-          <line x1={hov.x} y1={padY / 2} x2={hov.x} y2={H}
-            stroke="rgba(170,189,216,0.2)" strokeWidth="1" strokeDasharray="3,3" />
-        )}
-
-        {/* Points */}
+        {hov && <line x1={hov.x} y1={padY / 2} x2={hov.x} y2={H} stroke="rgba(170,189,216,0.2)" strokeWidth="1" strokeDasharray="3,3" />}
         {pts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y}
-            r={hover === i ? 4.5 : p.count > 0 ? 2.5 : 0}
+          <circle key={i} cx={p.x} cy={p.y} r={hover === i ? 4.5 : p.count > 0 ? 2.5 : 0}
             fill={hover === i ? "#DDAA40" : "#2A8FA5"}
-            stroke={hover === i ? "rgba(221,170,64,0.3)" : "none"}
-            strokeWidth={hover === i ? 6 : 0}
-            style={{ transition: "r 0.15s, fill 0.15s" }}
-          />
+            stroke={hover === i ? "rgba(221,170,64,0.3)" : "none"} strokeWidth={hover === i ? 6 : 0}
+            style={{ transition: "r 0.15s, fill 0.15s" }} />
         ))}
-
-        {/* Zones de hit invisibles */}
         {pts.map((p, i) => (
           <rect key={i}
-            x={i === 0 ? 0 : (pts[i - 1].x + p.x) / 2}
-            y={0}
-            width={
-              i === 0
-                ? (pts[1].x + p.x) / 2
-                : i === pts.length - 1
-                  ? W - (pts[i - 1].x + p.x) / 2
-                  : ((pts[i + 1]?.x ?? p.x) + p.x) / 2 - (pts[i - 1].x + p.x) / 2
-            }
-            height={H}
-            fill="transparent"
-            style={{ cursor: "crosshair" }}
-            onMouseEnter={() => setHover(i)}
-            onMouseLeave={() => setHover(null)}
-          />
+            x={i === 0 ? 0 : (pts[i - 1].x + p.x) / 2} y={0}
+            width={i === 0 ? (pts[1].x + p.x) / 2 : i === pts.length - 1 ? W - (pts[i - 1].x + p.x) / 2 : ((pts[i + 1]?.x ?? p.x) + p.x) / 2 - (pts[i - 1].x + p.x) / 2}
+            height={H} fill="transparent" style={{ cursor: "crosshair" }}
+            onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
         ))}
       </svg>
-
-      {/* Tooltip */}
       {hov && (
-        <div
-          className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg text-xs"
-          style={{
-            background: "#0A1520",
-            border: "1px solid rgba(170,189,216,0.2)",
-            color: "#EEF2F5",
+        <div className="absolute pointer-events-none px-2.5 py-1.5 rounded-lg text-xs"
+          style={{ background: "#0A1520", border: "1px solid rgba(170,189,216,0.2)", color: "#EEF2F5",
             top: Math.max(0, (hov.y / H) * 80 - 44),
             left: `clamp(0px, calc(${(hov.x / W) * 100}% - 48px), calc(100% - 96px))`,
-            whiteSpace: "nowrap",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-          }}
-        >
+            whiteSpace: "nowrap", boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>
           <span style={{ color: "#8BA5B0" }}>{hov.date}</span>
           <span className="mx-1.5" style={{ color: "rgba(170,189,216,0.3)" }}>·</span>
           <span style={{ color: "#DDAA40", fontWeight: 600 }}>{hov.count} nouveau{hov.count > 1 ? "x" : ""}</span>
@@ -134,79 +88,229 @@ function Sparkline({ data }: { data: { date: string; count: number }[] }) {
   );
 }
 
+// ── Donut chart ────────────────────────────────────────────────────────────────
+const PLAN_COLORS = ["#2A8FA5", "#9B7FD4", "#4ACA7A", "#E06060", "#DDAA40"];
+
+function DonutChart({ data }: { data: Record<string, number> }) {
+  const entries = Object.entries(data);
+  if (!entries.length) return <p className="text-xs text-center py-8" style={{ color: "rgba(170,189,216,0.25)" }}>Aucune donnée</p>;
+  const total = entries.reduce((a, [, v]) => a + v, 0);
+  const R = 60; const cx = 80; const cy = 80;
+  let angle = -90;
+  const slices = entries.map(([name, val], i) => {
+    const deg = (val / total) * 360;
+    const start = angle; angle += deg;
+    const r1 = (start * Math.PI) / 180;
+    const r2 = ((start + deg) * Math.PI) / 180;
+    const x1 = cx + R * Math.cos(r1); const y1 = cy + R * Math.sin(r1);
+    const x2 = cx + R * Math.cos(r2); const y2 = cy + R * Math.sin(r2);
+    const large = deg > 180 ? 1 : 0;
+    return { name, val, color: PLAN_COLORS[i % PLAN_COLORS.length], path: `M ${cx} ${cy} L ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2} Z` };
+  });
+  return (
+    <div className="flex items-center gap-6">
+      <svg width="160" height="160" viewBox="0 0 160 160">
+        {slices.map((s, i) => <path key={i} d={s.path} fill={s.color} opacity="0.85" />)}
+        <circle cx={cx} cy={cy} r={38} fill={K.card} />
+        <text x={cx} y={cy - 4} textAnchor="middle" fill={K.text} fontSize="14" fontWeight="700">{total}</text>
+        <text x={cx} y={cy + 13} textAnchor="middle" fill={K.muted} fontSize="9">clients payants</text>
+      </svg>
+      <div className="space-y-1.5">
+        {slices.map((s, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+            <span className="text-xs" style={{ color: K.muted }}>{s.name}</span>
+            <span className="text-xs font-semibold ml-auto" style={{ color: K.text }}>{s.val}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Funnel ─────────────────────────────────────────────────────────────────────
+function FunnelChart({ data }: { data: { label: string; value: number }[] }) {
+  if (!data.length) return null;
+  const max = Math.max(...data.map(d => d.value), 1);
+  return (
+    <div className="space-y-2">
+      {data.map((d, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <span className="text-xs w-28 shrink-0 text-right" style={{ color: K.muted }}>{d.label}</span>
+          <div className="flex-1 h-6 rounded-md overflow-hidden" style={{ background: "rgba(170,189,216,0.06)" }}>
+            <div className="h-full rounded-md transition-all duration-700"
+              style={{ width: `${(d.value / max) * 100}%`, background: `linear-gradient(90deg, ${K.teal}, ${K.tealXL})` }} />
+          </div>
+          <span className="text-xs font-semibold w-12 text-right" style={{ color: K.text }}>{d.value.toLocaleString("fr-FR")}</span>
+          {i > 0 && data[i - 1].value > 0 && (
+            <span className="text-xs w-10 shrink-0" style={{ color: "rgba(170,189,216,0.3)" }}>
+              {Math.round((d.value / data[i - 1].value) * 100)}%
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Page principale ────────────────────────────────────────────────────────────
 export default function AdminMetricsPage() {
-  const [metrics, setMetrics] = useState<any>(null);
-  const [growth,  setGrowth]  = useState<any[]>([]);
-  const [logs,    setLogs]    = useState<any[]>([]);
-  const [error,   setError]   = useState("");
+  const [metrics,  setMetrics]  = useState<any>(null);
+  const [growth,   setGrowth]   = useState<any[]>([]);
+  const [logs,     setLogs]     = useState<any[]>([]);
+  const [topCusto, setTopCusto] = useState<any[]>([]);
+  const [funnel,   setFunnel]   = useState<any[]>([]);
+  const [error,    setError]    = useState("");
 
   useEffect(() => {
     Promise.all([
       adminFetch<any>("/api/v1/admin/metrics"),
       adminFetch<any[]>("/api/v1/admin/metrics/growth?days=30"),
-      adminFetch<any>("/api/v1/admin/action-log?page=1&page_size=8"),
+      adminFetch<any>("/api/v1/admin/action-log?page=1&page_size=6"),
+      adminFetch<any[]>("/api/v1/admin/metrics/top-customers?limit=8"),
+      adminFetch<any[]>("/api/v1/admin/metrics/funnel"),
     ])
-      .then(([m, g, l]) => { setMetrics(m); setGrowth(g); setLogs(l.items ?? l); })
+      .then(([m, g, l, tc, f]) => {
+        setMetrics(m); setGrowth(g); setLogs(l.items ?? l);
+        setTopCusto(tc); setFunnel(f);
+      })
       .catch((e) => setError(e.message));
   }, []);
 
-  if (error) return <div className="p-8" style={{ color: "#E06060" }}>{error}</div>;
+  if (error) return <div className="p-8" style={{ color: K.red }}>{error}</div>;
   if (!metrics) return (
     <div className="p-8 flex justify-center">
       <div className="w-6 h-6 rounded-full animate-spin" style={{ border: `2px solid ${K.border}`, borderTopColor: K.tealL }} />
     </div>
   );
 
-  const { tenants, new_signups, sites_published, appointments_30d, trial_to_paid_rate, mrr } = metrics;
+  const { tenants, new_signups, sites_published, appointments_30d, trial_to_paid_rate, mrr, arr, churn_rate, contacts_total, plan_distribution } = metrics;
   const paid = (tenants.active ?? 0) + (tenants.trialing ?? 0);
   const totalGrowth = growth.reduce((a, d) => a + d.count, 0);
 
   return (
-    <div className="p-8 max-w-5xl">
-      <h1 className="text-xl font-semibold mb-1" style={{ color: K.text }}>Métriques</h1>
-      <p className="text-sm mb-8" style={{ color: K.muted }}>Vue d'ensemble du SaaS</p>
+    <div className="p-8 max-w-6xl">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-semibold mb-0.5" style={{ color: K.text }}>Klientys Analytics</h1>
+          <p className="text-xs" style={{ color: K.muted }}>Command center overview · Dernière mise à jour : {new Date().toLocaleString("fr-FR")}</p>
+        </div>
+      </div>
 
-      {/* Statuts par tenant */}
+      {/* ── Top KPIs ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+        <TopKpi label="MRR" value={`€${(mrr ?? 0).toLocaleString("fr-FR")}`} color={K.tealXL} sub={`ARR €${((arr ?? 0)).toLocaleString("fr-FR")}`} />
+        <TopKpi label="ARR" value={`€${(arr ?? 0).toLocaleString("fr-FR")}`} color={K.gold} />
+        <TopKpi label="Clients actifs" value={paid} color={K.tealXL} sub={`+${new_signups?.last_30d ?? 0} inscrits (30j)`} />
+        <TopKpi label="En essai" value={tenants.trial ?? 0} color={K.gold} />
+        <TopKpi label="Churn Rate" value={`${churn_rate ?? 0}%`} color={churn_rate > 20 ? K.red : K.green} />
+        <TopKpi label="Conversion" value={`${trial_to_paid_rate ?? 0}%`} color={K.blue} sub="trial → payé" />
+      </div>
+
+      {/* ── Stats secondaires ── */}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {[
+          { label: "Sites créés",    value: sites_published ?? 0,   icon: "🌐" },
+          { label: "Contacts CRM",   value: contacts_total ?? 0,    icon: "👥" },
+          { label: "RDV (30j)",      value: appointments_30d ?? 0,  icon: "📅" },
+        ].map((s) => (
+          <div key={s.label} className="rounded-xl px-4 py-3 flex items-center justify-between"
+            style={{ background: K.card, border: `1px solid ${K.border}` }}>
+            <div className="flex items-center gap-2">
+              <span className="text-base">{s.icon}</span>
+              <span className="text-xs" style={{ color: K.muted }}>{s.label}</span>
+            </div>
+            <span className="text-lg font-bold" style={{ color: K.text }}>{s.value.toLocaleString("fr-FR")}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Statuts par tenant ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         {Object.entries(STATUS_CONFIG).map(([key, { label, color }]) => (
           <Link key={key} href={`/admin/tenants?status=${key}`}
             className="rounded-xl p-4 block transition-colors"
             style={{ background: K.card, border: `1px solid ${K.border}` }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "rgba(170,189,216,0.22)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = K.border; }}
-          >
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = K.border; }}>
             <p className="text-xs mb-1" style={{ color: K.muted }}>{label}</p>
             <p className="text-2xl font-bold" style={{ color }}>{tenants[key] ?? 0}</p>
           </Link>
         ))}
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <KpiCard label="Total tenants"          value={tenants.total ?? 0}         unit=""   color={K.text}    />
-        <KpiCard label="MRR"                    value={mrr ?? 0}                   unit=" €" color={K.tealXL}  />
-        <KpiCard label="Conversion trial→payé"  value={trial_to_paid_rate ?? 0}    unit="%"  color={K.gold}    />
-        <KpiCard label="Payants actifs"          value={paid}                       unit=""   color={K.tealXL}  />
-        <KpiCard label="Nouveaux (7 j)"         value={new_signups?.last_7d ?? 0}  unit=""   color={K.text}    />
-        <KpiCard label="Nouveaux (30 j)"        value={new_signups?.last_30d ?? 0} unit=""   color={K.text}    />
-        <KpiCard label="Sites publiés"          value={sites_published ?? 0}       unit=""   color={K.text}    />
-        <KpiCard label="RDV ce mois"            value={appointments_30d ?? 0}      unit=""   color={K.text}    />
-      </div>
-
-      {/* Graphique croissance */}
-      <div className="rounded-xl p-5 mb-6" style={{ background: K.card, border: `1px solid ${K.border}` }}>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium" style={{ color: K.muted }}>Nouveaux tenants — 30 derniers jours</h2>
-          <span className="text-xs font-semibold" style={{ color: K.tealXL }}>{totalGrowth} au total</span>
+      {/* ── 2 colonnes : Growth + Plan Distribution ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        {/* Croissance clients */}
+        <div className="lg:col-span-2 rounded-xl p-5" style={{ background: K.card, border: `1px solid ${K.border}` }}>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium" style={{ color: K.muted }}>Nouveaux clients — 30 derniers jours</h2>
+            <span className="text-xs font-semibold" style={{ color: K.tealXL }}>{totalGrowth} au total</span>
+          </div>
+          <Sparkline data={growth} />
+          <div className="flex justify-between mt-1">
+            <span className="text-xs" style={{ color: "rgba(170,189,216,0.3)" }}>{growth[0]?.date}</span>
+            <span className="text-xs" style={{ color: "rgba(170,189,216,0.3)" }}>{growth[growth.length - 1]?.date}</span>
+          </div>
         </div>
-        <Sparkline data={growth} />
-        <div className="flex justify-between mt-1">
-          <span className="text-xs" style={{ color: "rgba(170,189,216,0.3)" }}>{growth[0]?.date}</span>
-          <span className="text-xs" style={{ color: "rgba(170,189,216,0.3)" }}>{growth[growth.length - 1]?.date}</span>
+
+        {/* Plan distribution */}
+        <div className="rounded-xl p-5" style={{ background: K.card, border: `1px solid ${K.border}` }}>
+          <h2 className="text-sm font-medium mb-4" style={{ color: K.muted }}>Plan Distribution</h2>
+          <DonutChart data={plan_distribution ?? {}} />
         </div>
       </div>
 
-      {/* Log récent */}
+      {/* ── Funnel de conversion ── */}
+      <div className="rounded-xl p-5 mb-4" style={{ background: K.card, border: `1px solid ${K.border}` }}>
+        <h2 className="text-sm font-medium mb-4" style={{ color: K.muted }}>Conversion Funnel</h2>
+        <FunnelChart data={funnel} />
+      </div>
+
+      {/* ── Top Customers ── */}
+      {topCusto.length > 0 && (
+        <div className="rounded-xl overflow-hidden mb-6" style={{ background: K.card, border: `1px solid ${K.border}` }}>
+          <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${K.border}` }}>
+            <h2 className="text-sm font-medium" style={{ color: K.muted }}>Top Customers</h2>
+          </div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ borderBottom: `1px solid rgba(170,189,216,0.05)` }}>
+                {["Client", "Statut", "Plan", "MRR", "Sites", "Contacts CRM"].map((h) => (
+                  <th key={h} className="px-5 py-3 text-left font-medium" style={{ color: K.muted }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {topCusto.map((c: any) => (
+                <tr key={c.tenant_id} style={{ borderBottom: "1px solid rgba(170,189,216,0.04)" }}>
+                  <td className="px-5 py-3">
+                    <Link href={`/admin/tenants/${c.tenant_id}`} className="font-medium transition-colors"
+                      style={{ color: K.text }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = K.tealXL)}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = K.text)}>
+                      {c.name}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className="px-2 py-0.5 rounded-full text-xs"
+                      style={{ background: "rgba(42,143,165,0.12)", color: K.tealXL, border: "1px solid rgba(42,143,165,0.2)" }}>
+                      {c.status === "active" ? "Actif" : "Trial Stripe"}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3" style={{ color: K.muted }}>{c.plan}</td>
+                  <td className="px-5 py-3 font-semibold" style={{ color: K.gold }}>€{c.mrr}</td>
+                  <td className="px-5 py-3" style={{ color: K.text }}>{c.sites_built}</td>
+                  <td className="px-5 py-3" style={{ color: K.text }}>{c.crm_contacts.toLocaleString("fr-FR")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Log récent ── */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium" style={{ color: K.muted }}>Actions récentes</h2>
         <Link href="/admin/log" className="text-xs transition-colors" style={{ color: K.tealXL }}
@@ -224,8 +328,7 @@ export default function AdminMetricsPage() {
               style={{ background: K.card, border: `1px solid ${K.border}` }}>
               <span className="font-mono text-xs shrink-0" style={{ color: K.tealXL }}>{l.action_type}</span>
               {l.target_tenant_name && (
-                <Link href={`/admin/tenants/${l.target_tenant_id}`}
-                  className="transition-colors truncate text-sm"
+                <Link href={`/admin/tenants/${l.target_tenant_id}`} className="transition-colors truncate text-sm"
                   style={{ color: "rgba(170,189,216,0.6)" }}>
                   {l.target_tenant_name}
                 </Link>
@@ -233,9 +336,7 @@ export default function AdminMetricsPage() {
               <span className="ml-auto text-xs shrink-0" style={{ color: "rgba(170,189,216,0.3)" }}>
                 {new Date(l.created_at).toLocaleString("fr-FR")}
               </span>
-              <span className="text-xs shrink-0 hidden sm:block" style={{ color: "rgba(170,189,216,0.25)" }}>
-                {l.admin_email}
-              </span>
+              <span className="text-xs shrink-0 hidden sm:block" style={{ color: "rgba(170,189,216,0.25)" }}>{l.admin_email}</span>
             </div>
           ))}
         </div>
@@ -244,14 +345,13 @@ export default function AdminMetricsPage() {
   );
 }
 
-function KpiCard({ label, value, unit, color }: { label: string; value: number; unit: string; color: string }) {
-  const K_card = "#0D1B25";
-  const K_border = "rgba(170,189,216,0.10)";
-  const K_muted = "#8BA5B0";
+// ── Composants ─────────────────────────────────────────────────────────────────
+function TopKpi({ label, value, color, sub }: { label: string; value: string | number; color: string; sub?: string }) {
   return (
-    <div className="rounded-xl p-4" style={{ background: K_card, border: `1px solid ${K_border}` }}>
-      <p className="text-xs mb-1" style={{ color: K_muted }}>{label}</p>
-      <p className="text-2xl font-bold" style={{ color }}>{value}{unit}</p>
+    <div className="rounded-xl p-4" style={{ background: K.card, border: `1px solid ${K.border}` }}>
+      <p className="text-xs mb-1" style={{ color: K.muted }}>{label}</p>
+      <p className="text-xl font-bold" style={{ color }}>{value}</p>
+      {sub && <p className="text-xs mt-0.5" style={{ color: "rgba(170,189,216,0.35)" }}>{sub}</p>}
     </div>
   );
 }

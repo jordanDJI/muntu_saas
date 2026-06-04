@@ -5,9 +5,13 @@ import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+import secrets
+
 from app.core.config import settings
 from app.core.supabase import get_supabase_admin
-from app.middleware.admin import get_current_admin
+from app.middleware.admin import get_current_admin, viewer_or_above, support_or_above
+from app.middleware.rate_limit import check_rate_by_key
+from app.services import email as email_svc
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -69,10 +73,78 @@ def _compute_status(tenant: dict, sub_map: dict, now: datetime) -> str:
     return "trial" if now < end else "trial_expired"
 
 
+def _auto_unpublish_expired_sites(sb, now: datetime) -> int:
+    """Dépublie automatiquement les sites des tenants expirés depuis 90+ jours.
+    Appelé en tâche de fond lors du chargement de la page Relances.
+    Retourne le nombre de sites dépubliés."""
+
+    # Tenants créés il y a 104+ jours (14j essai + 90j de grâce)
+    grace_cutoff = now - timedelta(days=104)
+    old_tenants = (
+        sb.table("tenant")
+        .select("id, name, created_at, trial_extended_until, suspended_at")
+        .lt("created_at", grace_cutoff.isoformat())
+        .execute().data or []
+    )
+    # Exclure suspendus (leur statut n'est pas trial_expired)
+    old_tenants = [t for t in old_tenants if not t.get("suspended_at")]
+    if not old_tenants:
+        return 0
+
+    paid_ids = {
+        s["tenant_id"] for s in (
+            sb.table("subscription").select("tenant_id")
+            .in_("status", ["active", "trialing"]).execute().data or []
+        )
+    }
+
+    # Tenants réellement expirés depuis 90+ jours (respecte trial_extended_until)
+    expired_90_ids = set()
+    for t in old_tenants:
+        if t["id"] in paid_ids:
+            continue
+        ext      = t.get("trial_extended_until")
+        exp_date = _parse_dt(ext) if ext else _parse_dt(t["created_at"]) + timedelta(days=14)
+        if exp_date + timedelta(days=90) < now:
+            expired_90_ids.add(t["id"])
+
+    if not expired_90_ids:
+        return 0
+
+    pub_sites = (
+        sb.table("site").select("id, tenant_id")
+        .eq("status", "published")
+        .in_("tenant_id", list(expired_90_ids))
+        .execute().data or []
+    )
+    if not pub_sites:
+        return 0
+
+    # Dépublication
+    sb.table("site").update({"status": "draft"}) \
+        .in_("tenant_id", [s["tenant_id"] for s in pub_sites]).execute()
+
+    # Audit log en batch
+    tenant_names = {t["id"]: t["name"] for t in old_tenants}
+    sb.table("admin_action_log").insert([
+        {
+            "admin_user_id":     "system",
+            "admin_email":       "system@klientys.co",
+            "action_type":       "auto_unpublish_site",
+            "target_tenant_id":  s["tenant_id"],
+            "target_tenant_name": tenant_names.get(s["tenant_id"], "?"),
+            "payload":           {"reason": "trial_expired_90d"},
+        }
+        for s in pub_sites
+    ]).execute()
+
+    return len(pub_sites)
+
+
 # ─── Métriques ────────────────────────────────────────────────────────────────
 
 @router.get("/metrics")
-async def get_metrics(admin=Depends(get_current_admin)):
+async def get_metrics(admin=Depends(viewer_or_above)):
     sb = get_supabase_admin()
     now = datetime.now(timezone.utc)
 
@@ -96,12 +168,23 @@ async def get_metrics(admin=Depends(get_current_admin)):
     expired = counts["trial_expired"]
     conv    = round(paid / (paid + expired) * 100, 1) if (paid + expired) > 0 else 0.0
 
-    # MRR — somme des prix mensuels des abonnements actifs
-    paid_subs = sb.table("subscription").select("plan:plan_id(price_monthly)").in_("status", ["active", "trialing"]).execute().data or []
+    # MRR + plan distribution
+    paid_subs = sb.table("subscription").select("plan:plan_id(name, price_monthly)").in_("status", ["active", "trialing"]).execute().data or []
     mrr = sum(
         s["plan"]["price_monthly"] for s in paid_subs
         if s.get("plan") and s["plan"].get("price_monthly")
     )
+    plan_dist: dict[str, int] = {}
+    for s in paid_subs:
+        name = (s.get("plan") or {}).get("name") or "Autre"
+        plan_dist[name] = plan_dist.get(name, 0) + 1
+
+    # Contacts total
+    contacts_total = sb.table("contact").select("id", count="exact").execute().count or 0
+
+    # Churn rate (essai expiré sans conversion / total des tenants arrivés à terme)
+    expired_or_paid = paid + expired
+    churn_rate = round(expired / max(1, expired_or_paid) * 100, 1)
 
     return {
         "tenants": counts,
@@ -114,6 +197,10 @@ async def get_metrics(admin=Depends(get_current_admin)):
         "custom_domains_active": sum(1 for d in domains if d.get("status") == "active"),
         "trial_to_paid_rate":    conv,
         "mrr":                   mrr,
+        "arr":                   mrr * 12,
+        "churn_rate":            churn_rate,
+        "contacts_total":        contacts_total,
+        "plan_distribution":     plan_dist,
     }
 
 
@@ -121,7 +208,7 @@ async def get_metrics(admin=Depends(get_current_admin)):
 
 @router.get("/tenants")
 async def list_tenants(
-    admin=Depends(get_current_admin),
+    admin=Depends(viewer_or_above),
     search: Optional[str] = None,
     status: Optional[str] = Query(None),
     page: int = 1,
@@ -171,7 +258,7 @@ async def list_tenants(
 # ─── Détail d'un tenant ───────────────────────────────────────────────────────
 
 @router.get("/tenants/{tenant_id}")
-async def get_tenant(tenant_id: str, admin=Depends(get_current_admin)):
+async def get_tenant(tenant_id: str, admin=Depends(viewer_or_above)):
     sb  = get_supabase_admin()
     now = datetime.now(timezone.utc)
 
@@ -255,7 +342,7 @@ class ExtendTrialIn(BaseModel):
     days: int = 7
 
 @router.post("/tenants/{tenant_id}/extend-trial")
-async def extend_trial(tenant_id: str, body: ExtendTrialIn, admin=Depends(get_current_admin)):
+async def extend_trial(tenant_id: str, body: ExtendTrialIn, admin=Depends(support_or_above)):
     sb = get_supabase_admin()
     t  = sb.table("tenant").select("name, created_at, trial_extended_until").eq("id", tenant_id).single().execute().data
     if not t:
@@ -319,7 +406,7 @@ async def force_activate(tenant_id: str, body: ForceActivateIn, admin=Depends(ge
     if existing:
         sb.table("subscription").update({"status": "active", "plan_id": plan_id}).eq("tenant_id", tenant_id).execute()
     else:
-        sb.table("subscription").insert({"tenant_id": tenant_id, "plan_id": plan_id, "status": "active", "stripe_subscription_id": f"manual_{tenant_id[:8]}"}).execute()
+        sb.table("subscription").insert({"tenant_id": tenant_id, "plan_id": plan_id, "status": "active"}).execute()
 
     _log(admin, "force_activate", tenant_id, t["name"], {"plan_id": plan_id})
     return {"ok": True}
@@ -328,7 +415,7 @@ async def force_activate(tenant_id: str, body: ForceActivateIn, admin=Depends(ge
 # ─── Vider le cache ROI ───────────────────────────────────────────────────────
 
 @router.post("/tenants/{tenant_id}/clear-cache")
-async def clear_cache(tenant_id: str, admin=Depends(get_current_admin)):
+async def clear_cache(tenant_id: str, admin=Depends(support_or_above)):
     get_supabase_admin().table("tenant_roi_cache").delete().eq("tenant_id", tenant_id).execute()
     _log(admin, "clear_cache", tenant_id)
     return {"ok": True}
@@ -337,7 +424,7 @@ async def clear_cache(tenant_id: str, admin=Depends(get_current_admin)):
 # ─── Confirmer l'email ────────────────────────────────────────────────────────
 
 @router.post("/tenants/{tenant_id}/confirm-email")
-async def confirm_email(tenant_id: str, admin=Depends(get_current_admin)):
+async def confirm_email(tenant_id: str, admin=Depends(support_or_above)):
     sb    = get_supabase_admin()
     owner = sb.table("membership").select("user_id").eq("tenant_id", tenant_id).eq("role", "owner").limit(1).execute().data
     if not owner:
@@ -352,7 +439,7 @@ async def confirm_email(tenant_id: str, admin=Depends(get_current_admin)):
 # ─── Envoyer un reset de mot de passe ────────────────────────────────────────
 
 @router.post("/tenants/{tenant_id}/reset-password")
-async def reset_password(tenant_id: str, admin=Depends(get_current_admin)):
+async def reset_password(tenant_id: str, admin=Depends(support_or_above)):
     sb    = get_supabase_admin()
     owner = sb.table("membership").select("user_id").eq("tenant_id", tenant_id).eq("role", "owner").limit(1).execute().data
     if not owner:
@@ -458,7 +545,7 @@ async def update_config(body: Dict[str, Any] = Body(...), admin=Depends(get_curr
 
 @router.get("/action-log")
 async def get_action_log(
-    admin=Depends(get_current_admin),
+    admin=Depends(viewer_or_above),
     page: int = 1,
     page_size: int = 50,
     action_type: Optional[str] = None,
@@ -479,7 +566,7 @@ async def get_action_log(
 # ─── Croissance (graphique) ───────────────────────────────────────────────────
 
 @router.get("/metrics/growth")
-async def get_growth(admin=Depends(get_current_admin), days: int = 30):
+async def get_growth(admin=Depends(viewer_or_above), days: int = 30):
     from collections import defaultdict
     sb    = get_supabase_admin()
     now   = datetime.now(timezone.utc)
@@ -492,6 +579,82 @@ async def get_growth(admin=Depends(get_current_admin), days: int = 30):
         {"date": (now - timedelta(days=days - 1 - i)).strftime("%Y-%m-%d"),
          "count": counts.get((now - timedelta(days=days - 1 - i)).strftime("%Y-%m-%d"), 0)}
         for i in range(days)
+    ]
+
+
+# ─── Top customers ───────────────────────────────────────────────────────────
+
+@router.get("/metrics/top-customers")
+async def get_top_customers(admin=Depends(viewer_or_above), limit: int = 10):
+    sb = get_supabase_admin()
+
+    subs = sb.table("subscription")\
+        .select("tenant_id, status, plan:plan_id(name, price_monthly)")\
+        .in_("status", ["active", "trialing"])\
+        .execute().data or []
+
+    if not subs:
+        return []
+
+    tenant_ids = [s["tenant_id"] for s in subs]
+    tenants_data = sb.table("tenant").select("id, name").in_("id", tenant_ids).execute().data or []
+    tenant_map = {t["id"]: t["name"] for t in tenants_data}
+
+    sites = sb.table("site").select("tenant_id").in_("tenant_id", tenant_ids).execute().data or []
+    site_map: dict[str, int] = {}
+    for si in sites:
+        tid = si["tenant_id"]; site_map[tid] = site_map.get(tid, 0) + 1
+
+    contacts = sb.table("contact").select("tenant_id").in_("tenant_id", tenant_ids).execute().data or []
+    contact_map: dict[str, int] = {}
+    for c in contacts:
+        tid = c["tenant_id"]; contact_map[tid] = contact_map.get(tid, 0) + 1
+
+    result = []
+    for s in subs:
+        plan = s.get("plan") or {}
+        tid = s["tenant_id"]
+        result.append({
+            "tenant_id": tid,
+            "name": tenant_map.get(tid, "—"),
+            "status": s.get("status", "active"),
+            "plan": plan.get("name", "—"),
+            "mrr": plan.get("price_monthly") or 0,
+            "sites_built": site_map.get(tid, 0),
+            "crm_contacts": contact_map.get(tid, 0),
+        })
+
+    result.sort(key=lambda x: x["mrr"], reverse=True)
+    return result[:limit]
+
+
+# ─── Funnel de conversion ────────────────────────────────────────────────────
+
+@router.get("/metrics/funnel")
+async def get_funnel(admin=Depends(viewer_or_above)):
+    sb  = get_supabase_admin()
+    now = datetime.now(timezone.utc)
+    ninety_ago = (now - timedelta(days=90)).isoformat()
+
+    tenants = sb.table("tenant").select("id, created_at, suspended_at, trial_extended_until").execute().data or []
+    subs    = sb.table("subscription").select("tenant_id, status").in_("status", ["active", "trialing"]).execute().data or []
+    sub_map = {s["tenant_id"]: s for s in subs}
+
+    total         = len(tenants)
+    in_trial_ids  = {t["id"] for t in tenants if _compute_status(t, sub_map, now) in ["trial", "active", "trialing"]}
+    in_trial      = len(in_trial_ids)
+    paid          = sum(1 for t in tenants if _compute_status(t, sub_map, now) in ["active", "trialing"])
+    retained      = sum(1 for t in tenants if _compute_status(t, sub_map, now) in ["active", "trialing"] and t["created_at"] < ninety_ago)
+    # Tenants non-expirés ayant publié leur site — garanti ≤ in_trial
+    pub_rows  = sb.table("site").select("tenant_id").eq("status", "published").execute().data or []
+    sites_pub = len({r["tenant_id"] for r in pub_rows} & in_trial_ids)
+
+    return [
+        {"label": "Inscriptions",  "value": total},
+        {"label": "Essai activé",  "value": in_trial},
+        {"label": "Site publié",   "value": sites_pub},
+        {"label": "Payant",        "value": paid},
+        {"label": "Après 3 mois",  "value": retained},
     ]
 
 
@@ -546,6 +709,9 @@ async def create_tenant(body: CreateTenantIn, admin=Depends(get_current_admin)):
 
 @router.post("/tenants/{tenant_id}/impersonate")
 async def impersonate(tenant_id: str, admin=Depends(get_current_admin)):
+    # 3 impersonations max par admin par tranche de 5 minutes
+    check_rate_by_key(admin["sub"], "impersonate", max_calls=3, window_seconds=300)
+
     sb    = get_supabase_admin()
     owner = sb.table("membership").select("user_id").eq("tenant_id", tenant_id).eq("role", "owner").limit(1).execute().data
     if not owner:
@@ -555,7 +721,11 @@ async def impersonate(tenant_id: str, admin=Depends(get_current_admin)):
     if not user:
         raise HTTPException(502, "Utilisateur introuvable")
 
-    redirect = f"{settings.frontend_url or settings.frontend_url_prod}/dashboard"
+    base = settings.frontend_url_prod or settings.frontend_url
+    if base == "http://localhost:3000":
+        base = "https://klientys.co"
+    redirect = f"{base}/auth/callback"
+
     async with httpx.AsyncClient() as c:
         r = await c.post(
             f"{settings.supabase_url}/auth/v1/admin/generate_link",
@@ -565,10 +735,28 @@ async def impersonate(tenant_id: str, admin=Depends(get_current_admin)):
         )
         if r.status_code != 200:
             raise HTTPException(502, f"Erreur génération lien: {r.text}")
-        link = r.json().get("action_link") or r.json().get("properties", {}).get("action_link")
+        data = r.json()
+        email_otp = data.get("email_otp") or data.get("properties", {}).get("email_otp")
+        if not email_otp:
+            raise HTTPException(502, "Impossible d'extraire l'OTP Supabase")
 
     _log(admin, "impersonate", tenant_id, payload={"email": user["email"]})
-    return {"link": link}
+
+    # Notification transparente au tenant (non bloquante)
+    tenant_row = sb.table("tenant").select("name").eq("id", tenant_id).limit(1).execute().data
+    tenant_name = tenant_row[0]["name"] if tenant_row else "votre espace"
+    accessed_at = datetime.now(timezone.utc).strftime("%d/%m/%Y à %H:%M UTC")
+    try:
+        email_svc.send_impersonation_notice(
+            tenant_email=user["email"],
+            tenant_name=tenant_name,
+            admin_email=admin.get("email", ""),
+            accessed_at=accessed_at,
+        )
+    except Exception:
+        pass  # non bloquant — l'impersonation continue même si l'email échoue
+
+    return {"email": user["email"], "otp": email_otp}
 
 
 # ─── Changer l'email du propriétaire ─────────────────────────────────────────
@@ -592,7 +780,7 @@ async def change_owner_email(tenant_id: str, body: ChangeEmailIn, admin=Depends(
 # ─── Synchroniser depuis Stripe ───────────────────────────────────────────────
 
 @router.post("/tenants/{tenant_id}/sync-stripe")
-async def sync_stripe(tenant_id: str, admin=Depends(get_current_admin)):
+async def sync_stripe(tenant_id: str, admin=Depends(support_or_above)):
     import stripe as stripe_lib
     stripe_lib.api_key = settings.stripe_secret_key.strip() if settings.stripe_secret_key else ""
 
@@ -619,7 +807,7 @@ async def sync_stripe(tenant_id: str, admin=Depends(get_current_admin)):
 # ─── Reset du domaine custom ──────────────────────────────────────────────────
 
 @router.post("/tenants/{tenant_id}/reset-domain")
-async def reset_domain(tenant_id: str, admin=Depends(get_current_admin)):
+async def reset_domain(tenant_id: str, admin=Depends(support_or_above)):
     sb  = get_supabase_admin()
     row = sb.table("custom_domain").select("id, domain").eq("tenant_id", tenant_id).limit(1).execute().data
     if not row:
@@ -662,4 +850,246 @@ async def update_sector(key: str, body: SectorPatch, admin=Depends(get_current_a
         sb.table("system_config").upsert({"key": "sector_labels", "value": labels, "updated_at": now}).execute()
 
     _log(admin, "update_sector", payload={"key": key})
+    return {"ok": True}
+
+
+# ─── Comptes support ──────────────────────────────────────────────────────────
+
+VALID_SUPPORT_ROLES = ("viewer", "support")
+
+class SupportAccountIn(BaseModel):
+    email: str
+    role:  str  # "viewer" | "support"
+
+class SupportRolePatch(BaseModel):
+    role: str
+
+
+def _sb_headers() -> dict:
+    return {
+        "apikey": settings.supabase_service_role_key,
+        "Authorization": f"Bearer {settings.supabase_service_role_key}",
+    }
+
+
+@router.get("/support-accounts")
+async def list_support_accounts(admin=Depends(get_current_admin)):
+    """Retourne tous les comptes avec un support_role dans app_metadata."""
+    async with httpx.AsyncClient() as c:
+        r = await c.get(
+            f"{settings.supabase_url}/auth/v1/admin/users?per_page=1000",
+            headers=_sb_headers(),
+            timeout=15,
+        )
+    if r.status_code != 200:
+        raise HTTPException(502, "Erreur récupération utilisateurs Supabase")
+    users = r.json().get("users", [])
+    return [
+        {
+            "id":              u["id"],
+            "email":           u.get("email"),
+            "role":            u.get("app_metadata", {}).get("support_role"),
+            "created_at":      u.get("created_at"),
+            "last_sign_in_at": u.get("last_sign_in_at"),
+        }
+        for u in users
+        if u.get("app_metadata", {}).get("support_role") in VALID_SUPPORT_ROLES
+    ]
+
+
+@router.post("/support-accounts")
+async def create_support_account(body: SupportAccountIn, admin=Depends(get_current_admin)):
+    if body.role not in VALID_SUPPORT_ROLES:
+        raise HTTPException(400, "Rôle invalide — valeurs acceptées : viewer, support")
+
+    async with httpx.AsyncClient() as c:
+        # Crée l'utilisateur Supabase avec email confirmé et un mot de passe aléatoire
+        r = await c.post(
+            f"{settings.supabase_url}/auth/v1/admin/users",
+            json={
+                "email":         body.email,
+                "password":      secrets.token_hex(32),
+                "email_confirm": True,
+                "app_metadata":  {"support_role": body.role},
+            },
+            headers=_sb_headers(),
+            timeout=10,
+        )
+        if r.status_code not in (200, 201):
+            detail = r.json().get("msg") or r.json().get("message") or r.text
+            raise HTTPException(502, f"Erreur création compte : {detail}")
+        user_id = r.json()["id"]
+
+        # Génère un lien de définition de mot de passe (type recovery)
+        r2 = await c.post(
+            f"{settings.supabase_url}/auth/v1/admin/generate_link",
+            json={"type": "recovery", "email": body.email},
+            headers=_sb_headers(),
+            timeout=10,
+        )
+        setup_link = r2.json().get("action_link", "") if r2.status_code == 200 else ""
+
+    try:
+        email_svc.send_support_account_invite(
+            email=body.email,
+            role=body.role,
+            setup_link=setup_link,
+        )
+    except Exception:
+        pass  # non bloquant
+
+    _log(admin, "create_support_account", payload={"email": body.email, "role": body.role})
+    return {"id": user_id, "email": body.email, "role": body.role}
+
+
+@router.patch("/support-accounts/{user_id}")
+async def update_support_account(user_id: str, body: SupportRolePatch, admin=Depends(get_current_admin)):
+    if body.role not in VALID_SUPPORT_ROLES:
+        raise HTTPException(400, "Rôle invalide")
+    # Fusionne avec le metadata existant pour ne pas écraser les autres clés (ex: tenant_id)
+    user = await _supabase_user_get(user_id)
+    if not user:
+        raise HTTPException(404, "Utilisateur introuvable")
+    new_meta = {**(user.get("app_metadata") or {}), "support_role": body.role}
+    r = await _supabase_user_patch(user_id, {"app_metadata": new_meta})
+    if r.status_code != 200:
+        raise HTTPException(502, "Erreur mise à jour Supabase")
+    _log(admin, "update_support_account", payload={"user_id": user_id, "role": body.role})
+    return {"ok": True}
+
+
+@router.delete("/support-accounts/{user_id}")
+async def delete_support_account(user_id: str, admin=Depends(get_current_admin)):
+    user = await _supabase_user_get(user_id)
+    if not user:
+        raise HTTPException(404, "Utilisateur introuvable")
+
+    current_meta = user.get("app_metadata") or {}
+    has_tenant   = bool(current_meta.get("tenant_id"))
+
+    if has_tenant:
+        # L'utilisateur est aussi tenant — on retire uniquement support_role
+        # en reconstruisant le metadata complet sans cette clé (Supabase ignore les null)
+        new_meta = {k: v for k, v in current_meta.items() if k != "support_role"}
+        r = await _supabase_user_patch(user_id, {"app_metadata": new_meta})
+        if r.status_code != 200:
+            raise HTTPException(502, "Erreur révocation Supabase")
+    else:
+        # Compte purement support → suppression complète du compte Supabase
+        async with httpx.AsyncClient() as c:
+            r = await c.delete(
+                f"{settings.supabase_url}/auth/v1/admin/users/{user_id}",
+                headers=_sb_headers(),
+                timeout=10,
+            )
+        if r.status_code not in (200, 204):
+            raise HTTPException(502, f"Erreur suppression Supabase : {r.text}")
+
+    _log(admin, "delete_support_account", payload={"user_id": user_id})
+    return {"ok": True}
+
+
+# ─── Tenants inactifs (relances) ─────────────────────────────────────────────
+
+@router.get("/inactive-tenants")
+async def get_inactive_tenants(admin=Depends(viewer_or_above), days: int = 30):
+    sb  = get_supabase_admin()
+    now = datetime.now(timezone.utc)
+
+    # Nettoyage automatique avant de construire la liste
+    _auto_unpublish_expired_sites(sb, now)
+
+    cutoff = (now - timedelta(days=days)).isoformat()
+
+    tenants = sb.table("tenant").select("id, name, slug, created_at, suspended_at, trial_extended_until").execute().data or []
+    subs    = sb.table("subscription").select("tenant_id, status").in_("status", ["active", "trialing"]).execute().data or []
+    sub_map = {s["tenant_id"]: s for s in subs}
+
+    # Seuls les tenants non-suspendus créés il y a plus de `days` jours
+    eligible = [t for t in tenants if not t.get("suspended_at") and t["created_at"] < cutoff]
+    all_ids  = {t["id"] for t in eligible}
+
+    owners    = sb.table("membership").select("tenant_id, user_id").eq("role", "owner").execute().data or []
+    owner_map = {m["tenant_id"]: m["user_id"] for m in owners if m["tenant_id"] in all_ids}
+
+    async with httpx.AsyncClient() as c:
+        r = await c.get(
+            f"{settings.supabase_url}/auth/v1/admin/users?per_page=1000",
+            headers=_sb_headers(), timeout=15,
+        )
+        users = r.json().get("users", []) if r.status_code == 200 else []
+    user_map = {u["id"]: u for u in users}
+
+    site_rows = sb.table("site").select("tenant_id, id, status").execute().data or []
+    site_map  = {s["tenant_id"]: s for s in site_rows}
+
+    result = []
+    for t in eligible:
+        owner_id = owner_map.get(t["id"])
+        if not owner_id:
+            continue
+        user         = user_map.get(owner_id, {})
+        last_sign_in = user.get("last_sign_in_at")
+        # Actif récemment → skip
+        if last_sign_in and last_sign_in > cutoff:
+            continue
+        site = site_map.get(t["id"])
+        result.append({
+            "tenant_id":       t["id"],
+            "tenant_name":     t["name"],
+            "tenant_slug":     t["slug"],
+            "owner_email":     user.get("email"),
+            "last_sign_in_at": last_sign_in,
+            "created_at":      t["created_at"],
+            "computed_status": _compute_status(t, sub_map, now),
+            "site_published":  site is not None and site.get("status") == "published",
+            "site_id":         site["id"] if site else None,
+        })
+
+    # Plus longtemps inactif en premier (None = jamais connecté → tout en haut)
+    result.sort(key=lambda x: x["last_sign_in_at"] or "0000")
+    return result
+
+
+@router.post("/tenants/{tenant_id}/relance")
+async def relance_tenant(tenant_id: str, admin=Depends(support_or_above)):
+    sb = get_supabase_admin()
+    tenant = sb.table("tenant").select("name, slug").eq("id", tenant_id).single().execute().data
+    if not tenant:
+        raise HTTPException(404, "Tenant introuvable")
+
+    owner = sb.table("membership").select("user_id").eq("tenant_id", tenant_id).eq("role", "owner").limit(1).execute().data
+    owner_id = owner[0]["user_id"] if owner else None
+    if not owner_id:
+        raise HTTPException(400, "Propriétaire introuvable")
+
+    u = await _supabase_user_get(owner_id)
+    owner_email = u.get("email") if u else None
+    if not owner_email:
+        raise HTTPException(400, "Email introuvable")
+
+    email_svc.send_reactivation_relance(
+        email=owner_email,
+        tenant_name=tenant["name"],
+        tenant_slug=tenant["slug"],
+        dashboard_url=f"{settings.frontend_url}/dashboard",
+        site_url=f"{settings.frontend_url}/{tenant['slug']}",
+    )
+    _log(admin, "relance", tenant_id, tenant["name"], {"owner_email": owner_email})
+    return {"ok": True}
+
+
+@router.post("/tenants/{tenant_id}/unpublish-site")
+async def unpublish_site(tenant_id: str, admin=Depends(support_or_above)):
+    sb = get_supabase_admin()
+    tenant = sb.table("tenant").select("name").eq("id", tenant_id).single().execute().data
+    if not tenant:
+        raise HTTPException(404, "Tenant introuvable")
+
+    site = sb.table("site").select("id").eq("tenant_id", tenant_id).limit(1).execute().data
+    if not site:
+        raise HTTPException(404, "Site introuvable")
+
+    sb.table("site").update({"status": "draft"}).eq("tenant_id", tenant_id).execute()
+    _log(admin, "unpublish_site", tenant_id, tenant["name"])
     return {"ok": True}

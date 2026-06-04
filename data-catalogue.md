@@ -1,4 +1,4 @@
-# Data Catalogue — SaaS Présence Digitale
+# Data Catalogue — Klientys Présence Digitale
 
 **Version :** 1.1  
 **Date :** Avril 2026  

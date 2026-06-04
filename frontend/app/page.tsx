@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { supabase } from "../lib/api";
 import { LangSelector, useLanguage } from "../contexts/LanguageContext";
 import CookieBanner from "../components/CookieBanner";
@@ -18,12 +19,29 @@ const FAQ_KEYS = [
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export default function LandingPage() {
+  const router = useRouter();
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   const [navScrolled, setNavScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [tenantCount, setTenantCount] = useState<number | null>(null);
   const { t } = useLanguage();
+
+  // Supabase redirige les erreurs OTP vers le Site URL (klientys.co/#error=...)
+  // On intercepte le hash et on renvoie vers /login avec un message lisible
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash;
+    if (!hash.includes("error=")) return;
+    const params = new URLSearchParams(hash.slice(1));
+    const code = params.get("error_code") ?? "";
+    const desc = params.get("error_description") ?? "Lien invalide ou expiré";
+    const msg = code === "otp_expired"
+      ? "Ce lien de confirmation a expiré. Reconnectez-vous pour en recevoir un nouveau."
+      : decodeURIComponent(desc.replace(/\+/g, " "));
+    window.history.replaceState(null, "", "/");
+    router.replace(`/login?auth_error=${encodeURIComponent(msg)}`);
+  }, [router]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setLoggedIn(!!session));
@@ -410,14 +428,18 @@ export default function LandingPage() {
               <p className="l-price-desc">{t.lp_plan1_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
-                <li>1 site vitrine (jusqu&apos;à 3 pages)</li>
+                <li>Site vitrine complet</li>
                 <li>Réservations en ligne</li>
                 <li>100 contacts CRM</li>
-                <li>Emails automatiques</li>
+                <li>Emails automatiques (RDV, rappels)</li>
+                <li>Agent IA vitrine (chatbot public)</li>
                 <li>Annuaire professionnel public</li>
                 <li>Support email</li>
               </ul>
-              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={trackLead}>{t.lp_waitlist}</Link>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center", whiteSpace: "nowrap" }} onClick={trackLead}>{t.lp_waitlist}</Link>
+                <span style={{ fontSize: "12px", visibility: "hidden" }}>placeholder</span>
+              </div>
             </div>
 
             <div className="l-price-card featured" data-r="" data-d="2">
@@ -430,16 +452,19 @@ export default function LandingPage() {
               <p className="l-price-desc">{t.lp_plan2_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
-                <li>Site vitrine multi-pages complet</li>
+                <li>Site vitrine complet</li>
                 <li>Réservations illimitées</li>
-                <li>CRM complet + pipeline illimité</li>
-                <li>Agent IA vitrine &amp; support client</li>
-                <li>Analytics comportementaux</li>
+                <li>1 000 contacts CRM</li>
+                <li>3 agents IA (vitrine, support client, assistant)</li>
+                <li>Analytics + Potentiel de demande locale</li>
                 <li>Domaine personnalisé inclus</li>
-                <li>Widget embarquable</li>
+                <li>Widget embarquable sur site externe</li>
                 <li>Support prioritaire 24/7</li>
               </ul>
-              <Link href="/onboarding" className="l-btn l-btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={trackLead}>{t.lp_waitlist_arr}</Link>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                <Link href="/onboarding" className="l-btn l-btn-primary l-btn-featured" style={{ width: "100%", justifyContent: "center", whiteSpace: "nowrap" }} onClick={trackLead}>{t.lp_waitlist_arr}</Link>
+                <span style={{ fontSize: "12px", color: "var(--l-text-3)" }}>✓ Sans carte bancaire &nbsp;·&nbsp; 14 jours offerts</span>
+              </div>
             </div>
 
             <div className="l-price-card" data-r="" data-d="3">
@@ -452,14 +477,18 @@ export default function LandingPage() {
               <div className="l-price-divider" />
               <ul className="l-price-features">
                 <li>Tout du plan Pro</li>
+                <li>Contacts illimités</li>
+                <li>CSS personnalisé sur votre site</li>
                 <li>Multi-espaces de travail</li>
-                <li>Gestion d&apos;équipe &amp; calendriers séparés</li>
-                <li>Agent IA assistant personnel</li>
-                <li>Potentiel de demande locale (Trends)</li>
+                <li>Membres d&apos;équipe illimités</li>
+                <li>Calendriers séparés par membre</li>
                 <li>Onboarding personnalisé</li>
                 <li>Account manager dédié</li>
               </ul>
-              <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center" }} onClick={trackLead}>{t.lp_waitlist}</Link>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center", whiteSpace: "nowrap" }} onClick={trackLead}>{t.lp_waitlist}</Link>
+                <span style={{ fontSize: "12px", visibility: "hidden" }}>placeholder</span>
+              </div>
             </div>
 
           </div>

@@ -52,7 +52,7 @@ export default function CguPage() {
         Conditions Générales d'Utilisation
       </h1>
       <p style={{ ...P, marginBottom: "56px" }}>
-        Dernière mise à jour : 16 mai 2026 — Klientys SRL, Belgique
+        Dernière mise à jour : 3 juin 2026 — Klientys SRL, Belgique
       </p>
 
       <div style={{ borderTop: "1px solid var(--l-border)", paddingTop: "48px" }}>
@@ -198,6 +198,31 @@ export default function CguPage() {
             Klientys se réserve le droit de modifier les présentes CGU. Toute modification substantielle sera
             notifiée par e-mail avec un préavis de 15 jours. La poursuite de l'utilisation du service après
             ce délai vaut acceptation des nouvelles conditions.
+          </p>
+        </div>
+
+        <div style={SECTION}>
+          <h2 style={H2}>13. Accès administrateur pour support et maintenance</h2>
+          <p style={P}>
+            Dans le cadre de ses obligations de support technique et de maintenance, Klientys SRL peut être amenée
+            à accéder à votre espace professionnel (tableau de bord, données CRM, configuration) sans nécessiter
+            votre présence ou votre action. Cet accès est strictement encadré :
+          </p>
+          <ul style={UL}>
+            <li>Il est réservé aux administrateurs Klientys identifiés et habilités</li>
+            <li>Chaque accès est automatiquement tracé dans un journal d'audit interne horodaté (adresse admin, tenant ciblé, date et heure)</li>
+            <li>Une notification par e-mail vous est envoyée automatiquement après chaque accès</li>
+            <li>Il est limité au strict nécessaire (diagnostic, correction de bug, assistance demandée)</li>
+            <li>Aucune donnée bancaire, mot de passe ou clé privée n'est accessible par ce biais</li>
+          </ul>
+          <p style={P}>
+            Ce mécanisme constitue une pratique standard dans le secteur SaaS (similaire à Stripe, Intercom, Crisp, etc.).
+            Si vous recevez une notification d'accès que vous n'avez pas sollicité, contactez-nous immédiatement à{" "}
+            <a href="mailto:support@klientys.co" style={{ color: "var(--l-teal-xl)" }}>support@klientys.co</a>.
+          </p>
+          <p style={P}>
+            En acceptant les présentes CGU, vous autorisez Klientys SRL à exercer ce droit d'accès dans les conditions
+            décrites ci-dessus.
           </p>
         </div>
 

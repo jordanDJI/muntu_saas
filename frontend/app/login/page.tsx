@@ -30,6 +30,12 @@ export default function LoginPage() {
   const [lockedMins, setLockedMins] = useState(0);
 
   useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const authError = p.get("auth_error");
+    if (authError) setError(decodeURIComponent(authError));
+  }, []);
+
+  useEffect(() => {
     const check = () => {
       const { until } = getLockout();
       const remaining = until - Date.now();

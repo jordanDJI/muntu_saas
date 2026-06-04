@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, supabase } from "../../../lib/api";
+import { UpgradeGate } from "../components/UpgradeGate";
 
 function CopyBlock({ label, code, id }: { label: string; code: string; id: string }) {
   const [copied, setCopied] = useState(false);
@@ -146,6 +147,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   const loading = !tenantSlug;
 
   return (
+    <UpgradeGate feature="embed_widget">
     <main className="max-w-3xl mx-auto p-6 space-y-10 pb-20">
 
       {/* Header */}
@@ -248,5 +250,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </section>
 
     </main>
+    </UpgradeGate>
   );
 }

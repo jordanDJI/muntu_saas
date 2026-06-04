@@ -27,7 +27,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
       headers: { "Content-Type": "application/json", ...headers, ...(options.headers ?? {}) },
     });
   } catch {
-    throw new Error(`Serveur inaccessible (${API_URL}). Vérifiez votre connexion ou la configuration du backend.`);
+    throw new Error("Service temporairement indisponible. Veuillez réessayer dans quelques instants.");
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -117,7 +117,7 @@ export const api = {
         body: form,
       });
     } catch {
-      throw new Error(`Serveur inaccessible (${API_URL}).`);
+      throw new Error("Impossible d'envoyer le fichier. Vérifiez votre connexion et réessayez.");
     }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

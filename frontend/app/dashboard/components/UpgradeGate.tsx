@@ -2,13 +2,15 @@
 import Link from "next/link";
 import { useSubscription, type FeatureKey } from "../../../contexts/SubscriptionContext";
 
-const FEATURE_PLAN: Record<string, { label: string; plan: string }> = {
+const FEATURE_PLAN: Record<string, { label: string; plan: string; desc?: string }> = {
   analytics:       { label: "Analytics comportementaux", plan: "Pro" },
-  analytics_roi:   { label: "Potentiel de demande locale", plan: "Business" },
-  agent_vitrine:   { label: "Agent Vitrine IA", plan: "Pro" },
+  analytics_roi:   { label: "Potentiel de demande locale", plan: "Pro" },
   agent_support:   { label: "Agent Support Client", plan: "Pro" },
-  agent_assistant: { label: "Assistant IA Tenant", plan: "Business" },
+  agent_assistant: { label: "Assistant IA personnel", plan: "Pro" },
+  embed_widget:    { label: "Widget embarquable", plan: "Pro", desc: "Intégrez le chatbot IA et le formulaire de réservation sur n'importe quel site existant (WordPress, Wix, Squarespace…) via un simple copier-coller de code." },
+  custom_css:      { label: "CSS personnalisé", plan: "Business" },
   multi_page_site: { label: "Site multi-pages", plan: "Pro" },
+  multi_tenant:    { label: "Multi-espaces de travail", plan: "Business" },
 };
 
 export function UpgradeGate({ feature, children }: { feature: FeatureKey; children: React.ReactNode }) {
@@ -37,7 +39,7 @@ export function UpgradeGate({ feature, children }: { feature: FeatureKey; childr
         </p>
         <h3 className="text-lg font-bold" style={{ color: "var(--l-text)" }}>{info.label}</h3>
         <p className="text-sm mt-1" style={{ color: "var(--l-text-2)" }}>
-          Passez au plan <strong>{info.plan}</strong> pour débloquer cette fonctionnalité.
+          {info.desc ?? `Passez au plan ${info.plan} pour débloquer cette fonctionnalité.`}
         </p>
       </div>
       <Link

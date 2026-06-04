@@ -3,6 +3,8 @@
 > Levier SEO #1 : chaque user Klientys devient une page indexée sur "kiné Lyon" ou "plombier Bruxelles".
 > Modèle : Treatwell, Doctolib listing, PagesJaunes — mais gratuit et auto-alimenté.
 
+> **État d'implémentation (juin 2026)** : Sections 3, 4, 5 (pages hub + liste métier×ville + ville multi-métiers) et 6 (opt-in settings) sont **implémentées et en production**. Les sections 7 (sitemap/schema.org) et 8 (monétisation) restent en roadmap.
+
 ---
 
 ## 1. Concept & valeur
@@ -27,181 +29,148 @@
 ## 2. Architecture des URLs
 
 ```
-/annuaire/                              → Hub annuaire (index par famille)
-/annuaire/[metier]/                     → Liste des pros du métier (toutes zones)
-/annuaire/[metier]/[ville]/             → Liste des pros du métier à [ville]
-/annuaire/[metier]/[ville]/[slug]/      → Fiche pro (= site vitrine du tenant)
+/annuaire/                              → Hub annuaire (index par famille)         ✅ implémenté
+/annuaire/[metier]/[ville]/             → Liste des pros du métier à [ville]        ✅ implémenté
+/annuaire/ville/[ville]/                → Toutes professions dans une ville          ✅ implémenté (ajout)
+/annuaire/[metier]/                     → Liste des pros du métier (toutes zones)   🔜 roadmap
+/annuaire/[metier]/[ville]/[slug]/      → Fiche pro avec booking inline             🔜 roadmap
 ```
 
 Exemples :
 ```
 /annuaire/kinesitherapeute/lyon/
 /annuaire/plombier/bruxelles/
-/annuaire/infirmier-liberal/paris/jean-dupont/
+/annuaire/ville/rennes/                  ← toutes professions à Rennes
 ```
+
+> **Note** : La page `/annuaire/ville/[ville]` a été ajoutée à l'implémentation (hors spec initiale) pour que les liens "villes populaires" du hub pointent vers une page utile même quand le secteur est inconnu.
 
 ---
 
-## 3. Base de données
+## 3. Base de données ✅ implémenté
 
-### Table `directory_listing` (nouvelle)
+### Table `directory_listing` — migration `026_directory.sql`
+
+Structure réelle implémentée (légèrement différente de la spec initiale) :
 
 ```sql
 create table directory_listing (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid references tenant(id) on delete cascade unique,
-  is_listed boolean default false,         -- opt-in explicite
-  listed_at timestamptz,
-  metier_slug text,                        -- slug normalisé (ex: "kinesitherapeute")
-  display_name text,                       -- nom affiché dans l'annuaire
-  tagline text,                            -- accroche courte
-  zones text[],                            -- ["Lyon", "Villeurbanne", "Bron"]
-  primary_zone text,                       -- ville principale (pour URL)
-  profile_photo_url text,
-  accepts_booking boolean default true,    -- si le tenant a l'agenda activé
-  languages text[] default array['fr'],
+  is_listed boolean default false,
+  metier text,                    -- clé secteur ("kinesitherapeute", "plombier", "autre"…)
+  metier_slug text,               -- slug URL (= metier pour les secteurs standard)
+  custom_metier text,             -- valeur libre si metier = "autre"
+  description text,
+  primary_zone text,              -- ville principale (Title Case)
+  zones text[],                   -- toutes les zones (Title Case obligatoire)
+  phone text,
+  email text,
   updated_at timestamptz default now()
 );
-
--- Index pour les recherches annuaire
-create index idx_directory_metier_zone on directory_listing (metier_slug, primary_zone)
-  where is_listed = true;
-create index idx_directory_zones on directory_listing using gin (zones)
-  where is_listed = true;
 ```
 
-### Vue matérialisée (rafraîchie toutes les heures)
+> **Normalisation zones** : les zones sont toujours stockées en **Title Case** (`"Rennes"`, `"Saint-Brieuc"`). Le backend normalise à l'écriture. Supabase `.contains()` est sensible à la casse pour les arrays text.
 
-```sql
-create materialized view directory_listing_enriched as
-  select
-    dl.*,
-    t.slug as tenant_slug,
-    t.country,
-    s.title as site_title,
-    s.address,
-    s.site_style->>'primary_color' as color,
-    count(distinct a.id) filter (where a.status = 'confirmed') as appointments_count,
-    max(a.created_at) as last_activity_at
-  from directory_listing dl
-  join tenant t on t.id = dl.tenant_id
-  join site s on s.tenant_id = dl.tenant_id and s.status = 'published'
-  left join appointment a on a.calendar_id in (
-    select id from calendar where tenant_id = dl.tenant_id
-  )
-  where dl.is_listed = true
-  group by dl.id, t.slug, t.country, s.title, s.address, s.site_style;
+> **Différences avec la spec initiale** : `display_name`, `tagline`, `profile_photo_url`, `accepts_booking`, `languages` ne sont pas encore dans la table — ces colonnes sont roadmap.
 
-create unique index on directory_listing_enriched (id);
-```
+### Vue matérialisée 🔜 roadmap
+
+La vue matérialisée n'est pas encore implémentée. Les requêtes annuaire font une jointure directe sur `tenant` et `site`.
 
 ---
 
-## 4. Endpoints backend
+## 4. Endpoints backend ✅ implémenté
 
-### Nouveaux endpoints annuaire
+### Endpoints annuaire réels (`backend/app/api/v1/directory.py`)
 
 ```
-GET  /api/v1/directory/[metier]                → liste paginée (public)
-GET  /api/v1/directory/[metier]/[ville]        → liste filtrée par ville (public)
-GET  /api/v1/directory/[metier]/[ville]/[slug] → fiche pro (public, redirige vers site)
-POST /api/v1/directory/opt-in                  → activer listing (authentifié)
-POST /api/v1/directory/opt-out                 → désactiver listing (authentifié)
-GET  /api/v1/directory/my-listing              → voir son propre listing (authentifié)
-PATCH /api/v1/directory/my-listing             → modifier son listing (authentifié)
+GET  /api/v1/directory/listings?ville=...&metier=...  → liste paginée (public, metier optionnel)
+GET  /api/v1/directory/listing/{slug}                 → fiche publique par slug (public)
+GET  /api/v1/directory/my-listing                     → listing du tenant courant (auth)
+POST /api/v1/directory/opt-in                         → créer/MAJ listing (auth, normalise zones)
+PATCH /api/v1/directory/my-listing                    → modifier listing (auth, normalise zones)
+DELETE /api/v1/directory/opt-out                      → is_listed = false (auth)
 ```
 
-### Schema de réponse GET /directory/[metier]/[ville]
+> **Différence avec la spec** : les endpoints utilisent des query params (`?ville=&metier=`) et non des segments de path. `metier` est optionnel — sans lui, la requête retourne toutes professions pour la ville.
+
+### Schema de réponse GET /directory/listings
 
 ```json
 {
   "metier": "kinesitherapeute",
-  "ville": "Lyon",
-  "total": 12,
+  "ville": "Rennes",
   "page": 1,
   "per_page": 20,
   "listings": [
     {
+      "id": "...",
       "slug": "cabinet-kine-dupont",
-      "display_name": "Jean Dupont — Kinésithérapeute",
-      "tagline": "Kiné à domicile — Lyon 3e et environs",
-      "zones": ["Lyon", "Villeurbanne", "Caluire-et-Cuire"],
-      "primary_zone": "Lyon",
-      "profile_photo_url": "https://...",
-      "accepts_booking": true,
+      "metier": "kinesitherapeute",
+      "metier_slug": "kinesitherapeute",
+      "description": "Kiné libéral à Rennes...",
+      "zones": ["Rennes", "Saint-Grégoire"],
+      "primary_zone": "Rennes",
+      "phone": "0612345678",
+      "email": "...",
       "site_url": "/cabinet-kine-dupont",
-      "directory_url": "/annuaire/kinesitherapeute/lyon/cabinet-kine-dupont"
+      "directory_url": "/annuaire/kinesitherapeute/rennes"
     }
   ]
 }
 ```
 
+### Pièges backend connus
+
+- **Join `!inner` en supabase-py** : `tenant!inner(slug)` retourne silencieusement des résultats vides. Utiliser `tenant(slug)` (sans `!inner`) + fallback slug via requête séparée.
+- **Casse des zones** : normaliser en `.title()` avant `.contains()` et avant écriture.
+
 ---
 
-## 5. Pages frontend (Next.js)
+## 5. Pages frontend (Next.js) ✅ partiellement implémenté
 
-### Structure fichiers
+### Structure fichiers réelle
 
 ```
-frontend/app/(marketing)/annuaire/
-├── page.tsx                            ← Hub annuaire
+frontend/app/annuaire/
+├── page.tsx                            ← Hub annuaire            ✅ implémenté
 ├── [metier]/
-│   ├── page.tsx                        ← Liste métier (toutes zones)
 │   └── [ville]/
-│       ├── page.tsx                    ← Liste métier × ville
-│       └── [slug]/
-│           └── page.tsx                ← Fiche pro (wrapper autour du site)
+│       └── page.tsx                    ← Liste métier × ville    ✅ implémenté
+└── ville/
+    └── [ville]/
+        └── page.tsx                    ← Toutes professions/ville ✅ implémenté (ajout)
+
+Manquant (roadmap) :
+├── [metier]/page.tsx                   ← Liste métier toutes zones 🔜
+└── [metier]/[ville]/[slug]/page.tsx    ← Fiche pro avec booking    🔜
 ```
 
-### Page hub (`/annuaire/`)
+> **Pas dans un route group `(marketing)`** — l'implémentation est directement dans `app/annuaire/`, pas `app/(marketing)/annuaire/`.
 
-- Titre H1 : "Annuaire des professionnels indépendants"
-- Grid des familles : Santé, Artisanat, Services
-- Sous chaque famille : top 5 métiers avec nb de pros listés
-- Schema.org `ItemList`
+### Page hub (`/annuaire/`) ✅
 
-### Page métier × ville (`/annuaire/[metier]/[ville]/`)
+- Grid des secteurs avec nb de pros listés par métier
+- Villes populaires par secteur — liens vers `/annuaire/ville/{ville}` (pas `/annuaire/{metier}/{ville}` pour éviter le problème du secteur inconnu)
+- `cache: "no-store"` — pas de cache Next.js (évite d'afficher 0 pro après opt-in)
 
-```
-H1 : "Kinésithérapeutes à Lyon — [N] professionnels listés"
+### Page métier × ville (`/annuaire/[metier]/[ville]/`) ✅
 
-Meta title : "Kinésithérapeutes à Lyon - Trouvez un kiné libéral | Klientys"
-Meta description : "Trouvez un kinésithérapeute libéral à Lyon. 
-  Profils vérifiés, prise de RDV en ligne directe. [N] kiné(s) disponibles."
+- Liste des fiches actives pour ce métier dans cette ville
+- Filtre via `zones` array (`.contains()` Title Case) + fallback `primary_zone ILIKE`
+- `cache: "no-store"`
 
-Contenu :
-  - Breadcrumb : Annuaire > Kinésithérapeutes > Lyon
-  - Carte Leaflet : marqueurs pour chaque pro (lat/lng de primary_zone)
-  - Liste de cards pros (nom, photo, tagline, zones, bouton RDV si booking actif)
-  - Pagination (20 par page)
-  - FAQ locale : 3 questions SEO sur "kiné Lyon"
-  - CTA bottom : "Vous êtes kiné à Lyon ? Rejoignez l'annuaire gratuitement"
-```
+### Page ville multi-métiers (`/annuaire/ville/[ville]/`) ✅ (ajout hors spec)
 
-### Fiche pro (`/annuaire/[metier]/[ville]/[slug]/`)
+- Toutes les fiches actives dans la ville, groupées par `metier_slug`
+- Lien "Voir tous →" par groupe → `/annuaire/{metier}/{ville}`
+- `robots: { index: false }` si aucune fiche trouvée
+- `cache: "no-store"`
 
-Deux options :
-- **Option A (simple)** : redirect 301 vers `/{slug}` (le site du tenant)
-- **Option B (SEO)** : page wrapper qui affiche les données du pro + iframe ou embed du site
+### Fiche pro (`/annuaire/[metier]/[ville]/[slug]/`) 🔜 roadmap
 
-**Recommandation : Option B** pour garder l'URL dans l'annuaire indexée.
-
-```
-Layout fiche pro :
-  - Header : nom, photo, métier, note (si avis)
-  - Zones d'intervention (liste + carte)
-  - Bouton "Prendre RDV" → ouvre widget booking inline
-  - Description du pro (depuis site.description)
-  - Prestations (depuis service_offer)
-  - Lien "Voir le site complet"
-  
-Schema.org :
-  "@type": "LocalBusiness" ou "Physician" (selon métier)
-  "name": display_name
-  "areaServed": zones[]
-  "url": site_url
-  "makesOffer": prestations[]
-```
+Option B recommandée (page wrapper SEO avec booking inline) — non encore implémentée. Actuellement, les cards de la liste pointent directement vers `/{slug}` (le site du tenant).
 
 ---
 
@@ -209,27 +178,29 @@ Schema.org :
 
 ### Où afficher l'opt-in ?
 
-1. **Dashboard settings** → section "Annuaire public" (toggle + aperçu)
-2. **Onboarding** → étape finale : "Voulez-vous apparaître dans l'annuaire ?"
-3. **Dashboard** → bannière contextuelle : "Votre site est publié ! Apparaissez dans l'annuaire pour +X clients potentiels"
+1. **Dashboard settings** → section "Annuaire public" (toggle + aperçu) ✅ implémenté
+2. **Onboarding** → étape finale 🔜 roadmap
+3. **Dashboard** → bannière contextuelle post-publication 🔜 roadmap
 
-### Flow opt-in
+### Flow opt-in implémenté (Settings → Annuaire)
 
-```
-1. Tenant clique "Rejoindre l'annuaire"
-2. Modal de configuration :
-   - Sélectionner le métier principal (liste déroulante)
-   - Choisir la zone principale (autocomplete villes)
-   - Vérifier les zones d'intervention (déjà renseignées dans site-builder)
-   - Upload photo de profil (ou utiliser logo)
-   - Aperçu de la fiche
-3. Clic "Publier dans l'annuaire"
-4. Confirmation : "Votre fiche sera visible dans l'annuaire sous 1h"
-```
+`SectionAnnuaire` dans `frontend/app/dashboard/settings/page.tsx` :
 
-### CGU annuaire (checkbox obligatoire)
+1. Toggle "Apparaître dans l'annuaire" → `is_listed`
+2. Sélecteur métier (liste déroulante des secteurs standard + "autre")
+3. Champ métier libre si "autre" → `custom_metier`
+4. Description (textarea)
+5. Zone principale + zones multiples avec **autocomplete Nominatim** (350ms debounce, `onMouseDown` sur suggestions)
+6. Téléphone + email
+7. Sauvegarde via `POST /api/v1/directory/opt-in` ou `PATCH /api/v1/directory/my-listing`
 
-> "J'accepte que mes informations professionnelles soient affichées publiquement dans l'annuaire Klientys et indexées par les moteurs de recherche."
+> **Autocomplete zones** : API Nominatim (OpenStreetMap), `onMouseDown` (pas `onClick`) pour éviter le conflit avec `onBlur`, délai 150ms sur `onBlur` avant fermeture du dropdown.
+
+> **Normalisation** : `titleCaseZone()` appliqué côté frontend à la lecture + au `addZone()`. Le backend normalise également à l'écriture (`.title()` Python).
+
+### CGU annuaire 🔜 roadmap
+
+La checkbox CGU n'est pas encore dans le flow — à ajouter avant le lancement public de l'annuaire.
 
 ---
 
@@ -289,18 +260,20 @@ Schema.org :
 
 ## 9. Roadmap implémentation
 
-| Sprint | Tâche | Effort |
+| Sprint | Tâche | Statut |
 |--------|-------|--------|
-| S1 | Migration SQL `directory_listing` + vue matérialisée | 2h |
-| S1 | Endpoints GET annuaire (public, paginé) | 4h |
-| S1 | Endpoints opt-in/opt-out + PATCH listing (auth) | 3h |
-| S2 | Page hub `/annuaire/` | 4h |
-| S2 | Page liste métier × ville (avec carte Leaflet) | 8h |
-| S2 | Fiche pro (Option B avec booking inline) | 6h |
-| S3 | Modal opt-in dans settings dashboard | 5h |
-| S3 | Bannière opt-in post-publication | 2h |
-| S3 | Schema.org + sitemap annuaire | 3h |
-| S4 | Vue matérialisée refresh job (cron) | 2h |
-| S4 | Règles noindex (< 3 pros, inactivité 6 mois) | 2h |
-
-**Total estimé : ~41h dev**
+| S1 | Migration SQL `directory_listing` (`026_directory.sql`) | ✅ fait |
+| S1 | Endpoints GET annuaire (public, paginé, metier optionnel) | ✅ fait |
+| S1 | Endpoints opt-in/opt-out + PATCH listing (auth) | ✅ fait |
+| S2 | Page hub `/annuaire/` | ✅ fait |
+| S2 | Page liste métier × ville | ✅ fait |
+| S2 | Page ville multi-métiers `/annuaire/ville/[ville]/` | ✅ fait (hors spec) |
+| S2 | Autocomplete Nominatim sur les zones (settings) | ✅ fait |
+| S3 | Section opt-in dans settings dashboard | ✅ fait |
+| S3 | Fiche pro (Option B avec booking inline) | 🔜 roadmap |
+| S3 | Bannière opt-in post-publication | 🔜 roadmap |
+| S3 | Schema.org + sitemap annuaire | 🔜 roadmap |
+| S4 | Vue matérialisée refresh job (cron) | 🔜 roadmap |
+| S4 | Règles noindex (< 3 pros, inactivité 6 mois) | 🔜 roadmap |
+| S4 | CGU annuaire (checkbox opt-in) | 🔜 roadmap |
+| S4 | Page `/annuaire/[metier]/` (liste toutes zones) | 🔜 roadmap |

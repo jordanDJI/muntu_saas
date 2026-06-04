@@ -402,6 +402,54 @@ function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: 
   );
 }
 
+function ContactLimitBanner() {
+  const { features, status, loading } = useSubscription();
+  const [count, setCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (loading || status === "trial_expired") return;
+    const max = features?.max_contacts;
+    if (!max || max === -1) return; // illimité → pas de bannière
+    api.getContactsCount().then(r => setCount(r.count)).catch(() => {});
+  }, [loading, status, features]);
+
+  if (count === null) return null;
+  const max = features?.max_contacts;
+  if (!max || max === -1) return null;
+
+  const pct = count / max;
+  if (pct < 0.8) return null;
+
+  const isCritical = pct >= 0.95;
+  const remaining = max - count;
+
+  return (
+    <div style={{
+      background: isCritical ? "rgba(191,51,51,.15)" : "rgba(221,170,64,.1)",
+      borderBottom: `1px solid ${isCritical ? "rgba(191,51,51,.3)" : "rgba(221,170,64,.25)"}`,
+      padding: "10px 24px", display: "flex", alignItems: "center", justifyContent: "center",
+      gap: "16px", flexWrap: "wrap", fontSize: "13px",
+    }}>
+      <span style={{ color: isCritical ? "#FC8181" : "#DDAA40", fontWeight: 600 }}>
+        {isCritical
+          ? `⚠️ Limite contacts atteinte presque — ${remaining} place${remaining > 1 ? "s" : ""} restante${remaining > 1 ? "s" : ""} sur ${max}`
+          : `⚠️ ${count} contacts sur ${max} — approche de la limite`}
+      </span>
+      <Link
+        href="/dashboard/settings?section=abonnement"
+        style={{
+          background: isCritical ? "#FC8181" : "var(--l-gold)",
+          color: "#07222F", fontWeight: 700,
+          fontSize: "12px", padding: "5px 14px", borderRadius: "100px",
+          textDecoration: "none",
+        }}
+      >
+        Passer au plan Business →
+      </Link>
+    </div>
+  );
+}
+
 function TrialBanner() {
   const { status, trialDaysLeft, loading } = useSubscription();
   const pathname = usePathname();
@@ -516,6 +564,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Fast path: read session from localStorage immediately, no server roundtrip
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
+        // Compte support → le dashboard tenant n'a pas de sens pour eux
+        const meta = session.user.app_metadata ?? {};
+        if (meta.support_role || meta.is_super_admin) {
+          window.location.replace("/admin");
+          return;
+        }
         const prefs = session.user.user_metadata?.ui_prefs ?? {};
         setDarkMode(prefs.darkMode ?? false);
         api.getMyTenant()
@@ -741,6 +795,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Contenu — offset pour la navbar */}
       <div className="pt-14">
         <TrialBanner />
+        <ContactLimitBanner />
         {children}
       </div>
     </div>
