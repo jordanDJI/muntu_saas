@@ -1,7 +1,7 @@
 # Périmètre Site Internet — Guide complet
 
-**Version :** 1.0  
-**Date :** Avril 2026  
+**Version :** 1.1  
+**Date :** Juin 2026  
 **Périmètre :** Création, personnalisation, publication et intégration de sites vitrine dans le SaaS
 
 ---
@@ -44,7 +44,7 @@ Le wizard guide le professionnel étape par étape. Il ne peut pas avancer si la
 
 | # | Étape | Champs | Sauvegarde |
 |---|---|---|---|
-| 1 | Votre image & photos | Logo (a / n'a pas / texte), palette couleur (6 choix), police (moderne / classique / manuscrit), option photos (stock / propres) | `site_style.logo_option`, `site_style.primary_color`, `site_style.font_style`, `site_style.photos_option`, `site_style.photo_urls` |
+| 1 | Votre image & photos | Logo (a / n'a pas / texte — ou lancer la **création de logo IA**), palette couleur (6 choix), police (moderne / classique / manuscrit), option photos (stock / propres) + URLs vidéo par section (plan Business uniquement) | `site_style.logo_option`, `site_style.primary_color`, `site_style.font_style`, `site_style.photos_option`, `site_style.photo_urls`, `site_style.video_urls` |
 | 2 | Votre contenu | Pages à inclure (Accueil, Présentation, Services, Contact) | `site_style.pages_enabled[]` |
 | 3 | Identité | Titre de l'activité, accroche (tagline), description | `site.title`, `site.tagline`, `site.description` |
 | 4 | Contact & Réseaux | Téléphone, email, adresse, Facebook / Instagram / LinkedIn | `site.phone`, `site.email_contact`, `site.address`, `site_style.social_links` |
@@ -109,7 +109,17 @@ Le template est rendu côté serveur (Next.js `[tenant]/page.tsx`) et adapte aut
          🤖 Chatbot IA (widget flottant)
 ```
 
-### 2.3 Les photos personnalisées
+### 2.3 Création de logo IA
+
+Dans l'étape 1, si le tenant n'a pas de logo, il peut cliquer **"Découvrez notre service de création de logo"**. Une fenêtre s'ouvre avec trois vues :
+
+1. **Info** — présentation des 3 forfaits (Essentiel 149 €, Standard 299 €, Premium 499 €)
+2. **Brief IA** — conversation guidée en 5 à 8 questions (secteur, style, couleurs, mots-clés, cible). L'IA collecte le brief et génère automatiquement un résumé structuré.
+3. **Résumé + paiement** — le brief est affiché, le tenant choisit son forfait (l'IA en recommande un), puis paie via Stripe. La demande est transmise à l'équipe Klientys pour traitement.
+
+Le suivi de la demande est visible dans `/dashboard/settings` → section **Achats ponctuels**.
+
+### 2.4 Les photos personnalisées
 
 Quand le client sélectionne "J'ai mes propres photos" à l'étape 1, quatre champs URL apparaissent — un par section du site. Un bouton `?` à côté de chaque champ ouvre un popover avec :
 - Un mini wireframe du site indiquant visuellement l'emplacement de la photo
@@ -277,9 +287,26 @@ Résultat :
 
 ## 4. Personnalisation avancée (plan Business)
 
-Disponible à l'étape 9 du wizard pour les abonnés **Business (99€/mois)**.
+Disponible pour les abonnés **Business (99 €/mois)**. Deux niveaux de personnalisation :
 
-Un éditeur de code CSS est disponible. Le CSS saisi est injecté en `<style>` directement dans la page du site public (champ `site_style.custom_css`).
+### 4.1 Vidéos par section
+
+À l'étape 1 du wizard, chaque section du site dispose d'un champ URL vidéo (YouTube, Vimeo, ou lien `.mp4` direct). Si une vidéo est renseignée, elle **remplace la photo** dans la section correspondante sur le site public :
+
+| Section | Rendu |
+|---|---|
+| **Héro** | Vidéo en fond plein-écran (autoplay silencieux, boucle) + overlay sombre + texte par-dessus |
+| **À propos** | Lecteur 16:9 embarqué à la place de la photo de profil |
+| **Services** | Vidéo en fond de la section (overlay blanc semi-transparent pour lisibilité des cartes) |
+| **Contact** | Lecteur 16:9 embarqué à la place de la photo de contact |
+
+Les URLs sont stockées dans `site_style.video_urls` (JSONB) — voir section 5.1.
+
+> Si aucune URL vidéo n'est renseignée pour une section, le comportement photo/stock habituel s'applique (rétrocompatibilité totale).
+
+### 4.2 CSS personnalisé
+
+Disponible à l'étape 9 du wizard. Un éditeur de code CSS injecte le CSS saisi en `<style>` directement dans la page du site public (champ `site_style.custom_css`).
 
 **Exemples d'utilisation :**
 
@@ -325,6 +352,12 @@ La colonne `site_style` (type `JSONB`) centralise tous les paramètres visuels e
   "photo_urls": {
     "hero": "https://example.com/hero.jpg",
     "about": "https://example.com/about.jpg",
+    "services": "",
+    "contact": ""
+  },
+  "video_urls": {
+    "hero": "",
+    "about": "",
     "services": "",
     "contact": ""
   },

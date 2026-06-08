@@ -69,6 +69,31 @@ export const api = {
   replaceSiteTestimonials: (siteId: string, testimonials: object[]) =>
     apiFetch(`/api/v1/sites/${siteId}/testimonials`, { method: "PUT", body: JSON.stringify(testimonials) }),
 
+  // Design requests
+  createDesignRequest: (body: { message: string; is_additional: boolean; site_id?: string }) =>
+    apiFetch("/api/v1/design-requests/", { method: "POST", body: JSON.stringify(body) }),
+  getMyDesignRequests: () => apiFetch<any[]>("/api/v1/design-requests/mine"),
+  adminGetDesignRequests: (status?: string) =>
+    apiFetch<any[]>(`/api/v1/admin/design-requests${status ? `?status=${status}` : ""}`),
+  adminUpdateDesignRequest: (id: string, body: { status?: string; admin_notes?: string }) =>
+    apiFetch(`/api/v1/admin/design-requests/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  // Logo requests
+  logoChat: (messages: { role: string; content: string }[]) =>
+    apiFetch<any>("/api/v1/logo-requests/chat", { method: "POST", body: JSON.stringify({ messages }) }),
+  createLogoRequest: (body: { brief: object; chat_history: object[]; price_tier: string }) =>
+    apiFetch<any>("/api/v1/logo-requests/", { method: "POST", body: JSON.stringify(body) }),
+  logoCheckout: (requestId: string, successUrl: string, cancelUrl: string) =>
+    apiFetch<{ checkout_url: string }>(`/api/v1/logo-requests/${requestId}/checkout`, {
+      method: "POST",
+      body: JSON.stringify({ success_url: successUrl, cancel_url: cancelUrl }),
+    }),
+  getMyLogoRequests: () => apiFetch<any[]>("/api/v1/logo-requests/mine"),
+  adminGetLogoRequests: (status?: string) =>
+    apiFetch<any[]>(`/api/v1/logo-requests/admin/all${status ? `?status=${status}` : ""}`),
+  adminUpdateLogoRequest: (id: string, body: { status?: string; admin_notes?: string }) =>
+    apiFetch(`/api/v1/logo-requests/admin/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
   // Leads
   getContactsCount: () => apiFetch<{ count: number }>("/api/v1/leads/contacts/count"),
   getLeads: (params?: { status?: string; audience_type?: string; limit?: number; offset?: number }) => {

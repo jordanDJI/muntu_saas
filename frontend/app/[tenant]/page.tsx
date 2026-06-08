@@ -46,6 +46,16 @@ const FONT_FAMILY: Record<string, string> = {
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
 
+function getVideoEmbed(url: string): { type: "youtube" | "vimeo" | "direct"; embedUrl: string } | null {
+  if (!url) return null;
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (yt) return { type: "youtube", embedUrl: `https://www.youtube.com/embed/${yt[1]}?rel=0` };
+  const vm = url.match(/vimeo\.com\/(\d+)/);
+  if (vm) return { type: "vimeo", embedUrl: `https://player.vimeo.com/video/${vm[1]}` };
+  if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) return { type: "direct", embedUrl: url };
+  return null;
+}
+
 async function getSiteData(slug: string, preview = false) {
   try {
     const url = `${API_URL}/api/v1/public/site/${encodeURIComponent(slug)}${preview ? "?preview=true" : ""}`;
@@ -153,6 +163,7 @@ export default async function TenantSitePage({
   const font = FONT_FAMILY[siteStyle.font_style ?? "modern"] ?? FONT_FAMILY.modern;
   const tracking = siteStyle.tracking ?? {};
   const photoUrls = siteStyle.photo_urls ?? {};
+  const videoUrls = siteStyle.video_urls ?? {};
   const customCss: string = siteStyle.custom_css ?? "";
   const pagesEnabled: string[] = siteStyle.pages_enabled ?? ["home", "about", "services", "contact"];
   const showAbout = pagesEnabled.includes("about") && (isPreview || !!site.description);
@@ -209,14 +220,25 @@ export default async function TenantSitePage({
         className="relative min-h-[88vh] flex flex-col justify-center items-center text-center px-6 overflow-hidden"
       >
         {/* Background */}
-        {photoUrls.hero ? (
-          <>
-            <Image src={photoUrls.hero} alt="" fill className="object-cover object-center" priority sizes="100vw" />
-            <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${colors.hero}e6 0%, ${colors.accent}bb 100%)` }} />
-          </>
-        ) : (
-          <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${colors.hero} 0%, ${colors.accent} 100%)` }} />
-        )}
+        {(() => {
+          const vid = getVideoEmbed(videoUrls.hero);
+          if (vid) return (
+            <>
+              {vid.type === "direct"
+                ? <video src={vid.embedUrl} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
+                : <iframe src={vid.embedUrl + "?autoplay=1&mute=1&loop=1&controls=0&modestbranding=1"} allow="autoplay; fullscreen" className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ transform: "scale(1.1)" }} />
+              }
+              <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${colors.hero}cc 0%, ${colors.accent}99 100%)` }} />
+            </>
+          );
+          if (photoUrls.hero) return (
+            <>
+              <Image src={photoUrls.hero} alt="" fill className="object-cover object-center" priority sizes="100vw" />
+              <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${colors.hero}e6 0%, ${colors.accent}bb 100%)` }} />
+            </>
+          );
+          return <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${colors.hero} 0%, ${colors.accent} 100%)` }} />;
+        })()}
         {/* Decorative orbs */}
         <div className="absolute top-16 right-8 w-80 h-80 rounded-full blur-3xl opacity-20 pointer-events-none" style={{ backgroundColor: "white" }} />
         <div className="absolute bottom-10 left-4 w-60 h-60 rounded-full blur-3xl opacity-10 pointer-events-none" style={{ backgroundColor: "white" }} />
@@ -279,55 +301,78 @@ export default async function TenantSitePage({
       {/* ── À PROPOS ─────────────────────────────────────────────────────── */}
       {showAbout && (
         <section id="a-propos" className="py-20 px-6 bg-white" data-reveal>
-          <div className={`max-w-5xl mx-auto${photoUrls.about ? " grid sm:grid-cols-2 gap-12 items-center" : " max-w-3xl"}`}>
-            {photoUrls.about && (
-              <div className="relative">
-                <Image
-                  src={photoUrls.about}
-                  alt={`${site.title} — présentation`}
-                  width={600}
-                  height={420}
-                  className="w-full h-72 sm:h-96 object-cover rounded-3xl shadow-xl"
-                />
-                <div className="absolute -bottom-4 -right-4 w-24 h-24 rounded-2xl opacity-30 -z-10" style={{ backgroundColor: colors.accent }} />
+          {(() => {
+            const vid = getVideoEmbed(videoUrls.about);
+            const hasMedia = !!(vid || photoUrls.about);
+            return (
+              <div className={`max-w-5xl mx-auto${hasMedia ? " grid sm:grid-cols-2 gap-12 items-center" : " max-w-3xl"}`}>
+                {hasMedia && (
+                  <div className="relative">
+                    {vid ? (
+                      vid.type === "direct"
+                        ? <video src={vid.embedUrl} controls className="w-full h-72 sm:h-96 object-cover rounded-3xl shadow-xl" />
+                        : <div className="relative w-full rounded-3xl shadow-xl overflow-hidden" style={{ paddingBottom: "56.25%" }}>
+                            <iframe src={vid.embedUrl} allow="fullscreen" allowFullScreen className="absolute inset-0 w-full h-full" />
+                          </div>
+                    ) : (
+                      <>
+                        <Image src={photoUrls.about} alt={`${site.title} — présentation`} width={600} height={420} className="w-full h-72 sm:h-96 object-cover rounded-3xl shadow-xl" />
+                        <div className="absolute -bottom-4 -right-4 w-24 h-24 rounded-2xl opacity-30 -z-10" style={{ backgroundColor: colors.accent }} />
+                      </>
+                    )}
+                  </div>
+                )}
+                <div className={hasMedia ? "" : "text-center"}>
+                  <span className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ backgroundColor: colors.light, color: colors.hero }}>
+                    À propos
+                  </span>
+                  <h2 className="tc-s text-3xl sm:text-5xl font-bold text-gray-900 mb-5 leading-snug">
+                    Qui sommes-nous ?
+                  </h2>
+                  {site.description ? (
+                    <p className="text-gray-500 leading-relaxed text-base whitespace-pre-wrap">{site.description}</p>
+                  ) : isPreview ? (
+                    <p className="text-gray-400 italic text-sm">Description non configurée — complétez l'étape 2 du site-builder.</p>
+                  ) : null}
+                  {(site.phone || site.email_contact) && (
+                    <a
+                      href="#contact"
+                      className="inline-flex items-center gap-2 mt-7 font-semibold text-sm px-5 py-2.5 rounded-xl transition-opacity hover:opacity-80"
+                      style={{ backgroundColor: colors.light, color: colors.hero }}
+                    >
+                      Nous contacter
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                    </a>
+                  )}
+                </div>
               </div>
-            )}
-            <div className={photoUrls.about ? "" : "text-center"}>
-              <span className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ backgroundColor: colors.light, color: colors.hero }}>
-                À propos
-              </span>
-              <h2 className="tc-s text-3xl sm:text-5xl font-bold text-gray-900 mb-5 leading-snug">
-                Qui sommes-nous ?
-              </h2>
-              {site.description ? (
-                <p className="text-gray-500 leading-relaxed text-base whitespace-pre-wrap">{site.description}</p>
-              ) : isPreview ? (
-                <p className="text-gray-400 italic text-sm">Description non configurée — complétez l'étape 2 du site-builder.</p>
-              ) : null}
-              {(site.phone || site.email_contact) && (
-                <a
-                  href="#contact"
-                  className="inline-flex items-center gap-2 mt-7 font-semibold text-sm px-5 py-2.5 rounded-xl transition-opacity hover:opacity-80"
-                  style={{ backgroundColor: colors.light, color: colors.hero }}
-                >
-                  Nous contacter
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                </a>
-              )}
-            </div>
-          </div>
+            );
+          })()}
         </section>
       )}
 
       {/* ── PRESTATIONS ──────────────────────────────────────────────────── */}
       {showServices && (
         <section id="prestations" className="py-20 px-6 relative overflow-hidden" data-reveal style={{ backgroundColor: "#f8fafc" }}>
-          {photoUrls.services && (
-            <>
-              <Image src={photoUrls.services} alt="" fill className="object-cover object-center" sizes="100vw" />
-              <div className="absolute inset-0 bg-white/85 backdrop-blur-sm" />
-            </>
-          )}
+          {(() => {
+            const vid = getVideoEmbed(videoUrls.services);
+            if (vid) return (
+              <>
+                {vid.type === "direct"
+                  ? <video src={vid.embedUrl} autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover" />
+                  : <iframe src={vid.embedUrl + "?autoplay=1&mute=1&loop=1&controls=0"} allow="autoplay" className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ transform: "scale(1.1)" }} />
+                }
+                <div className="absolute inset-0 bg-white/85 backdrop-blur-sm" />
+              </>
+            );
+            if (photoUrls.services) return (
+              <>
+                <Image src={photoUrls.services} alt="" fill className="object-cover object-center" sizes="100vw" />
+                <div className="absolute inset-0 bg-white/85 backdrop-blur-sm" />
+              </>
+            );
+            return null;
+          })()}
           <div className="relative z-10 max-w-5xl mx-auto">
             <div className="text-center mb-12">
               <span className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ backgroundColor: colors.light, color: colors.hero }}>
@@ -475,9 +520,18 @@ export default async function TenantSitePage({
 
             {/* Infos + photo éventuelle dans la même colonne */}
             <div className="space-y-4">
-              {photoUrls.contact && (
-                <Image src={photoUrls.contact} alt={`Contacter ${site.title}`} width={600} height={360} className="w-full h-56 object-cover rounded-3xl shadow-lg mb-2" />
-              )}
+              {(() => {
+                const vid = getVideoEmbed(videoUrls.contact);
+                if (vid) return vid.type === "direct"
+                  ? <video src={vid.embedUrl} controls className="w-full rounded-3xl shadow-lg mb-2" style={{ maxHeight: "224px" }} />
+                  : <div className="relative w-full rounded-3xl shadow-lg overflow-hidden mb-2" style={{ paddingBottom: "56.25%" }}>
+                      <iframe src={vid.embedUrl} allow="fullscreen" allowFullScreen className="absolute inset-0 w-full h-full" />
+                    </div>;
+                if (photoUrls.contact) return (
+                  <Image src={photoUrls.contact} alt={`Contacter ${site.title}`} width={600} height={360} className="w-full h-56 object-cover rounded-3xl shadow-lg mb-2" />
+                );
+                return null;
+              })()}
               <h3 className="font-semibold text-gray-800 text-lg mb-5">Nos coordonnées</h3>
               {site.phone && (
                 <a href={`tel:${site.phone}`} data-track="phone" className="flex items-center gap-3 p-4 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow group border border-gray-100">

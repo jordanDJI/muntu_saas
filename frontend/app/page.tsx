@@ -478,11 +478,12 @@ export default function LandingPage() {
               <ul className="l-price-features">
                 <li>Tout du plan Pro</li>
                 <li>Contacts illimités</li>
-                <li>CSS personnalisé sur votre site</li>
+                <li>Personnalisation CSS avancée</li>
                 <li>Multi-espaces de travail</li>
                 <li>Membres d&apos;équipe illimités</li>
                 <li>Calendriers séparés par membre</li>
                 <li>Onboarding personnalisé</li>
+                <li>Refonte design par notre équipe — 1 site inclus (sur demande)</li>
                 <li>Account manager dédié</li>
               </ul>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>

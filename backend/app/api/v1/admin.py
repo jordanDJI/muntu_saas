@@ -1079,6 +1079,44 @@ async def relance_tenant(tenant_id: str, admin=Depends(support_or_above)):
     return {"ok": True}
 
 
+# ─── Design Requests ──────────────────────────────────────────────────────────
+
+@router.get("/design-requests")
+async def list_design_requests(
+    status: str | None = Query(None),
+    admin=Depends(viewer_or_above),
+):
+    sb = get_supabase_admin()
+    q = sb.table("design_request").select("*").order("created_at", desc=True)
+    if status:
+        q = q.eq("status", status)
+    return q.execute().data or []
+
+
+class DesignRequestUpdate(BaseModel):
+    status: str | None = None
+    admin_notes: str | None = None
+
+
+@router.patch("/design-requests/{request_id}")
+async def update_design_request(
+    request_id: str,
+    body: DesignRequestUpdate,
+    admin=Depends(support_or_above),
+):
+    sb = get_supabase_admin()
+    patch: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.status is not None:
+        patch["status"] = body.status
+    if body.admin_notes is not None:
+        patch["admin_notes"] = body.admin_notes
+    res = sb.table("design_request").update(patch).eq("id", request_id).execute()
+    if not res.data:
+        raise HTTPException(404, "Demande introuvable")
+    _log(admin, "design_request_update", payload={"request_id": request_id, **patch})
+    return res.data[0]
+
+
 @router.post("/tenants/{tenant_id}/unpublish-site")
 async def unpublish_site(tenant_id: str, admin=Depends(support_or_above)):
     sb = get_supabase_admin()

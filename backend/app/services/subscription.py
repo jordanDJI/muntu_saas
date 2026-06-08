@@ -118,7 +118,8 @@ async def get_tenant_plan(tenant_id: str) -> dict:
     if res.data:
         row = res.data[0]
         plan = row["plan"]
-        base = plan.get("features") or PLAN_FEATURES.get(plan["name"], ESSENTIEL_FEATURES)
+        hardcoded = PLAN_FEATURES.get(plan["name"], ESSENTIEL_FEATURES)
+        base = {**hardcoded, **(plan.get("features") or {})}
         return {
             "plan_name": plan["name"],
             "status": row["status"],

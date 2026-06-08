@@ -128,6 +128,17 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
                 except Exception:
                     pass
 
+        elif meta.get("type") == "logo_request":
+            # ── Paiement logo confirmé ──
+            logo_request_id = meta.get("logo_request_id")
+            payment_intent  = session.get("payment_intent")
+            if logo_request_id:
+                supabase = get_supabase_admin()
+                supabase.table("logo_request").update({
+                    "status":                   "paid",
+                    "stripe_payment_intent_id": payment_intent,
+                }).eq("id", logo_request_id).execute()
+
         elif tenant_id and plan_id:
             supabase = get_supabase_admin()
             supabase.table("subscription").upsert({
@@ -136,6 +147,10 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
                 "stripe_subscription_id": stripe_subscription_id,
                 "status": "active",
             }, on_conflict="tenant_id").execute()
+            # Persiste le stripe_customer_id sur le tenant pour le portail
+            customer_id = session.get("customer")
+            if customer_id:
+                supabase.table("tenant").update({"stripe_customer_id": customer_id}).eq("id", tenant_id).execute()
 
     elif event["type"] == "customer.subscription.updated":
         sub = event["data"]["object"]
@@ -164,21 +179,29 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
 async def billing_portal(tenant_id: str = Depends(get_current_tenant)):
     """Ouvre le portail de facturation Stripe pour le tenant courant."""
     supabase = get_supabase_admin()
-    sub = supabase.table("subscription").select("stripe_subscription_id").eq("tenant_id", tenant_id).in_("status", ["active", "trialing"]).limit(1).execute()
-    if not sub.data or not sub.data[0].get("stripe_subscription_id"):
-        raise HTTPException(status_code=404, detail="Aucun abonnement actif trouvé")
 
-    return_url = "https://klientys.co/dashboard/settings"
-    if settings.app_env != "production":
-        return_url = f"{settings.frontend_url}/dashboard/settings"
+    return_url = f"{settings.frontend_url}/dashboard/settings?section=abonnement"
+
+    # 1. Essai via stripe_customer_id sur le tenant (chemin rapide)
+    tenant_row = supabase.table("tenant").select("stripe_customer_id").eq("id", tenant_id).maybe_single().execute()
+    customer_id = (tenant_row.data or {}).get("stripe_customer_id")
+
+    # 2. Fallback : récupère le customer depuis l'abonnement Stripe
+    if not customer_id:
+        sub = supabase.table("subscription").select("stripe_subscription_id").eq("tenant_id", tenant_id).in_("status", ["active", "trialing"]).limit(1).execute()
+        stripe_sub_id = (sub.data[0].get("stripe_subscription_id") if sub.data else None)
+        if not stripe_sub_id:
+            raise HTTPException(status_code=404, detail="Aucun abonnement Stripe trouvé. Souscrivez d'abord à un plan.")
+        try:
+            stripe_sub = stripe.Subscription.retrieve(stripe_sub_id)
+            customer_id = stripe_sub["customer"]
+            # Sauvegarde pour les prochaines fois
+            supabase.table("tenant").update({"stripe_customer_id": customer_id}).eq("id", tenant_id).execute()
+        except stripe.error.StripeError as e:
+            raise HTTPException(status_code=502, detail=f"Service de paiement indisponible : {e.user_message or str(e)}")
 
     try:
-        stripe_sub = stripe.Subscription.retrieve(sub.data[0]["stripe_subscription_id"])
-        customer_id = stripe_sub["customer"]
-        session = stripe.billing_portal.Session.create(
-            customer=customer_id,
-            return_url=return_url,
-        )
+        session = stripe.billing_portal.Session.create(customer=customer_id, return_url=return_url)
         return {"url": session.url}
     except stripe.error.InvalidRequestError as e:
         raise HTTPException(status_code=400, detail=f"Erreur Stripe : {e.user_message or str(e)}")

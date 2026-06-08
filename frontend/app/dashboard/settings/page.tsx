@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api, supabase } from "../../../lib/api";
 import { useLanguage, LANGUAGES } from "../../../contexts/LanguageContext";
+import { useSubscription } from "../../../contexts/SubscriptionContext";
 import DemandPotentialCard from "../analytics/DemandPotentialCard";
 import metiers from "../../../data/metiers.json";
 import villes from "../../../data/villes.json";
@@ -478,7 +479,156 @@ function SectionSite() {
           )}
         </div>
       </Card>
+
+      <DesignRequestCard />
     </>
+  );
+}
+
+function DesignRequestCard() {
+  const { planName, loading: subLoading } = useSubscription();
+  const [requests, setRequests]       = useState<any[]>([]);
+  const [sites, setSites]             = useState<any[]>([]);
+  const [message, setMessage]         = useState("");
+  const [isAdditional, setIsAdditional] = useState(false);
+  const [selectedSiteId, setSelectedSiteId] = useState("");
+  const [submitting, setSubmitting]   = useState(false);
+  const [success, setSuccess]         = useState(false);
+  const [error, setError]             = useState("");
+
+  useEffect(() => {
+    if (planName !== "Business") return;
+    api.getMyDesignRequests().then(setRequests).catch(() => {});
+    api.getSites().then(setSites).catch(() => {});
+  }, [planName]);
+
+  if (subLoading || planName !== "Business") return null;
+
+  const hasPending = requests.some((r) => r.status === "pending" || r.status === "in_progress");
+
+  const submit = async () => {
+    if (!message.trim()) { setError("Décrivez votre demande."); return; }
+    if (isAdditional && !selectedSiteId) { setError("Sélectionnez le site concerné."); return; }
+    setSubmitting(true); setError("");
+    try {
+      const req = await api.createDesignRequest({
+        message: message.trim(),
+        is_additional: isAdditional,
+        site_id: isAdditional ? selectedSiteId : undefined,
+      });
+      setRequests((prev) => [req, ...prev]);
+      setMessage(""); setSelectedSiteId(""); setSuccess(true);
+    } catch (e: any) {
+      setError(e?.message ?? "Erreur lors de l'envoi.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+    pending:     { label: "En attente",    cls: "bg-amber-100 text-amber-700" },
+    in_progress: { label: "En cours",      cls: "bg-blue-100 text-blue-700" },
+    done:        { label: "Terminée",      cls: "bg-green-100 text-green-700" },
+  };
+
+  return (
+    <Card className="border-amber-200 bg-amber-50">
+      <div className="flex items-start gap-3">
+        <span className="text-2xl flex-shrink-0">🎨</span>
+        <div className="flex-1 space-y-4">
+          <div>
+            <h3 className="font-semibold text-sm text-amber-900">Refonte design par notre équipe — 1 site inclus</h3>
+            <p className="text-sm text-amber-800 mt-1 leading-relaxed">
+              Votre plan Business inclut une refonte design complète pour <strong>un site</strong> —
+              moins standardisé, plus fidèle à votre image. Fournissez un template ou décrivez vos souhaits,
+              notre équipe s&apos;en charge.
+            </p>
+            <p className="text-xs text-amber-700 mt-1">
+              Plusieurs espaces de travail ? Les sites supplémentaires sont disponibles à un tarif ponctuel.
+            </p>
+          </div>
+
+          {/* Demandes existantes */}
+          {requests.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">Vos demandes</p>
+              {requests.map((r) => {
+                const s = STATUS_LABEL[r.status] ?? { label: r.status, cls: "bg-gray-100 text-gray-600" };
+                return (
+                  <div key={r.id} className="bg-white rounded-lg border border-amber-200 px-3 py-2.5 flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-700 truncate">{r.message}</p>
+                      {r.admin_notes && (
+                        <p className="text-xs text-blue-600 mt-1">💬 {r.admin_notes}</p>
+                      )}
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        {new Date(r.created_at).toLocaleDateString("fr-FR")}
+                        {r.is_additional && " · site supplémentaire"}
+                      </p>
+                    </div>
+                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${s.cls}`}>{s.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Formulaire nouvelle demande */}
+          {!success ? (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="is-additional"
+                    checked={isAdditional}
+                    onChange={(e) => { setIsAdditional(e.target.checked); setSelectedSiteId(""); }}
+                    className="rounded"
+                  />
+                  <label htmlFor="is-additional" className="text-xs text-amber-800">
+                    C&apos;est pour un site supplémentaire (devis ponctuel)
+                  </label>
+                </div>
+                {isAdditional && sites.length > 0 && (
+                  <select
+                    value={selectedSiteId}
+                    onChange={(e) => setSelectedSiteId(e.target.value)}
+                    className="w-full text-sm border border-amber-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  >
+                    <option value="">— Sélectionnez le site concerné —</option>
+                    {sites.map((s) => (
+                      <option key={s.id} value={s.id}>{s.title || s.id}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <textarea
+                rows={4}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Décrivez vos souhaits : charte graphique, template à fournir, inspirations, éléments à conserver…"
+                className="w-full text-sm border border-amber-300 rounded-lg px-3 py-2 bg-white resize-none focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+              {error && <p className="text-xs text-red-600">{error}</p>}
+              {hasPending && (
+                <p className="text-xs text-amber-700">⚠ Vous avez déjà une demande en cours.</p>
+              )}
+              <button
+                onClick={submit}
+                disabled={submitting || !message.trim()}
+                className="inline-flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors disabled:opacity-50"
+              >
+                {submitting ? "Envoi…" : "Envoyer ma demande →"}
+              </button>
+            </div>
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-sm text-green-800">
+              ✓ Demande envoyée — notre équipe vous contactera sous 48h.
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -556,26 +706,49 @@ function SectionMetriques() {
 
 // ── Section Abonnement ────────────────────────────────────────────────────────
 
-const PLAN_LABELS: Record<string, { price: string; desc: string }> = {
-  "Essentiel": { price: "29,90", desc: "Site vitrine, réservations, 100 contacts" },
-  "Pro":       { price: "59,90", desc: "CRM complet, agents IA, analytics, domaine inclus" },
-  "Business":  { price: "99,90", desc: "Multi-espaces, équipe, account manager dédié" },
-};
+const PLANS_INFO = [
+  {
+    name: "Essentiel",
+    price: "29,90",
+    color: "gray" as const,
+    features: ["Site vitrine complet", "Réservations en ligne", "100 contacts CRM", "Agent IA vitrine", "Support email"],
+  },
+  {
+    name: "Pro",
+    price: "59,90",
+    color: "primary" as const,
+    features: ["Tout Essentiel +", "1 000 contacts CRM", "3 agents IA (vitrine, support, assistant)", "Analytics & potentiel local", "Domaine personnalisé inclus", "Widget embarquable", "Support prioritaire 24/7"],
+  },
+  {
+    name: "Business",
+    price: "99,90",
+    color: "amber" as const,
+    features: ["Tout Pro +", "Contacts illimités", "Multi-espaces de travail", "Membres d'équipe illimités", "CSS personnalisé", "Refonte design par notre équipe", "Account manager dédié"],
+  },
+];
 
 function SectionAbonnement() {
-  const [sub, setSub]       = useState<any>(null);
-  const [plans, setPlans]   = useState<any[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const { planName: ctxPlan, status: ctxStatus, trialDaysLeft } = useSubscription();
+  const [sub, setSub]                   = useState<any>(null);
+  const [plans, setPlans]               = useState<any[]>([]);
+  const [loading, setLoading]           = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading]     = useState(false);
   const [portalError, setPortalError]         = useState("");
+  const [cancelOpen, setCancelOpen]     = useState(false);
+  const [oneTimePurchases, setOneTimePurchases] = useState<any[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [plansData] = await Promise.all([api.getPlans()]);
+        const plansData = await api.getPlans();
         setPlans(plansData);
-      } catch { /* plans non critiques */ }
+      } catch { /* non critique */ }
+
+      try {
+        const reqs = await api.getMyDesignRequests();
+        setOneTimePurchases(reqs.filter((r: any) => r.is_additional));
+      } catch { /* non critique */ }
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
@@ -583,7 +756,7 @@ function SectionAbonnement() {
       if (!mem) { setLoading(false); return; }
       const { data } = await supabase
         .from("subscription")
-        .select("*, plan:plan_id(name, price_monthly)")
+        .select("*, plan:plan_id(name, price_monthly), stripe_subscription_id")
         .eq("tenant_id", mem.tenant_id)
         .in("status", ["active", "trialing"])
         .maybeSingle();
@@ -600,8 +773,8 @@ function SectionAbonnement() {
       const base = window.location.origin;
       const { checkout_url } = await api.createCheckout({
         plan_id: planId,
-        success_url: `${base}/dashboard/settings?checkout_success=1`,
-        cancel_url:  `${base}/dashboard/settings`,
+        success_url: `${base}/dashboard/settings?section=abonnement&checkout_success=1`,
+        cancel_url:  `${base}/dashboard/settings?section=abonnement`,
       });
       window.location.href = checkout_url;
     } catch (e: any) {
@@ -623,82 +796,177 @@ function SectionAbonnement() {
     }
   };
 
+  const currentPlanName = sub?.plan?.name ?? ctxPlan ?? null;
+  // Vrai abonnement Stripe = stripe_subscription_id présent (pas une activation admin gratuite)
+  const hasRealStripeSub = !!(sub?.stripe_subscription_id);
+
+  const DESIGN_STATUS: Record<string, string> = {
+    pending: "En attente", in_progress: "En cours", done: "Terminée",
+  };
+
   return (
     <>
-      <SectionTitle title="Abonnement & facturation" subtitle="Votre offre actuelle, vos factures et vos moyens de paiement." />
+      <SectionTitle title="Abonnement & facturation" subtitle="Gérez votre plan, vos factures et vos moyens de paiement." />
       {loading ? <p className="text-sm text-gray-400">Chargement…</p> : (
         <>
-          {/* Plan actuel */}
+          {/* ── Plan actuel ── */}
           <Card>
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="font-semibold text-gray-800">{sub?.plan?.name ?? "Aucun abonnement actif"}</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Plan actuel</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xl font-bold text-gray-900">{currentPlanName ?? "Aucun abonnement"}</p>
+                  {sub && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Actif</span>
+                  )}
+                  {!sub && ctxStatus === "trial" && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                      Essai — {trialDaysLeft ?? "?"} jour{(trialDaysLeft ?? 0) > 1 ? "s" : ""} restant{(trialDaysLeft ?? 0) > 1 ? "s" : ""}
+                    </span>
+                  )}
+                  {ctxStatus === "trial_expired" && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">Essai expiré</span>
+                  )}
+                </div>
                 {sub?.plan?.price_monthly != null && (
-                  <p className="text-sm text-gray-500 mt-0.5">{Number(sub.plan.price_monthly).toFixed(2).replace(".", ",")} € / mois</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {Number(sub.plan.price_monthly).toFixed(2).replace(".", ",")} € / mois · renouvelé automatiquement
+                  </p>
                 )}
               </div>
-              <span className={`text-xs px-2 py-1 rounded-full font-medium ${sub ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                {sub ? "Actif" : "Inactif"}
-              </span>
+              {hasRealStripeSub && (
+                <div className="flex flex-col gap-2 shrink-0">
+                  <button onClick={openPortal} disabled={portalLoading}
+                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    {portalLoading ? "Ouverture…" : "Voir mes factures"}
+                  </button>
+                  <button onClick={openPortal} disabled={portalLoading}
+                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                    Moyen de paiement
+                  </button>
+                </div>
+              )}
             </div>
+            {portalError && <p className="text-xs text-red-500 mt-2">{portalError}</p>}
           </Card>
 
-          {/* Choix de plan — affiché si pas d'abo actif */}
-          {!sub && plans.length > 0 && (
+          {/* ── Choisir / changer de plan ── */}
+          {plans.filter(p => p.stripe_price_id).length > 0 && (
             <Card>
-              <h3 className="font-semibold text-sm text-gray-700 mb-3">Choisir un plan</h3>
-              <div className="flex flex-col gap-3">
-                {plans.filter(p => p.stripe_price_id).map((plan) => {
-                  const label = PLAN_LABELS[plan.name];
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+                {sub ? "Changer de plan" : "Choisir un plan"}
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {PLANS_INFO.map((info) => {
+                  const dbPlan = plans.find(p => p.name === info.name && p.stripe_price_id);
+                  const isCurrent = currentPlanName === info.name;
+                  const accent = info.color === "amber"
+                    ? { border: "border-amber-300", bg: "bg-amber-50", badge: "bg-amber-600", btn: "bg-amber-600 hover:bg-amber-700" }
+                    : info.color === "primary"
+                    ? { border: "border-primary-300", bg: "bg-primary-50", badge: "bg-primary-600", btn: "bg-primary-600 hover:bg-primary-700" }
+                    : { border: "border-gray-200", bg: "bg-gray-50", badge: "bg-gray-500", btn: "bg-gray-600 hover:bg-gray-700" };
+
                   return (
-                    <div key={plan.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50">
+                    <div key={info.name}
+                      className={`relative rounded-xl border-2 p-4 flex flex-col gap-3 ${isCurrent ? accent.border + " " + accent.bg : "border-gray-100"}`}>
+                      {isCurrent && (
+                        <span className={`absolute -top-2.5 left-3 text-[10px] font-bold uppercase tracking-widest text-white px-2 py-0.5 rounded-full ${accent.badge}`}>
+                          Actuel
+                        </span>
+                      )}
                       <div>
-                        <p className="font-medium text-sm text-gray-800">{plan.name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {label?.desc ?? ""} — {label?.price ?? Number(plan.price_monthly).toFixed(2).replace(".", ",")} €/mois
-                        </p>
+                        <p className="font-bold text-gray-900">{info.name}</p>
+                        <p className="text-lg font-bold text-gray-800 mt-0.5">{info.price} <span className="text-xs font-normal text-gray-400">€/mois</span></p>
                       </div>
-                      <button
-                        onClick={() => handleCheckout(plan.id)}
-                        disabled={checkoutLoading === plan.id}
-                        className="bg-primary-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-primary-700 disabled:opacity-50 whitespace-nowrap ml-3"
-                      >
-                        {checkoutLoading === plan.id ? "Redirection…" : "S'abonner →"}
-                      </button>
+                      <ul className="flex flex-col gap-1.5 flex-1">
+                        {info.features.map((f) => (
+                          <li key={f} className="flex items-start gap-1.5 text-xs text-gray-600">
+                            <span className="text-green-500 mt-0.5 flex-shrink-0">✓</span>{f}
+                          </li>
+                        ))}
+                      </ul>
+                      {isCurrent ? (
+                        <span className="text-xs text-center text-gray-400 font-medium py-1.5">Votre plan actuel</span>
+                      ) : dbPlan ? (
+                        <button
+                          onClick={() => hasRealStripeSub ? openPortal() : handleCheckout(dbPlan.id)}
+                          disabled={checkoutLoading === dbPlan.id || portalLoading}
+                          className={`w-full text-xs font-semibold text-white py-2 rounded-lg transition-colors disabled:opacity-50 ${accent.btn}`}
+                        >
+                          {checkoutLoading === dbPlan.id ? "Redirection…" : hasRealStripeSub ? `Passer au plan ${info.name} →` : `Choisir ${info.name} →`}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-center text-gray-300">Bientôt disponible</span>
+                      )}
                     </div>
                   );
                 })}
               </div>
+              {hasRealStripeSub && (
+                <p className="text-xs text-gray-400 mt-3">
+                  Le changement de plan s&apos;effectue via le portail Stripe. La différence est calculée au prorata.
+                </p>
+              )}
             </Card>
           )}
 
-          {/* Portail Stripe — affiché si abo actif */}
-          {sub && (
+          {/* ── Achats ponctuels ── */}
+          {oneTimePurchases.length > 0 && (
             <Card>
-              <h3 className="font-semibold text-sm text-gray-700">Gérer mon abonnement</h3>
-              <p className="text-sm text-gray-500 mt-1">Modifier votre plan, consulter les factures ou mettre à jour votre moyen de paiement.</p>
-              <button
-                onClick={openPortal}
-                disabled={portalLoading}
-                className="mt-3 bg-primary-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50"
-              >
-                {portalLoading ? "Ouverture…" : "Portail de facturation Stripe →"}
-              </button>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Achats ponctuels</p>
+              <div className="flex flex-col gap-2">
+                {oneTimePurchases.map((r: any) => (
+                  <div key={r.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">Refonte design — {r.site_name || "Site"}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{new Date(r.created_at).toLocaleDateString("fr-FR")}</p>
+                    </div>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                      r.status === "done" ? "bg-green-100 text-green-700" :
+                      r.status === "in_progress" ? "bg-blue-100 text-blue-700" :
+                      "bg-amber-100 text-amber-700"
+                    }`}>
+                      {DESIGN_STATUS[r.status] ?? r.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </Card>
           )}
 
-          {portalError && (
-            <p className="text-sm text-red-500 mt-1">{portalError}</p>
-          )}
-
-          {/* Résiliation */}
-          {sub && (
+          {/* ── Résiliation ── */}
+          {hasRealStripeSub && (
             <Card className="border-red-100">
-              <h3 className="font-semibold text-sm text-red-600">Résilier l'abonnement</h3>
-              <p className="text-sm text-gray-500 mt-1">La résiliation est effective à la fin de la période en cours. Vos données sont conservées 30 jours.</p>
-              <button onClick={openPortal} disabled={portalLoading} className="mt-2 text-red-500 text-sm hover:underline disabled:opacity-50">
-                Résilier via le portail Stripe →
+              <button
+                onClick={() => setCancelOpen(o => !o)}
+                className="flex items-center justify-between w-full text-left"
+              >
+                <h3 className="font-semibold text-sm text-red-600">Annuler mon abonnement</h3>
+                <svg className={`w-4 h-4 text-red-400 transition-transform ${cancelOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
               </button>
+              {cancelOpen && (
+                <div className="mt-3 space-y-3">
+                  <p className="text-sm text-gray-500 leading-relaxed">
+                    Votre abonnement reste actif jusqu&apos;à la fin de la période en cours — vous ne perdez aucun accès immédiatement.
+                    Vos données sont conservées 30 jours après la résiliation.
+                  </p>
+                  <button
+                    onClick={openPortal}
+                    disabled={portalLoading}
+                    className="text-sm font-medium text-red-500 hover:text-red-700 underline disabled:opacity-50"
+                  >
+                    {portalLoading ? "Ouverture…" : "Annuler depuis le portail Stripe →"}
+                  </button>
+                </div>
+              )}
             </Card>
           )}
         </>

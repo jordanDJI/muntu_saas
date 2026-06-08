@@ -1,4 +1,9 @@
 # ======================
+# Documents confidentiels investisseurs
+# ======================
+docs/investor/
+
+# ======================
 # Environnement virtuel Python
 # ======================
 .muntu_saas/

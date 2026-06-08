@@ -362,3 +362,78 @@ def send_reactivation_relance(email: str, tenant_name: str, tenant_slug: str, da
         </div>
         """,
     })
+
+
+def send_design_request_admin(
+    tenant_name: str,
+    site_name: str,
+    is_additional: bool,
+    message: str,
+    request_id: str,
+) -> None:
+    label = "site supplémentaire (payant)" if is_additional else "1er site inclus dans le plan Business"
+    resend.Emails.send({
+        "from": f"{settings.email_from_name} <{settings.email_from}>",
+        "to": [settings.email_from],
+        "subject": f"[Klientys] Nouvelle demande de refonte design — {tenant_name}",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;background:#fff">
+          <h2 style="color:#07222F;margin-bottom:4px">Nouvelle demande de refonte design</h2>
+          <p style="color:#6b7280;font-size:13px;margin-top:0">Demande #{request_id[:8]}</p>
+          <table style="width:100%;border-collapse:collapse;margin:24px 0">
+            <tr><td style="padding:8px 0;font-size:14px;color:#374151;width:140px"><strong>Tenant</strong></td><td style="padding:8px 0;font-size:14px;color:#374151">{tenant_name}</td></tr>
+            <tr><td style="padding:8px 0;font-size:14px;color:#374151"><strong>Site</strong></td><td style="padding:8px 0;font-size:14px;color:#374151">{site_name or '—'}</td></tr>
+            <tr><td style="padding:8px 0;font-size:14px;color:#374151"><strong>Type</strong></td><td style="padding:8px 0;font-size:14px;color:#374151">{label}</td></tr>
+          </table>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin-bottom:24px">
+            <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af">Message du tenant</p>
+            <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;white-space:pre-wrap">{message}</p>
+          </div>
+          <a href="{settings.frontend_url}/admin/design-requests" style="background:#0D4B58;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">
+            Voir dans le panel admin →
+          </a>
+        </div>
+        """,
+    })
+
+
+def send_logo_request_admin(
+    tenant_name: str,
+    brief: dict,
+    price_tier: str,
+    price_eur: float,
+    request_id: str,
+) -> None:
+    tier_labels = {"essentiel": "Essentiel", "standard": "Standard", "premium": "Premium"}
+    tier_label = tier_labels.get(price_tier, price_tier)
+    brief_rows = "".join(
+        f"<tr><td style='padding:6px 0;font-size:13px;color:#6b7280;width:140px;text-transform:capitalize'>{k.replace('_', ' ')}</td>"
+        f"<td style='padding:6px 0;font-size:13px;color:#374151'>{', '.join(v) if isinstance(v, list) else v}</td></tr>"
+        for k, v in brief.items()
+        if k not in ("recommended_tier",) and v
+    )
+    resend.Emails.send({
+        "from": f"{settings.email_from_name} <{settings.email_from}>",
+        "to": [settings.email_from],
+        "subject": f"[Klientys] Nouvelle demande de logo — {tenant_name} ({tier_label} · {price_eur:.0f}€)",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;background:#fff">
+          <h2 style="color:#07222F;margin-bottom:4px">Nouvelle demande de création de logo</h2>
+          <p style="color:#6b7280;font-size:13px;margin-top:0">#{request_id[:8]} — {tenant_name}</p>
+          <div style="background:#DDAA4015;border:1px solid #DDAA40;border-radius:8px;padding:12px 16px;margin:20px 0;display:flex;align-items:center;gap:12px">
+            <span style="font-size:20px">🎨</span>
+            <div>
+              <p style="margin:0;font-weight:600;color:#07222F">{tier_label} — {price_eur:.0f} €</p>
+              <p style="margin:2px 0 0;font-size:12px;color:#6b7280">En attente de paiement par le tenant</p>
+            </div>
+          </div>
+          <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin:20px 0 8px">Brief collecté par l'IA</h3>
+          <table style="width:100%;border-collapse:collapse">{brief_rows}</table>
+          <div style="margin-top:28px">
+            <a href="{settings.frontend_url}/admin/logo-requests" style="background:#0D4B58;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">
+              Voir dans le panel admin →
+            </a>
+          </div>
+        </div>
+        """,
+    })
