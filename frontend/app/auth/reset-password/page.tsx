@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/api";
@@ -14,15 +14,31 @@ export default function ResetPasswordPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  const ran = useRef(false);
 
-  // Le code a déjà été échangé par /auth/callback — on vérifie juste la session active
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setStep("form");
-      } else {
+    if (ran.current) return;
+    ran.current = true;
+
+    const code = new URLSearchParams(window.location.search).get("code");
+    if (!code) {
+      // Pas de code → vérifier si une session recovery est déjà active
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          setStep("form");
+        } else {
+          setStep("error");
+          setErrorMsg("Lien invalide ou expiré. Demandez un nouveau lien depuis la page de connexion.");
+        }
+      });
+      return;
+    }
+    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      if (error) {
         setStep("error");
-        setErrorMsg("Session expirée ou lien invalide. Demandez un nouveau lien depuis la page de connexion.");
+        setErrorMsg("Ce lien est expiré ou a déjà été utilisé. Demandez un nouveau lien.");
+      } else {
+        setStep("form");
       }
     });
   }, []);
