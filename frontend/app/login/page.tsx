@@ -97,12 +97,12 @@ export default function LoginPage() {
     }
   };
 
-  const handleForgot = async (e: React.FormEvent) => {
+  const handleForgot = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setForgotError("");
     setForgotLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
     });
     setForgotLoading(false);
     if (error) {

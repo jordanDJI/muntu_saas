@@ -32,6 +32,7 @@ export default function AuthCallbackPage() {
       // Échange le code PKCE contre une session (email confirmation + Google OAuth + magic link)
       const url = new URL(window.location.href);
       const code = url.searchParams.get("code");
+      const next = url.searchParams.get("next");
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
@@ -39,6 +40,12 @@ export default function AuthCallbackPage() {
           setTimeout(() => router.replace("/login"), 3000);
           return;
         }
+      }
+
+      // Redirect explicite après échange (ex: réinitialisation de mot de passe)
+      if (next && next.startsWith("/")) {
+        router.replace(next);
+        return;
       }
 
       const { data: { session } } = await supabase.auth.getSession();
