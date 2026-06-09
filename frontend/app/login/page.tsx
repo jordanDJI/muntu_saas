@@ -28,6 +28,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [lockedMins, setLockedMins] = useState(0);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState("");
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -89,6 +94,21 @@ export default function LoginPage() {
       setError(err?.message ?? "Erreur de connexion. Vérifiez votre réseau.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError("");
+    setForgotLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    });
+    setForgotLoading(false);
+    if (error) {
+      setForgotError(error.message);
+    } else {
+      setForgotSent(true);
     }
   };
 
@@ -343,82 +363,176 @@ export default function LoginPage() {
               <div style={{ flex: 1, height: "1px", background: "rgba(170,189,216,.12)" }} />
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <input
-                type="email"
-                placeholder={t.login_email}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                style={{
-                  display: "block", width: "100%", background: "rgba(255,255,255,.05)",
-                  border: "1px solid rgba(170,189,216,.18)", borderRadius: "10px",
-                  padding: "11px 14px", fontSize: "14px", color: "var(--l-text)",
-                  outline: "none", transition: "border-color .2s, box-shadow .2s",
-                  boxSizing: "border-box",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "var(--l-teal-xl)";
-                  e.target.style.boxShadow = "0 0 0 3px rgba(42,143,165,.15)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "rgba(170,189,216,.18)";
-                  e.target.style.boxShadow = "none";
-                }}
-              />
-              <input
-                type="password"
-                placeholder={t.login_password}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={{
-                  display: "block", width: "100%", background: "rgba(255,255,255,.05)",
-                  border: "1px solid rgba(170,189,216,.18)", borderRadius: "10px",
-                  padding: "11px 14px", fontSize: "14px", color: "var(--l-text)",
-                  outline: "none", transition: "border-color .2s, box-shadow .2s",
-                  boxSizing: "border-box",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "var(--l-teal-xl)";
-                  e.target.style.boxShadow = "0 0 0 3px rgba(42,143,165,.15)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "rgba(170,189,216,.18)";
-                  e.target.style.boxShadow = "none";
-                }}
-              />
-              {error && (
-                <p style={{
-                  color: "#FC8181", fontSize: "13px", margin: 0,
-                  background: "rgba(191,51,51,.1)", border: "1px solid rgba(191,51,51,.25)",
-                  borderRadius: "8px", padding: "8px 12px",
-                }}>
-                  {error}
-                </p>
-              )}
-              <button
-                type="submit"
-                disabled={loading}
-                className="l-btn l-btn-primary"
-                style={{ width: "100%", justifyContent: "center", marginTop: "4px", opacity: loading ? 0.7 : 1 }}
-              >
-                {loading ? t.login_loading : t.login_submit}
-              </button>
-            </form>
+            {/* Form — mode normal ou mode "mot de passe oublié" */}
+            {forgotMode ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ textAlign: "center", marginBottom: "4px" }}>
+                  <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--l-text)", margin: "0 0 6px" }}>
+                    Mot de passe oublié ?
+                  </p>
+                  <p style={{ fontSize: "13px", color: "var(--l-text-2)", margin: 0 }}>
+                    Entrez votre email pour recevoir un lien de réinitialisation.
+                  </p>
+                </div>
+                {forgotSent ? (
+                  <div style={{
+                    background: "rgba(74,202,122,.1)", border: "1px solid rgba(74,202,122,.3)",
+                    borderRadius: "10px", padding: "14px 16px", textAlign: "center",
+                  }}>
+                    <p style={{ color: "#4ACA7A", fontSize: "14px", margin: "0 0 4px", fontWeight: 600 }}>
+                      Email envoyé ✓
+                    </p>
+                    <p style={{ color: "var(--l-text-2)", fontSize: "13px", margin: 0 }}>
+                      Vérifiez votre boîte mail (et vos spams).
+                    </p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgot} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <input
+                      type="email"
+                      placeholder="votre@email.com"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      required
+                      autoFocus
+                      style={{
+                        display: "block", width: "100%", background: "rgba(255,255,255,.05)",
+                        border: "1px solid rgba(170,189,216,.18)", borderRadius: "10px",
+                        padding: "11px 14px", fontSize: "14px", color: "var(--l-text)",
+                        outline: "none", transition: "border-color .2s, box-shadow .2s",
+                        boxSizing: "border-box",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "var(--l-teal-xl)";
+                        e.target.style.boxShadow = "0 0 0 3px rgba(42,143,165,.15)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "rgba(170,189,216,.18)";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    />
+                    {forgotError && (
+                      <p style={{
+                        color: "#FC8181", fontSize: "13px", margin: 0,
+                        background: "rgba(191,51,51,.1)", border: "1px solid rgba(191,51,51,.25)",
+                        borderRadius: "8px", padding: "8px 12px",
+                      }}>{forgotError}</p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={forgotLoading}
+                      className="l-btn l-btn-primary"
+                      style={{ width: "100%", justifyContent: "center", opacity: forgotLoading ? 0.7 : 1 }}
+                    >
+                      {forgotLoading ? "Envoi…" : "Envoyer le lien"}
+                    </button>
+                  </form>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setForgotMode(false); setForgotSent(false); setForgotError(""); }}
+                  style={{
+                    background: "none", border: "none", color: "var(--l-text-2)",
+                    fontSize: "13px", cursor: "pointer", textAlign: "center", padding: "4px",
+                  }}
+                >
+                  ← Retour à la connexion
+                </button>
+              </div>
+            ) : (
+              <>
+                <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <input
+                    type="email"
+                    placeholder={t.login_email}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    style={{
+                      display: "block", width: "100%", background: "rgba(255,255,255,.05)",
+                      border: "1px solid rgba(170,189,216,.18)", borderRadius: "10px",
+                      padding: "11px 14px", fontSize: "14px", color: "var(--l-text)",
+                      outline: "none", transition: "border-color .2s, box-shadow .2s",
+                      boxSizing: "border-box",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = "var(--l-teal-xl)";
+                      e.target.style.boxShadow = "0 0 0 3px rgba(42,143,165,.15)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "rgba(170,189,216,.18)";
+                      e.target.style.boxShadow = "none";
+                    }}
+                  />
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <input
+                      type="password"
+                      placeholder={t.login_password}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      style={{
+                        display: "block", width: "100%", background: "rgba(255,255,255,.05)",
+                        border: "1px solid rgba(170,189,216,.18)", borderRadius: "10px",
+                        padding: "11px 14px", fontSize: "14px", color: "var(--l-text)",
+                        outline: "none", transition: "border-color .2s, box-shadow .2s",
+                        boxSizing: "border-box",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "var(--l-teal-xl)";
+                        e.target.style.boxShadow = "0 0 0 3px rgba(42,143,165,.15)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "rgba(170,189,216,.18)";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    />
+                    <div style={{ textAlign: "right" }}>
+                      <button
+                        type="button"
+                        onClick={() => { setForgotMode(true); setForgotEmail(email); }}
+                        style={{
+                          background: "none", border: "none", color: "var(--l-teal-xl)",
+                          fontSize: "12px", cursor: "pointer", padding: "2px 0",
+                          fontWeight: 500,
+                        }}
+                      >
+                        Mot de passe oublié ?
+                      </button>
+                    </div>
+                  </div>
+                  {error && (
+                    <p style={{
+                      color: "#FC8181", fontSize: "13px", margin: 0,
+                      background: "rgba(191,51,51,.1)", border: "1px solid rgba(191,51,51,.25)",
+                      borderRadius: "8px", padding: "8px 12px",
+                    }}>
+                      {error}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="l-btn l-btn-primary"
+                    style={{ width: "100%", justifyContent: "center", marginTop: "4px", opacity: loading ? 0.7 : 1 }}
+                  >
+                    {loading ? t.login_loading : t.login_submit}
+                  </button>
+                </form>
 
-            {lockedMins > 0 && (
-              <p style={{ textAlign: "center", fontSize: "12px", color: "#FC8181", marginTop: "8px", marginBottom: 0 }}>
-                🔒 {t.login_locked.replace("{m}", String(lockedMins))}
-              </p>
+                {lockedMins > 0 && (
+                  <p style={{ textAlign: "center", fontSize: "12px", color: "#FC8181", marginTop: "8px", marginBottom: 0 }}>
+                    🔒 {t.login_locked.replace("{m}", String(lockedMins))}
+                  </p>
+                )}
+                <p style={{ textAlign: "center", fontSize: "13px", color: "var(--l-text-2)", marginTop: "24px", marginBottom: 0 }}>
+                  {t.login_no_account}{" "}
+                  <Link href="/onboarding" style={{ color: "var(--l-teal-xl)", textDecoration: "none", fontWeight: 600 }}>
+                    {t.login_signup}
+                  </Link>
+                </p>
+              </>
             )}
-            <p style={{ textAlign: "center", fontSize: "13px", color: "var(--l-text-2)", marginTop: "24px", marginBottom: 0 }}>
-              {t.login_no_account}{" "}
-              <Link href="/onboarding" style={{ color: "var(--l-teal-xl)", textDecoration: "none", fontWeight: 600 }}>
-                {t.login_signup}
-              </Link>
-            </p>
           </div>
 
           {/* Trust line sous la card */}
