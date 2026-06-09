@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/api";
@@ -14,9 +14,13 @@ export default function ResetPasswordPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  const ran = useRef(false);
 
-  // Supabase envoie le code en query param (?code=...) avec le flux PKCE
+  // Guard : empêche la double-exécution React StrictMode (consomme le code deux fois)
   useEffect(() => {
+    if (ran.current) return;
+    ran.current = true;
+
     const code = new URLSearchParams(window.location.search).get("code");
     if (!code) {
       setStep("error");
@@ -33,7 +37,7 @@ export default function ResetPasswordPage() {
     });
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (password !== confirm) {
       setErrorMsg("Les mots de passe ne correspondent pas.");
