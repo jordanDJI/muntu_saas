@@ -368,10 +368,10 @@ export default function LoginPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div style={{ textAlign: "center", marginBottom: "4px" }}>
                   <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--l-text)", margin: "0 0 6px" }}>
-                    Mot de passe oublié ?
+                    {t.login_forgot}
                   </p>
                   <p style={{ fontSize: "13px", color: "var(--l-text-2)", margin: 0 }}>
-                    Entrez votre email pour recevoir un lien de réinitialisation.
+                    {t.login_forgot_subtitle}
                   </p>
                 </div>
                 {forgotSent ? (
@@ -380,10 +380,10 @@ export default function LoginPage() {
                     borderRadius: "10px", padding: "14px 16px", textAlign: "center",
                   }}>
                     <p style={{ color: "#4ACA7A", fontSize: "14px", margin: "0 0 4px", fontWeight: 600 }}>
-                      Email envoyé ✓
+                      {t.login_forgot_sent_title}
                     </p>
                     <p style={{ color: "var(--l-text-2)", fontSize: "13px", margin: 0 }}>
-                      Vérifiez votre boîte mail (et vos spams).
+                      {t.login_forgot_sent_desc}
                     </p>
                   </div>
                 ) : (
@@ -424,7 +424,7 @@ export default function LoginPage() {
                       className="l-btn l-btn-primary"
                       style={{ width: "100%", justifyContent: "center", opacity: forgotLoading ? 0.7 : 1 }}
                     >
-                      {forgotLoading ? "Envoi…" : "Envoyer le lien"}
+                      {forgotLoading ? t.login_forgot_sending : t.login_forgot_submit}
                     </button>
                   </form>
                 )}
@@ -436,7 +436,7 @@ export default function LoginPage() {
                     fontSize: "13px", cursor: "pointer", textAlign: "center", padding: "4px",
                   }}
                 >
-                  ← Retour à la connexion
+                  {t.login_forgot_back}
                 </button>
               </div>
             ) : (
@@ -497,7 +497,7 @@ export default function LoginPage() {
                           fontWeight: 500,
                         }}
                       >
-                        Mot de passe oublié ?
+                        {t.login_forgot}
                       </button>
                     </div>
                   </div>

@@ -1300,22 +1300,30 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     ).eq("tenant_id", tenant_id).limit(1).execute()
     site = (site_res.data or [{}])[0]
 
+    # ── Langue du tenant ─────────────────────────────────────────────────────
+    display_name = site.get("title") or tenant_name
+    lang = site.get("default_language") or "fr"
+    # English names for the LLM instruction (universally understood)
+    _LANG_NAMES = {"fr": "French", "en": "English", "nl": "Dutch", "de": "German"}
+    lang_name = _LANG_NAMES.get(lang, "French")
+
     # ── Mode absence ──────────────────────────────────────────────────────────
     if site.get("absence_mode"):
-        msg = site.get("absence_message") or "Le professionnel est actuellement indisponible."
+        msg = site.get("absence_message") or {
+            "fr": "Le professionnel est actuellement indisponible.",
+            "en": "The professional is currently unavailable.",
+            "de": "Der Fachmann ist derzeit nicht verfügbar.",
+            "nl": "De professional is momenteel niet beschikbaar.",
+        }.get(lang, "Le professionnel est actuellement indisponible.")
         return (
-            f"Tu es l'assistant de {site.get('title') or tenant_name}. "
-            f"Le professionnel est absent. Communique ce message au client : « {msg} » "
-            "Sois courtois, ne prends aucun engagement, invite à recontacter plus tard. "
-            "Texte simple, sans mise en forme."
+            f"You are the assistant of {display_name}. "
+            f"The professional is absent. Relay this message to the client: « {msg} » "
+            f"Be courteous, make no commitments, invite to contact later. "
+            f"Plain text only, no formatting. ALWAYS reply in {lang_name}."
             + date_ctx
         )
 
     # ── Construction du prompt dynamique ─────────────────────────────────────
-
-    display_name = site.get("title") or tenant_name
-    lang = site.get("default_language") or "fr"
-    lang_label = {"fr": "français", "en": "anglais", "nl": "néerlandais"}.get(lang, "français")
 
     lines: list[str] = []
 
@@ -1388,7 +1396,7 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     # Règles de comportement — 100 % génériques, aucune référence sectorielle
     lines.append(
         f"\nRÈGLES DE COMPORTEMENT :\n"
-        f"- Réponds exclusivement en {lang_label}, avec un ton chaleureux et professionnel\n"
+        f"- ALWAYS reply in {lang_name}, with a warm and professional tone\n"
         "- Utilise uniquement du texte brut — aucun markdown, aucun astérisque, aucun #\n"
         "- Base-toi uniquement sur les informations fournies ci-dessus ; "
         "ne suppose rien qui ne soit pas écrit ici\n"

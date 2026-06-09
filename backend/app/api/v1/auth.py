@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant, get_current_user
 from app.services.activity import log_activity
+from app.services.email import send_password_changed
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -136,3 +137,16 @@ async def get_my_tenants(user: dict = Depends(get_current_user)):
                 "role": row["role"],
             })
     return tenants
+
+
+@router.post("/notify-password-changed")
+async def notify_password_changed(user: dict = Depends(get_current_user)):
+    """Envoie un email de confirmation après un changement de mot de passe réussi."""
+    email = user.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email introuvable dans le token")
+    try:
+        send_password_changed(email)
+    except Exception:
+        pass  # non bloquant — la page redirige quoi qu'il arrive
+    return {"ok": True}

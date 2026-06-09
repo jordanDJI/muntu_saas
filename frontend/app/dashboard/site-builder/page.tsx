@@ -154,7 +154,7 @@ export default function SiteBuilderPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const logoPaid = searchParams.get("logo_paid") === "1";
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { planName } = useSubscription();
   const isBusiness = planName === "Business";
 
@@ -609,8 +609,8 @@ export default function SiteBuilderPage() {
         <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
           <span className="text-green-500 text-lg flex-shrink-0">✓</span>
           <div>
-            <p className="text-sm font-semibold text-green-800">Demande de logo enregistrée et payée !</p>
-            <p className="text-xs text-green-600 mt-0.5">Notre équipe traite votre brief et vous livre dans les délais indiqués. Vous recevrez votre logo par email.</p>
+            <p className="text-sm font-semibold text-green-800">{t.sb_logo_paid_success}</p>
+            <p className="text-xs text-green-600 mt-0.5">{t.sb_logo_paid_desc}</p>
           </div>
         </div>
       )}
@@ -772,7 +772,7 @@ export default function SiteBuilderPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-xl">🎨</span>
                       <h3 className="font-semibold text-gray-900">
-                        {logoModalView === "chat" ? "Brief logo — assistant IA" : logoModalView === "summary" ? "Votre brief est prêt" : "Création de logo professionnel"}
+                        {logoModalView === "chat" ? t.sb_logo_modal_chat_title : logoModalView === "summary" ? t.sb_logo_modal_summary_title : t.sb_logo_modal_info_title}
                       </h3>
                     </div>
                     <button onClick={() => { setShowLogoServiceModal(false); setLogoModalView("info"); setLogoChatMessages([]); setLogoBrief(null); }} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
@@ -781,18 +781,18 @@ export default function SiteBuilderPage() {
                   {/* ── VUE INFO ── */}
                   {logoModalView === "info" && (
                     <div className="p-6 space-y-5 overflow-y-auto">
-                      <p className="text-sm text-gray-500">Notre équipe vous crée un logo sur-mesure à partir d'un brief collecté par notre assistant IA. Paiement avant livraison.</p>
+                      <p className="text-sm text-gray-500">{t.sb_logo_modal_desc}</p>
                       <div className="grid grid-cols-3 gap-3">
-                        {[
-                          { tier:"essentiel", label:"Essentiel", price:"149 €", items:["1 concept","2 variantes couleur","PNG + SVG","5 jours ouvrés"] },
-                          { tier:"standard",  label:"Standard",  price:"299 €", items:["2 concepts","3 variantes couleur","PNG + SVG + PDF","7 jours ouvrés"], highlight:true },
-                          { tier:"premium",   label:"Premium",   price:"499 €", items:["3 concepts","Identité visuelle complète","Tous formats","10 jours ouvrés"] },
-                        ].map((t) => (
-                          <div key={t.tier} className={`rounded-xl p-3 border-2 text-center flex flex-col gap-1 ${t.highlight ? "border-primary-400 bg-primary-50" : "border-gray-100"}`}>
-                            <p className="font-bold text-xs text-gray-800">{t.label}</p>
-                            <p className="text-base font-bold text-gray-900">{t.price}</p>
-                            {t.items.map((item) => <p key={item} className="text-[10px] text-gray-500">{item}</p>)}
-                            {t.highlight && <span className="text-[9px] font-bold text-primary-600 uppercase tracking-wide mt-1">Populaire</span>}
+                        {([
+                          { tier:"essentiel", label:"Essentiel", price:"149 €", items:[t.sb_logo_ess_i1, t.sb_logo_ess_i2, t.sb_logo_ess_i3, t.sb_logo_ess_i4] },
+                          { tier:"standard",  label:"Standard",  price:"299 €", items:[t.sb_logo_std_i1, t.sb_logo_std_i2, t.sb_logo_std_i3, t.sb_logo_std_i4], highlight:true },
+                          { tier:"premium",   label:"Premium",   price:"499 €", items:[t.sb_logo_pre_i1, t.sb_logo_pre_i2, t.sb_logo_pre_i3, t.sb_logo_pre_i4] },
+                        ] as const).map((plan) => (
+                          <div key={plan.tier} className={`rounded-xl p-3 border-2 text-center flex flex-col gap-1 ${"highlight" in plan && plan.highlight ? "border-primary-400 bg-primary-50" : "border-gray-100"}`}>
+                            <p className="font-bold text-xs text-gray-800">{plan.label}</p>
+                            <p className="text-base font-bold text-gray-900">{plan.price}</p>
+                            {plan.items.map((item) => <p key={item} className="text-[10px] text-gray-500">{item}</p>)}
+                            {"highlight" in plan && plan.highlight && <span className="text-[9px] font-bold text-primary-600 uppercase tracking-wide mt-1">{t.sb_logo_tier_popular}</span>}
                           </div>
                         ))}
                       </div>
@@ -801,12 +801,12 @@ export default function SiteBuilderPage() {
                           setLogoModalView("chat");
                           setLogoChatMessages([{
                             role: "assistant",
-                            content: "Bonjour ! Je vais vous aider à créer votre logo en quelques questions. Pour commencer, quel est le nom commercial que vous souhaitez intégrer dans votre logo ?"
+                            content: t.sb_logo_chat_init,
                           }]);
                         }}
                         className="w-full bg-primary-600 text-white text-sm font-semibold py-3 rounded-xl hover:bg-primary-700 transition-colors"
                       >
-                        Démarrer le brief IA →
+                        {t.sb_logo_start_brief}
                       </button>
                     </div>
                   )}
@@ -853,7 +853,7 @@ export default function SiteBuilderPage() {
                                 setLogoChatInput("");
                                 setLogoChatLoading(true);
                                 try {
-                                  const res = await api.logoChat(newMessages);
+                                  const res = await api.logoChat(newMessages, lang);
                                   const assistantMsg = { role: "assistant", content: res.message };
                                   setLogoChatMessages(prev => [...prev, assistantMsg]);
                                   if (res.complete) {
@@ -863,13 +863,13 @@ export default function SiteBuilderPage() {
                                     setTimeout(() => setLogoModalView("summary"), 800);
                                   }
                                 } catch {
-                                  setLogoChatMessages(prev => [...prev, { role: "assistant", content: "Désolé, une erreur est survenue. Réessayez." }]);
+                                  setLogoChatMessages(prev => [...prev, { role: "assistant", content: t.sb_logo_chat_error }]);
                                 } finally {
                                   setLogoChatLoading(false);
                                 }
                               }
                             }}
-                            placeholder="Votre réponse…"
+                            placeholder={t.sb_logo_chat_placeholder}
                             className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2.5 outline-none focus:border-primary-400"
                             disabled={logoChatLoading}
                           />
@@ -882,7 +882,7 @@ export default function SiteBuilderPage() {
                               setLogoChatInput("");
                               setLogoChatLoading(true);
                               try {
-                                const res = await api.logoChat(newMessages);
+                                const res = await api.logoChat(newMessages, lang);
                                 const assistantMsg = { role: "assistant", content: res.message };
                                 setLogoChatMessages(prev => [...prev, assistantMsg]);
                                 if (res.complete) {
@@ -892,7 +892,7 @@ export default function SiteBuilderPage() {
                                   setTimeout(() => setLogoModalView("summary"), 800);
                                 }
                               } catch {
-                                setLogoChatMessages(prev => [...prev, { role: "assistant", content: "Désolé, une erreur est survenue. Réessayez." }]);
+                                setLogoChatMessages(prev => [...prev, { role: "assistant", content: t.sb_logo_chat_error }]);
                               } finally {
                                 setLogoChatLoading(false);
                               }
@@ -914,7 +914,7 @@ export default function SiteBuilderPage() {
                     <div className="p-6 space-y-5 overflow-y-auto">
                       {/* Résumé brief */}
                       <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Votre brief</p>
+                        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">{t.sb_logo_brief_label}</p>
                         {Object.entries(logoBrief).filter(([k]) => k !== "recommended_tier").map(([k, v]) => (
                           <div key={k} className="flex gap-2 text-sm">
                             <span className="text-gray-400 capitalize flex-shrink-0 w-28">{k.replace(/_/g, " ")}</span>
@@ -926,15 +926,15 @@ export default function SiteBuilderPage() {
                       {/* Sélection tier */}
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-                          Choisir votre formule
-                          {logoRecommendedTier && <span className="ml-2 text-primary-600 normal-case font-normal">(recommandé : {logoRecommendedTier})</span>}
+                          {t.sb_logo_formula_label}
+                          {logoRecommendedTier && <span className="ml-2 text-primary-600 normal-case font-normal">({t.sb_logo_recommended.replace("{tier}", logoRecommendedTier)})</span>}
                         </p>
                         <div className="grid grid-cols-3 gap-2">
                           {[
                             { key:"essentiel", label:"Essentiel", price:"149 €" },
                             { key:"standard",  label:"Standard",  price:"299 €" },
                             { key:"premium",   label:"Premium",   price:"499 €" },
-                          ].map((tier) => (
+                          ].map((tier) => (  // tier names intentionally not translated (commercial identifiers)
                             <button
                               key={tier.key}
                               onClick={() => setLogoSelectedTier(tier.key)}
@@ -971,16 +971,16 @@ export default function SiteBuilderPage() {
                             );
                             window.location.href = checkout_url;
                           } catch (e: any) {
-                            setLogoRequestError(e?.message ?? "Erreur — réessayez.");
+                            setLogoRequestError(e?.message ?? t.sb_logo_request_error);
                             setLogoCheckoutLoading(false);
                           }
                         }}
                         disabled={logoCheckoutLoading}
                         className="w-full bg-primary-600 text-white text-sm font-semibold py-3 rounded-xl hover:bg-primary-700 transition-colors disabled:opacity-50"
                       >
-                        {logoCheckoutLoading ? "Redirection vers le paiement…" : "Payer et soumettre la demande →"}
+                        {logoCheckoutLoading ? t.sb_logo_checkout_loading : t.sb_logo_checkout_submit}
                       </button>
-                      <p className="text-xs text-gray-400 text-center">Paiement sécurisé via Stripe · Livraison dans les délais indiqués</p>
+                      <p className="text-xs text-gray-400 text-center">{t.sb_logo_checkout_secure}</p>
                     </div>
                   )}
                 </div>

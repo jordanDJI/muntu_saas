@@ -3,11 +3,13 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/api";
+import { useLanguage } from "../../../contexts/LanguageContext";
 
 type Step = "loading" | "form" | "success" | "error";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [step, setStep] = useState<Step>("loading");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -20,37 +22,41 @@ export default function ResetPasswordPage() {
     if (ran.current) return;
     ran.current = true;
 
-    const code = new URLSearchParams(window.location.search).get("code");
-    if (!code) {
-      // Pas de code → vérifier si une session recovery est déjà active
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          setStep("form");
-        } else {
-          setStep("error");
-          setErrorMsg("Lien invalide ou expiré. Demandez un nouveau lien depuis la page de connexion.");
-        }
-      });
-      return;
-    }
-    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+    const init = async () => {
+      // Le client Supabase (detectSessionInUrl:true) échange le code automatiquement
+      // au chargement et nettoie l'URL — la session est souvent déjà établie ici
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setStep("form");
+        return;
+      }
+      // Fallback : code encore présent dans l'URL (Supabase ne l'a pas encore échangé)
+      const code = new URLSearchParams(window.location.search).get("code");
+      if (!code) {
+        setStep("error");
+        setErrorMsg("no_code");
+        return;
+      }
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
         setStep("error");
-        setErrorMsg("Ce lien est expiré ou a déjà été utilisé. Demandez un nouveau lien.");
+        setErrorMsg("expired");
       } else {
         setStep("form");
       }
-    });
+    };
+
+    init();
   }, []);
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (password !== confirm) {
-      setErrorMsg("Les mots de passe ne correspondent pas.");
+      setErrorMsg(t.reset_mismatch);
       return;
     }
     if (password.length < 8) {
-      setErrorMsg("Le mot de passe doit contenir au moins 8 caractères.");
+      setErrorMsg(t.reset_too_short);
       return;
     }
     setErrorMsg("");
@@ -61,6 +67,15 @@ export default function ResetPasswordPage() {
       setErrorMsg(error.message);
     } else {
       setStep("success");
+      // Envoi de l'email de confirmation (non bloquant)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+        fetch(`${api}/api/v1/auth/notify-password-changed`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).catch(() => {});
+      }
       setTimeout(() => router.replace("/dashboard"), 3000);
     }
   };
@@ -101,7 +116,7 @@ export default function ResetPasswordPage() {
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path d="M9 11L5 7l4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
-        Connexion
+        {t.reset_back}
       </Link>
 
       <div style={{
@@ -131,7 +146,7 @@ export default function ResetPasswordPage() {
                 border: "2px solid rgba(170,189,216,.2)", borderTopColor: "var(--l-teal-xl)",
                 animation: "spin 0.8s linear infinite",
               }} />
-              <p style={{ color: "var(--l-text-2)", fontSize: "14px", margin: 0 }}>Vérification du lien…</p>
+              <p style={{ color: "var(--l-text-2)", fontSize: "14px", margin: 0 }}>{t.reset_loading}</p>
             </div>
           )}
 
@@ -142,10 +157,12 @@ export default function ResetPasswordPage() {
                 fontSize: "20px", fontWeight: 800, color: "var(--l-text)",
                 fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif",
                 marginBottom: "10px",
-              }}>Lien invalide</h1>
-              <p style={{ color: "var(--l-text-2)", fontSize: "14px", marginBottom: "24px" }}>{errorMsg}</p>
+              }}>{t.reset_error_title}</h1>
+              <p style={{ color: "var(--l-text-2)", fontSize: "14px", marginBottom: "24px" }}>
+                {errorMsg === "no_code" ? t.reset_no_code : t.reset_expired}
+              </p>
               <Link href="/login" className="l-btn l-btn-primary" style={{ display: "inline-flex", justifyContent: "center" }}>
-                Retour à la connexion
+                {t.reset_go_login}
               </Link>
             </div>
           )}
@@ -157,9 +174,9 @@ export default function ResetPasswordPage() {
                 fontSize: "20px", fontWeight: 800, color: "var(--l-text)",
                 fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif",
                 marginBottom: "10px",
-              }}>Mot de passe mis à jour</h1>
+              }}>{t.reset_success_title}</h1>
               <p style={{ color: "var(--l-text-2)", fontSize: "14px", margin: 0 }}>
-                Redirection vers votre tableau de bord…
+                {t.reset_success_desc}
               </p>
             </div>
           )}
@@ -172,17 +189,17 @@ export default function ResetPasswordPage() {
                 marginBottom: "6px", color: "var(--l-text)", letterSpacing: "-.02em",
                 textAlign: "center",
               }}>
-                Nouveau mot de passe
+                {t.reset_title}
               </h1>
               <p style={{ color: "var(--l-text-2)", fontSize: "14px", textAlign: "center", marginBottom: "24px" }}>
-                Choisissez un mot de passe sécurisé (8 caractères minimum).
+                {t.reset_subtitle}
               </p>
               <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {/* Champ mot de passe avec toggle */}
                 <div style={{ position: "relative" }}>
                   <input
                     type={showPwd ? "text" : "password"}
-                    placeholder="Nouveau mot de passe"
+                    placeholder={t.reset_placeholder}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -217,7 +234,7 @@ export default function ResetPasswordPage() {
                 <div style={{ position: "relative" }}>
                   <input
                     type={showPwd ? "text" : "password"}
-                    placeholder="Confirmer le mot de passe"
+                    placeholder={t.reset_confirm}
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
                     required
@@ -258,7 +275,7 @@ export default function ResetPasswordPage() {
                   className="l-btn l-btn-primary"
                   style={{ width: "100%", justifyContent: "center", marginTop: "4px", opacity: saving ? 0.7 : 1 }}
                 >
-                  {saving ? "Mise à jour…" : "Enregistrer le mot de passe"}
+                  {saving ? t.reset_saving : t.reset_submit}
                 </button>
               </form>
             </>

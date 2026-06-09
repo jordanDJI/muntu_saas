@@ -39,34 +39,44 @@ LOGO_TIERS: dict[str, dict] = {
 
 # ── Prompt système ───────────────────────────────────────────────────────────
 
-_BRIEF_SYSTEM = """
-Tu es un assistant spécialisé dans la collecte de briefs pour la création de logos professionnels.
-Ton objectif : rassembler toutes les informations nécessaires en 5 à 8 questions naturelles et bienveillantes.
+_LANG_NAMES = {
+    "fr": "French",
+    "en": "English",
+    "de": "German",
+    "nl": "Dutch",
+}
 
-Informations à collecter (dans n'importe quel ordre selon la conversation) :
-1. Le nom commercial ou le texte à intégrer dans le logo
-2. Le secteur d'activité et la nature du business
-3. Le style souhaité : moderne/épuré, classique/élégant, dynamique/coloré, minimaliste, corporate, ludique
-4. Les couleurs ou ambiances souhaitées (ex: professionnel, chaleureux, naturel, premium, énergique)
-5. Les mots-clés ou valeurs de la marque (ex: confiance, expertise, innovation, proximité)
-6. Le public cible (particuliers, professionnels, jeunes, seniors, etc.)
-7. Des exemples de logos appréciés — optionnel, demander seulement si la conversation le permet naturellement
+def _brief_system(lang: str) -> str:
+    lang_name = _LANG_NAMES.get(lang, "French")
+    return f"""
+You are an assistant specialized in collecting briefs for professional logo creation.
+Your goal: gather all necessary information in 5 to 8 natural, friendly questions.
 
-Règles :
-- Pose UNE seule question à la fois, de façon conversationnelle
-- Sois chaleureux, professionnel et encourage les réponses détaillées
-- Après avoir collecté l'essentiel (5 à 8 échanges), génère le résumé du brief
-- Recommande le tier en fonction de la complexité : simple→essentiel, besoin pro→standard, identité complète→premium
-- Quand le brief est complet, termine ton message avec exactement ce bloc (sans espace avant [BRIEF_COMPLET]) :
-[BRIEF_COMPLET]{"sector":"...","business_name":"...","style":"...","colors":["..."],"keywords":["..."],"target":"...","notes":"...","recommended_tier":"standard"}
-- Le JSON doit être sur une seule ligne, sans saut de ligne
-- Réponds TOUJOURS en français
+Information to collect (in any order, following the conversation flow):
+1. The business name or text to include in the logo
+2. The industry and nature of the business
+3. The desired style: modern/clean, classic/elegant, dynamic/colourful, minimalist, corporate, playful
+4. Desired colours or moods (e.g. professional, warm, natural, premium, energetic)
+5. Brand keywords or values (e.g. trust, expertise, innovation, proximity)
+6. Target audience (individuals, professionals, young people, seniors, etc.)
+7. Examples of logos they like — optional, only ask if it fits naturally in the conversation
+
+Rules:
+- Ask ONE question at a time, in a conversational way
+- Be warm, professional and encourage detailed answers
+- After collecting the essentials (5 to 8 exchanges), generate the brief summary
+- Recommend a tier based on complexity: simple→essentiel, professional need→standard, full identity→premium
+- When the brief is complete, end your message with exactly this block (no space before [BRIEF_COMPLET]):
+[BRIEF_COMPLET]{{"sector":"...","business_name":"...","style":"...","colors":["..."],"keywords":["..."],"target":"...","notes":"...","recommended_tier":"standard"}}
+- The JSON must be on a single line, no line breaks
+- ALWAYS reply in {lang_name}
 """
 
 # ── Schémas Pydantic ─────────────────────────────────────────────────────────
 
 class ChatIn(BaseModel):
     messages: list[dict]  # [{role: "user"|"assistant", content: str}]
+    lang: str = "fr"      # langue de l'UI ("fr", "en", "de", "nl")
 
 
 class LogoRequestIn(BaseModel):
@@ -98,7 +108,7 @@ async def logo_chat(body: ChatIn, tenant_id: str = Depends(get_current_tenant)):
     ]
 
     try:
-        reply = chat_completion(messages=messages, system_prompt=_BRIEF_SYSTEM)
+        reply = chat_completion(messages=messages, system_prompt=_brief_system(body.lang))
     except Exception:
         raise HTTPException(503, "Service IA temporairement indisponible — réessayez dans quelques secondes.")
 

@@ -397,6 +397,34 @@ def send_design_request_admin(
     })
 
 
+def send_password_changed(user_email: str) -> None:
+    """Email de confirmation envoyé à l'utilisateur après un changement de mot de passe réussi."""
+    resend.Emails.send({
+        "from": f"{settings.email_from_name} <{settings.email_from}>",
+        "to": [user_email],
+        "subject": "Votre mot de passe Klientys a été modifié",
+        "html": f"""
+        <div style="font-family:'DM Sans',sans-serif;max-width:520px;margin:0 auto;background:#07222F;color:#EEF2F5;padding:40px 36px;border-radius:16px">
+          <img src="{settings.frontend_url}/logo.png" height="36" style="margin-bottom:28px"/>
+          <h2 style="font-size:20px;font-weight:800;margin:0 0 12px;letter-spacing:-.02em">
+            Mot de passe modifié ✓
+          </h2>
+          <p style="color:#AAC0D8;font-size:15px;line-height:1.6;margin:0 0 24px">
+            Votre mot de passe Klientys a bien été mis à jour. Vous pouvez vous connecter avec votre nouveau mot de passe.
+          </p>
+          <a href="{settings.frontend_url}/login"
+             style="display:inline-block;background:#DDAA40;color:#07222F;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">
+            Accéder à mon tableau de bord →
+          </a>
+          <p style="color:#5C7A8A;font-size:12px;margin-top:32px;line-height:1.6">
+            Si vous n'avez pas effectué cette modification, contactez-nous immédiatement à
+            <a href="mailto:support@klientys.co" style="color:#2A8FA5;text-decoration:none">support@klientys.co</a>.
+          </p>
+        </div>
+        """,
+    })
+
+
 def send_logo_request_admin(
     tenant_name: str,
     brief: dict,

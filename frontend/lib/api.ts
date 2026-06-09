@@ -79,8 +79,8 @@ export const api = {
     apiFetch(`/api/v1/admin/design-requests/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   // Logo requests
-  logoChat: (messages: { role: string; content: string }[]) =>
-    apiFetch<any>("/api/v1/logo-requests/chat", { method: "POST", body: JSON.stringify({ messages }) }),
+  logoChat: (messages: { role: string; content: string }[], lang: string) =>
+    apiFetch<any>("/api/v1/logo-requests/chat", { method: "POST", body: JSON.stringify({ messages, lang }) }),
   createLogoRequest: (body: { brief: object; chat_history: object[]; price_tier: string }) =>
     apiFetch<any>("/api/v1/logo-requests/", { method: "POST", body: JSON.stringify(body) }),
   logoCheckout: (requestId: string, successUrl: string, cancelUrl: string) =>
