@@ -48,6 +48,9 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     const msg = typeof detail === "string" ? detail : `HTTP ${res.status}`;
     throw new Error(msg);
   }
+  if (res.status === 204) return null as T;
+  const ct = res.headers.get("content-type");
+  if (!ct?.includes("application/json")) return null as T;
   return res.json();
 }
 
@@ -104,8 +107,9 @@ export const api = {
   updateLead: (id: string, body: object) => apiFetch(`/api/v1/leads/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   // Appointments
-  getAppointments: (params?: { status?: string }) => {
-    const qs = params ? "?" + new URLSearchParams(params as any).toString() : "";
+  getAppointments: (params?: { status?: string; contact_id?: string; future_only?: boolean }) => {
+    const filtered = Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined && v !== false));
+    const qs = Object.keys(filtered).length ? "?" + new URLSearchParams(filtered as any).toString() : "";
     return apiFetch<any[]>(`/api/v1/appointments/${qs}`);
   },
   createAppointment: (body: object) => apiFetch("/api/v1/appointments/", { method: "POST", body: JSON.stringify(body) }),
@@ -302,6 +306,113 @@ export const api = {
   getDirectoryListing: () => apiFetch<any>("/api/v1/directory/my-listing"),
   directoryOptIn: (body: object) => apiFetch("/api/v1/directory/opt-in", { method: "POST", body: JSON.stringify(body) }),
   directoryOptOut: () => apiFetch("/api/v1/directory/opt-out", { method: "DELETE" }),
+
+  // CRM — Contacts enrichis
+  getContacts: (params?: { q?: string; tag_id?: string; inactive_only?: boolean; limit?: number; offset?: number }) => {
+    const filtered = Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined && v !== null));
+    const qs = Object.keys(filtered).length ? "?" + new URLSearchParams(filtered as any).toString() : "";
+    return apiFetch<{ contacts: any[]; total: number; offset: number; limit: number }>(`/api/v1/contacts/${qs}`);
+  },
+  getContact: (id: string) => apiFetch<any>(`/api/v1/contacts/${id}`),
+  updateContact: (id: string, body: { notes?: string; first_name?: string; last_name?: string; email?: string; phone?: string }) =>
+    apiFetch<any>(`/api/v1/contacts/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  importContactsCsv: async (file: File): Promise<{ created: number; skipped: number; errors: string[] }> => {
+    const headers = await getAuthHeaders();
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_URL}/api/v1/contacts/import`, { method: "POST", headers, body: form });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail ?? `HTTP ${res.status}`); }
+    return res.json();
+  },
+
+  // CRM — Tags
+  getTags: () => apiFetch<any[]>("/api/v1/tags"),
+  createTag: (body: { name: string; color: string }) =>
+    apiFetch<any>("/api/v1/tags", { method: "POST", body: JSON.stringify(body) }),
+  updateTag: (id: string, body: { name?: string; color?: string }) =>
+    apiFetch<any>(`/api/v1/tags/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteTag: (id: string) => apiFetch(`/api/v1/tags/${id}`, { method: "DELETE" }),
+  addTagToContact: (contactId: string, tagId: string) =>
+    apiFetch<any>(`/api/v1/contacts/${contactId}/tags/${tagId}`, { method: "POST" }),
+  removeTagFromContact: (contactId: string, tagId: string) =>
+    apiFetch(`/api/v1/contacts/${contactId}/tags/${tagId}`, { method: "DELETE" }),
+
+  // CRM — Relances
+  getReminders: (params?: { contact_id?: string; done?: boolean; upcoming_only?: boolean }) => {
+    const filtered = Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined));
+    const qs = Object.keys(filtered).length ? "?" + new URLSearchParams(filtered as any).toString() : "";
+    return apiFetch<any[]>(`/api/v1/reminders/${qs}`);
+  },
+  createReminder: (body: { contact_id: string; due_date: string; note?: string; reminder_type?: string; auto_send?: boolean }) =>
+    apiFetch<any>("/api/v1/reminders/", { method: "POST", body: JSON.stringify(body) }),
+  updateReminder: (id: string, body: { due_date?: string; note?: string; done?: boolean; reminder_type?: string; auto_send?: boolean }) =>
+    apiFetch<any>(`/api/v1/reminders/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteReminder: (id: string) => apiFetch(`/api/v1/reminders/${id}`, { method: "DELETE" }),
+  getReminderPreview: (id: string) =>
+    apiFetch<{ subject: string; body: string; contact_email: string; contact_name: string }>(
+      `/api/v1/reminders/${id}/preview`
+    ),
+  sendReminder: (id: string, opts?: { subject_override?: string; message_override?: string }) =>
+    apiFetch<{ sent: boolean; sent_at: string }>(`/api/v1/reminders/${id}/send`, {
+      method: "POST",
+      body: JSON.stringify(opts ?? {}),
+    }),
+
+  // CRM — Export CSV (téléchargement direct)
+  exportContactsCsv: async (): Promise<void> => {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/v1/contacts/export`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "contacts.csv"; a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  // CRM — Activités (timeline)
+  getActivities: (contactId: string) =>
+    apiFetch<any[]>(`/api/v1/contacts/${contactId}/activities`),
+  createActivity: (contactId: string, body: { type: string; content: string }) =>
+    apiFetch<any>(`/api/v1/contacts/${contactId}/activities`, { method: "POST", body: JSON.stringify(body) }),
+  deleteActivity: (contactId: string, activityId: string) =>
+    apiFetch(`/api/v1/contacts/${contactId}/activities/${activityId}`, { method: "DELETE" }),
+
+  // Pièces jointes par contact
+  listAttachments: (contactId: string) =>
+    apiFetch<any[]>(`/api/v1/contacts/${contactId}/attachments`),
+  uploadAttachment: async (contactId: string, file: File) => {
+    const headers = await getAuthHeaders();
+    const form = new FormData();
+    form.append("file", file);
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/api/v1/contacts/${contactId}/attachments`, {
+        method: "POST",
+        headers,
+        body: form,
+      });
+    } catch {
+      throw new Error("Service temporairement indisponible.");
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail ?? `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  deleteAttachment: (contactId: string, attachmentId: string) =>
+    apiFetch(`/api/v1/contacts/${contactId}/attachments/${attachmentId}`, { method: "DELETE" }),
+
+  // Campagnes email
+  getCampaigns: () => apiFetch<any[]>("/api/v1/campaigns/"),
+  getCampaignPreview: (segment: string, tagId?: string) => {
+    const qs = new URLSearchParams({ segment });
+    if (tagId) qs.set("tag_id", tagId);
+    return apiFetch<{ count: number }>(`/api/v1/campaigns/preview?${qs}`);
+  },
+  sendCampaign: (body: { name: string; subject: string; body: string; segment: string; tag_id?: string }) =>
+    apiFetch<any>("/api/v1/campaigns/", { method: "POST", body: JSON.stringify(body) }),
 
   // Booking public (sans auth)
   getPublicAvailableDays: (tenantSlug: string, year: number, month: number) => {

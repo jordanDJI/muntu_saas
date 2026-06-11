@@ -31,7 +31,7 @@ const TOUR_REQUIRED_FEATURE: Partial<Record<string, FeatureKey>> = {
 
 const NAV_HREFS = [
   { href: "/dashboard",              tKey: "nav_db",       icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg> },
-  { href: "/dashboard/leads",        tKey: "nav_leads",    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-4a4 4 0 11-8 0 4 4 0 018 0z"/></svg> },
+  { href: "/dashboard/contacts",     tKey: "nav_contacts",  icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-4a4 4 0 11-8 0 4 4 0 018 0z"/></svg> },
   { href: "/dashboard/appointments", tKey: "nav_appts",    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M16 2v4M8 2v4M3 10h18"/></svg> },
   { href: "/dashboard/site-builder", tKey: "nav_site",      icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path strokeLinecap="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg> },
   { href: "/dashboard/analytics",    tKey: "nav_analytics", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg> },
@@ -450,6 +450,70 @@ function ContactLimitBanner() {
   );
 }
 
+function RemindersBanner() {
+  const [reminders, setReminders] = useState<any[]>([]);
+  const [dismissed, setDismissed] = useState(false);
+
+  const todayKey = () => `klientys_reminders_dismissed_${new Date().toISOString().split("T")[0]}`;
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem(todayKey()) === "true") {
+      setDismissed(true);
+      return;
+    }
+    api.getReminders({ upcoming_only: true }).then(setReminders).catch(() => {});
+  }, []);
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    if (typeof window !== "undefined") localStorage.setItem(todayKey(), "true");
+  };
+
+  if (dismissed || reminders.length === 0) return null;
+
+  return (
+    <div style={{
+      background: "rgba(221,170,64,.12)",
+      borderBottom: "1px solid rgba(221,170,64,.28)",
+      padding: "10px 24px", display: "flex", alignItems: "center",
+      justifyContent: "space-between", gap: "16px", flexWrap: "wrap", fontSize: "13px",
+    }}>
+      <span style={{ color: "#DDAA40", fontWeight: 600 }}>
+        🔔 {reminders.length} relance{reminders.length > 1 ? "s" : ""} en attente —{" "}
+        {reminders.slice(0, 2).map((r, i) => (
+          <span key={r.id}>
+            {i > 0 && ", "}
+            <Link
+              href={`/dashboard/contacts/${r.contact_id}`}
+              style={{ color: "#DDAA40", textDecoration: "underline" }}
+            >
+              {r.contact?.first_name} {r.contact?.last_name}
+            </Link>
+            {r.note ? ` (${r.note})` : ""}
+          </span>
+        ))}
+        {reminders.length > 2 && ` +${reminders.length - 2} autre${reminders.length - 2 > 1 ? "s" : ""}`}
+      </span>
+      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <Link
+          href="/dashboard/reminders"
+          style={{
+            background: "var(--l-gold)", color: "#07222F", fontWeight: 700,
+            fontSize: "12px", padding: "5px 14px", borderRadius: "100px", textDecoration: "none",
+          }}
+        >
+          Voir les relances →
+        </Link>
+        <button
+          onClick={handleDismiss}
+          style={{ background: "none", border: "none", color: "#DDAA40", cursor: "pointer", fontSize: "16px", padding: "0 4px" }}
+          aria-label="Fermer"
+        >×</button>
+      </div>
+    </div>
+  );
+}
+
 function TrialBanner() {
   const { status, trialDaysLeft, loading } = useSubscription();
   const pathname = usePathname();
@@ -796,6 +860,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="pt-14">
         <TrialBanner />
         <ContactLimitBanner />
+        <RemindersBanner />
         {children}
       </div>
     </div>

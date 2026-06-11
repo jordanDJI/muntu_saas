@@ -13,10 +13,11 @@ router = APIRouter(prefix="/appointments", tags=["Appointments"])
 @router.get("/", response_model=list[AppointmentOut])
 async def list_appointments(
     status: str | None = None,
+    contact_id: str | None = None,
+    future_only: bool = False,
     tenant_id: str = Depends(get_current_tenant),
 ):
     supabase = get_supabase()
-    # Récupérer les calendar_ids du tenant d'abord
     calendars = supabase.table("calendar").select("id").eq("tenant_id", tenant_id).execute().data
     if not calendars:
         return []
@@ -30,6 +31,10 @@ async def list_appointments(
     )
     if status:
         query = query.eq("status", status)
+    if contact_id:
+        query = query.eq("contact_id", contact_id)
+    if future_only:
+        query = query.gte("scheduled_at", datetime.utcnow().isoformat())
     return query.execute().data
 
 

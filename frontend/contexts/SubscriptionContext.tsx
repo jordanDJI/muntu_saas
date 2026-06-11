@@ -16,6 +16,9 @@ export type PlanFeatures = {
   multi_tenant: boolean;
   booking: boolean;
   crm: boolean;
+  campaigns: boolean;
+  attachments_max: number;
+  attachment_file_max_mb: number;
 };
 
 export type FeatureKey = keyof PlanFeatures;
@@ -34,6 +37,9 @@ const ESSENTIEL_FEATURES: PlanFeatures = {
   multi_tenant: false,
   booking: true,
   crm: true,
+  campaigns: false,
+  attachments_max: 0,
+  attachment_file_max_mb: 0,
 };
 
 type SubscriptionCtx = {

@@ -465,3 +465,372 @@ def send_logo_request_admin(
         </div>
         """,
     })
+
+
+# ── CRM — Relance client ──────────────────────────────────────────────────────
+
+def _crm_lang(country: str) -> str:
+    """Déduit la langue de l'email depuis le pays du tenant."""
+    c = (country or "").upper()
+    if c in ("FR", "BE", "CH", "LU", "MC", "SN", "CI", "CM"):
+        return "fr"
+    if c in ("DE", "AT"):
+        return "de"
+    if c in ("NL",):
+        return "nl"
+    return "en"
+
+
+_CRM_TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
+    "fr": {
+        "post_service": {
+            "subject": "Comment s'est passée votre dernière visite ?",
+            "intro": "Suite à votre dernière visite, je souhaitais prendre de vos nouvelles.",
+        },
+        "reactivation": {
+            "subject": "On vous a pas vu depuis un moment !",
+            "intro": "Cela fait quelque temps que nous ne nous sommes pas vus. J'espère que vous allez bien.",
+        },
+        "quote_followup": {
+            "subject": "Votre devis en attente",
+            "intro": "Je reviens vers vous au sujet du devis que je vous ai transmis récemment.",
+        },
+        "payment": {
+            "subject": "Rappel de règlement",
+            "intro": "Je me permets de vous relancer concernant une facture en attente de règlement.",
+        },
+        "health_reminder": {
+            "subject": "Pensez à votre suivi",
+            "intro": "Il est temps de penser à votre prochain suivi. Ne tardez pas trop !",
+        },
+        "promo": {
+            "subject": "Une offre préparée pour vous",
+            "intro": "Je vous contacte pour vous faire part d'une offre spéciale.",
+        },
+        "custom": {
+            "subject": "",
+            "intro": "",
+        },
+    },
+    "en": {
+        "post_service": {
+            "subject": "How was your last session?",
+            "intro": "Following your last visit, I wanted to check in with you.",
+        },
+        "reactivation": {
+            "subject": "We haven't seen you in a while!",
+            "intro": "It's been a while since we last met. Hope you're doing well.",
+        },
+        "quote_followup": {
+            "subject": "Your pending quote",
+            "intro": "I'm following up on the quote I recently sent you.",
+        },
+        "payment": {
+            "subject": "Payment reminder",
+            "intro": "I'm reaching out regarding an outstanding invoice.",
+        },
+        "health_reminder": {
+            "subject": "Time for your follow-up",
+            "intro": "It's time to think about your next check-up. Don't wait too long!",
+        },
+        "promo": {
+            "subject": "A special offer for you",
+            "intro": "I'm getting in touch to share a special offer I've prepared for you.",
+        },
+        "custom": {
+            "subject": "",
+            "intro": "",
+        },
+    },
+    "de": {
+        "post_service": {
+            "subject": "Wie war Ihr letzter Besuch?",
+            "intro": "Im Anschluss an Ihren letzten Besuch wollte ich nachfragen, wie es Ihnen geht.",
+        },
+        "reactivation": {
+            "subject": "Wir haben Sie eine Weile nicht gesehen!",
+            "intro": "Es ist eine Weile her, dass wir uns zuletzt gesehen haben. Ich hoffe, es geht Ihnen gut.",
+        },
+        "quote_followup": {
+            "subject": "Ihr ausstehendes Angebot",
+            "intro": "Ich melde mich wegen des Angebots, das ich Ihnen kürzlich geschickt habe.",
+        },
+        "payment": {
+            "subject": "Zahlungserinnerung",
+            "intro": "Ich wende mich wegen einer ausstehenden Rechnung an Sie.",
+        },
+        "health_reminder": {
+            "subject": "Zeit für Ihre nächste Kontrolle",
+            "intro": "Es ist an der Zeit, an Ihre nächste Kontrolle zu denken. Warten Sie nicht zu lange!",
+        },
+        "promo": {
+            "subject": "Ein Angebot für Sie",
+            "intro": "Ich melde mich, um Ihnen ein besonderes Angebot mitzuteilen.",
+        },
+        "custom": {
+            "subject": "",
+            "intro": "",
+        },
+    },
+    "nl": {
+        "post_service": {
+            "subject": "Hoe was uw laatste bezoek?",
+            "intro": "Na uw laatste bezoek wilde ik even polsen hoe het met u gaat.",
+        },
+        "reactivation": {
+            "subject": "We hebben u al een tijdje niet gezien!",
+            "intro": "Het is een tijdje geleden dat we elkaar hebben gezien. Ik hoop dat alles goed met u gaat.",
+        },
+        "quote_followup": {
+            "subject": "Uw openstaande offerte",
+            "intro": "Ik neem contact met u op over de offerte die ik u onlangs heb gestuurd.",
+        },
+        "payment": {
+            "subject": "Betalingsherinnering",
+            "intro": "Ik neem contact met u op in verband met een openstaande factuur.",
+        },
+        "health_reminder": {
+            "subject": "Tijd voor uw opvolging",
+            "intro": "Het is tijd om aan uw volgende opvolging te denken. Wacht niet te lang!",
+        },
+        "promo": {
+            "subject": "Een aanbod voor u",
+            "intro": "Ik neem contact met u op om u een speciaal aanbod te delen.",
+        },
+        "custom": {
+            "subject": "",
+            "intro": "",
+        },
+    },
+}
+
+_CRM_I18N: dict[str, dict[str, str]] = {
+    "fr": {
+        "greeting":   "Bonjour {first_name},",
+        "cta":        "Prendre rendez-vous →",
+        "sign":       "Cordialement,",
+        "footer":     "Vous recevez cet email car vous êtes client(e) de {tenant}.",
+        "subject_fallback": "Message de {tenant}",
+    },
+    "en": {
+        "greeting":   "Hello {first_name},",
+        "cta":        "Book an appointment →",
+        "sign":       "Best regards,",
+        "footer":     "You're receiving this email because you are a customer of {tenant}.",
+        "subject_fallback": "Message from {tenant}",
+    },
+    "de": {
+        "greeting":   "Guten Tag {first_name},",
+        "cta":        "Termin buchen →",
+        "sign":       "Mit freundlichen Grüßen,",
+        "footer":     "Sie erhalten diese E-Mail, weil Sie Kunde von {tenant} sind.",
+        "subject_fallback": "Nachricht von {tenant}",
+    },
+    "nl": {
+        "greeting":   "Goedendag {first_name},",
+        "cta":        "Afspraak maken →",
+        "sign":       "Met vriendelijke groet,",
+        "footer":     "U ontvangt deze e-mail omdat u klant bent van {tenant}.",
+        "subject_fallback": "Bericht van {tenant}",
+    },
+}
+
+
+# Mapping couleurs Tailwind → hex (champ primary_color du site_style tenant)
+_TAILWIND_HEX: dict[str, str] = {
+    "indigo":  "#4f46e5",
+    "blue":    "#2563eb",
+    "teal":    "#0d9488",
+    "green":   "#16a34a",
+    "purple":  "#7c3aed",
+    "pink":    "#db2777",
+    "orange":  "#ea580c",
+    "red":     "#dc2626",
+    "yellow":  "#ca8a04",
+    "gray":    "#6b7280",
+    "slate":   "#475569",
+    "cyan":    "#0891b2",
+    "emerald": "#059669",
+    "violet":  "#7c3aed",
+    "rose":    "#e11d48",
+    "amber":   "#d97706",
+    "sky":     "#0284c7",
+    "lime":    "#65a30d",
+}
+_DEFAULT_BRAND = "#0D4B58"
+
+
+def _hex(color_name: str) -> str:
+    return _TAILWIND_HEX.get((color_name or "").lower(), _DEFAULT_BRAND)
+
+
+def build_crm_reminder_preview(
+    country: str,
+    reminder_type: str,
+    tenant_name: str,
+    contact_first_name: str,
+    note: str,
+) -> dict:
+    """
+    Retourne le sujet et le corps en texte brut pour pré-remplir
+    la modale d'édition avant envoi (sans envoyer l'email).
+    """
+    lang  = _crm_lang(country)
+    tpl   = _CRM_TEMPLATES.get(lang, _CRM_TEMPLATES["fr"]).get(reminder_type, _CRM_TEMPLATES["fr"]["custom"])
+    i18n  = _CRM_I18N.get(lang, _CRM_I18N["fr"])
+
+    subject = tpl["subject"] or i18n["subject_fallback"].format(tenant=tenant_name)
+
+    parts: list[str] = []
+    if tpl["intro"]:
+        parts.append(tpl["intro"])
+    if note and note.strip():
+        if parts:
+            parts.append("")  # ligne vide entre intro et note
+        parts.append(note.strip())
+
+    return {"subject": subject, "body": "\n".join(parts)}
+
+
+def send_crm_reminder_to_contact(
+    contact_email: str,
+    contact_first_name: str,
+    tenant_name: str,
+    tenant_country: str,
+    reminder_type: str,
+    note: str,
+    booking_url: str = "",
+    # Charte graphique du tenant (depuis site.site_style)
+    primary_color: str = "",      # nom Tailwind, ex: "indigo"
+    logo_url: str = "",
+    logo_option: str = "text_only",
+    subject_override: str = "",   # permet à la modale d'envoyer un sujet édité
+    message_override: str = "",   # idem pour le corps
+    reply_url: str = "",          # mailto: ou URL formulaire de contact du tenant
+) -> None:
+    """
+    Envoie une relance CRM au contact (client) au nom du tenant,
+    avec la charte graphique du site (couleur, logo).
+    """
+    lang  = _crm_lang(tenant_country)
+    tpl   = _CRM_TEMPLATES.get(lang, _CRM_TEMPLATES["fr"]).get(reminder_type, _CRM_TEMPLATES["fr"]["custom"])
+    i18n  = _CRM_I18N.get(lang, _CRM_I18N["fr"])
+    brand = _hex(primary_color)
+
+    subject  = subject_override or tpl["subject"] or i18n["subject_fallback"].format(tenant=tenant_name)
+    greeting = i18n["greeting"].format(first_name=contact_first_name)
+    sign     = i18n["sign"]
+    footer   = i18n["footer"].format(tenant=tenant_name)
+    cta_text = i18n["cta"]
+
+    # Corps du message : override (modale) ou intro_type + note
+    body_text = message_override.strip() if message_override and message_override.strip() else None
+
+    intro_block = ""
+    note_block  = ""
+    if body_text:
+        # Texte libre édité par le tenant dans la modale
+        note_block = (
+            f'<div style="margin:16px 0;padding:14px 18px;background:#f8fafc;'
+            f'border-left:4px solid {brand};border-radius:4px">'
+            f'<p style="margin:0;color:#1e293b;white-space:pre-wrap;line-height:1.65">{body_text}</p>'
+            f'</div>'
+        )
+    else:
+        if tpl["intro"]:
+            intro_block = f'<p style="color:#374151;line-height:1.7;margin:0 0 14px">{tpl["intro"]}</p>'
+        if note and note.strip():
+            note_block = (
+                f'<div style="margin:16px 0;padding:14px 18px;background:#f8fafc;'
+                f'border-left:4px solid {brand};border-radius:4px">'
+                f'<p style="margin:0;color:#1e293b;white-space:pre-wrap;line-height:1.65">{note.strip()}</p>'
+                f'</div>'
+            )
+
+    cta_btn = f"background:{brand};color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block"
+    cta_block = (
+        f'<div style="margin:24px 0"><a href="{booking_url}" style="{cta_btn}">{cta_text}</a></div>'
+        if booking_url else ""
+    )
+
+    # En-tête : logo image ou nom en texte coloré
+    if logo_url and logo_option == "image":
+        header_block = (
+            f'<div style="margin-bottom:28px">'
+            f'<img src="{logo_url}" alt="{tenant_name}" style="max-height:56px;max-width:200px;object-fit:contain">'
+            f'</div>'
+        )
+    else:
+        header_block = (
+            f'<div style="margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid {brand}">'
+            f'<span style="font-size:20px;font-weight:700;color:{brand}">{tenant_name}</span>'
+            f'</div>'
+        )
+
+    reply_block = (
+        f'<p style="color:#9ca3af;font-size:12px;margin:8px 0 0">'
+        f'<a href="{reply_url}" style="color:#6b7280;text-decoration:underline">'
+        f'Pour répondre à ce message, cliquez ici →</a></p>'
+    ) if reply_url else ""
+
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff">
+      {header_block}
+      <p style="color:#374151;line-height:1.7;margin:0 0 14px">{greeting}</p>
+      {intro_block}
+      {note_block}
+      {cta_block}
+      <p style="color:#374151;line-height:1.7;margin:24px 0 2px">{sign}</p>
+      <p style="color:{brand};font-weight:600;margin:0">{tenant_name}</p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
+      <p style="color:#9ca3af;font-size:12px;line-height:1.6;margin:0">{footer}</p>
+      {reply_block}
+    </div>
+    """
+
+    resend.Emails.send({
+        "from":    f"{tenant_name} <{settings.email_from}>",
+        "to":      [contact_email],
+        "subject": subject,
+        "html":    html,
+    })
+
+
+async def send_campaign_email(
+    to_email: str,
+    to_name: str,
+    subject: str,
+    body: str,
+    sender_name: str,
+    reply_url: str = "",
+) -> None:
+    """Envoie un email de campagne à un contact."""
+    body_html = "".join(
+        f"<p style='color:#374151;line-height:1.7;margin:0 0 14px'>{line}</p>"
+        if line.strip() else "<br>"
+        for line in body.split("\n")
+    )
+    reply_block = (
+        f'<p style="color:#9ca3af;font-size:12px;margin:8px 0 0">'
+        f'<a href="{reply_url}" style="color:#6b7280;text-decoration:underline">'
+        f'Pour répondre à ce message, cliquez ici →</a></p>'
+    ) if reply_url else ""
+    html = f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff">
+      <div style="margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid #4f46e5">
+        <span style="font-size:20px;font-weight:700;color:#4f46e5">{sender_name}</span>
+      </div>
+      {body_html}
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
+      <p style="color:#9ca3af;font-size:12px;margin:0">
+        Vous recevez cet email car vous êtes client de {sender_name}.
+      </p>
+      {reply_block}
+    </div>
+    """
+    resend.Emails.send({
+        "from": f"{sender_name} <{settings.email_from}>",
+        "to":   [to_email],
+        "subject": subject,
+        "html": html,
+    })

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
 import { useLanguage } from "../../../contexts/LanguageContext";
+import { useSubscription } from "../../../contexts/SubscriptionContext";
 
 const PAGE_SIZE = 10;
 
@@ -26,6 +27,7 @@ type LinkModal = {
 
 export default function LeadsPage() {
   const { t } = useLanguage();
+  const { hasFeature } = useSubscription();
   const router = useRouter();
 
   const STATUS_LABELS: Record<string, string> = {
@@ -57,6 +59,23 @@ export default function LeadsPage() {
   const [copied, setCopied] = useState(false);
   const [noteSaving, setNoteSaving] = useState<string | null>(null);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [viewMode, setViewMode] = useState<"list" | "kanban">(() => {
+    if (typeof window !== "undefined") return (localStorage.getItem("leads_view") as any) ?? "list";
+    return "list";
+  });
+  const [kanbanLeads, setKanbanLeads] = useState<any[]>([]);
+  const [kanbanLoading, setKanbanLoading] = useState(false);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+
+  type SchedulingModal = {
+    leadId: string;
+    contactId: string;
+    contactName: string;
+    appointments: any[];
+    selectedApptId: string;
+    loading: boolean;
+  };
+  const [schedulingModal, setSchedulingModal] = useState<SchedulingModal | null>(null);
 
   const offsetRef = useRef(0);
   const loadingRef = useRef(false);
@@ -82,10 +101,11 @@ export default function LeadsPage() {
   }, []);
 
   useEffect(() => {
+    if (!hasFeature("agent_support")) return;
     api.getTelegramBotInfo()
       .then((info) => setBotUsername(info.username))
       .catch(() => {});
-  }, []);
+  }, [hasFeature]);
 
   useEffect(() => {
     api.getLeads({ limit: 500, offset: 0 })
@@ -93,6 +113,7 @@ export default function LeadsPage() {
         const counts: Record<string, number> = {};
         for (const l of all) counts[l.status] = (counts[l.status] ?? 0) + 1;
         setStatusCounts(counts);
+        setKanbanLeads(all); // réutilise les mêmes données pour le kanban
       })
       .catch(() => {});
   }, []);
@@ -114,9 +135,54 @@ export default function LeadsPage() {
     return () => observer.disconnect();
   }, [hasMore, filter, loadPage]);
 
-  const updateStatus = async (id: string, newStatus: string) => {
+  const switchView = (mode: "list" | "kanban") => {
+    setViewMode(mode);
+    localStorage.setItem("leads_view", mode);
+    if (mode === "kanban" && kanbanLeads.length === 0) loadKanban();
+  };
+
+  const loadKanban = async () => {
+    setKanbanLoading(true);
+    try {
+      const data = await api.getLeads({ limit: 500, offset: 0 });
+      setKanbanLeads(data);
+    } finally { setKanbanLoading(false); }
+  };
+
+  const applyStatus = async (id: string, newStatus: string) => {
     await api.updateLead(id, { status: newStatus });
-    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status: newStatus } : l)));
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, status: newStatus } : l));
+    setKanbanLeads(prev => prev.map(l => l.id === id ? { ...l, status: newStatus } : l));
+    setStatusCounts(prev => {
+      const lead = [...leads, ...kanbanLeads].find(l => l.id === id);
+      if (!lead) return prev;
+      const next = { ...prev };
+      if (next[lead.status] > 0) next[lead.status]--;
+      next[newStatus] = (next[newStatus] ?? 0) + 1;
+      return next;
+    });
+  };
+
+  const updateStatus = async (id: string, newStatus: string) => {
+    const lead = [...leads, ...kanbanLeads].find(l => l.id === id);
+    const oldStatus = lead?.status;
+
+    // Interception tout statut → RDV planifié
+    if (newStatus === "scheduled" && oldStatus !== "scheduled") {
+      const contactId = lead?.contact_id ?? lead?.contact?.id;
+      const contactName = [lead?.contact?.first_name, lead?.contact?.last_name].filter(Boolean).join(" ") || "—";
+      setSchedulingModal({ leadId: id, contactId, contactName, appointments: [], selectedApptId: "", loading: true });
+      try {
+        const appts = await api.getAppointments({ contact_id: contactId, future_only: true });
+        const active = appts.filter(a => a.status !== "cancelled" && a.status !== "refused");
+        setSchedulingModal(m => m ? { ...m, appointments: active, selectedApptId: active[0]?.id ?? "", loading: false } : null);
+      } catch {
+        setSchedulingModal(m => m ? { ...m, loading: false } : null);
+      }
+      return;
+    }
+
+    await applyStatus(id, newStatus);
   };
 
   const saveNote = async (id: string, note: string) => {
@@ -155,19 +221,132 @@ export default function LeadsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold">{t.lead_title}</h1>
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          {t.sett_back}
-        </button>
+    <div className={`mx-auto p-4 sm:p-6 space-y-5 ${viewMode === "kanban" ? "max-w-full" : "max-w-4xl"}`}>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="text-xl sm:text-2xl font-bold">{t.lead_title}</h1>
+        <div className="flex items-center gap-2">
+          {/* Toggle vue */}
+          <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+            <button onClick={() => switchView("list")}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === "list" ? "bg-white shadow text-primary-700" : "text-gray-500 hover:text-gray-700"}`}>
+              <svg className="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+              </svg>
+              {t.leads_view_list}
+            </button>
+            <button onClick={() => switchView("kanban")}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${viewMode === "kanban" ? "bg-white shadow text-primary-700" : "text-gray-500 hover:text-gray-700"}`}>
+              <svg className="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="16" rx="1"/>
+              </svg>
+              {t.leads_view_kanban}
+            </button>
+          </div>
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            <span className="hidden sm:inline">{t.sett_back}</span>
+          </button>
+        </div>
       </div>
+
+      {/* ── VUE KANBAN ──────────────────────────────────────────────────── */}
+      {viewMode === "kanban" && (
+        <div className="overflow-x-auto pb-4">
+          {kanbanLoading
+            ? <div className="text-center py-16 text-gray-400">Chargement…</div>
+            : (
+              <div className="flex gap-3 min-w-max">
+                {STATUSES.map(col => {
+                  const cards = kanbanLeads.filter(l => l.status === col);
+                  const isOver = dragOverCol === col;
+
+                  // Couleurs identiques aux badges de la vue liste
+                  const COL_STYLE: Record<string, { bg: string; text: string; border: string; colBg: string }> = {
+                    new:         { bg: "#E0F7FA", text: "#0D4B58", border: "#80DEEA", colBg: "#F0FAFB" },
+                    contacted:   { bg: "#FFF8E1", text: "#6D4C00", border: "#FFE082", colBg: "#FFFDF0" },
+                    qualified:   { bg: "#EEF2FF", text: "#1E3A8A", border: "#A5B4FC", colBg: "#F5F7FF" },
+                    scheduled:   { bg: "#F0EFFE", text: "#4338CA", border: "#A78BFA", colBg: "#F7F5FF" },
+                    closed_won:  { bg: "#F0FDF4", text: "#14532D", border: "#86EFAC", colBg: "#F5FFF8" },
+                    closed_lost: { bg: "#FEF2F2", text: "#991B1B", border: "#FCA5A5", colBg: "#FFF8F8" },
+                  };
+                  const cs = COL_STYLE[col] ?? { bg: "#F3F4F6", text: "#374151", border: "#D1D5DB", colBg: "#F9FAFB" };
+
+                  return (
+                    <div key={col}
+                      onDragOver={e => { e.preventDefault(); setDragOverCol(col); }}
+                      onDragLeave={() => setDragOverCol(null)}
+                      onDrop={e => {
+                        e.preventDefault();
+                        const leadId = e.dataTransfer.getData("lead_id");
+                        if (leadId) updateStatus(leadId, col);
+                        setDragOverCol(null);
+                      }}
+                      style={{ borderColor: isOver ? cs.border : cs.border, backgroundColor: isOver ? cs.bg : cs.colBg }}
+                      className="w-64 flex flex-col rounded-2xl border-2 transition-colors">
+                      {/* En-tête colonne — couleur du badge statut */}
+                      <div style={{ backgroundColor: cs.bg, borderBottomColor: cs.border }}
+                        className="px-3 py-2.5 flex items-center justify-between border-b rounded-t-2xl">
+                        <span style={{ color: cs.text }} className="text-xs font-bold uppercase tracking-wide">{STATUS_LABELS[col]}</span>
+                        <span style={{ background: "white", color: cs.text, borderColor: cs.border }}
+                          className="text-xs font-bold border rounded-full px-2 py-0.5">{cards.length}</span>
+                      </div>
+                      {/* Cartes */}
+                      <div className="flex-1 p-2 space-y-2 min-h-[120px]">
+                        {cards.map(lead => {
+                          const contactName = [lead.contact?.first_name, lead.contact?.last_name].filter(Boolean).join(" ") || "—";
+                          return (
+                            <div key={lead.id}
+                              draggable
+                              onDragStart={e => e.dataTransfer.setData("lead_id", lead.id)}
+                              style={{ borderLeftColor: cs.border }}
+                              className="bg-white rounded-xl border border-gray-100 border-l-4 shadow-sm p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-all group">
+                              <p className="font-semibold text-sm text-gray-900 truncate">{contactName}</p>
+                              {lead.contact?.email && (
+                                <p className="text-xs text-gray-400 truncate">{lead.contact.email}</p>
+                              )}
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                <span className="text-xs text-gray-400">
+                                  {new Date(lead.created_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                                </span>
+                                <select
+                                  value={lead.status}
+                                  onChange={e => updateStatus(lead.id, e.target.value)}
+                                  onClick={e => e.stopPropagation()}
+                                  className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-primary-400 max-w-[110px]">
+                                  {STATUSES.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                                </select>
+                              </div>
+                              {lead.notes && (
+                                <p className="mt-1.5 text-xs text-gray-500 italic line-clamp-2 border-t border-gray-50 pt-1.5">
+                                  {lead.notes}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {cards.length === 0 && (
+                          <div style={{ borderColor: cs.border, color: cs.text }}
+                            className="h-16 flex items-center justify-center rounded-xl border-2 border-dashed text-xs opacity-40 transition-colors">
+                            —
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          }
+        </div>
+      )}
+
+      {/* ── VUE LISTE ────────────────────────────────────────────────────── */}
+      {viewMode === "list" && <>
 
       {/* Filtres par statut */}
       <div id="leads-filters" className="flex gap-2 flex-wrap">
@@ -325,6 +504,126 @@ export default function LeadsPage() {
           <p className="text-center text-xs text-gray-400 py-2">Tous les leads sont affichés.</p>
         )}
       </div>
+
+      </> /* fin vue liste */}
+
+      {/* ── Modal Qualifié → RDV planifié ───────────────────────────────── */}
+      {schedulingModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full sm:rounded-2xl shadow-2xl max-w-lg max-h-[90dvh] flex flex-col rounded-t-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-lg text-gray-900">Passage à "RDV planifié"</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{schedulingModal.contactName}</p>
+              </div>
+              <button onClick={() => setSchedulingModal(null)}
+                className="text-gray-400 hover:text-gray-700 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">×</button>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 px-5 py-5">
+              {schedulingModal.loading ? (
+                <div className="text-center py-8 text-gray-400">Vérification des rendez-vous…</div>
+              ) : schedulingModal.appointments.length > 0 ? (
+                /* ── CAS 1 : RDV futurs trouvés ── */
+                <div className="space-y-4">
+                  <div className="flex gap-2.5 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                    <svg className="w-4 h-4 text-green-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <p className="text-xs text-green-800 leading-relaxed">
+                      {schedulingModal.appointments.length} rendez-vous futur{schedulingModal.appointments.length > 1 ? "s" : ""} trouvé{schedulingModal.appointments.length > 1 ? "s" : ""} pour ce contact. Choisissez celui qui correspond à cette demande.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    {schedulingModal.appointments.map(a => {
+                      const d = new Date(a.scheduled_at);
+                      const dateStr = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+                      const timeStr = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+                      const isSelected = schedulingModal.selectedApptId === a.id;
+                      return (
+                        <label key={a.id}
+                          className={`flex items-start gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-colors ${isSelected ? "border-primary-400 bg-primary-50" : "border-gray-200 hover:border-gray-300"}`}>
+                          <input type="radio" name="appt" value={a.id} checked={isSelected}
+                            onChange={() => setSchedulingModal(m => m ? { ...m, selectedApptId: a.id } : null)}
+                            className="accent-primary-600 w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="font-semibold text-sm text-gray-900 capitalize">{dateStr} à {timeStr}</p>
+                            {a.service_offer?.name && <p className="text-xs text-gray-500">{a.service_offer.name}</p>}
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full mt-1 inline-block ${a.status === "confirmed" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                              {a.status === "confirmed" ? "Confirmé" : "En attente"}
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* ── CAS 2 : Aucun RDV futur ── */
+                <div className="space-y-4">
+                  <div className="flex gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                    <svg className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      Aucun rendez-vous futur trouvé pour <strong>{schedulingModal.contactName}</strong>. Pour passer en "RDV planifié", vous devez d'abord créer un rendez-vous avec ce client.
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-600">Ou si la situation a changé, vous pouvez fermer ce lead directement :</p>
+                  <div className="flex gap-2">
+                    <button onClick={async () => { await applyStatus(schedulingModal.leadId, "closed_won"); setSchedulingModal(null); }}
+                      className="flex-1 rounded-xl border-2 border-green-200 bg-green-50 text-green-800 py-2.5 text-sm font-semibold hover:bg-green-100 active:scale-95 transition-all">
+                      ✓ Marquer Gagné
+                    </button>
+                    <button onClick={async () => { await applyStatus(schedulingModal.leadId, "closed_lost"); setSchedulingModal(null); }}
+                      className="flex-1 rounded-xl border-2 border-red-200 bg-red-50 text-red-700 py-2.5 text-sm font-semibold hover:bg-red-100 active:scale-95 transition-all">
+                      ✗ Marquer Perdu
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-2 px-5 py-4 flex-shrink-0 border-t border-gray-100">
+              {schedulingModal.appointments.length > 0 ? (
+                <>
+                  <button onClick={() => setSchedulingModal(null)}
+                    className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 active:scale-95 transition-all">
+                    Annuler
+                  </button>
+                  <button
+                    disabled={!schedulingModal.selectedApptId}
+                    onClick={async () => {
+                      await applyStatus(schedulingModal.leadId, "scheduled");
+                      setSchedulingModal(null);
+                    }}
+                    className="flex-1 rounded-xl bg-primary-600 text-white py-2.5 text-sm font-semibold hover:bg-primary-700 disabled:opacity-40 active:scale-95 transition-all shadow-sm">
+                    Confirmer — passer en RDV planifié →
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setSchedulingModal(null)}
+                    className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-500 hover:bg-gray-50 active:scale-95 transition-all">
+                    Annuler
+                  </button>
+                  <a href={`/dashboard/appointments`}
+                    onClick={() => applyStatus(schedulingModal.leadId, "scheduled")}
+                    className="flex-1 rounded-xl bg-primary-600 text-white py-2.5 text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all shadow-sm flex items-center justify-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <rect x="3" y="4" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M16 2v4M8 2v4M3 10h18"/>
+                    </svg>
+                    Créer un RDV →
+                  </a>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal lien Telegram */}
       {linkModal && (

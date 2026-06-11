@@ -295,11 +295,13 @@ export default function LandingPage() {
               <h3>{t.lp_feat3_t}</h3>
               <p>{t.lp_feat3_d}</p>
               <ul className="l-feat-list">
-                <li>Pipeline visuel de leads</li>
+                <li>Pipeline visuel Kanban &amp; liste de leads</li>
+                <li>Timeline horodatée des échanges par client</li>
+                <li>Pièces jointes par contact (ordonnances, devis…)</li>
+                <li>Campagnes email ciblées (clients inactifs, étiquette)</li>
+                <li>Export CSV &amp; import de contacts</li>
                 <li>Agents IA Telegram, WhatsApp &amp; email</li>
-                <li>Analytics comportementaux du site</li>
-                <li>Potentiel de demande locale (Google Trends)</li>
-                <li>Multi-utilisateurs &amp; gestion d&apos;équipe</li>
+                <li>Analytics comportementaux + potentiel de demande locale</li>
               </ul>
             </div>
 
@@ -432,6 +434,7 @@ export default function LandingPage() {
                 <li>Réservations en ligne</li>
                 <li>100 contacts CRM</li>
                 <li>Emails automatiques (RDV, rappels)</li>
+                <li>Export CSV des contacts</li>
                 <li>Agent IA vitrine (chatbot public)</li>
                 <li>Annuaire professionnel public</li>
                 <li>Support email</li>
@@ -455,6 +458,9 @@ export default function LandingPage() {
                 <li>Site vitrine complet</li>
                 <li>Réservations illimitées</li>
                 <li>1 000 contacts CRM</li>
+                <li>Timeline, Kanban &amp; notes horodatées</li>
+                <li><strong>5 pièces jointes/contact</strong> (ordonnances, devis…)</li>
+                <li>Campagnes email ciblées</li>
                 <li>3 agents IA (vitrine, support client, assistant)</li>
                 <li>Analytics + Potentiel de demande locale</li>
                 <li>Domaine personnalisé inclus</li>
@@ -478,6 +484,8 @@ export default function LandingPage() {
               <ul className="l-price-features">
                 <li>Tout du plan Pro</li>
                 <li>Contacts illimités</li>
+                <li><strong>10 pièces jointes/contact</strong> · packs supplémentaires disponibles</li>
+                <li>Campagnes email illimitées</li>
                 <li>Personnalisation CSS avancée</li>
                 <li>Multi-espaces de travail</li>
                 <li>Membres d&apos;équipe illimités</li>

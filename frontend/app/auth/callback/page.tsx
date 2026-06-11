@@ -78,14 +78,15 @@ export default function AuthCallbackPage() {
         localStorage.removeItem("klientys_pending_setup");
         localStorage.removeItem("klientys_tenant_id");
         const provider = session.user.app_metadata?.provider;
-        if (provider === "google") {
+        if (provider === "google" || provider === "linkedin_oidc" || provider === "facebook") {
           try {
             await fetch(`${API}/api/v1/auth/ensure-profile`, {
               method: "POST",
               headers: { Authorization: `Bearer ${session.access_token}` },
             });
           } catch { /* non bloquant */ }
-          api.logActivity({ action: "Connexion", detail: "Via Google" }).catch(() => {});
+          const providerLabel = provider === "linkedin_oidc" ? "LinkedIn" : provider === "facebook" ? "Facebook" : "Google";
+          api.logActivity({ action: "Connexion", detail: `Via ${providerLabel}` }).catch(() => {});
         }
         router.replace("/dashboard");
         return;

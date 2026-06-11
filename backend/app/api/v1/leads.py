@@ -53,14 +53,24 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
     if body.email and str(body.email).strip().lower() in _get_team_emails(supabase, tenant_id):
         raise HTTPException(status_code=403, detail=_TEAM_EMAIL_ERROR)
 
-    contact = supabase.table("contact").insert({
-        "tenant_id": tenant_id,
-        "first_name": body.first_name,
-        "last_name": body.last_name,
-        "email": str(body.email) if body.email else None,
-        "phone": body.phone,
-        "contact_type": body.contact_type,
-    }).execute().data[0]
+    # Chercher un contact existant par email pour éviter les doublons
+    email_val = str(body.email).strip().lower() if body.email else None
+    existing = None
+    if email_val:
+        res = supabase.table("contact").select("id").eq("tenant_id", tenant_id).eq("email", email_val).execute()
+        existing = res.data[0] if res.data else None
+
+    if existing:
+        contact = existing
+    else:
+        contact = supabase.table("contact").insert({
+            "tenant_id": tenant_id,
+            "first_name": body.first_name,
+            "last_name": body.last_name,
+            "email": email_val,
+            "phone": body.phone,
+            "contact_type": body.contact_type,
+        }).execute().data[0]
 
     stage = supabase.table("pipeline_stage").select("id").eq("tenant_id", tenant_id).eq("position", 1).single().execute().data
     lead_data = {

@@ -4,7 +4,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime, timedelta, timezone
 from app.core.supabase import get_supabase_admin
-from app.services.email import send_appointment_reminder
+from app.services.email import send_appointment_reminder, send_crm_reminder_to_contact
 
 scheduler = AsyncIOScheduler(timezone="Europe/Brussels")
 logger = logging.getLogger(__name__)
@@ -146,6 +146,69 @@ async def run_synthesis_worker() -> None:
         logger.info("Synthesis generated for tenant %s (%d messages)", tenant_id, len(raw_lines))
 
 
+# ── Relances CRM auto-send ────────────────────────────────────────────────────
+
+async def send_crm_auto_reminders() -> None:
+    """
+    Chaque matin à 8h : envoie les relances CRM dont auto_send=true et due_date=today.
+    Utilise sent_at pour éviter les doublons.
+    """
+    from app.core.config import settings as cfg
+
+    sb = get_supabase_admin()
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    try:
+        rows = (
+            sb.table("contact_reminder")
+            .select(
+                "id, note, reminder_type, tenant_id, "
+                "contact(first_name, last_name, email), "
+                "tenant(name, country, slug, site(site_style))"
+            )
+            .eq("due_date", today)
+            .eq("auto_send", True)
+            .eq("done", False)
+            .is_("sent_at", "null")
+            .execute()
+        ).data or []
+    except Exception as exc:
+        logger.error("CRM auto-reminders query failed: %s", exc)
+        return
+
+    for row in rows:
+        contact = row.get("contact") or {}
+        tenant  = row.get("tenant") or {}
+        email   = contact.get("email")
+        if not email:
+            continue
+
+        sites       = tenant.get("site") or []
+        site_style  = (sites[0].get("site_style") or {}) if sites else {}
+        slug        = tenant.get("slug", "")
+        booking_url = f"{cfg.frontend_url}/{slug}" if slug else ""
+
+        try:
+            await asyncio.to_thread(
+                send_crm_reminder_to_contact,
+                contact_email=email,
+                contact_first_name=contact.get("first_name", ""),
+                tenant_name=tenant.get("name", ""),
+                tenant_country=tenant.get("country", "BE"),
+                reminder_type=row.get("reminder_type", "custom"),
+                note=row.get("note") or "",
+                booking_url=booking_url,
+                primary_color=site_style.get("primary_color", ""),
+                logo_url=site_style.get("logo_url", ""),
+                logo_option=site_style.get("logo_option", "text_only"),
+            )
+            now = datetime.now(timezone.utc).isoformat()
+            sb.table("contact_reminder").update({"sent_at": now}).eq("id", row["id"]).execute()
+            logger.info("CRM auto-reminder sent for reminder %s", row["id"])
+        except Exception as exc:
+            logger.error("CRM auto-reminder failed for %s: %s", row.get("id"), exc)
+
+
 # ── Démarrage / arrêt ─────────────────────────────────────────────────────────
 
 def start_scheduler() -> None:
@@ -161,6 +224,15 @@ def start_scheduler() -> None:
         run_synthesis_worker,
         IntervalTrigger(minutes=30),
         id="synthesis_worker",
+        replace_existing=True,
+    )
+    # Relances CRM auto-send : chaque jour à 8h00 (Europe/Brussels)
+    scheduler.add_job(
+        send_crm_auto_reminders,
+        "cron",
+        hour=8,
+        minute=0,
+        id="crm_auto_reminders",
         replace_existing=True,
     )
     scheduler.start()

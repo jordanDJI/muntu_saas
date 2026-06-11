@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
+import { useLanguage } from "../../../contexts/LanguageContext";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -11,6 +12,7 @@ type Appointment = {
   scheduled_at: string;
   end_at: string;
   service_offer_id?: string;
+  contact_id?: string;
   notes?: string;
   contact?: { first_name: string; last_name: string; email: string; phone?: string };
   service_offer?: { name: string };
@@ -127,6 +129,7 @@ function NewClientModal({ initialName, onConfirm, onClose }: {
   onConfirm: (data: NewClientData) => void;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const parts = initialName.trim().split(" ");
   const [fn, setFn]         = useState(parts[0] ?? "");
   const [ln, setLn]         = useState(parts.slice(1).join(" "));
@@ -142,6 +145,13 @@ function NewClientModal({ initialName, onConfirm, onClose }: {
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
         <div className="p-5 space-y-3">
+          {/* Explication */}
+          <div className="flex gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+            <svg className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p className="text-xs text-blue-700 leading-relaxed">{t.new_client_explain}</p>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-medium text-gray-600">Prénom *</label>
@@ -201,6 +211,7 @@ function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose
   offers: { id: string; name: string }[];
   onSave: () => void; onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const [dur, setDur]               = useState(durationMin);
   const [serviceId, setService]     = useState("");
   const [contact, setContact]       = useState<Contact | null>(null);
@@ -261,6 +272,13 @@ function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose
           </div>
           {/* Body */}
           <div className="p-4 space-y-3">
+            {/* Explication */}
+            <div className="flex gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+              <svg className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <p className="text-xs text-blue-700 leading-relaxed">{t.new_appt_explain}</p>
+            </div>
             {clientLabel ? (
               <div className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-primary-50">
                 <span className="text-sm font-medium text-primary-800">{clientLabel}</span>
@@ -623,6 +641,8 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
   onUpdate: () => void;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
+  const router = useRouter();
   const pad = (n: number) => String(n).padStart(2, "0");
   const initDt = new Date(appt.scheduled_at);
   const [editing, setEditing]         = useState(false);
@@ -658,6 +678,13 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
           <h3 className="font-bold text-lg">{appt.contact?.first_name} {appt.contact?.last_name}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 leading-none">✕</button>
         </div>
+        {/* Explication */}
+        <div className="flex gap-2 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5">
+          <svg className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <p className="text-xs text-blue-700 leading-relaxed">{t.appt_modal_explain}</p>
+        </div>
         {appt.contact?.email && <p className="text-sm text-gray-500">{appt.contact.email}</p>}
 
         {!editing ? (
@@ -688,6 +715,17 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
                 </button>
               )}
             </div>
+            {appt.contact_id && (
+              <button
+                onClick={() => { onClose(); router.push(`/dashboard/contacts/${appt.contact_id}`); }}
+                className="w-full inline-flex items-center justify-center gap-2 border border-gray-200 rounded-lg py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                </svg>
+                Voir la fiche contact
+              </button>
+            )}
             {appt.status === "pending" && (
               <div className="flex gap-2">
                 <button onClick={() => onConfirm(appt.id)}

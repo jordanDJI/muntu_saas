@@ -13,6 +13,9 @@ ESSENTIEL_FEATURES: dict = {
     "booking": True,
     "crm": True,
     "custom_domain": False,
+    "campaigns": False,
+    "attachments_max": 0,
+    "attachment_file_max_mb": 0,
 }
 
 BUSINESS_FEATURES: dict = {
@@ -30,6 +33,9 @@ BUSINESS_FEATURES: dict = {
     "booking": True,
     "crm": True,
     "custom_domain": True,
+    "campaigns": True,
+    "attachments_max": 10,
+    "attachment_file_max_mb": 45,
 }
 
 
@@ -48,6 +54,9 @@ PRO_FEATURES: dict = {
     "booking": True,
     "crm": True,
     "custom_domain": True,
+    "campaigns": True,
+    "attachments_max": 5,
+    "attachment_file_max_mb": 45,
 }
 
 PLAN_FEATURES: dict = {

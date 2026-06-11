@@ -165,7 +165,7 @@ async def get_calendar_appointments(
     cal_id = _ensure_calendar(sb, tenant_id)
     q = (
         sb.table("appointment")
-        .select("id, status, scheduled_at, end_at, notes, service_offer_id, contact(first_name, last_name, email, phone), service_offer(name)")
+        .select("id, status, scheduled_at, end_at, notes, service_offer_id, contact_id, contact(first_name, last_name, email, phone), service_offer(name)")
         .eq("calendar_id", cal_id)
         .neq("status", "cancelled")
     )
