@@ -50,7 +50,7 @@ const STATUS_LABEL: Record<string, string> = {
   active: "Actif", trialing: "Stripe trial", trial: "Essai", trial_expired: "Expiré", suspended: "Suspendu",
 };
 
-const KNOWN_FEATURES = ["analytics", "agent_vitrine", "agent_support", "agent_assistant", "custom_domain", "booking", "crm", "multi_page_site", "multi_tenant"];
+const KNOWN_FEATURES = ["analytics", "agent_vitrine", "agent_support", "agent_assistant", "custom_domain", "booking", "crm", "multi_page_site", "multi_tenant", "campaigns", "attachments_max", "attachment_file_max_mb"];
 
 export default function TenantDetailPage() {
   const { id }   = useParams<{ id: string }>();
@@ -286,11 +286,14 @@ export default function TenantDetailPage() {
           </InfoCard>
 
           <InfoCard title="Données">
-            <Row label="RDV"      value={String(counts.appointments)} />
-            <Row label="Contacts" value={String(counts.contacts)}     />
-            <Row label="Leads"    value={String(counts.leads)}        />
-            <Row label="Site"     value={site ? `${site.title ?? "Sans titre"} (${site.status})` : "Aucun"} />
-            <Row label="Domaine"  value={domain ? `${domain.domain} (${domain.status})` : "Aucun"} />
+            <Row label="RDV"          value={String(counts.appointments)} />
+            <Row label="Contacts"     value={String(counts.contacts)}     />
+            <Row label="Leads"        value={String(counts.leads)}        />
+            <Row label="Campagnes"    value={String(counts.campaigns ?? 0)} />
+            <Row label="Rappels"      value={String(counts.reminders ?? 0)} />
+            <Row label="Pièces jointes" value={String(counts.attachments ?? 0)} />
+            <Row label="Site"         value={site ? `${site.title ?? "Sans titre"} (${site.status})` : "Aucun"} />
+            <Row label="Domaine"      value={domain ? `${domain.domain} (${domain.status})` : "Aucun"} />
           </InfoCard>
 
           <InfoCard title="Infos tenant">

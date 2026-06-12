@@ -70,29 +70,40 @@ TRIAL_DAYS = 14
 
 
 def _apply_global_flags(features: dict, flags: list) -> dict:
-    """Applique les feature_flag globaux (admin/config) sur le dict de features.
-    Seules les clés booléennes présentes dans features sont affectées.
-    Un flag global désactivé écrase le plan — utile pour couper une feature pendant une panne."""
+    """Applique les feature_flag globaux sur le dict de features.
+    Booléens : valeur du flag. Numériques (attachments_max, max_contacts…) : flag désactivé → 0 (kill switch)."""
     if not flags:
         return features
     result = dict(features)
     for f in flags:
         key = f.get("key")
-        if key in result and isinstance(result[key], bool):
+        if key not in result:
+            continue
+        val = result[key]
+        if isinstance(val, bool):
             result[key] = bool(f["enabled"])
+        elif isinstance(val, (int, float)):
+            if not f["enabled"]:
+                result[key] = 0
     return result
 
 
 def _apply_overrides(features: dict, overrides: list) -> dict:
-    """Applique les tenant_feature_override sur le dict de features.
-    Priorité maximale : écrase les feature flags globaux pour ce tenant spécifique."""
+    """Applique les tenant_feature_override. Priorité maximale — écrase flags globaux.
+    Booléens : valeur de l'override. Numériques : override désactivé → 0."""
     if not overrides:
         return features
     result = dict(features)
     for o in overrides:
         key = o.get("feature_key")
-        if key in result and isinstance(result[key], bool):
+        if key not in result:
+            continue
+        val = result[key]
+        if isinstance(val, bool):
             result[key] = bool(o["enabled"])
+        elif isinstance(val, (int, float)):
+            if not o["enabled"]:
+                result[key] = 0
     return result
 
 

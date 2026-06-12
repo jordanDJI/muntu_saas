@@ -184,7 +184,7 @@ export default function AdminMetricsPage() {
     </div>
   );
 
-  const { tenants, new_signups, sites_published, appointments_30d, trial_to_paid_rate, mrr, arr, churn_rate, contacts_total, plan_distribution } = metrics;
+  const { tenants, new_signups, sites_published, appointments_30d, trial_to_paid_rate, mrr, arr, churn_rate, contacts_total, campaigns_30d, logo_requests_pending, design_requests_pending, plan_distribution } = metrics;
   const paid = (tenants.active ?? 0) + (tenants.trialing ?? 0);
   const totalGrowth = growth.reduce((a, d) => a + d.count, 0);
 
@@ -209,19 +209,25 @@ export default function AdminMetricsPage() {
       </div>
 
       {/* ── Stats secondaires ── */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         {[
-          { label: "Sites créés",    value: sites_published ?? 0,   icon: "🌐" },
-          { label: "Contacts CRM",   value: contacts_total ?? 0,    icon: "👥" },
-          { label: "RDV (30j)",      value: appointments_30d ?? 0,  icon: "📅" },
+          { label: "Sites créés",      value: sites_published ?? 0,          icon: "🌐" },
+          { label: "Contacts CRM",     value: contacts_total ?? 0,           icon: "👥" },
+          { label: "RDV (30j)",        value: appointments_30d ?? 0,         icon: "📅" },
+          { label: "Campagnes (30j)",  value: campaigns_30d ?? 0,            icon: "📧" },
+          { label: "Logos en attente", value: logo_requests_pending ?? 0,    icon: "🎨", alert: (logo_requests_pending ?? 0) > 0 },
+          { label: "Design en attente",value: design_requests_pending ?? 0,  icon: "🖼️", alert: (design_requests_pending ?? 0) > 0 },
         ].map((s) => (
           <div key={s.label} className="rounded-xl px-4 py-3 flex items-center justify-between"
-            style={{ background: K.card, border: `1px solid ${K.border}` }}>
+            style={{ background: K.card, border: `1px solid ${"alert" in s && s.alert ? "rgba(221,170,64,0.25)" : K.border}` }}>
             <div className="flex items-center gap-2">
               <span className="text-base">{s.icon}</span>
               <span className="text-xs" style={{ color: K.muted }}>{s.label}</span>
             </div>
-            <span className="text-lg font-bold" style={{ color: K.text }}>{s.value.toLocaleString("fr-FR")}</span>
+            <span className="text-lg font-bold"
+              style={{ color: "alert" in s && s.alert ? K.gold : K.text }}>
+              {s.value.toLocaleString("fr-FR")}
+            </span>
           </div>
         ))}
       </div>

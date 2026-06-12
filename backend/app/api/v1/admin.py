@@ -182,6 +182,13 @@ async def get_metrics(admin=Depends(viewer_or_above)):
     # Contacts total
     contacts_total = sb.table("contact").select("id", count="exact").execute().count or 0
 
+    # Campagnes email (30j)
+    campaigns_30d = sb.table("email_campaign").select("id", count="exact").gte("created_at", thirty_ago).execute().count or 0
+
+    # Demandes en attente (logo + design)
+    logo_pending   = sb.table("logo_request").select("id", count="exact").eq("status", "pending").execute().count or 0
+    design_pending = sb.table("design_request").select("id", count="exact").eq("status", "pending").execute().count or 0
+
     # Churn rate (essai expiré sans conversion / total des tenants arrivés à terme)
     expired_or_paid = paid + expired
     churn_rate = round(expired / max(1, expired_or_paid) * 100, 1)
@@ -200,6 +207,9 @@ async def get_metrics(admin=Depends(viewer_or_above)):
         "arr":                   mrr * 12,
         "churn_rate":            churn_rate,
         "contacts_total":        contacts_total,
+        "campaigns_30d":         campaigns_30d,
+        "logo_requests_pending": logo_pending,
+        "design_requests_pending": design_pending,
         "plan_distribution":     plan_dist,
     }
 
@@ -283,11 +293,14 @@ async def get_tenant(tenant_id: str, admin=Depends(viewer_or_above)):
     domain_row = sb.table("custom_domain").select("domain, status").eq("tenant_id", tenant_id).limit(1).execute().data
     domain = domain_row[0] if domain_row else None
 
-    cal_row  = sb.table("calendar").select("id").eq("tenant_id", tenant_id).limit(1).execute().data
-    cal_id   = cal_row[0]["id"] if cal_row else None
-    appts    = sb.table("appointment").select("id", count="exact").eq("calendar_id", cal_id).execute() if cal_id else type("R", (), {"count": 0})()
-    contacts = sb.table("contact").select("id", count="exact").eq("tenant_id", tenant_id).execute()
-    leads    = sb.table("lead").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+    cal_row     = sb.table("calendar").select("id").eq("tenant_id", tenant_id).limit(1).execute().data
+    cal_id      = cal_row[0]["id"] if cal_row else None
+    appts       = sb.table("appointment").select("id", count="exact").eq("calendar_id", cal_id).execute() if cal_id else type("R", (), {"count": 0})()
+    contacts    = sb.table("contact").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+    leads       = sb.table("lead").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+    campaigns   = sb.table("email_campaign").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+    reminders   = sb.table("contact_reminder").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+    attachments = sb.table("contact_attachment").select("id", count="exact").eq("tenant_id", tenant_id).execute()
 
     overrides = sb.table("tenant_feature_override").select("*").eq("tenant_id", tenant_id).execute().data or []
     logs = sb.table("admin_action_log").select("*").eq("target_tenant_id", tenant_id).order("created_at", desc=True).limit(30).execute().data or []
@@ -299,7 +312,14 @@ async def get_tenant(tenant_id: str, admin=Depends(viewer_or_above)):
         "subscription": sub,
         "site":   site,
         "domain": domain,
-        "counts": {"appointments": appts.count or 0, "contacts": contacts.count or 0, "leads": leads.count or 0},
+        "counts": {
+            "appointments": appts.count or 0,
+            "contacts":     contacts.count or 0,
+            "leads":        leads.count or 0,
+            "campaigns":    campaigns.count or 0,
+            "reminders":    reminders.count or 0,
+            "attachments":  attachments.count or 0,
+        },
         "overrides": overrides,
         "action_log": logs,
     }

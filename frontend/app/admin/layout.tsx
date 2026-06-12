@@ -85,6 +85,7 @@ const NAV_ALL = [
     ),
   },
   {
+    id: "logo-requests",
     href: "/admin/logo-requests",
     label: "Logos",
     minLevel: "support" as SupportLevel,
@@ -95,6 +96,7 @@ const NAV_ALL = [
     ),
   },
   {
+    id: "design-requests",
     href: "/admin/design-requests",
     label: "Design",
     minLevel: "support" as SupportLevel,
@@ -124,7 +126,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [ready,         setReady]         = useState(false);
   const [userLevel,     setUserLevel]     = useState<SupportLevel | null>(null);
-  const [inactiveCount, setInactiveCount] = useState<number | null>(null);
+  const [inactiveCount,  setInactiveCount]  = useState<number | null>(null);
+  const [logoPending,    setLogoPending]    = useState<number | null>(null);
+  const [designPending,  setDesignPending]  = useState<number | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -136,15 +140,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       setUserLevel(level);
       setReady(true);
 
-      // Badge inactifs — non bloquant
+      // Badges sidebar — non bloquant
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch(`${API}/api/v1/admin/inactive-tenants?days=30`, {
-          headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setInactiveCount(Array.isArray(data) ? data.length : 0);
+        const headers = { Authorization: `Bearer ${session?.access_token ?? ""}` };
+
+        const [inactiveRes, metricsRes] = await Promise.allSettled([
+          fetch(`${API}/api/v1/admin/inactive-tenants?days=30`, { headers }),
+          fetch(`${API}/api/v1/admin/metrics`, { headers }),
+        ]);
+
+        if (inactiveRes.status === "fulfilled" && inactiveRes.value.ok) {
+          const d = await inactiveRes.value.json();
+          setInactiveCount(Array.isArray(d) ? d.length : 0);
+        }
+        if (metricsRes.status === "fulfilled" && metricsRes.value.ok) {
+          const d = await metricsRes.value.json();
+          setLogoPending(d.logo_requests_pending ?? 0);
+          setDesignPending(d.design_requests_pending ?? 0);
         }
       } catch { /* non bloquant */ }
     });
@@ -187,7 +200,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="flex-1 p-3 space-y-0.5">
           {nav.map((item) => {
             const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
-            const badge  = (item as any).id === "relances" && inactiveCount ? inactiveCount : null;
+            const itemId = (item as any).id;
+            const badge  =
+              itemId === "relances"       && inactiveCount  ? inactiveCount  :
+              itemId === "logo-requests"  && logoPending    ? logoPending    :
+              itemId === "design-requests"&& designPending  ? designPending  : null;
             return (
               <Link
                 key={item.href}

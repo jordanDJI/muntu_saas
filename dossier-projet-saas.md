@@ -1,7 +1,7 @@
 # Dossier Projet — Klientys gestion de présence digitale pour indépendants et structures locales
 
-**Version :** 2.6 — Mise à jour Mai 2026
-**Date :** Mai 2026
+**Version :** 2.7 — Mise à jour Juin 2026
+**Date :** Juin 2026
 **Auteur :** Jordan (porteur du projet)
 **Statut :** En développement actif — MVP déployé, V1 livré, V2 avancé (agents IA + équipe)
 
@@ -151,13 +151,29 @@ L'indépendant voit tout depuis un tableau de bord simple, sans jongler entre pl
 - Si la question dépasse ses capacités, il transfère à l'humain et crée un ticket
 - Toutes les conversations sont enregistrées
 
-### 5.5 CRM léger (gestion des relations)
+### 5.5 CRM (gestion des relations clients)
 
-- Fiche pour chaque contact (particulier ou professionnel)
-- Fiche pour chaque organisation partenaire (maison de repos, mutuelle, etc.)
-- Historique complet des échanges, demandes et rendez-vous
-- Pipeline visuel : à quel stade est chaque relation ?
-- Notes internes
+**Contacts :**
+- Fiche complète par contact (prénom, nom, email, téléphone, adresse, notes libres)
+- Tags colorés personnalisables pour segmenter la clientèle
+- Timeline d'activité horodatée (RDV, leads, notes, emails envoyés)
+- Notes internes avec historique
+- Pièces jointes par contact (ordonnances, devis, documents) — **Pro : 5 fichiers × 45 Mo max, Business : 10 fichiers × 45 Mo max**
+- Export CSV de tous les contacts
+- Vue Kanban et vue liste avec filtres
+
+**Relances :**
+- Création de relances avec date d'échéance et type (post-service, réactivation, suivi devis, paiement, rappel santé, promo, libre)
+- Envoi manuel avec prévisualisation et édition avant envoi
+- **Multi-canal** : si le contact a lié son Telegram, la relance est envoyée sur les deux canaux (email + Telegram) simultanément
+- Footer email de réponse : "Pour répondre à ce message, cliquez ici →" vers l'email du tenant ou son formulaire de contact
+
+**Campagnes email :**
+- Envoi groupé par segment : tous les contacts / inactifs (180+ jours sans RDV confirmé) / par tag
+- Personnalisation automatique avec `{prenom}` dans le corps du message
+- **Multi-canal** : envoi Telegram en parallèle si le contact est lié
+- Historique des campagnes (statut, nb envoyés, nb échecs)
+- Accessible aux plans **Pro et Business uniquement**
 
 ### 5.6 Tableau de bord et ROI
 
@@ -292,7 +308,7 @@ Tenant          ←  [Agent 3 / Assistant Tenant]  ←→  WhatsApp + Dashboard
 
 - Ce n'est pas un logiciel de comptabilité complet (mais une facturation légère est prévue en V2)
 - Ce n'est pas un dossier médical électronique (DMP)
-- Ce n'est pas un outil de marketing avancé (campagnes email, publicité)
+- Ce n'est pas un outil de publicité payante (Google Ads, Meta Ads)
 - Ce n'est pas une solution pour les grandes entreprises (focus TPE/indépendants)
 
 ---
@@ -331,7 +347,7 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 | CRM léger (liste contacts + historique)          | —              | ✅ Livré                                                                                                                                         |
 | Mode absence                                      | —              | ✅ Livré                                                                                                                                         |
 
-### V2 — 🔄 En cours / Partiellement livré (Mai 2026)
+### V2 — ✅ Livré (Juin 2026)
 
 | Fonctionnalité                                 | Agent concerné | Statut                                                                                                                        |
 | ----------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -342,6 +358,8 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 | **Rappels RDV 24h**                       | —              | ✅ Livré — scheduler horaire, anti-doublon via `reminder_sent_at`                                                         |
 | **Invitation membres d'équipe**          | —              | ✅ Livré — table `team_invite`, token 7 jours, email Resend, page `/join`, gestion rôles (owner/admin/member)          |
 | **Configuration agents enrichie**         | Dashboard       | ✅ Livré — token bot Telegram, webhook setup, activation chat personnel, fréquence synthèse, masquage champs selon rôle  |
+| **CRM complet**                            | —              | ✅ Livré (Juin 2026) — contacts, tags, notes timeline, relances multi-canal, campagnes email/Telegram, pièces jointes (Pro/Business) |
+| **Auth providers OAuth**                   | —              | ✅ Livré (Juin 2026) — LinkedIn OIDC actif ; Facebook intégré (masqué, validation Meta en attente) |
 | WhatsApp Business API                           | Agents 2 & 3    | ⏳ Bloqué — approbation Meta en attente                                                                                     |
 | Journaux d'activité complets                   | —              | ⏳ Planifié — UI prête (section Paramètres), table `activity_log` à créer                                             |
 | Notifications temps réel (push)                | —              | ⏳ Planifié — UI prête (section Paramètres), backend à implémenter                                                      |
@@ -374,13 +392,13 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 
 ## 9. Modèle économique (proposition)
 
-| Plan     | Prix mensuel | Inclus                                                                             |
-| -------- | ------------ | ---------------------------------------------------------------------------------- |
-| Starter  | 29 €/mois   | 1 site, 1 utilisateur, 200 messages/mois, calendrier basique                       |
-| Pro      | 59 €/mois   | 1 site, 3 utilisateurs, messages illimités, chatbot, CRM                          |
-| Business | 99 €/mois   | 3 sites, 10 utilisateurs, ROI prédictif, partenaires B2B, intégrations avancées |
+| Plan         | Prix mensuel | Inclus                                                                                                                              |
+| ------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Essentiel** | 29,90 €/mois | Site vitrine, calendrier, leads, CRM basique, export CSV, chatbot vitrine (gratuit), essai 14 jours                              |
+| **Pro**       | 59,90 €/mois | Tout Essentiel + campagnes email/Telegram, 5 pièces jointes/contact (45 Mo max), timeline & kanban, analytics comportementaux     |
+| **Business**  | 99,90 €/mois | Tout Pro + 10 pièces jointes/contact, packs supplémentaires, CSS custom, vidéos par section, refonte design (1 site inclus)      |
 
-> Essai gratuit 30 jours sans carte bancaire.
+> Essai gratuit 14 jours sans carte bancaire.
 
 ---
 
