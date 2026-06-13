@@ -6,6 +6,7 @@ POST /api/v1/booking/{tenant_slug}/book                   → créer contact + R
 import logging
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone, time as dtime, date
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, HTTPException, Request, status
 from app.core.supabase import get_supabase_admin
 from app.middleware.rate_limit import check_rate
@@ -19,8 +20,8 @@ logger = logging.getLogger(__name__)
 @router.get("/{tenant_slug}/available-days")
 async def get_available_days(tenant_slug: str, year: int, month: int, request: Request):
     """
-    Retourne les numéros de jours du mois ayant des créneaux disponibles.
-    Utilisé par le calendrier public pour griser les jours sans disponibilité.
+    Retourne les numéros de jours du mois ayant au moins un créneau réservable.
+    Un créneau est réservable s'il est dans le futur, non bloqué, et pas à capacité pleine.
     """
     check_rate(request, "available_days", max_calls=60, window_seconds=60)
 
@@ -29,25 +30,30 @@ async def get_available_days(tenant_slug: str, year: int, month: int, request: R
         raise HTTPException(status_code=400, detail="Paramètres year/month invalides")
 
     sb = get_supabase_admin()
-    _, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
+    tenant, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
+    tz = _tenant_tz(tenant)
 
+    # Créneaux de disponibilité (tous les jours configurés)
     avail_res = (
         sb.table("availability_slot")
-        .select("day_of_week")
+        .select("*")
         .eq("calendar_id", cal_id)
         .eq("is_active", True)
         .execute()
     )
-    available_weekdays: set[int] = {row["day_of_week"] for row in avail_res.data}
-
-    if not available_weekdays:
+    if not avail_res.data:
         return []
 
-    # Périodes bloquées sur le mois entier
+    available_weekdays: set[int] = {row["day_of_week"] for row in avail_res.data}
+    avail_by_weekday: dict[int, list] = {}
+    for row in avail_res.data:
+        avail_by_weekday.setdefault(row["day_of_week"], []).append(row)
+
     _, days_in_month = monthrange(year, month)
     month_start = datetime(year, month, 1, tzinfo=timezone.utc)
     month_end = datetime(year, month, days_in_month, 23, 59, 59, tzinfo=timezone.utc)
 
+    # Périodes bloquées du mois
     blocked_res = (
         sb.table("blocked_period")
         .select("start_at, end_at")
@@ -56,29 +62,106 @@ async def get_available_days(tenant_slug: str, year: int, month: int, request: R
         .gte("end_at", month_start.isoformat())
         .execute()
     )
-    full_day_blocks: list[tuple[datetime, datetime]] = [
-        (
-            datetime.fromisoformat(b["start_at"].replace("Z", "+00:00")),
-            datetime.fromisoformat(b["end_at"].replace("Z", "+00:00")),
-        )
-        for b in blocked_res.data
-    ]
+    blocked_periods: list[tuple[datetime, datetime]] = []
+    for b in blocked_res.data:
+        try:
+            if b.get("start_at") and b.get("end_at"):
+                bs = datetime.fromisoformat(str(b["start_at"]).replace("Z", "+00:00"))
+                be = datetime.fromisoformat(str(b["end_at"]).replace("Z", "+00:00"))
+                # S'assurer que les datetimes sont UTC-aware
+                if bs.tzinfo is None:
+                    bs = bs.replace(tzinfo=timezone.utc)
+                if be.tzinfo is None:
+                    be = be.replace(tzinfo=timezone.utc)
+                blocked_periods.append((bs, be))
+        except Exception as exc:
+            logger.warning("available-days: blocked_period ignoré (parse error): %s", exc)
+
+    # RDV du mois (pour vérifier la capacité)
+    appts_res = (
+        sb.table("appointment")
+        .select("scheduled_at, end_at")
+        .eq("calendar_id", cal_id)
+        .neq("status", "cancelled")
+        .gte("scheduled_at", month_start.isoformat())
+        .lte("scheduled_at", month_end.isoformat())
+        .execute()
+    )
+    month_appts: list[tuple[datetime, datetime]] = []
+    for a in appts_res.data:
+        try:
+            if a.get("scheduled_at") and a.get("end_at"):
+                s = datetime.fromisoformat(str(a["scheduled_at"]).replace("Z", "+00:00"))
+                e = datetime.fromisoformat(str(a["end_at"]).replace("Z", "+00:00"))
+                # Heure locale naive → UTC via tz du tenant pour comparer avec les slots (UTC)
+                if s.tzinfo is None:
+                    s = s.replace(tzinfo=tz).astimezone(timezone.utc)
+                if e.tzinfo is None:
+                    e = e.replace(tzinfo=tz).astimezone(timezone.utc)
+                month_appts.append((s, e))
+        except Exception as exc:
+            logger.warning("available-days: appointment ignoré (parse error): %s", exc)
 
     today = datetime.now(timezone.utc).date()
+    now = datetime.now(timezone.utc)
     result: list[int] = []
 
     for day_num in range(1, days_in_month + 1):
-        d = date(year, month, day_num)
-        if d < today:
-            continue
-        if d.weekday() not in available_weekdays:
-            continue
-        # Vérifie si le jour entier est bloqué
-        day_start = datetime.combine(d, dtime.min).replace(tzinfo=timezone.utc)
-        day_end = datetime.combine(d, dtime.max).replace(tzinfo=timezone.utc)
-        fully_blocked = any(b_s <= day_start and b_e >= day_end for b_s, b_e in full_day_blocks)
-        if not fully_blocked:
-            result.append(day_num)
+        try:
+            d = date(year, month, day_num)
+            if d < today:
+                continue
+            if d.weekday() not in available_weekdays:
+                continue
+
+            day_start = datetime.combine(d, dtime.min).replace(tzinfo=timezone.utc)
+            day_end = datetime.combine(d, dtime.max).replace(tzinfo=timezone.utc)
+
+            # Jour entièrement bloqué par une période manuelle ?
+            if any(b_s <= day_start and b_e >= day_end for b_s, b_e in blocked_periods):
+                continue
+
+            # Périodes bloquées partiellement ce jour
+            day_blocked = [(bs, be) for bs, be in blocked_periods if bs < day_end and day_start < be]
+            # RDV de ce jour
+            day_appts = [(s, e) for s, e in month_appts if day_start <= s <= day_end]
+
+            # Cherche au moins un créneau réservable (futur + non bloqué + capacité dispo)
+            has_slot = False
+            for avail in avail_by_weekday.get(d.weekday(), []):
+                h_s, m_s = map(int, str(avail["start_time"])[:5].split(":"))
+                h_e, m_e = map(int, str(avail["end_time"])[:5].split(":"))
+                duration = int(avail.get("slot_duration_min") or 30)
+                capacity = int(avail.get("capacity") or 1)
+
+                slot_start = _local_slot(d, h_s, m_s, tz)
+                period_end = _local_slot(d, h_e, m_e, tz)
+
+                while slot_start + timedelta(minutes=duration) <= period_end:
+                    slot_end = slot_start + timedelta(minutes=duration)
+
+                    if slot_start <= now:
+                        slot_start = slot_end
+                        continue
+
+                    if any(bs < slot_end and slot_start < be for bs, be in day_blocked):
+                        slot_start = slot_end
+                        continue
+
+                    booked = sum(1 for s, e in day_appts if s < slot_end and slot_start < e)
+                    if booked < capacity:
+                        has_slot = True
+                        break
+
+                    slot_start = slot_end
+
+                if has_slot:
+                    break
+
+            if has_slot:
+                result.append(day_num)
+        except Exception as exc:
+            logger.error("available-days: erreur jour %s/%s/%s : %s", year, month, day_num, exc)
 
     return result
 
@@ -86,7 +169,7 @@ async def get_available_days(tenant_slug: str, year: int, month: int, request: R
 def _get_tenant_and_calendar(sb, tenant_slug: str) -> tuple[dict, str]:
     tenant_res = (
         sb.table("tenant")
-        .select("id, name")
+        .select("id, name, timezone")
         .eq("slug", tenant_slug)
         .neq("is_active", False)
         .single()
@@ -102,12 +185,26 @@ def _get_tenant_and_calendar(sb, tenant_slug: str) -> tuple[dict, str]:
     return tenant, cal_res.data[0]["id"]
 
 
+def _tenant_tz(tenant: dict) -> ZoneInfo:
+    """Retourne le ZoneInfo du tenant, avec fallback sur UTC si invalide."""
+    try:
+        return ZoneInfo(tenant.get("timezone") or "UTC")
+    except (ZoneInfoNotFoundError, KeyError):
+        return ZoneInfo("UTC")
+
+
+def _local_slot(d: date, h: int, m: int, tz: ZoneInfo) -> datetime:
+    """Crée un datetime UTC à partir d'une heure locale (h:m) dans la timezone du tenant."""
+    return datetime(d.year, d.month, d.day, h, m, tzinfo=tz).astimezone(timezone.utc)
+
+
 @router.get("/{tenant_slug}/slots")
 async def get_available_slots(tenant_slug: str, date: str, request: Request):
     """Retourne les créneaux libres pour une date donnée (YYYY-MM-DD)."""
     check_rate(request, "slots", max_calls=60, window_seconds=60)
     sb = get_supabase_admin()
-    _, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
+    tenant, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
+    tz = _tenant_tz(tenant)
 
     try:
         target_date = datetime.strptime(date, "%Y-%m-%d").date()
@@ -139,13 +236,22 @@ async def get_available_slots(tenant_slug: str, date: str, request: Request):
         .lte("scheduled_at", day_end.isoformat())
         .execute()
     )
-    appointments = [
-        (
-            datetime.fromisoformat(a["scheduled_at"].replace("Z", "+00:00")),
-            datetime.fromisoformat(a["end_at"].replace("Z", "+00:00")),
-        )
-        for a in appts_res.data
-    ]
+    appointments: list[tuple[datetime, datetime]] = []
+    for a in appts_res.data:
+        try:
+            if a.get("scheduled_at") and a.get("end_at"):
+                s = datetime.fromisoformat(str(a["scheduled_at"]).replace("Z", "+00:00"))
+                e = datetime.fromisoformat(str(a["end_at"]).replace("Z", "+00:00"))
+                # Les RDV créés depuis le dashboard ou après notre fix timezone sont stockés
+                # en heure locale naive. Il faut les convertir en UTC (via le tz du tenant)
+                # avant de les comparer aux slots (qui sont toujours en UTC).
+                if s.tzinfo is None:
+                    s = s.replace(tzinfo=tz).astimezone(timezone.utc)
+                if e.tzinfo is None:
+                    e = e.replace(tzinfo=tz).astimezone(timezone.utc)
+                appointments.append((s, e))
+        except Exception as exc:
+            logger.warning("slots: appointment ignoré (parse error): %s", exc)
 
     blocked_res = (
         sb.table("blocked_period")
@@ -155,25 +261,33 @@ async def get_available_slots(tenant_slug: str, date: str, request: Request):
         .gte("end_at", day_start.isoformat())
         .execute()
     )
-    blocked_periods = [
-        (
-            datetime.fromisoformat(b["start_at"].replace("Z", "+00:00")),
-            datetime.fromisoformat(b["end_at"].replace("Z", "+00:00")),
-        )
-        for b in blocked_res.data
-    ]
+    blocked_periods: list[tuple[datetime, datetime]] = []
+    for b in blocked_res.data:
+        try:
+            if b.get("start_at") and b.get("end_at"):
+                bs = datetime.fromisoformat(str(b["start_at"]).replace("Z", "+00:00"))
+                be = datetime.fromisoformat(str(b["end_at"]).replace("Z", "+00:00"))
+                if bs.tzinfo is None:
+                    bs = bs.replace(tzinfo=timezone.utc)
+                if be.tzinfo is None:
+                    be = be.replace(tzinfo=timezone.utc)
+                blocked_periods.append((bs, be))
+        except Exception as exc:
+            logger.warning("slots: blocked_period ignoré (parse error): %s", exc)
 
     slots = []
     now = datetime.now(timezone.utc)
 
     for avail in avail_res.data:
-        h_s, m_s = map(int, avail["start_time"][:5].split(":"))
-        h_e, m_e = map(int, avail["end_time"][:5].split(":"))
-        duration = avail["slot_duration_min"]
-        capacity = avail.get("capacity", 1)
+        h_s, m_s = map(int, str(avail["start_time"])[:5].split(":"))
+        h_e, m_e = map(int, str(avail["end_time"])[:5].split(":"))
+        duration = int(avail.get("slot_duration_min") or 30)
+        capacity       = int(avail.get("capacity") or 1)
+        max_party_size = avail.get("max_party_size") or 1  # 1 = solo par défaut
 
-        slot_start = datetime.combine(target_date, dtime(h_s, m_s)).replace(tzinfo=timezone.utc)
-        period_end = datetime.combine(target_date, dtime(h_e, m_e)).replace(tzinfo=timezone.utc)
+        # Interprète les heures en heure locale du tenant → UTC
+        slot_start = _local_slot(target_date, h_s, m_s, tz)
+        period_end = _local_slot(target_date, h_e, m_e, tz)
 
         while slot_start + timedelta(minutes=duration) <= period_end:
             slot_end = slot_start + timedelta(minutes=duration)
@@ -182,24 +296,25 @@ async def get_available_slots(tenant_slug: str, date: str, request: Request):
                 slot_start = slot_end
                 continue
 
-            # Périodes bloquées → skip complet
             if any(s < slot_end and slot_start < e for s, e in blocked_periods):
                 slot_start = slot_end
                 continue
 
-            # Compter les RDV qui chevauchent ce créneau
             booked = sum(1 for s, e in appointments if s < slot_end and slot_start < e)
             spots_left = capacity - booked
 
             if spots_left > 0:
+                # Label en heure locale du tenant
+                local_label = slot_start.astimezone(tz).strftime("%H:%M")
                 slot_data: dict = {
                     "start": slot_start.isoformat(),
                     "end": slot_end.isoformat(),
-                    "label": slot_start.strftime("%H:%M"),
+                    "label": local_label,
                 }
                 if capacity > 1:
                     slot_data["spots_left"] = spots_left
                     slot_data["capacity"] = capacity
+                slot_data["max_party_size"] = max_party_size  # toujours inclus
                 slots.append(slot_data)
 
             slot_start = slot_end
@@ -304,53 +419,69 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
     ensure_lead(sb, tenant["id"], contact_id, "website", status="scheduled",
                 request_type="b2c_appointment", notes=body.message or None)
 
-    end_at = body.scheduled_at + timedelta(minutes=body.slot_duration_min)
+    # Convertir l'heure UTC reçue du frontend en heure locale naive du tenant.
+    # Les RDV créés depuis le dashboard sont déjà en heure locale naive (via toLocalISO()),
+    # cette conversion assure la cohérence d'affichage pour les deux sources.
+    tz = _tenant_tz(tenant)
+    if body.scheduled_at.tzinfo is not None:
+        scheduled_at_store = body.scheduled_at.astimezone(tz).replace(tzinfo=None)
+    else:
+        scheduled_at_store = body.scheduled_at
+    end_at = scheduled_at_store + timedelta(minutes=body.slot_duration_min)
 
-    # Vérification anti-double réservation (TOCTOU) avec gestion de capacité
-    # Cherche la capacité du créneau (availability_slot)
-    target_date_val = body.scheduled_at.date()
+    # Vérification anti-double réservation (TOCTOU)
+    target_date_val = scheduled_at_store.date()
     day_of_week = target_date_val.weekday()
-    slot_time = body.scheduled_at.strftime("%H:%M")
     avail_check = (
         sb.table("availability_slot")
-        .select("capacity")
+        .select("capacity, max_party_size")
         .eq("calendar_id", cal_id)
         .eq("day_of_week", day_of_week)
         .eq("is_active", True)
         .execute()
     )
-    slot_capacity = 1
+    slot_capacity  = 1
+    max_party_size = 1  # défaut : solo
     for avail in avail_check.data or []:
-        slot_capacity = max(slot_capacity, avail.get("capacity", 1))
+        slot_capacity  = max(slot_capacity, int(avail.get("capacity") or 1))
+        mps = int(avail.get("max_party_size") or 1)
+        if mps > max_party_size:
+            max_party_size = mps
 
+    # Règle 2 : groupe trop grand
+    if body.party_size > max_party_size:
+        _DAYS_FR = {0:"Lundi",1:"Mardi",2:"Mercredi",3:"Jeudi",4:"Vendredi",5:"Samedi",6:"Dimanche"}
+        _day_name = _DAYS_FR.get(day_of_week, "")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Le nombre de personnes maximum par réservation des {_day_name} pour cette période est de {max_party_size} personne(s).",
+        )
+
+    # Règle 1 : créneau plein (nb de réservations simultanées)
     existing = (
         sb.table("appointment")
         .select("id")
         .eq("calendar_id", cal_id)
         .neq("status", "cancelled")
         .lt("scheduled_at", end_at.isoformat())
-        .gt("end_at", body.scheduled_at.isoformat())
+        .gt("end_at", scheduled_at_store.isoformat())
         .execute()
     )
     booked_count = len(existing.data or [])
-    if booked_count + body.party_size > slot_capacity:
-        if slot_capacity == 1:
-            detail = "Ce créneau vient d'être réservé. Veuillez choisir un autre horaire."
-        else:
-            spots_left = max(0, slot_capacity - booked_count)
-            detail = (
-                f"Il ne reste que {spots_left} place(s) pour ce créneau "
-                f"(vous demandez {body.party_size} place(s))."
-                if spots_left > 0
-                else "Ce créneau est complet. Veuillez choisir un autre horaire."
-            )
+    if booked_count >= slot_capacity:
+        spots_left = max(0, slot_capacity - booked_count)
+        detail = (
+            "Ce créneau vient d'être réservé. Veuillez choisir un autre horaire."
+            if slot_capacity == 1
+            else "Ce créneau est complet. Veuillez choisir un autre horaire."
+        )
         raise HTTPException(status_code=409, detail=detail)
 
     appt_row: dict = {
         "calendar_id": cal_id,
         "contact_id": contact_id,
         "service_offer_id": str(body.service_offer_id) if body.service_offer_id else None,
-        "scheduled_at": body.scheduled_at.isoformat(),
+        "scheduled_at": scheduled_at_store.isoformat(),
         "end_at": end_at.isoformat(),
         "status": "pending",
         "type": "b2c_appointment",
@@ -364,7 +495,7 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
 
     # Notifier le tenant via Telegram/WhatsApp + email (avec le message du visiteur)
     _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name,
-                           body.scheduled_at.isoformat(), message=body.message)
+                           scheduled_at_store.isoformat(), message=body.message)
     _email_tenant_pending(sb, tenant, {"first_name": body.first_name, "last_name": body.last_name,
                                         "email": body.email, "phone": body.phone}, appt,
                           message=body.message)
@@ -397,6 +528,7 @@ def _email_tenant_pending(sb, tenant: dict, contact: dict, appointment: dict, me
             appointment=appointment,
             dashboard_url=dashboard_url,
             message=message,
+            tz_name=tenant.get("timezone", "UTC"),
         )
     except Exception as exc:
         logger.error("Email tenant pending failed: %s", exc)
@@ -412,6 +544,7 @@ def _email_client_booking_received(tenant: dict, first_name: str, last_name: str
             contact_name=contact_name,
             appointment=appointment,
             tenant_name=tenant.get("name", ""),
+            tz_name=tenant.get("timezone", "UTC"),
         )
     except Exception as exc:
         logger.error("Email client booking received failed: %s", exc)

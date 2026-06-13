@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.calendar import AvailabilitySlotIn, BlockedPeriodIn, CalendarApptIn
@@ -40,11 +41,25 @@ async def get_availability(tenant_id: str = Depends(get_current_tenant)):
 async def replace_availability(slots: list[AvailabilitySlotIn], tenant_id: str = Depends(get_current_tenant)):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)
+
+    # Sauvegarde avant suppression — si l'INSERT échoue (colonne manquante, etc.), on restaure
+    backup = (sb.table("availability_slot").select("*").eq("calendar_id", cal_id).execute().data or [])
+
     sb.table("availability_slot").delete().eq("calendar_id", cal_id).execute()
+
     if slots:
-        sb.table("availability_slot").insert([
-            {"calendar_id": cal_id, **s.model_dump()} for s in slots
-        ]).execute()
+        try:
+            sb.table("availability_slot").insert([
+                {"calendar_id": cal_id, **s.model_dump()} for s in slots
+            ]).execute()
+        except Exception as exc:
+            # Restaure les anciennes données pour ne pas laisser la table vide
+            if backup:
+                for row in backup:
+                    row.pop("id", None)
+                sb.table("availability_slot").insert(backup).execute()
+            raise HTTPException(status_code=500, detail=f"Erreur sauvegarde disponibilités : {exc}")
+
     return {"replaced": len(slots)}
 
 
@@ -163,9 +178,18 @@ async def get_calendar_appointments(
 ):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)
+
+    # Timezone du tenant pour normaliser les heures en affichage local
+    tenant_res = sb.table("tenant").select("timezone").eq("id", tenant_id).single().execute()
+    tz_name = (tenant_res.data or {}).get("timezone") or "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, KeyError):
+        tz = ZoneInfo("UTC")
+
     q = (
         sb.table("appointment")
-        .select("id, status, scheduled_at, end_at, notes, service_offer_id, contact_id, contact(first_name, last_name, email, phone), service_offer(name)")
+        .select("id, status, scheduled_at, end_at, notes, party_size, service_offer_id, contact_id, contact(first_name, last_name, email, phone), service_offer(name)")
         .eq("calendar_id", cal_id)
         .neq("status", "cancelled")
     )
@@ -173,4 +197,22 @@ async def get_calendar_appointments(
         q = q.gte("scheduled_at", start)
     if end:
         q = q.lte("scheduled_at", end)
-    return q.order("scheduled_at").execute().data
+    data = q.order("scheduled_at").execute().data or []
+
+    # Les RDV créés via réservation publique sont stockés en UTC ("+00:00").
+    # Le frontend utilise getHours() (heure locale) pour positionner les RDV dans le calendrier.
+    # On normalise en ISO local naïf ("YYYY-MM-DDTHH:MM:SS") pour que l'affichage
+    # soit cohérent quel que soit le fuseau du navigateur.
+    for appt in data:
+        for field in ("scheduled_at", "end_at"):
+            val = appt.get(field)
+            if not val:
+                continue
+            try:
+                dt = datetime.fromisoformat(str(val).replace("Z", "+00:00"))
+                if dt.tzinfo is not None:
+                    appt[field] = dt.astimezone(tz).strftime("%Y-%m-%dT%H:%M:%S")
+            except Exception:
+                pass
+
+    return data

@@ -1,9 +1,24 @@
 import resend
+from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from app.core.config import settings
 
 resend.api_key = settings.resend_api_key
 
 _BTN = "background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block"
+
+
+def _fmt_dt(iso_str: str, tz_name: str = "UTC") -> str:
+    """Formate un datetime ISO en heure locale du tenant (ex: 'lundi 13/06/2026 à 09:00')."""
+    try:
+        dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        try:
+            tz = ZoneInfo(tz_name)
+        except (ZoneInfoNotFoundError, KeyError):
+            tz = ZoneInfo("UTC")
+        return dt.astimezone(tz).strftime("%A %d/%m/%Y à %H:%M")
+    except Exception:
+        return iso_str
 
 
 def send_lead_notification(tenant_email: str, lead: dict, contact: dict) -> None:
@@ -34,16 +49,18 @@ def send_appointment_pending_tenant(
     appointment: dict,
     dashboard_url: str,
     message: str | None = None,
+    tz_name: str = "UTC",
 ) -> None:
     """Email au professionnel : nouveau RDV en attente de validation."""
-    from datetime import datetime
-    try:
-        dt = datetime.fromisoformat(appointment.get("scheduled_at", "").replace("Z", "+00:00"))
-        date_str = dt.strftime("%A %d/%m/%Y à %H:%M")
-    except Exception:
-        date_str = appointment.get("scheduled_at", "—")
+    date_str = _fmt_dt(appointment.get("scheduled_at", ""), tz_name)
 
     contact_name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip()
+    party_size = appointment.get("party_size", 1)
+    group_row = (
+        f'<tr><td style="padding:4px 12px 4px 0;color:#6b7280">Groupe</td>'
+        f'<td><strong>{party_size} personnes</strong></td></tr>'
+        if party_size > 1 else ""
+    )
 
     message_block = ""
     if message and message.strip():
@@ -56,7 +73,7 @@ def send_appointment_pending_tenant(
     resend.Emails.send({
         "from": f"{settings.email_from_name} <{settings.email_from}>",
         "to": [tenant_email],
-        "subject": f"Nouveau RDV en attente — {contact_name}",
+        "subject": f"Nouveau RDV en attente — {contact_name}" + (f" ({party_size} pers.)" if party_size > 1 else ""),
         "html": f"""
         <h2>Nouveau rendez-vous en attente de confirmation</h2>
         <p>Bonjour,</p>
@@ -66,6 +83,7 @@ def send_appointment_pending_tenant(
           <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Email</td><td>{contact.get('email', '—')}</td></tr>
           <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Téléphone</td><td>{contact.get('phone', '—')}</td></tr>
           <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Date</td><td><strong>{date_str}</strong></td></tr>
+          {group_row}
         </table>
         {message_block}
         <p>Connectez-vous à votre espace <strong>{tenant_name}</strong> pour confirmer ou refuser ce rendez-vous.</p>
@@ -79,13 +97,11 @@ def send_appointment_pending_tenant(
     })
 
 
-def send_appointment_confirmation(contact_email: str, contact_name: str, appointment: dict, tenant_name: str) -> None:
-    from datetime import datetime
-    try:
-        dt = datetime.fromisoformat(appointment.get("scheduled_at", "").replace("Z", "+00:00"))
-        date_str = dt.strftime("%A %d/%m/%Y à %H:%M")
-    except Exception:
-        date_str = appointment.get("scheduled_at", "—")
+def send_appointment_confirmation(contact_email: str, contact_name: str, appointment: dict, tenant_name: str, tz_name: str = "UTC") -> None:
+    date_str = _fmt_dt(appointment.get("scheduled_at", ""), tz_name)
+
+    party_size = appointment.get("party_size", 1)
+    group_line = f"<p>Réservation pour <strong>{party_size} personnes</strong>.</p>" if party_size > 1 else ""
 
     resend.Emails.send({
         "from": f"{tenant_name} <{settings.email_from}>",
@@ -96,6 +112,7 @@ def send_appointment_confirmation(contact_email: str, contact_name: str, appoint
         <p>Bonjour {contact_name},</p>
         <p>Votre rendez-vous avec <strong>{tenant_name}</strong> est confirmé
         pour le <strong>{date_str}</strong>.</p>
+        {group_line}
         <p>Vous recevrez un rappel 24 h avant.</p>
         <p style="color:#6b7280;font-size:13px">En cas d'empêchement, merci de prévenir dès que possible.</p>
         """,
@@ -109,18 +126,17 @@ def send_appointment_cancellation(
     tenant_name: str,
     booking_url: str = "",
     was_pending: bool = False,
+    tz_name: str = "UTC",
 ) -> None:
     """
     Email au client lors d'une annulation ou d'un refus de RDV.
     - was_pending=True : le professionnel n'a pas validé la demande → propose de rechoisir
     - was_pending=False : RDV confirmé annulé → propose de recontacter
     """
-    from datetime import datetime
-    try:
-        dt = datetime.fromisoformat(appointment.get("scheduled_at", "").replace("Z", "+00:00"))
-        date_str = dt.strftime("%A %d/%m/%Y à %H:%M")
-    except Exception:
-        date_str = appointment.get("scheduled_at", "—")
+    date_str = _fmt_dt(appointment.get("scheduled_at", ""), tz_name)
+
+    party_size = appointment.get("party_size", 1)
+    group_line = f"<p>Réservation concernée : <strong>{party_size} personnes</strong>.</p>" if party_size > 1 else ""
 
     if was_pending:
         subject = "Votre demande de rendez-vous n'a pas pu être acceptée"
@@ -129,6 +145,7 @@ def send_appointment_cancellation(
         <p>Bonjour {contact_name},</p>
         <p>Votre demande de rendez-vous avec <strong>{tenant_name}</strong>
         pour le <strong>{date_str}</strong> n'a malheureusement pas pu être acceptée.</p>
+        {group_line}
         <p>Vous pouvez choisir un autre créneau directement en ligne :</p>
         {f'<br><a href="{booking_url}" style="{_BTN}">Choisir un autre créneau →</a><br>' if booking_url else ""}
         <br>
@@ -264,14 +281,10 @@ def send_booking_request_received(
     contact_name: str,
     appointment: dict,
     tenant_name: str,
+    tz_name: str = "UTC",
 ) -> None:
     """Accuse de réception au client après une demande de rendez-vous (statut pending)."""
-    from datetime import datetime
-    try:
-        dt = datetime.fromisoformat(appointment.get("scheduled_at", "").replace("Z", "+00:00"))
-        date_str = dt.strftime("%A %d/%m/%Y à %H:%M")
-    except Exception:
-        date_str = appointment.get("scheduled_at", "—")
+    date_str = _fmt_dt(appointment.get("scheduled_at", ""), tz_name)
 
     resend.Emails.send({
         "from": f"{tenant_name} <{settings.email_from}>",

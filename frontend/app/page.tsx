@@ -249,7 +249,7 @@ export default function LandingPage() {
         <div className="l-container">
           <div className="l-logos-label">{t.lp_for_pros}</div>
           <div className="l-logos-row">
-            {["🩺 Infirmier·ère", "🦴 Kinésithérapeute", "🔧 Artisan", "✂️ Esthéticien·ne", "⚖️ Consultant·e", "💆 Coach"].map((p) => (
+            {["🩺 Infirmier·ère", "🦴 Kinésithérapeute", "🔧 Artisan", "✂️ Esthéticien·ne", "⚖️ Consultant·e", "💆 Coach", "🍽️ Restaurateur·rice", "🛒 Commerçant·e"].map((p) => (
               <span key={p} className="l-logo-item">{p}</span>
             ))}
           </div>

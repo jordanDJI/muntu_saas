@@ -3,10 +3,12 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 import { getSectorVocab, SectorVocab } from "./sectorVocabulary";
 import { getSectorLeadTypes, LeadTypeOption } from "./sectorLeadTypes";
+import { useLanguage } from "../contexts/LanguageContext";
 
 let _cachedSector: string | null = null;
 
 export function useSectorVocab(): { vocab: SectorVocab; leadTypes: LeadTypeOption[]; sector: string; loading: boolean } {
+  const { lang } = useLanguage();
   const [sector, setSector] = useState<string>(_cachedSector ?? "other");
   const [loading, setLoading] = useState(!_cachedSector);
 
@@ -27,7 +29,7 @@ export function useSectorVocab(): { vocab: SectorVocab; leadTypes: LeadTypeOptio
   }, []);
 
   return {
-    vocab: getSectorVocab(sector),
+    vocab: getSectorVocab(sector, lang),
     leadTypes: getSectorLeadTypes(sector),
     sector,
     loading,

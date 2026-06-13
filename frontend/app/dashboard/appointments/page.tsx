@@ -15,6 +15,7 @@ type Appointment = {
   service_offer_id?: string;
   contact_id?: string;
   notes?: string;
+  party_size?: number;
   contact?: { first_name: string; last_name: string; email: string; phone?: string };
   service_offer?: { name: string };
 };
@@ -25,6 +26,8 @@ type AvailSlot = {
   end_time: string;
   slot_duration_min: number;
   is_active: boolean;
+  capacity?: number;
+  max_party_size?: number;
 };
 
 type BlockedPeriod = { id: string; start_at: string; end_at: string; reason?: string; color?: string };
@@ -197,7 +200,7 @@ function NewClientModal({ initialName, onConfirm, onClose }: {
             })}
             disabled={!fn.trim()}
             className="w-full bg-primary-600 text-white rounded-xl py-2.5 font-semibold hover:bg-primary-700 disabled:opacity-50 text-sm">
-            Ajouter ce client au rendez-vous
+            Ajouter ce {vocab.contact.toLowerCase()} à {vocab.appointment.toLowerCase()}
           </button>
         </div>
       </div>
@@ -308,7 +311,7 @@ function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose
             {err && <p className="text-red-500 text-sm">{err}</p>}
             <button onClick={save} disabled={saving || (!contact && !newClient)}
               className="w-full bg-primary-600 text-white rounded-xl py-2.5 font-semibold hover:bg-primary-700 disabled:opacity-50 text-sm">
-              {saving ? "Création…" : "Créer le rendez-vous"}
+              {saving ? "Création…" : `Créer ${vocab.appointment.toLowerCase()}`}
             </button>
           </div>
         </div>
@@ -328,7 +331,7 @@ function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose
 // ── AvailabilityPanel ─────────────────────────────────────────────────────────
 
 type TimeRange = { start_time: string; end_time: string; slot_duration_min: number };
-type DaySlots  = { day_of_week: number; is_active: boolean; ranges: TimeRange[] };
+type DaySlots  = { day_of_week: number; is_active: boolean; ranges: TimeRange[]; capacity: number; max_party_size: number };
 
 const DEFAULT_RANGE: TimeRange = { start_time: "09:00", end_time: "18:00", slot_duration_min: 30 };
 
@@ -342,10 +345,12 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
         return {
           day_of_week: i,
           is_active: true,
+          capacity: daySlots[0].capacity ?? 1,
+          max_party_size: daySlots[0].max_party_size ?? 1,
           ranges: daySlots.map(s => ({ start_time: s.start_time, end_time: s.end_time, slot_duration_min: s.slot_duration_min })),
         };
       }
-      return { day_of_week: i, is_active: false, ranges: [{ ...DEFAULT_RANGE }] };
+      return { day_of_week: i, is_active: false, capacity: 1, max_party_size: 1, ranges: [{ ...DEFAULT_RANGE }] };
     })
   );
   const [saving, setSaving] = useState(false);
@@ -373,7 +378,7 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
     try {
       const flat: AvailSlot[] = days
         .filter(d => d.is_active && d.ranges.length > 0)
-        .flatMap(d => d.ranges.map(r => ({ day_of_week: d.day_of_week, is_active: true, ...r })));
+        .flatMap(d => d.ranges.map(r => ({ day_of_week: d.day_of_week, is_active: true, capacity: d.capacity, max_party_size: d.max_party_size, ...r })));
       await api.replaceAvailability(flat);
       onSave();
     } finally { setSaving(false); }
@@ -389,12 +394,36 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
         <div className="flex-1 overflow-auto p-4 space-y-3">
           {days.map((d, di) => (
             <div key={di} className={`rounded-lg border p-3 space-y-2 ${d.is_active ? "border-primary-300 bg-primary-50" : "border-gray-200"}`}>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-sm">{DAYS_FULL[di]}</span>
-                <button onClick={() => toggleDay(di)}
-                  className={`w-10 h-5 rounded-full transition-colors relative ${d.is_active ? "bg-primary-600" : "bg-gray-300"}`}>
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${d.is_active ? "left-5" : "left-0.5"}`} />
-                </button>
+                <div className="flex items-center gap-3">
+                  {d.is_active && (
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-1.5 text-xs text-gray-500" title="Nombre de réservations simultanées sur ce créneau">
+                        <span className="whitespace-nowrap">Créneaux simultanés</span>
+                        <input
+                          type="number" min={1} max={500}
+                          value={d.capacity}
+                          onChange={e => setDays(p => p.map((day, idx) => idx === di ? { ...day, capacity: Math.max(1, Number(e.target.value) || 1) } : day))}
+                          className="border rounded px-1.5 py-0.5 text-xs w-12 text-center"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs text-gray-500" title="Nombre max de personnes par réservation (1 = solo)">
+                        <span className="whitespace-nowrap">Max pers.</span>
+                        <input
+                          type="number" min={1} max={500}
+                          value={d.max_party_size}
+                          onChange={e => setDays(p => p.map((day, idx) => idx === di ? { ...day, max_party_size: Math.max(1, Number(e.target.value) || 1) } : day))}
+                          className="border rounded px-1.5 py-0.5 text-xs w-12 text-center"
+                        />
+                      </label>
+                    </div>
+                  )}
+                  <button onClick={() => toggleDay(di)}
+                    className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${d.is_active ? "bg-primary-600" : "bg-gray-300"}`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${d.is_active ? "left-5" : "left-0.5"}`} />
+                  </button>
+                </div>
               </div>
 
               {d.is_active && d.ranges.map((r, ri) => (
@@ -607,7 +636,7 @@ function BlockedOverrideModal({ period, onConfirm, onClose }: {
           </div>
         </div>
         <p className="text-sm text-gray-700">
-          Vous êtes sur le point d'insérer un rendez-vous sur une plage de dates bloquées.
+          Vous êtes sur le point d'insérer {vocab.appointment.toLowerCase()} sur une plage de dates bloquées.
           Voulez-vous continuer quand même ?
         </p>
         <div className="flex gap-2">
@@ -691,14 +720,24 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
         {!editing ? (
           <>
             {appt.contact?.phone && <p className="text-sm text-gray-400">{appt.contact.phone}</p>}
-            {appt.service_offer?.name && <p className="text-sm font-medium text-primary-600">{appt.service_offer.name}</p>}
-            <div className="bg-gray-50 rounded-lg p-3 text-sm">
+            <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
               <p>{new Date(appt.scheduled_at).toLocaleString("fr-BE",{dateStyle:"full",timeStyle:"short"})}</p>
-              <p className="text-gray-400 text-xs mt-1">→ {fmtTime(appt.end_at)}</p>
+              <p className="text-gray-400 text-xs">→ {fmtTime(appt.end_at)}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                👥 {appt.party_size ?? 1} {(appt.party_size ?? 1) > 1 ? t.appt_party_size_n : t.appt_party_size_1}
+              </p>
             </div>
+            {appt.service_offer?.name && (
+              <div className="flex items-center gap-1.5 text-sm text-primary-700 font-medium">
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+                {appt.service_offer.name}
+              </div>
+            )}
             {appt.notes && (
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
-                <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-1">Message du client</p>
+                <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-1">{t.appt_client_message}</p>
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{appt.notes}</p>
               </div>
             )}
@@ -724,7 +763,7 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                 </svg>
-                Voir la fiche contact
+                Voir la fiche {vocab.contact.toLowerCase()}
               </button>
             )}
             {appt.status === "pending" && (
@@ -742,13 +781,13 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
             {appt.status === "confirmed" && (
               <button onClick={() => onCancel(appt.id)}
                 className="w-full border border-red-300 text-red-500 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
-                Annuler ce rendez-vous
+                Annuler ce {vocab.appointment.toLowerCase()}
               </button>
             )}
           </>
         ) : (
           <>
-            <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide">Modifier le rendez-vous</p>
+            <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide">Modifier {vocab.appointment.toLowerCase()}</p>
             <div className="space-y-2">
               <div>
                 <label className="text-xs font-medium text-gray-500">Date</label>
@@ -1090,7 +1129,7 @@ export default function AppointmentsPage() {
       {!loading && appointments.filter(a => a.status === "pending").length > 0 && (
         <div id="appts-pending" className="bg-amber-50 border-b border-amber-200 px-4 py-2 space-y-1.5 shrink-0">
           <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
-            {appointments.filter(a => a.status === "pending").length} rendez-vous en attente de confirmation
+            {appointments.filter(a => a.status === "pending").length} {vocab.appointments.toLowerCase()} en attente de confirmation
           </p>
           <div className="flex flex-wrap gap-2">
             {appointments.filter(a => a.status === "pending").map(a => (

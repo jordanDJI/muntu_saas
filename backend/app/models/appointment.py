@@ -29,5 +29,9 @@ class AppointmentOut(BaseModel):
     audience_type: str
     scheduled_at: datetime
     end_at: datetime
+    contact_id: Optional[UUID] = None
+    service_offer_id: Optional[UUID] = None
+    notes: Optional[str] = None
+    party_size: int = 1
     contact: Optional[dict] = None
     service_offer: Optional[dict] = None

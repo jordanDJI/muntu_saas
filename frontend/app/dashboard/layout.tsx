@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { OnbordaProvider, Onborda, useOnborda } from "onborda";
 import { supabase, api } from "../../lib/api";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { useSectorVocab } from "../../lib/useSectorVocab";
 import { TenantProvider, useTenant } from "../../contexts/TenantContext";
 import { SubscriptionProvider, useSubscription } from "../../contexts/SubscriptionContext";
 import type { FeatureKey } from "../../contexts/SubscriptionContext";
@@ -614,8 +615,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useLanguage();
+  const { vocab } = useSectorVocab();
 
-  const NAV = NAV_HREFS.map((n) => ({ ...n, label: t[n.tKey] }));
+  const NAV = NAV_HREFS.map((n) => ({
+    ...n,
+    label: n.tKey === "nav_contacts" ? vocab.contacts
+         : n.tKey === "nav_appts"    ? vocab.appointments
+         : t[n.tKey],
+  }));
 
   // Listen for live dark mode toggle from settings page
   useEffect(() => {

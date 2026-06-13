@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { api, supabase } from "../../lib/api";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { useSectorVocab } from "../../lib/useSectorVocab";
 
 const DemandPotentialCard = dynamic(() => import("./analytics/DemandPotentialCard"), { ssr: false });
 
@@ -33,6 +34,7 @@ const NAV_ITEM_DEFS = [
 
 export default function DashboardPage() {
   const { t } = useLanguage();
+  const { vocab } = useSectorVocab();
   const [leads, setLeads]             = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [tenantSlug, setTenantSlug]   = useState<string>("");
@@ -42,7 +44,13 @@ export default function DashboardPage() {
   const [actioning, setActioning]     = useState<string | null>(null);
   const [kpis, setKpis]               = useState<string[] | null>(null);
 
-  const NAV_ITEMS = NAV_ITEM_DEFS.map(d => ({ ...d, label: t[d.labelKey], desc: t[d.descKey] }));
+  const NAV_ITEMS = NAV_ITEM_DEFS.map(d => ({
+    ...d,
+    label: d.labelKey === "nav_appts" ? vocab.appointments
+         : d.labelKey === "nav_leads" ? vocab.leads
+         : t[d.labelKey],
+    desc: t[d.descKey],
+  }));
 
   const LEAD_STATUS_LABEL: Record<string, { label: string; color: string }> = {
     new:         { label: t.lead_status_new,       color: LEAD_STATUS_COLOR.new },
@@ -209,7 +217,7 @@ export default function DashboardPage() {
           )}
           {showKpi("contacts") && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{t.kpi_contacts}</p>
+              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{vocab.contacts}</p>
               <p className="text-3xl font-bold text-gray-700 mt-1">{loading || contactsCount === null ? "—" : contactsCount}</p>
               <p className="text-xs text-gray-400 mt-1">{t.kpi_distinct}</p>
             </div>
@@ -268,7 +276,7 @@ export default function DashboardPage() {
         {/* Recent leads */}
         <div id="dash-recent-leads" className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-50">
-            <h2 className="font-semibold text-gray-800 text-sm">{t.dash_recent_leads}</h2>
+            <h2 className="font-semibold text-gray-800 text-sm">{vocab.leads}</h2>
             <Link href="/dashboard/leads" className="text-xs text-primary-600 hover:underline">{t.dash_see_all}</Link>
           </div>
           <ul className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
@@ -310,7 +318,7 @@ export default function DashboardPage() {
         {/* Upcoming confirmed appointments */}
         <div id="dash-upcoming-appts" className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-50">
-            <h2 className="font-semibold text-gray-800 text-sm">{t.dash_upcoming_appts}</h2>
+            <h2 className="font-semibold text-gray-800 text-sm">{vocab.appointments}</h2>
             <Link href="/dashboard/appointments" className="text-xs text-primary-600 hover:underline">{t.dash_agenda}</Link>
           </div>
           <ul className="divide-y divide-gray-50 max-h-64 overflow-y-auto">

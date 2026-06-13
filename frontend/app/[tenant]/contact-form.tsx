@@ -15,7 +15,7 @@ function _track(slug: string, type: string, section?: string, data?: object) {
   } catch {}
 }
 
-type Slot = { start: string; end: string; label: string; spots_left?: number; capacity?: number };
+type Slot = { start: string; end: string; label: string; spots_left?: number; capacity?: number; max_party_size?: number };
 type Mode = "contact" | "appointment";
 
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
@@ -276,7 +276,6 @@ export default function ContactForm({
 }) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
   const bookingCta = vocab?.booking_cta ?? "Prendre rendez-vous";
-  const showPartySize = vocab?.show_party_size ?? false;
   const partySizeLabel = vocab?.party_size_label ?? "Nombre de personnes";
   const partySizeHint = vocab?.party_size_hint ?? null;
 
@@ -293,6 +292,10 @@ export default function ContactForm({
   const [slots, setSlots] = useState<Slot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+
+  // Afficher le stepper groupe si le secteur l'active OU si le créneau sélectionné a max_party_size > 1
+  const showPartySize = (vocab?.show_party_size ?? false) || (selectedSlot?.max_party_size ?? 1) > 1;
+  const maxPartySize = selectedSlot?.max_party_size ?? 50;
   const [fields, setFields] = useState<ContactFields>({
     first_name: "", last_name: "", email: "", phone: "", message: "", service_offer_id: "", contact_type: "individual",
   });
@@ -365,7 +368,7 @@ export default function ContactForm({
             (new Date(selectedSlot!.end).getTime() - new Date(selectedSlot!.start).getTime()) / 60000
           ),
           contact_type: fields.contact_type,
-          party_size: showPartySize ? partySize : 1,
+          party_size: partySize,
         };
       }
 
@@ -483,7 +486,7 @@ export default function ContactForm({
                 <span className="w-6 text-center font-semibold text-gray-800">{partySize}</span>
                 <button
                   type="button"
-                  onClick={() => setPartySize((n) => Math.min(50, n + 1))}
+                  onClick={() => setPartySize((n) => Math.min(maxPartySize, n + 1))}
                   className="w-7 h-7 rounded-full border flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold"
                 >+</button>
               </div>

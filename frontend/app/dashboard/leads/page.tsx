@@ -226,7 +226,7 @@ export default function LeadsPage() {
   return (
     <div className={`mx-auto p-4 sm:p-6 space-y-5 ${viewMode === "kanban" ? "max-w-full" : "max-w-4xl"}`}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-xl sm:text-2xl font-bold">{t.lead_title}</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">{vocab.leads}</h1>
         <div className="flex items-center gap-2">
           {/* Toggle vue */}
           <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
@@ -517,7 +517,7 @@ export default function LeadsPage() {
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0 border-b border-gray-100">
               <div>
-                <h3 className="font-bold text-lg text-gray-900">Passage à "RDV planifié"</h3>
+                <h3 className="font-bold text-lg text-gray-900">Passage à "{vocab.appointment} planifié(e)"</h3>
                 <p className="text-xs text-gray-500 mt-0.5">{schedulingModal.contactName}</p>
               </div>
               <button onClick={() => setSchedulingModal(null)}
@@ -527,7 +527,7 @@ export default function LeadsPage() {
             {/* Body */}
             <div className="overflow-y-auto flex-1 px-5 py-5">
               {schedulingModal.loading ? (
-                <div className="text-center py-8 text-gray-400">Vérification des rendez-vous…</div>
+                <div className="text-center py-8 text-gray-400">Vérification des {vocab.appointments.toLowerCase()}…</div>
               ) : schedulingModal.appointments.length > 0 ? (
                 /* ── CAS 1 : RDV futurs trouvés ── */
                 <div className="space-y-4">
@@ -536,7 +536,7 @@ export default function LeadsPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
                     </svg>
                     <p className="text-xs text-green-800 leading-relaxed">
-                      {schedulingModal.appointments.length} rendez-vous futur{schedulingModal.appointments.length > 1 ? "s" : ""} trouvé{schedulingModal.appointments.length > 1 ? "s" : ""} pour ce contact. Choisissez celui qui correspond à cette demande.
+                      {schedulingModal.appointments.length} {vocab.appointment.toLowerCase()} futur{schedulingModal.appointments.length > 1 ? "s" : ""} trouvé{schedulingModal.appointments.length > 1 ? "s" : ""} pour ce {vocab.contact.toLowerCase()}. Choisissez celui qui correspond à cette demande.
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -571,7 +571,7 @@ export default function LeadsPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
                     <p className="text-xs text-amber-800 leading-relaxed">
-                      Aucun rendez-vous futur trouvé pour <strong>{schedulingModal.contactName}</strong>. Pour passer en "RDV planifié", vous devez d'abord créer un rendez-vous avec ce client.
+                      Aucun {vocab.appointment.toLowerCase()} futur trouvé pour <strong>{schedulingModal.contactName}</strong>. Pour passer en "{vocab.appointment} planifié(e)", vous devez d'abord créer {vocab.appointment.toLowerCase()} avec ce {vocab.contact.toLowerCase()}.
                     </p>
                   </div>
                   <p className="text-sm text-gray-600">Ou si la situation a changé, vous pouvez fermer ce lead directement :</p>

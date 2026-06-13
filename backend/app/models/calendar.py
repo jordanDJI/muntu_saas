@@ -11,7 +11,8 @@ class AvailabilitySlotIn(BaseModel):
     end_time: str             # "HH:MM"
     slot_duration_min: int = 30
     is_active: bool = True
-    capacity: int = Field(default=1, ge=1, le=500)  # 1=1:1 (défaut), N=groupe/atelier
+    capacity: int = Field(default=1, ge=1, le=500)        # nb de réservations simultanées
+    max_party_size: int = Field(default=1, ge=1, le=500)  # max personnes par résa (1=solo, >1=groupe)
 
 
 class AvailabilitySlotOut(BaseModel):
@@ -23,6 +24,7 @@ class AvailabilitySlotOut(BaseModel):
     slot_duration_min: int
     is_active: bool
     capacity: int = 1
+    max_party_size: int = 1
 
 
 class BlockedPeriodIn(BaseModel):

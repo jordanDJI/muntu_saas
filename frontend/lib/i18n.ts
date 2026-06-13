@@ -186,6 +186,9 @@ const fr = {
   new_client_explain:  "Entrez les coordonnées de votre client pour l'ajouter à votre carnet de contacts. L'email et le téléphone sont facultatifs mais utiles pour lui envoyer des rappels et confirmations automatiquement.",
   new_appt_explain:    "Créez un rendez-vous en choisissant le client, la prestation et l'heure. Une fois enregistré, votre client recevra une confirmation par email s'il en a un.",
   appt_modal_explain:  "Ici vous pouvez voir les détails du rendez-vous, le confirmer pour que votre client reçoive un email, ou l'annuler. Vous pouvez aussi modifier la date, l'heure ou la prestation.",
+  appt_party_size_1:   "personne",
+  appt_party_size_n:   "personnes",
+  appt_client_message: "Message du client",
   crm_reminder_upcoming_section: "À venir",
   crm_reminder_past_section:     "Passées / Faites",
 
@@ -851,6 +854,9 @@ const en: T = {
   new_client_explain:  "Enter your client's details to add them to your contacts. Email and phone are optional but useful for sending automatic reminders and confirmations.",
   new_appt_explain:    "Create an appointment by choosing the client, service and time. Once saved, your client will receive a confirmation email if they have one.",
   appt_modal_explain:  "Here you can see the appointment details, confirm it so your client receives an email, or cancel it. You can also change the date, time or service.",
+  appt_party_size_1:   "person",
+  appt_party_size_n:   "persons",
+  appt_client_message: "Client message",
   crm_reminder_upcoming_section: "Upcoming",
   crm_reminder_past_section:     "Past / Done",
 
@@ -1503,6 +1509,9 @@ const de: T = {
   new_client_explain:  "Geben Sie die Daten Ihres Kunden ein, um ihn zu Ihren Kontakten hinzuzufügen. E-Mail und Telefon sind optional, aber nützlich für automatische Erinnerungen und Bestätigungen.",
   new_appt_explain:    "Erstellen Sie einen Termin, indem Sie Kunden, Leistung und Uhrzeit auswählen. Nach dem Speichern erhält Ihr Kunde eine Bestätigungs-E-Mail, sofern er eine hat.",
   appt_modal_explain:  "Hier können Sie die Termindetails einsehen, den Termin bestätigen (Ihr Kunde erhält dann eine E-Mail) oder absagen. Sie können auch Datum, Uhrzeit oder Leistung ändern.",
+  appt_party_size_1:   "Person",
+  appt_party_size_n:   "Personen",
+  appt_client_message: "Nachricht des Kunden",
   crm_reminder_upcoming_section: "Bevorstehend",
   crm_reminder_past_section:     "Vergangen / Erledigt",
 
@@ -2155,6 +2164,9 @@ const nl: T = {
   new_client_explain:  "Voer de gegevens van uw klant in om hem aan uw contacten toe te voegen. E-mail en telefoon zijn optioneel maar handig voor automatische herinneringen en bevestigingen.",
   new_appt_explain:    "Maak een afspraak aan door klant, dienst en tijdstip te kiezen. Na het opslaan ontvangt uw klant een bevestigingsmail als hij er een heeft.",
   appt_modal_explain:  "Hier kunt u de afspraakdetails bekijken, de afspraak bevestigen zodat uw klant een e-mail ontvangt, of annuleren. U kunt ook de datum, het tijdstip of de dienst wijzigen.",
+  appt_party_size_1:   "persoon",
+  appt_party_size_n:   "personen",
+  appt_client_message: "Bericht van klant",
   crm_reminder_upcoming_section: "Komende",
   crm_reminder_past_section:     "Verleden / Gedaan",
 

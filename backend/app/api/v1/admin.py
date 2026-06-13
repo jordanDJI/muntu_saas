@@ -351,8 +351,8 @@ async def delete_tenant(tenant_id: str, admin=Depends(get_current_admin)):
     t  = sb.table("tenant").select("name").eq("id", tenant_id).single().execute().data
     if not t:
         raise HTTPException(404, "Tenant introuvable")
-    sb.table("tenant").delete().eq("id", tenant_id).execute()
     _log(admin, "delete_tenant", tenant_id, t["name"])
+    sb.table("tenant").delete().eq("id", tenant_id).execute()
     return {"ok": True}
 
 

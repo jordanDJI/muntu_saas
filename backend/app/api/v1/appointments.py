@@ -72,7 +72,7 @@ async def create_appointment(
         supabase.table("lead").update({"status": "scheduled"}).eq("id", str(body.lead_id)).execute()
 
     contact = supabase.table("contact").select("first_name, last_name, email").eq("id", str(body.contact_id)).single().execute().data
-    tenant = supabase.table("tenant").select("name").eq("id", tenant_id).single().execute().data
+    tenant = supabase.table("tenant").select("name, timezone").eq("id", tenant_id).single().execute().data
 
     if contact and contact.get("email") and tenant:
         background_tasks.add_task(
@@ -81,6 +81,7 @@ async def create_appointment(
             contact_name=f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip(),
             appointment=appt,
             tenant_name=tenant.get("name", ""),
+            tz_name=tenant.get("timezone", "UTC"),
         )
 
     contact_name = (
@@ -153,7 +154,7 @@ async def confirm_appointment(
     supabase.table("lead").update({"status": "scheduled"}).eq("contact_id", appt["contact_id"]).eq("tenant_id", tenant_id).execute()
 
     contact = supabase.table("contact").select("first_name, last_name, email").eq("id", appt["contact_id"]).single().execute().data
-    tenant = supabase.table("tenant").select("name").eq("id", tenant_id).single().execute().data
+    tenant = supabase.table("tenant").select("name, timezone").eq("id", tenant_id).single().execute().data
 
     if contact and contact.get("email") and tenant:
         background_tasks.add_task(
@@ -162,6 +163,7 @@ async def confirm_appointment(
             contact_name=f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip(),
             appointment=appt,
             tenant_name=tenant.get("name", ""),
+            tz_name=tenant.get("timezone", "UTC"),
         )
 
     return appt
@@ -189,7 +191,7 @@ async def cancel_appointment(
 
     if was_confirmed or was_pending:
         contact = supabase.table("contact").select("first_name, last_name, email").eq("id", appt["contact_id"]).single().execute().data
-        tenant = supabase.table("tenant").select("name, slug").eq("id", tenant_id).single().execute().data
+        tenant = supabase.table("tenant").select("name, slug, timezone").eq("id", tenant_id).single().execute().data
         if contact and contact.get("email") and tenant:
             booking_url = f"{settings.frontend_url}/{tenant.get('slug', '')}"
             background_tasks.add_task(
@@ -200,6 +202,7 @@ async def cancel_appointment(
                 tenant_name=tenant.get("name", ""),
                 booking_url=booking_url,
                 was_pending=was_pending,
+                tz_name=tenant.get("timezone", "UTC"),
             )
 
     return appt

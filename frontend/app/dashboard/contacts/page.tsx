@@ -4,6 +4,7 @@ import Link from "next/link";
 import { api } from "../../../lib/api";
 import { useLanguage } from "../../../contexts/LanguageContext";
 import { useSubscription } from "../../../contexts/SubscriptionContext";
+import { useSectorVocab } from "../../../lib/useSectorVocab";
 
 const TAG_COLORS: Record<string, { bg: string; text: string }> = {
   blue:   { bg: "#EFF6FF", text: "#2563EB" },
@@ -198,6 +199,7 @@ Paul,Martin,paul.m@mail.com,,`
 export default function ContactsPage() {
   const { t } = useLanguage();
   const { hasFeature } = useSubscription();
+  const { vocab } = useSectorVocab();
   const [contacts, setContacts] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [tags, setTags] = useState<any[]>([]);
@@ -281,8 +283,8 @@ export default function ContactsPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold">{t.crm_title}</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{total} contact{total !== 1 ? "s" : ""}</p>
+          <h1 className="text-xl sm:text-2xl font-bold">{vocab.contacts}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{total} {total !== 1 ? vocab.contacts.toLowerCase() : vocab.contact.toLowerCase()}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Link href="/dashboard/reminders"
