@@ -48,7 +48,9 @@ const STATUS_LABEL: Record<string, string> = {
   active: "Actif", trialing: "Stripe trial", trial: "Essai", trial_expired: "Expiré", suspended: "Suspendu",
 };
 const SECTORS: Record<string, string> = {
-  health: "Santé", coaching: "Coaching", trade: "Artisan", beauty: "Beauté", finance: "Finance", other: "Autre",
+  health: "Santé", coaching: "Coaching", trade: "Artisan / Bâtiment",
+  beauty: "Beauté", finance: "Finance", restaurant: "Restaurant",
+  commerce: "Commerce", other: "Autre",
 };
 
 function exportCSV(items: any[]) {

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
 import { useLanguage } from "../../../contexts/LanguageContext";
 import { useSubscription } from "../../../contexts/SubscriptionContext";
+import { useSectorVocab } from "../../../lib/useSectorVocab";
 
 const PAGE_SIZE = 10;
 
@@ -28,6 +29,7 @@ type LinkModal = {
 export default function LeadsPage() {
   const { t } = useLanguage();
   const { hasFeature } = useSubscription();
+  const { vocab, leadTypes } = useSectorVocab();
   const router = useRouter();
 
   const STATUS_LABELS: Record<string, string> = {
@@ -46,8 +48,9 @@ export default function LeadsPage() {
   };
 
   const TYPE_LABELS: Record<string, string> = {
-    b2c_appointment: "Prise de RDV", b2b_appointment: "Prise de RDV (B2B)",
+    b2c_appointment: `Prise de ${vocab.appointment.toLowerCase()}`, b2b_appointment: `Prise de ${vocab.appointment.toLowerCase()} (B2B)`,
     contact: "Prise de contact", information: "Demande d'info",
+    ...Object.fromEntries(leadTypes.map((lt) => [lt.value, lt.label])),
   };
   const [leads, setLeads] = useState<any[]>([]);
   const [filter, setFilter] = useState<string | undefined>(undefined);

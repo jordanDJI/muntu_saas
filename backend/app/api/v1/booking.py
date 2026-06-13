@@ -139,7 +139,7 @@ async def get_available_slots(tenant_slug: str, date: str, request: Request):
         .lte("scheduled_at", day_end.isoformat())
         .execute()
     )
-    busy = [
+    appointments = [
         (
             datetime.fromisoformat(a["scheduled_at"].replace("Z", "+00:00")),
             datetime.fromisoformat(a["end_at"].replace("Z", "+00:00")),
@@ -155,7 +155,7 @@ async def get_available_slots(tenant_slug: str, date: str, request: Request):
         .gte("end_at", day_start.isoformat())
         .execute()
     )
-    busy += [
+    blocked_periods = [
         (
             datetime.fromisoformat(b["start_at"].replace("Z", "+00:00")),
             datetime.fromisoformat(b["end_at"].replace("Z", "+00:00")),
@@ -170,19 +170,38 @@ async def get_available_slots(tenant_slug: str, date: str, request: Request):
         h_s, m_s = map(int, avail["start_time"][:5].split(":"))
         h_e, m_e = map(int, avail["end_time"][:5].split(":"))
         duration = avail["slot_duration_min"]
+        capacity = avail.get("capacity", 1)
 
         slot_start = datetime.combine(target_date, dtime(h_s, m_s)).replace(tzinfo=timezone.utc)
         period_end = datetime.combine(target_date, dtime(h_e, m_e)).replace(tzinfo=timezone.utc)
 
         while slot_start + timedelta(minutes=duration) <= period_end:
             slot_end = slot_start + timedelta(minutes=duration)
-            is_busy = any(s < slot_end and slot_start < e for s, e in busy)
-            if not is_busy and slot_start > now:
-                slots.append({
+
+            if slot_start <= now:
+                slot_start = slot_end
+                continue
+
+            # Périodes bloquées → skip complet
+            if any(s < slot_end and slot_start < e for s, e in blocked_periods):
+                slot_start = slot_end
+                continue
+
+            # Compter les RDV qui chevauchent ce créneau
+            booked = sum(1 for s, e in appointments if s < slot_end and slot_start < e)
+            spots_left = capacity - booked
+
+            if spots_left > 0:
+                slot_data: dict = {
                     "start": slot_start.isoformat(),
                     "end": slot_end.isoformat(),
                     "label": slot_start.strftime("%H:%M"),
-                })
+                }
+                if capacity > 1:
+                    slot_data["spots_left"] = spots_left
+                    slot_data["capacity"] = capacity
+                slots.append(slot_data)
+
             slot_start = slot_end
 
     return slots
@@ -287,22 +306,45 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
 
     end_at = body.scheduled_at + timedelta(minutes=body.slot_duration_min)
 
-    # Vérification anti-double réservation (TOCTOU) : le créneau est-il encore libre ?
-    conflict = (
+    # Vérification anti-double réservation (TOCTOU) avec gestion de capacité
+    # Cherche la capacité du créneau (availability_slot)
+    target_date_val = body.scheduled_at.date()
+    day_of_week = target_date_val.weekday()
+    slot_time = body.scheduled_at.strftime("%H:%M")
+    avail_check = (
+        sb.table("availability_slot")
+        .select("capacity")
+        .eq("calendar_id", cal_id)
+        .eq("day_of_week", day_of_week)
+        .eq("is_active", True)
+        .execute()
+    )
+    slot_capacity = 1
+    for avail in avail_check.data or []:
+        slot_capacity = max(slot_capacity, avail.get("capacity", 1))
+
+    existing = (
         sb.table("appointment")
         .select("id")
         .eq("calendar_id", cal_id)
         .neq("status", "cancelled")
         .lt("scheduled_at", end_at.isoformat())
         .gt("end_at", body.scheduled_at.isoformat())
-        .limit(1)
         .execute()
     )
-    if conflict.data:
-        raise HTTPException(
-            status_code=409,
-            detail="Ce créneau vient d'être réservé. Veuillez choisir un autre horaire.",
-        )
+    booked_count = len(existing.data or [])
+    if booked_count + body.party_size > slot_capacity:
+        if slot_capacity == 1:
+            detail = "Ce créneau vient d'être réservé. Veuillez choisir un autre horaire."
+        else:
+            spots_left = max(0, slot_capacity - booked_count)
+            detail = (
+                f"Il ne reste que {spots_left} place(s) pour ce créneau "
+                f"(vous demandez {body.party_size} place(s))."
+                if spots_left > 0
+                else "Ce créneau est complet. Veuillez choisir un autre horaire."
+            )
+        raise HTTPException(status_code=409, detail=detail)
 
     appt_row: dict = {
         "calendar_id": cal_id,
@@ -313,6 +355,7 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
         "status": "pending",
         "type": "b2c_appointment",
         "audience_type": "b2c",
+        "party_size": body.party_size,
     }
     if body.message and body.message.strip():
         appt_row["notes"] = body.message.strip()

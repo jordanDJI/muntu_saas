@@ -96,6 +96,8 @@ def _offer_from_db(row: dict) -> dict:
         "description": row.get("description"),
         "duration_min": row.get("duration_min"),
         "price_eur": row.get("price_eur"),
+        "service_type": row.get("service_type", "service"),
+        "category": row.get("category"),
         "created_at": row.get("created_at"),
     }
 
@@ -109,6 +111,9 @@ def _offer_to_db(site_id: str, offer: ServiceOfferIn) -> dict:
         row["price_eur"] = offer.price_eur
     if offer.image_url is not None:
         row["image_url"] = offer.image_url
+    row["service_type"] = offer.service_type or "service"
+    if offer.category is not None:
+        row["category"] = offer.category
     return row
 
 

@@ -15,7 +15,7 @@ function _track(slug: string, type: string, section?: string, data?: object) {
   } catch {}
 }
 
-type Slot = { start: string; end: string; label: string };
+type Slot = { start: string; end: string; label: string; spots_left?: number; capacity?: number };
 type Mode = "contact" | "appointment";
 
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
@@ -138,14 +138,17 @@ function SlotGrid({
           <button
             key={s.start}
             onClick={() => onSelect(s)}
-            className="py-2 rounded-lg text-sm font-medium border transition-colors"
+            className="py-2 rounded-lg text-sm font-medium border transition-colors flex flex-col items-center"
             style={
               isSel
                 ? { backgroundColor: accentColor, color: "#fff", borderColor: accentColor }
                 : { backgroundColor: "#f9fafb", color: "#374151", borderColor: "#e5e7eb" }
             }
           >
-            {s.label}
+            <span>{s.label}</span>
+            {s.spots_left !== undefined && s.capacity && s.capacity > 1 && (
+              <span className="text-xs opacity-70">{s.spots_left} pl.</span>
+            )}
           </button>
         );
       })}
@@ -253,19 +256,33 @@ function ContactFields({
 
 // ── Composant principal ───────────────────────────────────────────────────────
 
+type SectorVocabMini = {
+  booking_cta?: string;
+  show_party_size?: boolean;
+  party_size_label?: string | null;
+  party_size_hint?: string | null;
+};
+
 export default function ContactForm({
   tenantSlug,
   accentColor = "#4f46e5",
   offers = [],
+  vocab,
 }: {
   tenantSlug: string;
   accentColor?: string;
   offers?: { id: string; name: string }[];
+  vocab?: SectorVocabMini;
 }) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  const bookingCta = vocab?.booking_cta ?? "Prendre rendez-vous";
+  const showPartySize = vocab?.show_party_size ?? false;
+  const partySizeLabel = vocab?.party_size_label ?? "Nombre de personnes";
+  const partySizeHint = vocab?.party_size_hint ?? null;
 
   const [mode, setMode] = useState<Mode>("contact");
   const [step, setStep] = useState<"date" | "slot" | "form">("date");
+  const [partySize, setPartySize] = useState(1);
 
   useEffect(() => {
     if (window.location.hash === "#rdv") {
@@ -348,6 +365,7 @@ export default function ContactForm({
             (new Date(selectedSlot!.end).getTime() - new Date(selectedSlot!.start).getTime()) / 60000
           ),
           contact_type: fields.contact_type,
+          party_size: showPartySize ? partySize : 1,
         };
       }
 
@@ -374,11 +392,13 @@ export default function ContactForm({
       <div className="text-center py-8">
         <div className="text-4xl mb-3">✓</div>
         <p className="font-semibold text-lg" style={{ color: accentColor }}>
-          {mode === "appointment" ? "Rendez-vous confirmé !" : "Message envoyé !"}
+          {mode === "appointment" ? `${bookingCta} — Demande reçue !` : "Message envoyé !"}
         </p>
         <p className="text-gray-500 mt-2 text-sm">
           {mode === "appointment"
-            ? "Vous recevrez une confirmation par email avec les détails."
+            ? showPartySize
+              ? `Votre réservation pour ${partySize} personne(s) a bien été transmise. Vous recevrez une confirmation par email.`
+              : "Vous recevrez une confirmation par email avec les détails."
             : "Nous vous recontacterons très prochainement."}
         </p>
       </div>
@@ -401,7 +421,7 @@ export default function ContactForm({
           className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mode === "appointment" ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
           style={mode === "appointment" ? { backgroundColor: accentColor } : {}}
         >
-          Prendre rendez-vous
+          {bookingCta}
         </button>
       </div>
 
@@ -446,6 +466,29 @@ export default function ContactForm({
               3. Coordonnées
             </span>
           </div>
+
+          {/* Party size — affiché si secteur 1:N (restaurant…) */}
+          {showPartySize && (
+            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border">
+              <label className="text-sm text-gray-600 flex-1">
+                {partySizeLabel}
+                {partySizeHint && <span className="block text-xs text-gray-400">{partySizeHint}</span>}
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPartySize((n) => Math.max(1, n - 1))}
+                  className="w-7 h-7 rounded-full border flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold"
+                >−</button>
+                <span className="w-6 text-center font-semibold text-gray-800">{partySize}</span>
+                <button
+                  type="button"
+                  onClick={() => setPartySize((n) => Math.min(50, n + 1))}
+                  className="w-7 h-7 rounded-full border flex items-center justify-center text-gray-600 hover:bg-gray-100 font-bold"
+                >+</button>
+              </div>
+            </div>
+          )}
 
           {/* Étape 1 — Calendrier */}
           {step === "date" && (

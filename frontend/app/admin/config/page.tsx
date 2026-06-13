@@ -31,12 +31,14 @@ async function adminFetch<T>(path: string, options: RequestInit = {}): Promise<T
 }
 
 const DEFAULT_SECTORS: Record<string, string[]> = {
-  health:   ["infirmière à domicile", "kinésithérapeute", "médecin généraliste"],
-  beauty:   ["coiffeur", "esthéticienne", "salon de beauté"],
-  coaching: ["coach de vie", "coaching personnel", "coach sportif"],
-  finance:  ["comptable indépendant", "conseiller financier", "expert comptable"],
-  trade:    ["plombier", "électricien", "artisan"],
-  other:    ["prestataire de service", "indépendant"],
+  health:      ["infirmière à domicile", "kinésithérapeute", "médecin généraliste"],
+  beauty:      ["coiffeur", "esthéticienne", "salon de beauté"],
+  coaching:    ["coach de vie", "coaching personnel", "coach sportif"],
+  finance:     ["comptable indépendant", "conseiller financier", "expert comptable"],
+  trade:       ["plombier", "électricien", "artisan"],
+  restaurant:  ["restaurant", "livraison repas", "réservation restaurant"],
+  commerce:    ["boutique", "magasin", "commerce de proximité"],
+  other:       ["prestataire de service", "indépendant"],
 };
 
 export default function ConfigPage() {
@@ -54,6 +56,10 @@ export default function ConfigPage() {
 
   const [editingSector, setEditingSector] = useState<string | null>(null);
   const [sectorKws,     setSectorKws]     = useState<string>("");
+  const [newSectorKey,  setNewSectorKey]  = useState("");
+  const [newSectorLabel,setNewSectorLabel]= useState("");
+  const [newSectorKws,  setNewSectorKws]  = useState("");
+  const [showNewSector, setShowNewSector] = useState(false);
 
   const showToast = (msg: string, ok = true) => {
     setToast(msg); setToastOk(ok); setTimeout(() => setToast(""), 3000);
@@ -136,6 +142,22 @@ export default function ConfigPage() {
     try {
       await adminFetch(`/api/v1/admin/feature-flags/${key}`, { method: "DELETE" });
       showToast("Supprimé ✓");
+      await load();
+    } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
+    finally { setBusy(false); }
+  };
+
+  const createSector = async () => {
+    if (!newSectorKey.trim()) return;
+    const kws = newSectorKws.split("\n").map(s => s.trim()).filter(Boolean);
+    setBusy(true);
+    try {
+      await adminFetch<any>("/api/v1/admin/sectors", {
+        method: "POST",
+        body: JSON.stringify({ key: newSectorKey.trim().toLowerCase(), label: newSectorLabel.trim() || undefined, keywords: kws }),
+      });
+      showToast(`Secteur "${newSectorKey}" créé ✓`);
+      setNewSectorKey(""); setNewSectorLabel(""); setNewSectorKws(""); setShowNewSector(false);
       await load();
     } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
     finally { setBusy(false); }
@@ -278,6 +300,58 @@ export default function ConfigPage() {
         <p className="text-xs mb-4" style={{ color: "rgba(170,189,216,0.3)" }}>
           Ces mots-clés sont utilisés par le moteur de potentiel de demande locale.
         </p>
+
+        <div className="flex justify-end mb-3">
+          <button onClick={() => setShowNewSector(v => !v)}
+            className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+            style={{ background: showNewSector ? "rgba(13,75,88,0.4)" : "rgba(13,75,88,0.2)", color: K.tealXL, border: `1px solid rgba(42,143,165,0.3)` }}>
+            {showNewSector ? "Annuler" : "+ Nouveau secteur"}
+          </button>
+        </div>
+
+        {showNewSector && (
+          <div className="rounded-xl p-4 mb-3 space-y-3" style={{ background: K.card, border: `1px solid rgba(42,143,165,0.3)` }}>
+            <p className="text-xs font-medium" style={{ color: K.tealXL }}>Créer un nouveau secteur</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: K.muted }}>Clé (ex: immobilier)</label>
+                <input
+                  value={newSectorKey}
+                  onChange={(e) => setNewSectorKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  placeholder="ma_cle"
+                  className="w-full rounded-lg px-3 py-2 text-xs font-mono focus:outline-none"
+                  style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.15)`, color: K.text }}
+                />
+              </div>
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: K.muted }}>Label affiché (ex: Immobilier)</label>
+                <input
+                  value={newSectorLabel}
+                  onChange={(e) => setNewSectorLabel(e.target.value)}
+                  placeholder="Mon secteur"
+                  className="w-full rounded-lg px-3 py-2 text-xs focus:outline-none"
+                  style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.15)`, color: K.text }}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs mb-1 block" style={{ color: K.muted }}>Mots-clés Google Trends (un par ligne)</label>
+              <textarea
+                value={newSectorKws}
+                onChange={(e) => setNewSectorKws(e.target.value)}
+                rows={3}
+                placeholder={"agent immobilier\nachat appartement\nvente maison"}
+                className="w-full rounded-lg px-3 py-2 text-xs font-mono focus:outline-none resize-none"
+                style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.15)`, color: K.text }}
+              />
+            </div>
+            <button onClick={createSector} disabled={busy || !newSectorKey.trim()}
+              className="text-xs px-3 py-1.5 rounded-lg disabled:opacity-40 transition-colors"
+              style={{ background: "rgba(13,75,88,0.5)", color: K.success, border: `1px solid rgba(74,202,122,0.3)` }}>
+              Créer le secteur
+            </button>
+          </div>
+        )}
 
         <div className="space-y-2">
           {Object.entries(sectors).map(([key, kws]) => (

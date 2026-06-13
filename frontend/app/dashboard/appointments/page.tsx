@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
 import { useLanguage } from "../../../contexts/LanguageContext";
+import { useSectorVocab } from "../../../lib/useSectorVocab";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -801,6 +802,7 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
 
 export default function AppointmentsPage() {
   const router = useRouter();
+  const { vocab } = useSectorVocab();
   const [view, setView]                 = useState<View>("week");
   const [anchor, setAnchor]             = useState<Date>(() => { const d=new Date(); d.setHours(0,0,0,0); return d; });
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -1042,7 +1044,7 @@ export default function AppointmentsPage() {
           <span className="hidden sm:inline">Retour</span>
         </button>
 
-        <h1 className="text-lg sm:text-xl font-bold text-gray-900 flex-1 min-w-0">Rendez-vous</h1>
+        <h1 className="text-lg sm:text-xl font-bold text-gray-900 flex-1 min-w-0">{vocab.appointments}</h1>
 
         <button id="appts-availability-btn" onClick={()=>setShowAvail(true)}
           className="text-xs sm:text-sm px-2.5 py-1.5 border border-primary-300 text-primary-600 rounded-lg hover:bg-primary-50 shrink-0">

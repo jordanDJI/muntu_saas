@@ -7,6 +7,7 @@ import ChatbotWidget from "../../components/ChatbotWidget";
 import PreviewBanner from "./preview-banner";
 import NavBar from "./navbar";
 import { AtoutIconSVG } from "../../lib/atout-icons";
+import { getSectorVocab } from "../../lib/sectorVocabulary";
 import CookieBanner from "../../components/CookieBanner";
 import TrackingScripts from "../../components/TrackingScripts";
 
@@ -54,6 +55,39 @@ function getVideoEmbed(url: string): { type: "youtube" | "vimeo" | "direct"; emb
   if (vm) return { type: "vimeo", embedUrl: `https://player.vimeo.com/video/${vm[1]}` };
   if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) return { type: "direct", embedUrl: url };
   return null;
+}
+
+function OfferCard({ offer, colors }: { offer: any; colors: { accent: string; light: string; hero: string } }) {
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all hover:-translate-y-1 border border-gray-100/80">
+      {offer.image_url ? (
+        <Image src={offer.image_url} alt={offer.name} width={400} height={160} className="w-full h-40 object-cover" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" />
+      ) : (
+        <div className="h-2 w-full" style={{ backgroundColor: colors.accent }} />
+      )}
+      <div className="p-5">
+        <h3 className="font-semibold text-gray-900 text-lg leading-snug">{offer.name}</h3>
+        {offer.description && (
+          <p className="text-gray-500 mt-2 text-sm leading-relaxed">{offer.description}</p>
+        )}
+        {((offer.duration_min ?? offer.duration_minutes) || (offer.price_eur ?? offer.price_from)) && (
+          <div className="flex gap-2 mt-4 flex-wrap">
+            {(offer.duration_min ?? offer.duration_minutes) && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white" style={{ backgroundColor: colors.accent }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                {offer.duration_min ?? offer.duration_minutes} min
+              </span>
+            )}
+            {(offer.price_eur ?? offer.price_from) && (
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: colors.light, color: colors.hero }}>
+                {offer.price_eur ?? offer.price_from} €
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 async function getSiteData(slug: string, preview = false) {
@@ -168,6 +202,27 @@ export default async function TenantSitePage({
   const pagesEnabled: string[] = siteStyle.pages_enabled ?? ["home", "about", "services", "contact"];
   const showAbout = pagesEnabled.includes("about") && (isPreview || !!site.description);
   const showServices = pagesEnabled.includes("services") && (isPreview || (site.service_offer?.length > 0));
+
+  const sector: string = site.tenant?.sector ?? "other";
+  const sectorVocab = getSectorVocab(sector);
+  const openingHours: Record<string, { open: boolean; from: string; to: string }> = siteStyle.opening_hours ?? {};
+  const hasOpeningHours = Object.values(openingHours).some((d: any) => d?.open);
+
+  // Grouper les offres par catégorie (pour restaurant/commerce)
+  const offers: any[] = site.service_offer ?? [];
+  const offersByCategory: Record<string, any[]> = {};
+  const offersWithCategory = offers.filter((o: any) => o.category);
+  if (offersWithCategory.length > 0) {
+    for (const o of offers) {
+      const cat = o.category || "Autres";
+      if (!offersByCategory[cat]) offersByCategory[cat] = [];
+      offersByCategory[cat].push(o);
+    }
+  }
+  const useCategories = Object.keys(offersByCategory).length > 0;
+
+  const DAYS_FR_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+  const DAYS_KEYS_PUB = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
   return (
     <main className="min-h-screen bg-white text-gray-900" style={{ fontFamily: font }}>
@@ -376,46 +431,35 @@ export default async function TenantSitePage({
           <div className="relative z-10 max-w-5xl mx-auto">
             <div className="text-center mb-12">
               <span className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ backgroundColor: colors.light, color: colors.hero }}>
-                Prestations
+                {sectorVocab.appointments}
               </span>
-              <h2 className="tc-s text-3xl sm:text-5xl font-bold text-gray-900">Nos services</h2>
+              <h2 className="tc-s text-3xl sm:text-5xl font-bold text-gray-900">
+                {sector === "restaurant" ? "Notre carte" : sector === "commerce" ? "Nos produits" : "Nos services"}
+              </h2>
             </div>
-            {site.service_offer?.length > 0 ? (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {site.service_offer.map((offer: any) => (
-                  <div
-                    key={offer.id}
-                    className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all hover:-translate-y-1 border border-gray-100/80"
-                  >
-                    {offer.image_url ? (
-                      <Image src={offer.image_url} alt={offer.name} width={400} height={160} className="w-full h-40 object-cover" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" />
-                    ) : (
-                      <div className="h-2 w-full" style={{ backgroundColor: colors.accent }} />
-                    )}
-                    <div className="p-5">
-                      <h3 className="font-semibold text-gray-900 text-lg leading-snug">{offer.name}</h3>
-                      {offer.description && (
-                        <p className="text-gray-500 mt-2 text-sm leading-relaxed">{offer.description}</p>
-                      )}
-                      {((offer.duration_min ?? offer.duration_minutes) || (offer.price_eur ?? offer.price_from)) && (
-                        <div className="flex gap-2 mt-4 flex-wrap">
-                          {(offer.duration_min ?? offer.duration_minutes) && (
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white" style={{ backgroundColor: colors.accent }}>
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                              {offer.duration_min ?? offer.duration_minutes} min
-                            </span>
-                          )}
-                          {(offer.price_eur ?? offer.price_from) && (
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: colors.light, color: colors.hero }}>
-                              {offer.price_eur ?? offer.price_from} €
-                            </span>
-                          )}
-                        </div>
-                      )}
+            {offers.length > 0 ? (
+              useCategories ? (
+                /* Affichage par catégories (restaurant / commerce) */
+                <div className="space-y-10">
+                  {Object.entries(offersByCategory).map(([cat, catOffers]) => (
+                    <div key={cat}>
+                      <h3 className="text-xl font-bold mb-5 pb-2 border-b" style={{ color: colors.hero, borderColor: colors.light }}>{cat}</h3>
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {catOffers.map((offer: any) => (
+                          <OfferCard key={offer.id} offer={offer} colors={colors} />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                /* Affichage classique en grille */
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {offers.map((offer: any) => (
+                    <OfferCard key={offer.id} offer={offer} colors={colors} />
+                  ))}
+                </div>
+              )
             ) : isPreview ? (
               <p className="text-center text-gray-400 italic text-sm">Prestations non configurées — complétez l'étape 5 du site-builder.</p>
             ) : null}
@@ -566,6 +610,28 @@ export default async function TenantSitePage({
                   </div>
                 </div>
               )}
+              {/* Horaires d'ouverture */}
+              {hasOpeningHours && (
+                <div className="p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+                  <p className="text-xs text-gray-400 font-medium mb-3">Horaires d'ouverture</p>
+                  <div className="space-y-1.5">
+                    {DAYS_KEYS_PUB.map((key, idx) => {
+                      const dh = openingHours[key];
+                      if (!dh) return null;
+                      return (
+                        <div key={key} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500 w-10">{DAYS_FR_SHORT[idx]}</span>
+                          {dh.open ? (
+                            <span className="font-medium text-gray-700">{dh.from} – {dh.to}</span>
+                          ) : (
+                            <span className="text-gray-400 italic text-xs">Fermé</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {(social.facebook || social.instagram || social.linkedin) && (
                 <div className="flex gap-2 pt-1">
                   {social.facebook && (
@@ -587,6 +653,7 @@ export default async function TenantSitePage({
                 tenantSlug={tenantSlug}
                 accentColor={colors.accent}
                 offers={(site.service_offer ?? []).map((o: any) => ({ id: o.id, name: o.name }))}
+                vocab={sectorVocab}
               />
             </div>
           </div>

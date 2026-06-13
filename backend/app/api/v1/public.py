@@ -58,7 +58,7 @@ async def get_directory_slugs():
 async def get_public_site(slug: str, preview: bool = Query(False)):
     sb = get_supabase()
 
-    tenant_res = sb.table("tenant").select("id, name, country").eq("slug", slug).limit(1).execute()
+    tenant_res = sb.table("tenant").select("id, name, country, sector").eq("slug", slug).limit(1).execute()
     if not tenant_res.data:
         raise HTTPException(status_code=404, detail="Site introuvable")
 
@@ -80,4 +80,4 @@ async def get_public_site(slug: str, preview: bool = Query(False)):
     domain_res = sb.table("custom_domain").select("domain").eq("tenant_id", tenant["id"]).eq("status", "active").limit(1).execute()
     custom_domain = domain_res.data[0]["domain"] if domain_res.data else None
 
-    return {**site_res.data, "tenant": {**tenant, "country": tenant_res.data[0].get("country", "FR"), "custom_domain": custom_domain}}
+    return {**site_res.data, "tenant": {**tenant, "country": tenant_res.data[0].get("country", "FR"), "sector": tenant_res.data[0].get("sector", "other"), "custom_domain": custom_domain}}

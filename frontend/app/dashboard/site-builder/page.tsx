@@ -60,6 +60,8 @@ type PhotoHighlight = "hero" | "about" | "services" | "contact";
 
 // ── Icônes Atouts ─────────────────────────────────────────────────────────────
 import { ATOUT_ICONS, AtoutIconSVG } from "../../../lib/atout-icons";
+import { getSectorVocab } from "../../../lib/sectorVocabulary";
+import { getSectorTemplate } from "../../../lib/sectorTemplates";
 
 function SiteWireframe({ highlight }: { highlight: PhotoHighlight }) {
   const ring = "ring-2 ring-primary-500";
@@ -129,11 +131,11 @@ const STEP_KEYS = [
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Offer = { name: string; description: string; duration_min: string; price_eur: string; image_url: string };
+type Offer = { name: string; description: string; duration_min: string; price_eur: string; image_url: string; service_type: string; category: string };
 type Value = { icon: string; title: string; description: string };
 type Testimonial = { author_name: string; author_role: string; content: string; rating: number };
 
-const EMPTY_OFFER = (): Offer => ({ name: "", description: "", duration_min: "", price_eur: "", image_url: "" });
+const EMPTY_OFFER = (): Offer => ({ name: "", description: "", duration_min: "", price_eur: "", image_url: "", service_type: "service", category: "" });
 const EMPTY_VALUE = (): Value => ({ icon: "star", title: "", description: "" });
 const EMPTY_TESTIMONIAL = (): Testimonial => ({ author_name: "", author_role: "", content: "", rating: 5 });
 
@@ -200,6 +202,18 @@ export default function SiteBuilderPage() {
   const [facebook, setFacebook] = useState("");
   const [instagram, setInstagram] = useState("");
   const [linkedin, setLinkedin] = useState("");
+
+  // Secteur du tenant (chargé via api.getMyTenant)
+  const [tenantSector, setTenantSector] = useState<string>("other");
+
+  // Step 3 — Horaires d'ouverture (site_style.opening_hours)
+  const DAYS_FR = t.sb_oh_days;
+  const DAYS_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+  type DayHours = { open: boolean; from: string; to: string };
+  const DEFAULT_DAY_HOURS = (): DayHours => ({ open: false, from: "09:00", to: "18:00" });
+  const [openingHours, setOpeningHours] = useState<Record<string, DayHours>>(() =>
+    Object.fromEntries(DAYS_KEYS.map((k) => [k, DEFAULT_DAY_HOURS()]))
+  );
 
   // Step 4 — Zones
   const [zones, setZones] = useState<string[]>([""]);
@@ -303,10 +317,12 @@ export default function SiteBuilderPage() {
       const s = sites[0];
       setSiteId(s.id);
 
-      // Récupérer le slug tenant pour le lien de prévisualisation
+      // Récupérer slug et secteur tenant
+      let resolvedSector = "other";
       try {
         const tenant = await api.getMyTenant();
         if (tenant?.slug) setTenantSlug(tenant.slug);
+        if (tenant?.sector) { resolvedSector = tenant.sector; setTenantSector(tenant.sector); }
       } catch { /* slug reste vide */ }
 
       // Style
@@ -324,6 +340,11 @@ export default function SiteBuilderPage() {
       setMetaPixelId(style.tracking?.meta_pixel_id ?? "");
       setGtmId(style.tracking?.gtm_id ?? "");
       setCustomCss(style.custom_css ?? "");
+
+      // Horaires d'ouverture
+      if (style.opening_hours && typeof style.opening_hours === "object") {
+        setOpeningHours((prev) => ({ ...prev, ...style.opening_hours }));
+      }
 
       // Identité
       setTitle(s.title ?? "");
@@ -362,10 +383,35 @@ export default function SiteBuilderPage() {
               duration_min: o.duration_min?.toString() ?? "",
               price_eur: o.price_eur?.toString() ?? "",
               image_url: o.image_url ?? "",
+              service_type: o.service_type ?? "service",
+              category: o.category ?? "",
             }))
           : [EMPTY_OFFER()]
       );
       setTestimonials(testimonialsData.length ? testimonialsData : []);
+
+      // Pré-remplissage depuis le template sectoriel (premier accès depuis l'onboarding)
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("template") === "auto" && !s.tagline && !s.description) {
+        const tmpl = getSectorTemplate(resolvedSector);
+        setTagline(tmpl.tagline);
+        setDescription(tmpl.description);
+        setPagesEnabled(tmpl.pages_enabled);
+        setOffers(tmpl.services.map((svc) => ({
+          name: svc.name,
+          description: svc.description,
+          duration_min: svc.duration_min?.toString() ?? "",
+          price_eur: svc.price !== null ? svc.price?.toString() ?? "" : "",
+          image_url: "",
+          service_type: "service",
+          category: "",
+        })));
+        setValues(tmpl.atouts.map((a) => ({ icon: a.icon, title: a.title, description: a.description })));
+        // Passer directement à l'étape identité (étape 2)
+        setStep(2);
+        // Retirer le query param pour éviter le re-déclenchement
+        window.history.replaceState({}, "", "/dashboard/site-builder");
+      }
     };
     load().catch(console.error);
   }, []);
@@ -390,6 +436,7 @@ export default function SiteBuilderPage() {
     tracking: { ga4_id: ga4Id, meta_pixel_id: metaPixelId, gtm_id: gtmId },
     ...(customCss ? { custom_css: customCss } : {}),
     address_parts: { street: addressStreet, postal_code: addressPostal, city: addressCity, country: addressCountry },
+    opening_hours: openingHours,
   });
 
   // ── Sauvegarde par étape ────────────────────────────────────────────────────
@@ -428,6 +475,8 @@ export default function SiteBuilderPage() {
               duration_min: o.duration_min ? parseInt(o.duration_min) : undefined,
               price_eur: o.price_eur ? parseFloat(o.price_eur) : undefined,
               image_url: o.image_url || undefined,
+              service_type: o.service_type || "service",
+              category: o.category || undefined,
             })));
           break;
         case 6:
@@ -1354,6 +1403,49 @@ export default function SiteBuilderPage() {
               </div>
             ))}
           </div>
+          {/* Horaires d'ouverture — affiché selon le secteur */}
+          {getSectorVocab(tenantSector).show_opening_hours && (
+            <div className="pt-3 border-t space-y-3">
+              <p className="text-sm font-medium text-gray-700">{t.sb_oh_lbl} <span className="text-gray-400 font-normal">{t.sb_optional}</span></p>
+              <p className="text-xs text-gray-500">{t.sb_oh_hint}</p>
+              <div className="space-y-2">
+                {DAYS_KEYS.map((key, idx) => {
+                  const dh = openingHours[key] ?? DEFAULT_DAY_HOURS();
+                  return (
+                    <div key={key} className="flex items-center gap-3">
+                      <span className="w-24 text-sm text-gray-600">{DAYS_FR[idx]}</span>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={dh.open}
+                          onChange={(e) => setOpeningHours((prev) => ({ ...prev, [key]: { ...dh, open: e.target.checked } }))}
+                          className="accent-primary-600"
+                        />
+                        <span className="text-xs text-gray-500">{dh.open ? t.sb_oh_open : t.sb_oh_closed}</span>
+                      </label>
+                      {dh.open && (
+                        <>
+                          <input
+                            type="time"
+                            value={dh.from}
+                            onChange={(e) => setOpeningHours((prev) => ({ ...prev, [key]: { ...dh, from: e.target.value } }))}
+                            className="inp w-28 py-1 text-sm"
+                          />
+                          <span className="text-gray-400 text-sm">→</span>
+                          <input
+                            type="time"
+                            value={dh.to}
+                            onChange={(e) => setOpeningHours((prev) => ({ ...prev, [key]: { ...dh, to: e.target.value } }))}
+                            className="inp w-28 py-1 text-sm"
+                          />
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1447,11 +1539,45 @@ export default function SiteBuilderPage() {
                   <button onClick={() => listRemove(setOffers, i)} className="text-red-400 hover:text-red-600 text-sm">{t.sb_remove}</button>
                 )}
               </div>
+              {/* Type de prestation — adapté au secteur */}
+              {(() => {
+                const typeOpts = getSectorVocab(tenantSector).service_type_options;
+                return typeOpts.length > 1 ? (
+                  <div className="flex gap-2">
+                    {typeOpts.map((opt) => (
+                      <label key={opt.value} className={`flex-1 text-center py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                        o.service_type === opt.value
+                          ? "border-primary-500 bg-primary-50 text-primary-700 font-medium"
+                          : "border-gray-200 text-gray-500 hover:border-gray-300"
+                      }`}>
+                        <input
+                          type="radio"
+                          name={`offer_type_${i}`}
+                          value={opt.value}
+                          checked={o.service_type === opt.value}
+                          onChange={() => listUpdate(setOffers, i, { service_type: opt.value })}
+                          className="sr-only"
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
               <input value={o.name}
                 onChange={(e) => { listUpdate(setOffers, i, { name: e.target.value }); if (stepErrors[`offer_${i}_name`] || stepErrors.offers) setStepErrors((p) => ({ ...p, [`offer_${i}_name`]: "", offers: "" })); }}
                 className={`inp ${stepErrors[`offer_${i}_name`] ? "border-red-400" : ""}`}
                 placeholder={t.sb_offer_name_ph} />
               {stepErrors[`offer_${i}_name`] && <p className="text-red-500 text-xs">{stepErrors[`offer_${i}_name`]}</p>}
+              {/* Catégorie — restaurant / commerce */}
+              {(tenantSector === "restaurant" || tenantSector === "commerce") && (
+                <input
+                  value={o.category}
+                  onChange={(e) => listUpdate(setOffers, i, { category: e.target.value })}
+                  className="inp"
+                  placeholder={`${t.sb_offer_category_ph} (${tenantSector === "restaurant" ? t.sb_offer_cat_ex_food : t.sb_offer_cat_ex_shop})`}
+                />
+              )}
               <textarea rows={2} value={o.description}
                 onChange={(e) => listUpdate(setOffers, i, { description: e.target.value })}
                 className="inp resize-y" placeholder={t.sb_offer_desc_ph} />

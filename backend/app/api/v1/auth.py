@@ -109,7 +109,7 @@ async def ensure_profile(user: dict = Depends(get_current_user)):
 async def get_my_tenant(tenant_id: str = Depends(get_current_tenant)):
     """Retourne le slug et le nom du tenant courant — utilisé par le dashboard."""
     sb = get_supabase_admin()
-    res = sb.table("tenant").select("id, slug, name").eq("id", tenant_id).single().execute()
+    res = sb.table("tenant").select("id, slug, name, sector, country").eq("id", tenant_id).single().execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Tenant introuvable")
     return res.data

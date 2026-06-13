@@ -11,6 +11,7 @@ class AvailabilitySlotIn(BaseModel):
     end_time: str             # "HH:MM"
     slot_duration_min: int = 30
     is_active: bool = True
+    capacity: int = Field(default=1, ge=1, le=500)  # 1=1:1 (défaut), N=groupe/atelier
 
 
 class AvailabilitySlotOut(BaseModel):
@@ -21,6 +22,7 @@ class AvailabilitySlotOut(BaseModel):
     end_time: str
     slot_duration_min: int
     is_active: bool
+    capacity: int = 1
 
 
 class BlockedPeriodIn(BaseModel):
@@ -64,6 +66,7 @@ class PublicBookIn(BaseModel):
     slot_duration_min: int = Field(default=30, ge=5, le=480)  # 5 min → 8h max
     request_type: Literal["contact", "appointment"] = "appointment"
     contact_type: Literal["individual", "company"] = "individual"
+    party_size: int = Field(default=1, ge=1, le=500)  # nb de personnes (restaurant: table de 4)
 
     @field_validator("email")
     @classmethod

@@ -9,6 +9,8 @@ class ServiceOfferIn(BaseModel):
     duration_min: Optional[int] = None
     price_eur: Optional[float] = None
     image_url: Optional[str] = None
+    service_type: Optional[str] = "service"  # service | product | menu_item
+    category: Optional[str] = None
 
 
 class ServiceAreaIn(BaseModel):

@@ -21,12 +21,14 @@ export default function OnboardingPage() {
   const [facebookLoading, setFacebookLoading] = useState(false);
 
   const SECTORS = [
-    { value: "health",   label: t.ob_sector_health },
-    { value: "coaching", label: t.ob_sector_coaching },
-    { value: "trade",    label: t.ob_sector_trade },
-    { value: "beauty",   label: t.ob_sector_beauty },
-    { value: "finance",  label: t.ob_sector_finance },
-    { value: "other",    label: t.ob_sector_other },
+    { value: "health",      label: t.ob_sector_health },
+    { value: "coaching",    label: t.ob_sector_coaching },
+    { value: "trade",       label: t.ob_sector_trade },
+    { value: "beauty",      label: t.ob_sector_beauty },
+    { value: "finance",     label: t.ob_sector_finance },
+    { value: "restaurant",  label: t.ob_sector_restaurant },
+    { value: "commerce",    label: t.ob_sector_commerce },
+    { value: "other",       label: t.ob_sector_other },
   ];
 
   const [form, setForm] = useState({
@@ -143,7 +145,8 @@ export default function OnboardingPage() {
       if ((window as any).gtag) (window as any).gtag("event", "sign_up", { method });
     }
     await supabase.auth.refreshSession();
-    router.push("/dashboard");
+    // Rediriger vers le site-builder avec ?template=auto pour pré-remplir selon le secteur
+    router.push(`/dashboard/site-builder?template=auto`);
   };
 
   const handleSubmit = async (e: React.SyntheticEvent) => {

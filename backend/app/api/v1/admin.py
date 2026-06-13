@@ -713,7 +713,8 @@ async def create_tenant(body: CreateTenantIn, admin=Depends(get_current_admin)):
 
     tenant = sb.table("tenant").insert({"name": body.name, "slug": body.slug, "sector": body.sector, "country": body.country, "is_active": True}).execute().data[0]
     sb.table("membership").insert({"tenant_id": tenant["id"], "user_id": user_id, "role": "owner"}).execute()
-    sb.table("calendar").insert({"tenant_id": tenant["id"]}).execute()
+    from app.api.v1.calendar import _ensure_calendar
+    _ensure_calendar(sb, tenant["id"])
     await _supabase_user_patch(user_id, {"app_metadata": {"tenant_id": tenant["id"]}})
 
     if body.send_invite and not body.password:
@@ -852,6 +853,36 @@ async def get_sectors(admin=Depends(get_current_admin)):
 class SectorPatch(BaseModel):
     keywords: list[str]
     label:    Optional[str] = None
+
+class SectorCreate(BaseModel):
+    key:      str
+    keywords: list[str] = []
+    label:    Optional[str] = None
+
+@router.post("/sectors")
+async def create_sector(body: SectorCreate, admin=Depends(get_current_admin)):
+    from app.services.trends import SECTOR_KEYWORDS as DEFAULT_KW
+    if not body.key or not body.key.replace("_", "").isalnum():
+        raise HTTPException(400, "Clé invalide — uniquement lettres, chiffres, underscores")
+    sb  = get_supabase_admin()
+    now = datetime.now(timezone.utc).isoformat()
+
+    kw_row  = sb.table("system_config").select("value").eq("key", "sector_keywords").limit(1).execute().data
+    current = kw_row[0]["value"] if kw_row else {}
+    if body.key in DEFAULT_KW and body.key not in current:
+        current[body.key] = body.keywords or DEFAULT_KW[body.key]
+    else:
+        current[body.key] = body.keywords
+    sb.table("system_config").upsert({"key": "sector_keywords", "value": current, "updated_at": now}).execute()
+
+    if body.label:
+        lbl_row = sb.table("system_config").select("value").eq("key", "sector_labels").limit(1).execute().data
+        labels  = lbl_row[0]["value"] if lbl_row else {}
+        labels[body.key] = body.label
+        sb.table("system_config").upsert({"key": "sector_labels", "value": labels, "updated_at": now}).execute()
+
+    _log(admin, "create_sector", payload={"key": body.key})
+    return {"ok": True, "key": body.key}
 
 @router.patch("/sectors/{key}")
 async def update_sector(key: str, body: SectorPatch, admin=Depends(get_current_admin)):

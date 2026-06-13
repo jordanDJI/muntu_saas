@@ -229,7 +229,7 @@ export const api = {
     apiFetch(`/api/v1/members/${userId}`, { method: "DELETE" }),
 
   // Tenant info
-  getMyTenant: () => apiFetch<{ id: string; slug: string; name: string }>("/api/v1/auth/me/tenant"),
+  getMyTenant: () => apiFetch<{ id: string; slug: string; name: string; sector?: string; country?: string }>("/api/v1/auth/me/tenant"),
   getMyTenants: () => apiFetch<{ id: string; slug: string; name: string; role: string }[]>("/api/v1/auth/me/tenants"),
   createTenant: (body: { name: string; slug: string; sector: string; country: string }) =>
     apiFetch<{ id: string; slug: string; name: string }>("/api/v1/tenants/", { method: "POST", body: JSON.stringify(body) }),

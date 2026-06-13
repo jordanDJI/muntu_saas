@@ -9,12 +9,14 @@ from typing import Optional
 _semaphore = asyncio.Semaphore(3)  # max 3 appels Google Trends simultanés
 
 SECTOR_KEYWORDS: dict[str, list[str]] = {
-    "health":   ["infirmière à domicile", "kinésithérapeute", "médecin généraliste"],
-    "beauty":   ["coiffeur", "esthéticienne", "salon de beauté"],
-    "coaching": ["coach de vie", "coaching personnel", "coach sportif"],
-    "finance":  ["comptable indépendant", "conseiller financier", "expert comptable"],
-    "trade":    ["plombier", "électricien", "artisan"],
-    "other":    ["prestataire de service", "indépendant"],
+    "health":     ["infirmière à domicile", "kinésithérapeute", "médecin généraliste"],
+    "beauty":     ["coiffeur", "esthéticienne", "salon de beauté"],
+    "coaching":   ["coach de vie", "coaching personnel", "coach sportif"],
+    "finance":    ["comptable indépendant", "conseiller financier", "expert comptable"],
+    "trade":      ["plombier", "électricien", "artisan"],
+    "restaurant": ["restaurant", "livraison repas", "réservation restaurant"],
+    "commerce":   ["boutique", "magasin", "commerce de proximité"],
+    "other":      ["prestataire de service", "indépendant"],
 }
 
 
