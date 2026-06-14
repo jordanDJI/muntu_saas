@@ -217,6 +217,7 @@ function NewApptCard({ day, startH, startM, durationMin, offers, onSave, onClose
   onSave: () => void; onClose: () => void;
 }) {
   const { t } = useLanguage();
+  const { vocab } = useSectorVocab();
   const [dur, setDur]               = useState(durationMin);
   const [serviceId, setService]     = useState("");
   const [contact, setContact]       = useState<Contact | null>(null);
@@ -620,6 +621,7 @@ function BlockedOverrideModal({ period, onConfirm, onClose }: {
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const { vocab } = useSectorVocab();
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm space-y-4">
@@ -673,6 +675,7 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
   onClose: () => void;
 }) {
   const { t } = useLanguage();
+  const { vocab } = useSectorVocab();
   const router = useRouter();
   const pad = (n: number) => String(n).padStart(2, "0");
   const initDt = new Date(appt.scheduled_at);
