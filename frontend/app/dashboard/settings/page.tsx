@@ -865,7 +865,7 @@ function SectionAbonnement() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 {PLANS_INFO.map((info) => {
                   const dbPlan = plans.find(p => p.name === info.name && p.stripe_price_id);
-                  const isCurrent = currentPlanName === info.name;
+                  const isCurrent = hasRealStripeSub && currentPlanName === info.name;
                   const accent = info.color === "amber"
                     ? { border: "border-amber-300", bg: "bg-amber-50", badge: "bg-amber-600", btn: "bg-amber-600 hover:bg-amber-700" }
                     : info.color === "primary"
