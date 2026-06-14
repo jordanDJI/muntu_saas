@@ -134,6 +134,7 @@ function NewClientModal({ initialName, onConfirm, onClose }: {
   onClose: () => void;
 }) {
   const { t } = useLanguage();
+  const { vocab } = useSectorVocab();
   const parts = initialName.trim().split(" ");
   const [fn, setFn]         = useState(parts[0] ?? "");
   const [ln, setLn]         = useState(parts.slice(1).join(" "));
