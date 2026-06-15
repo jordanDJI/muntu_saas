@@ -809,6 +809,594 @@ def send_crm_reminder_to_contact(
     })
 
 
+# ── Emails onboarding & trial ────────────────────────────────────────────────
+
+_WELCOME_I18N: dict[str, dict[str, str]] = {
+    "fr": {
+        "subject":      "Bienvenue sur Klientys, {name} 🎉",
+        "header_sub":   "Votre espace professionnel est prêt.",
+        "title":        "C'est parti, {name} !",
+        "trial_badge":  "✦ Essai gratuit de 14 jours",
+        "intro":        "Votre espace <strong>{tenant}</strong> vient d'être créé. Voici les 3 premières choses à faire pour en tirer le meilleur parti.",
+        "s1_title":     "1. Personnalisez votre site vitrine",
+        "s1_desc":      "Ajoutez votre logo, vos prestations, vos coordonnées et publiez en un clic.",
+        "s1_cta":       "Créer mon site →",
+        "s2_title":     "2. Définissez vos disponibilités",
+        "s2_desc":      "Indiquez vos horaires pour que vos clients puissent réserver en ligne 24h/24.",
+        "s2_cta":       "Configurer mes horaires →",
+        "s3_title":     "3. Partagez votre lien",
+        "s3_desc":      "Votre page est accessible immédiatement — partagez-la sur vos réseaux.",
+        "s3_cta":       "Voir mon site →",
+        "footer":       "Vous recevez cet email car vous venez de créer un compte Klientys.",
+        "help":         "Une question ? Écrivez-nous :",
+    },
+    "en": {
+        "subject":      "Welcome to Klientys, {name} 🎉",
+        "header_sub":   "Your professional space is ready.",
+        "title":        "Let's go, {name}!",
+        "trial_badge":  "✦ 14-day free trial",
+        "intro":        "Your space <strong>{tenant}</strong> has just been created. Here are the 3 first things to do to get the most out of it.",
+        "s1_title":     "1. Customize your website",
+        "s1_desc":      "Add your logo, services, contact details and publish with one click.",
+        "s1_cta":       "Create my website →",
+        "s2_title":     "2. Set your availability",
+        "s2_desc":      "Add your working hours so clients can book online 24/7.",
+        "s2_cta":       "Set up my schedule →",
+        "s3_title":     "3. Share your link",
+        "s3_desc":      "Your page is immediately accessible — share it on your social media.",
+        "s3_cta":       "View my website →",
+        "footer":       "You received this email because you just created a Klientys account.",
+        "help":         "Any questions? Email us:",
+    },
+    "de": {
+        "subject":      "Willkommen bei Klientys, {name} 🎉",
+        "header_sub":   "Ihr professioneller Bereich ist bereit.",
+        "title":        "Los geht's, {name}!",
+        "trial_badge":  "✦ 14 Tage kostenlose Testphase",
+        "intro":        "Ihr Bereich <strong>{tenant}</strong> wurde soeben erstellt. Hier sind die 3 ersten Schritte.",
+        "s1_title":     "1. Passen Sie Ihre Website an",
+        "s1_desc":      "Fügen Sie Logo, Leistungen und Kontaktdaten hinzu und veröffentlichen Sie mit einem Klick.",
+        "s1_cta":       "Meine Website erstellen →",
+        "s2_title":     "2. Legen Sie Ihre Verfügbarkeit fest",
+        "s2_desc":      "Tragen Sie Ihre Arbeitszeiten ein, damit Kunden rund um die Uhr online buchen können.",
+        "s2_cta":       "Meine Zeiten einrichten →",
+        "s3_title":     "3. Teilen Sie Ihren Link",
+        "s3_desc":      "Ihre Seite ist sofort zugänglich — teilen Sie sie in sozialen Netzwerken.",
+        "s3_cta":       "Meine Website ansehen →",
+        "footer":       "Sie erhalten diese E-Mail, weil Sie gerade ein Klientys-Konto erstellt haben.",
+        "help":         "Fragen? Schreiben Sie uns:",
+    },
+    "nl": {
+        "subject":      "Welkom bij Klientys, {name} 🎉",
+        "header_sub":   "Uw professionele ruimte is klaar.",
+        "title":        "Aan de slag, {name}!",
+        "trial_badge":  "✦ 14 dagen gratis proefperiode",
+        "intro":        "Uw ruimte <strong>{tenant}</strong> is zojuist aangemaakt. Hier zijn de 3 eerste stappen.",
+        "s1_title":     "1. Pas uw website aan",
+        "s1_desc":      "Voeg uw logo, diensten en contactgegevens toe en publiceer met één klik.",
+        "s1_cta":       "Mijn website maken →",
+        "s2_title":     "2. Stel uw beschikbaarheid in",
+        "s2_desc":      "Voer uw werktijden in zodat klanten 24/7 online kunnen boeken.",
+        "s2_cta":       "Mijn uren instellen →",
+        "s3_title":     "3. Deel uw link",
+        "s3_desc":      "Uw pagina is onmiddellijk toegankelijk — deel hem op uw sociale media.",
+        "s3_cta":       "Mijn website bekijken →",
+        "footer":       "U ontvangt deze e-mail omdat u zojuist een Klientys-account heeft aangemaakt.",
+        "help":         "Vragen? Schrijf ons:",
+    },
+}
+
+_TRIAL_I18N: dict[str, dict] = {
+    "fr": {
+        "subjects": {
+            7: "Vous avancez bien — il reste 7 jours d'essai ✨",
+            3: "Plus que 3 jours pour passer à la vitesse supérieure ⏳",
+            1: "Dernier jour d'essai — ne perdez pas votre travail ⚠️",
+        },
+        "titles": {
+            7: "Vous avancez bien ! 🚀",
+            3: "Plus que 3 jours ⏳",
+            1: "Dernier jour d'essai ⚠️",
+        },
+        "intros": {
+            7: "Votre essai gratuit se termine dans <strong>7 jours</strong>. Voici un résumé de ce que vous avez déjà mis en place :",
+            3: "Votre essai se termine dans <strong>3 jours</strong>. Choisissez un plan pour ne rien perdre et continuer à recevoir des réservations.",
+            1: "C'est votre <strong>dernier jour d'essai</strong>. Demain, votre espace sera limité et votre site ne sera plus accessible au public.",
+        },
+        "summary_title": "Votre activité pendant l'essai",
+        "contacts":      "contact(s)",
+        "leads":         "demande(s) reçue(s)",
+        "appointments":  "rendez-vous",
+        "cta":           "Choisir mon plan →",
+        "footer":        "Vous recevez cet email car votre période d'essai Klientys touche à sa fin.",
+        "no_action":     "Si vous ne souhaitez pas continuer, aucune action n'est requise — votre essai expirera automatiquement.",
+    },
+    "en": {
+        "subjects": {
+            7: "Great progress — 7 days left on your trial ✨",
+            3: "Only 3 days left to level up ⏳",
+            1: "Last day of trial — don't lose your work ⚠️",
+        },
+        "titles": {
+            7: "Great progress! 🚀",
+            3: "Only 3 days left ⏳",
+            1: "Last day of your trial ⚠️",
+        },
+        "intros": {
+            7: "Your free trial ends in <strong>7 days</strong>. Here's a summary of what you've set up so far:",
+            3: "Your trial ends in <strong>3 days</strong>. Choose a plan to keep your work and continue receiving bookings.",
+            1: "This is your <strong>last trial day</strong>. Tomorrow, your space will be limited and your website won't be publicly accessible.",
+        },
+        "summary_title": "Your activity during the trial",
+        "contacts":      "contact(s)",
+        "leads":         "request(s) received",
+        "appointments":  "appointment(s)",
+        "cta":           "Choose my plan →",
+        "footer":        "You're receiving this email because your Klientys trial period is ending.",
+        "no_action":     "If you don't wish to continue, no action is needed — your trial will expire automatically.",
+    },
+    "de": {
+        "subjects": {
+            7: "Gute Fortschritte — noch 7 Tage Testphase ✨",
+            3: "Nur noch 3 Tage ⏳",
+            1: "Letzter Tag der Testphase — verlieren Sie Ihre Arbeit nicht ⚠️",
+        },
+        "titles": {
+            7: "Gute Fortschritte! 🚀",
+            3: "Nur noch 3 Tage ⏳",
+            1: "Letzter Tag Ihrer Testphase ⚠️",
+        },
+        "intros": {
+            7: "Ihre kostenlose Testphase endet in <strong>7 Tagen</strong>. Hier ist eine Zusammenfassung:",
+            3: "Ihre Testphase endet in <strong>3 Tagen</strong>. Wählen Sie einen Plan, um Ihre Arbeit zu behalten.",
+            1: "Dies ist Ihr <strong>letzter Testtag</strong>. Morgen wird Ihr Bereich eingeschränkt.",
+        },
+        "summary_title": "Ihre Aktivität während der Testphase",
+        "contacts":      "Kontakt(e)",
+        "leads":         "Anfrage(n)",
+        "appointments":  "Termin(e)",
+        "cta":           "Meinen Plan wählen →",
+        "footer":        "Sie erhalten diese E-Mail, weil Ihre Klientys-Testphase bald endet.",
+        "no_action":     "Wenn Sie nach der Testphase nicht fortfahren möchten, ist keine Aktion erforderlich.",
+    },
+    "nl": {
+        "subjects": {
+            7: "Goede voortgang — nog 7 dagen proefperiode ✨",
+            3: "Nog maar 3 dagen over ⏳",
+            1: "Laatste dag van uw proefperiode — verlies uw werk niet ⚠️",
+        },
+        "titles": {
+            7: "Geweldige voortgang! 🚀",
+            3: "Nog maar 3 dagen ⏳",
+            1: "Laatste dag van uw proefperiode ⚠️",
+        },
+        "intros": {
+            7: "Uw gratis proefperiode eindigt over <strong>7 dagen</strong>. Hier is een overzicht van uw instellingen:",
+            3: "Uw proefperiode eindigt over <strong>3 dagen</strong>. Kies een abonnement om uw werk te behouden.",
+            1: "Dit is uw <strong>laatste proefdag</strong>. Morgen wordt uw ruimte beperkt.",
+        },
+        "summary_title": "Uw activiteit tijdens de proefperiode",
+        "contacts":      "contact(en)",
+        "leads":         "ontvangen aanvraag/aanvragen",
+        "appointments":  "afspraak/afspraken",
+        "cta":           "Mijn abonnement kiezen →",
+        "footer":        "U ontvangt deze e-mail omdat uw Klientys proefperiode bijna afloopt.",
+        "no_action":     "Als u na de proefperiode niet wilt doorgaan, is geen actie vereist.",
+    },
+}
+
+_KLIENTYS_LOGO = "{frontend_url}/logo.png"
+
+
+def _klientys_email_wrapper(header_html: str, body_html: str, footer_html: str) -> str:
+    """Enveloppe HTML commune — thème navy Klientys."""
+    return f"""
+    <div style="font-family:'DM Sans',Arial,sans-serif;max-width:600px;margin:0 auto;background:#07222F;border-radius:16px;overflow:hidden">
+      {header_html}
+      <div style="padding:32px 36px">
+        {body_html}
+        <hr style="border:none;border-top:1px solid rgba(170,189,216,.1);margin:28px 0 16px">
+        {footer_html}
+      </div>
+    </div>
+    """
+
+
+def send_welcome_email(
+    owner_email: str,
+    owner_name: str,
+    tenant_name: str,
+    country: str,
+    dashboard_url: str,
+    site_builder_url: str,
+    calendar_url: str,
+    site_url: str,
+) -> None:
+    """Email de bienvenue post-inscription avec les 3 premières étapes."""
+    lang = _crm_lang(country)
+    t = _WELCOME_I18N.get(lang, _WELCOME_I18N["fr"])
+    logo_url = _KLIENTYS_LOGO.format(frontend_url=settings.frontend_url)
+
+    header = f"""
+    <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:32px 36px">
+      <img src="{logo_url}" height="34" alt="Klientys" style="margin-bottom:18px;display:block"/>
+      <h1 style="color:#fff;font-size:22px;font-weight:800;margin:0;letter-spacing:-.02em">
+        {t['title'].format(name=owner_name or tenant_name)}
+      </h1>
+      <p style="color:rgba(255,255,255,.65);margin:6px 0 0;font-size:13px">{t['header_sub']}</p>
+    </div>"""
+
+    body = f"""
+      <div style="display:inline-block;background:rgba(221,170,64,.12);border:1px solid rgba(221,170,64,.35);
+                  border-radius:20px;padding:4px 14px;margin-bottom:20px">
+        <span style="color:#DDAA40;font-size:12px;font-weight:600">{t['trial_badge']}</span>
+      </div>
+      <p style="color:#EEF2F5;font-size:15px;line-height:1.65;margin:0 0 24px">
+        {t['intro'].format(name=owner_name or "", tenant=tenant_name)}
+      </p>
+      <p style="color:#AAC0D8;font-size:11px;font-weight:700;text-transform:uppercase;
+                letter-spacing:.1em;margin:0 0 12px">
+        {t.get('steps_hint', '')}
+      </p>
+
+      <!-- Étape 1 -->
+      <div style="background:rgba(13,75,88,.35);border:1px solid rgba(26,110,130,.4);
+                  border-radius:12px;padding:18px 20px;margin-bottom:10px">
+        <p style="color:#fff;font-weight:700;margin:0 0 5px;font-size:14px">{t['s1_title']}</p>
+        <p style="color:#AAC0D8;font-size:13px;line-height:1.55;margin:0 0 14px">{t['s1_desc']}</p>
+        <a href="{site_builder_url}"
+           style="display:inline-block;background:#DDAA40;color:#07222F;padding:9px 20px;
+                  border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">
+          {t['s1_cta']}
+        </a>
+      </div>
+
+      <!-- Étape 2 -->
+      <div style="background:rgba(13,75,88,.35);border:1px solid rgba(26,110,130,.4);
+                  border-radius:12px;padding:18px 20px;margin-bottom:10px">
+        <p style="color:#fff;font-weight:700;margin:0 0 5px;font-size:14px">{t['s2_title']}</p>
+        <p style="color:#AAC0D8;font-size:13px;line-height:1.55;margin:0 0 14px">{t['s2_desc']}</p>
+        <a href="{calendar_url}"
+           style="display:inline-block;background:#1A6E82;color:#fff;padding:9px 20px;
+                  border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">
+          {t['s2_cta']}
+        </a>
+      </div>
+
+      <!-- Étape 3 -->
+      <div style="background:rgba(13,75,88,.35);border:1px solid rgba(26,110,130,.4);
+                  border-radius:12px;padding:18px 20px;margin-bottom:24px">
+        <p style="color:#fff;font-weight:700;margin:0 0 5px;font-size:14px">{t['s3_title']}</p>
+        <p style="color:#AAC0D8;font-size:13px;line-height:1.55;margin:0 0 14px">{t['s3_desc']}</p>
+        <a href="{site_url}"
+           style="display:inline-block;background:rgba(42,143,165,.25);color:#2A8FA5;padding:9px 20px;
+                  border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;
+                  border:1px solid rgba(42,143,165,.5)">
+          {t['s3_cta']}
+        </a>
+      </div>
+    """
+
+    footer = f"""
+      <p style="color:#5C7A8A;font-size:12px;line-height:1.6;margin:0">
+        {t['footer']}<br>
+        {t['help']} <a href="mailto:support@klientys.co"
+          style="color:#2A8FA5;text-decoration:none">support@klientys.co</a>
+      </p>
+    """
+
+    resend.Emails.send({
+        "from":    f"Klientys <{settings.email_from}>",
+        "to":      [owner_email],
+        "subject": t["subject"].format(name=owner_name or tenant_name),
+        "html":    _klientys_email_wrapper(header, body, footer),
+    })
+
+
+def send_trial_reminder(
+    owner_email: str,
+    owner_name: str,
+    tenant_name: str,
+    country: str,
+    days_left: int,
+    summary: dict,
+    upgrade_url: str,
+) -> None:
+    """Email de rappel d'expiration du trial J-7, J-3 ou J-1."""
+    lang = _crm_lang(country)
+    t = _TRIAL_I18N.get(lang, _TRIAL_I18N["fr"])
+    logo_url = _KLIENTYS_LOGO.format(frontend_url=settings.frontend_url)
+
+    # Couleur header selon urgence
+    if days_left <= 1:
+        header_gradient = "linear-gradient(135deg,#7f1d1d 0%,#b91c1c 100%)"
+    elif days_left <= 3:
+        header_gradient = "linear-gradient(135deg,#78350f 0%,#d97706 100%)"
+    else:
+        header_gradient = "linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%)"
+
+    header = f"""
+    <div style="background:{header_gradient};padding:32px 36px">
+      <img src="{logo_url}" height="34" alt="Klientys" style="margin-bottom:18px;display:block"/>
+      <h1 style="color:#fff;font-size:22px;font-weight:800;margin:0;letter-spacing:-.02em">
+        {t['titles'][days_left]}
+      </h1>
+      <p style="color:rgba(255,255,255,.7);margin:6px 0 0;font-size:13px">{tenant_name}</p>
+    </div>"""
+
+    greeting = f"Bonjour {owner_name}," if lang == "fr" else \
+               f"Hello {owner_name}," if lang == "en" else \
+               f"Guten Tag {owner_name}," if lang == "de" else \
+               f"Goedendag {owner_name},"
+
+    contacts_n   = summary.get("contacts", 0)
+    leads_n      = summary.get("leads", 0)
+    appointments_n = summary.get("appointments", 0)
+    total_activity = contacts_n + leads_n + appointments_n
+
+    if total_activity > 0:
+        summary_block = f"""
+        <p style="color:#AAC0D8;font-size:11px;font-weight:700;text-transform:uppercase;
+                  letter-spacing:.1em;margin:20px 0 12px">{t['summary_title']}</p>
+        <div style="display:table;width:100%;border-collapse:separate;border-spacing:8px">
+          <div style="display:table-row">
+            <div style="display:table-cell;width:33%;background:rgba(13,75,88,.4);border:1px solid rgba(26,110,130,.35);
+                        border-radius:10px;padding:14px 12px;text-align:center">
+              <p style="color:#DDAA40;font-size:28px;font-weight:800;margin:0;line-height:1">{contacts_n}</p>
+              <p style="color:#AAC0D8;font-size:11px;margin:4px 0 0;line-height:1.4">{t['contacts']}</p>
+            </div>
+            <div style="display:table-cell;width:33%;background:rgba(13,75,88,.4);border:1px solid rgba(26,110,130,.35);
+                        border-radius:10px;padding:14px 12px;text-align:center">
+              <p style="color:#DDAA40;font-size:28px;font-weight:800;margin:0;line-height:1">{leads_n}</p>
+              <p style="color:#AAC0D8;font-size:11px;margin:4px 0 0;line-height:1.4">{t['leads']}</p>
+            </div>
+            <div style="display:table-cell;width:33%;background:rgba(13,75,88,.4);border:1px solid rgba(26,110,130,.35);
+                        border-radius:10px;padding:14px 12px;text-align:center">
+              <p style="color:#DDAA40;font-size:28px;font-weight:800;margin:0;line-height:1">{appointments_n}</p>
+              <p style="color:#AAC0D8;font-size:11px;margin:4px 0 0;line-height:1.4">{t['appointments']}</p>
+            </div>
+          </div>
+        </div>"""
+    else:
+        summary_block = ""
+
+    body = f"""
+      <p style="color:#EEF2F5;font-size:15px;line-height:1.65;margin:0 0 6px">{greeting}</p>
+      <p style="color:#EEF2F5;font-size:15px;line-height:1.65;margin:0 0 4px">
+        {t['intros'][days_left]}
+      </p>
+      {summary_block}
+      <div style="text-align:center;margin:28px 0">
+        <a href="{upgrade_url}"
+           style="display:inline-block;background:#DDAA40;color:#07222F;padding:14px 32px;
+                  border-radius:10px;text-decoration:none;font-weight:800;font-size:15px;
+                  letter-spacing:-.01em">
+          {t['cta']}
+        </a>
+      </div>
+    """
+
+    footer = f"""
+      <p style="color:#5C7A8A;font-size:12px;line-height:1.6;margin:0">
+        {t['footer']}<br>
+        <span style="font-size:11px">{t['no_action']}</span>
+      </p>
+    """
+
+    resend.Emails.send({
+        "from":    f"Klientys <{settings.email_from}>",
+        "to":      [owner_email],
+        "subject": t["subjects"][days_left],
+        "html":    _klientys_email_wrapper(header, body, footer),
+    })
+
+
+# ── Emails abonnement Stripe ─────────────────────────────────────────────────
+
+_SUBSCRIPTION_I18N: dict[str, dict[str, str]] = {
+    "fr": {
+        "confirmed_subject": "Votre abonnement {plan} est activé ✓",
+        "confirmed_title":   "Abonnement activé !",
+        "confirmed_sub":     "Votre espace Klientys est maintenant complet.",
+        "confirmed_intro":   "Votre abonnement <strong>{plan}</strong> est actif. Vous bénéficiez désormais de toutes les fonctionnalités incluses dans votre plan.",
+        "confirmed_cta":     "Accéder à mon tableau de bord →",
+        "confirmed_billing": "Pour consulter vos factures, changer de plan ou résilier, accédez à votre espace abonnement.",
+        "confirmed_billing_cta": "Gérer mon abonnement →",
+        "confirmed_footer":  "Vous recevez cet email car vous venez de souscrire à un abonnement Klientys.",
+        "failed_subject":    "Action requise — problème de paiement sur votre abonnement",
+        "failed_title":      "Échec du paiement",
+        "failed_sub":        "Une action est requise pour maintenir votre accès.",
+        "failed_intro":      "Nous n'avons pas pu encaisser le paiement de votre abonnement Klientys. Pour éviter toute interruption de service, veuillez mettre à jour vos informations de paiement.",
+        "failed_cta":        "Mettre à jour mes informations de paiement →",
+        "failed_note":       "Si vous ne mettez pas à jour vos informations sous 7 jours, votre accès sera suspendu automatiquement.",
+        "failed_footer":     "Vous recevez cet email car un paiement a échoué sur votre compte Klientys.",
+        "greeting":          "Bonjour",
+    },
+    "en": {
+        "confirmed_subject": "Your {plan} subscription is active ✓",
+        "confirmed_title":   "Subscription activated!",
+        "confirmed_sub":     "Your Klientys space is now fully unlocked.",
+        "confirmed_intro":   "Your <strong>{plan}</strong> subscription is now active. You now have access to all the features included in your plan.",
+        "confirmed_cta":     "Go to my dashboard →",
+        "confirmed_billing": "To view invoices, change plan, or cancel, visit your subscription area.",
+        "confirmed_billing_cta": "Manage my subscription →",
+        "confirmed_footer":  "You're receiving this email because you just subscribed to a Klientys plan.",
+        "failed_subject":    "Action required — payment issue on your subscription",
+        "failed_title":      "Payment failed",
+        "failed_sub":        "Action is required to maintain your access.",
+        "failed_intro":      "We were unable to process your Klientys subscription payment. To avoid any service interruption, please update your payment information.",
+        "failed_cta":        "Update my payment information →",
+        "failed_note":       "If you don't update your payment details within 7 days, your access will be automatically suspended.",
+        "failed_footer":     "You're receiving this email because a payment failed on your Klientys account.",
+        "greeting":          "Hello",
+    },
+    "de": {
+        "confirmed_subject": "Ihr {plan}-Abonnement ist aktiv ✓",
+        "confirmed_title":   "Abonnement aktiviert!",
+        "confirmed_sub":     "Ihr Klientys-Bereich ist jetzt vollständig freigeschaltet.",
+        "confirmed_intro":   "Ihr <strong>{plan}</strong>-Abonnement ist jetzt aktiv. Sie haben nun Zugang zu allen Funktionen Ihres Plans.",
+        "confirmed_cta":     "Zu meinem Dashboard →",
+        "confirmed_billing": "Um Rechnungen einzusehen, den Plan zu wechseln oder zu kündigen, öffnen Sie Ihren Abonnementbereich.",
+        "confirmed_billing_cta": "Abonnement verwalten →",
+        "confirmed_footer":  "Sie erhalten diese E-Mail, weil Sie gerade ein Klientys-Abonnement abgeschlossen haben.",
+        "failed_subject":    "Aktion erforderlich — Zahlungsproblem bei Ihrem Abonnement",
+        "failed_title":      "Zahlung fehlgeschlagen",
+        "failed_sub":        "Eine Aktion ist erforderlich, um Ihren Zugang aufrechtzuerhalten.",
+        "failed_intro":      "Wir konnten die Zahlung für Ihr Klientys-Abonnement nicht einziehen. Um eine Unterbrechung des Dienstes zu vermeiden, aktualisieren Sie bitte Ihre Zahlungsinformationen.",
+        "failed_cta":        "Zahlungsinformationen aktualisieren →",
+        "failed_note":       "Wenn Sie Ihre Zahlungsdaten nicht innerhalb von 7 Tagen aktualisieren, wird Ihr Zugang automatisch gesperrt.",
+        "failed_footer":     "Sie erhalten diese E-Mail, weil eine Zahlung auf Ihrem Klientys-Konto fehlgeschlagen ist.",
+        "greeting":          "Guten Tag",
+    },
+    "nl": {
+        "confirmed_subject": "Uw {plan}-abonnement is actief ✓",
+        "confirmed_title":   "Abonnement geactiveerd!",
+        "confirmed_sub":     "Uw Klientys-ruimte is nu volledig ontgrendeld.",
+        "confirmed_intro":   "Uw <strong>{plan}</strong>-abonnement is nu actief. U heeft nu toegang tot alle functies van uw plan.",
+        "confirmed_cta":     "Naar mijn dashboard →",
+        "confirmed_billing": "Om facturen te bekijken, van plan te wijzigen of op te zeggen, bezoek uw abonnementsruimte.",
+        "confirmed_billing_cta": "Mijn abonnement beheren →",
+        "confirmed_footer":  "U ontvangt deze e-mail omdat u zojuist een Klientys-abonnement heeft afgesloten.",
+        "failed_subject":    "Actie vereist — betalingsprobleem op uw abonnement",
+        "failed_title":      "Betaling mislukt",
+        "failed_sub":        "Er is een actie vereist om uw toegang te behouden.",
+        "failed_intro":      "We konden uw Klientys-abonnementsbetaling niet verwerken. Om een onderbreking van de service te vermijden, werk uw betalingsgegevens bij.",
+        "failed_cta":        "Mijn betalingsgegevens bijwerken →",
+        "failed_note":       "Als u uw betalingsgegevens niet binnen 7 dagen bijwerkt, wordt uw toegang automatisch geblokkeerd.",
+        "failed_footer":     "U ontvangt deze e-mail omdat een betaling op uw Klientys-account is mislukt.",
+        "greeting":          "Goedendag",
+    },
+}
+
+
+def send_subscription_confirmed(
+    owner_email: str,
+    owner_name: str,
+    tenant_name: str,
+    country: str,
+    plan_name: str,
+    dashboard_url: str,
+    subscription_settings_url: str,
+) -> None:
+    """Email de confirmation d'activation d'un abonnement payant."""
+    lang = _crm_lang(country)
+    t = _SUBSCRIPTION_I18N.get(lang, _SUBSCRIPTION_I18N["fr"])
+    logo_url = _KLIENTYS_LOGO.format(frontend_url=settings.frontend_url)
+    greeting = t["greeting"]
+
+    header = f"""
+    <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:32px 36px">
+      <img src="{logo_url}" height="34" alt="Klientys" style="margin-bottom:18px;display:block"/>
+      <h1 style="color:#fff;font-size:22px;font-weight:800;margin:0;letter-spacing:-.02em">
+        {t['confirmed_title']}
+      </h1>
+      <p style="color:rgba(255,255,255,.65);margin:6px 0 0;font-size:13px">{t['confirmed_sub']}</p>
+    </div>"""
+
+    body = f"""
+      <p style="color:#EEF2F5;font-size:15px;line-height:1.65;margin:0 0 16px">
+        {greeting} {owner_name or tenant_name},
+      </p>
+      <p style="color:#AAC0D8;font-size:15px;line-height:1.65;margin:0 0 24px">
+        {t['confirmed_intro'].format(plan=plan_name)}
+      </p>
+      <div style="text-align:center;margin:24px 0">
+        <a href="{dashboard_url}"
+           style="display:inline-block;background:#DDAA40;color:#07222F;padding:14px 32px;
+                  border-radius:10px;text-decoration:none;font-weight:800;font-size:15px;
+                  letter-spacing:-.01em">
+          {t['confirmed_cta']}
+        </a>
+      </div>
+      <div style="background:rgba(13,75,88,.35);border:1px solid rgba(26,110,130,.4);
+                  border-radius:12px;padding:16px 20px;margin:20px 0">
+        <p style="color:#AAC0D8;font-size:13px;line-height:1.55;margin:0 0 12px">
+          {t['confirmed_billing']}
+        </p>
+        <a href="{subscription_settings_url}"
+           style="display:inline-block;background:rgba(42,143,165,.25);color:#2A8FA5;padding:9px 20px;
+                  border-radius:8px;text-decoration:none;font-weight:700;font-size:13px;
+                  border:1px solid rgba(42,143,165,.5)">
+          {t['confirmed_billing_cta']}
+        </a>
+      </div>
+    """
+
+    footer = f"""
+      <p style="color:#5C7A8A;font-size:12px;line-height:1.6;margin:0">
+        {t['confirmed_footer']}<br>
+        <a href="mailto:support@klientys.co" style="color:#2A8FA5;text-decoration:none">support@klientys.co</a>
+      </p>
+    """
+
+    resend.Emails.send({
+        "from":    f"Klientys <{settings.email_from}>",
+        "to":      [owner_email],
+        "subject": t["confirmed_subject"].format(plan=plan_name),
+        "html":    _klientys_email_wrapper(header, body, footer),
+    })
+
+
+def send_subscription_payment_failed(
+    owner_email: str,
+    owner_name: str,
+    tenant_name: str,
+    country: str,
+    billing_portal_url: str,
+) -> None:
+    """Email d'alerte de paiement échoué — invite à mettre à jour le moyen de paiement."""
+    lang = _crm_lang(country)
+    t = _SUBSCRIPTION_I18N.get(lang, _SUBSCRIPTION_I18N["fr"])
+    logo_url = _KLIENTYS_LOGO.format(frontend_url=settings.frontend_url)
+    greeting = t["greeting"]
+
+    header = f"""
+    <div style="background:linear-gradient(135deg,#7f1d1d 0%,#b91c1c 100%);padding:32px 36px">
+      <img src="{logo_url}" height="34" alt="Klientys" style="margin-bottom:18px;display:block"/>
+      <h1 style="color:#fff;font-size:22px;font-weight:800;margin:0;letter-spacing:-.02em">
+        {t['failed_title']}
+      </h1>
+      <p style="color:rgba(255,255,255,.7);margin:6px 0 0;font-size:13px">{t['failed_sub']}</p>
+    </div>"""
+
+    body = f"""
+      <p style="color:#EEF2F5;font-size:15px;line-height:1.65;margin:0 0 16px">
+        {greeting} {owner_name or tenant_name},
+      </p>
+      <p style="color:#AAC0D8;font-size:15px;line-height:1.65;margin:0 0 20px">
+        {t['failed_intro']}
+      </p>
+      <div style="text-align:center;margin:24px 0">
+        <a href="{billing_portal_url}"
+           style="display:inline-block;background:#dc2626;color:#fff;padding:14px 32px;
+                  border-radius:10px;text-decoration:none;font-weight:800;font-size:15px;
+                  letter-spacing:-.01em">
+          {t['failed_cta']}
+        </a>
+      </div>
+      <div style="background:rgba(127,29,29,.25);border:1px solid rgba(185,28,28,.4);
+                  border-radius:10px;padding:14px 18px;margin:16px 0">
+        <p style="color:#fca5a5;font-size:13px;line-height:1.6;margin:0">
+          ⚠️ {t['failed_note']}
+        </p>
+      </div>
+    """
+
+    footer = f"""
+      <p style="color:#5C7A8A;font-size:12px;line-height:1.6;margin:0">
+        {t['failed_footer']}<br>
+        <a href="mailto:support@klientys.co" style="color:#2A8FA5;text-decoration:none">support@klientys.co</a>
+      </p>
+    """
+
+    resend.Emails.send({
+        "from":    f"Klientys <{settings.email_from}>",
+        "to":      [owner_email],
+        "subject": t["failed_subject"],
+        "html":    _klientys_email_wrapper(header, body, footer),
+    })
+
+
 async def send_campaign_email(
     to_email: str,
     to_name: str,
@@ -846,4 +1434,140 @@ async def send_campaign_email(
         "to":   [to_email],
         "subject": subject,
         "html": html,
+    })
+
+
+# ── Rapport mensuel Analytics ────────────────────────────────────────────────
+
+_MONTHLY_REPORT_I18N: dict[str, dict] = {
+    "fr": {
+        "subject":  "Votre rapport analytics {month} — {tenant}",
+        "title":    "Votre rapport mensuel est prêt",
+        "sub":      "Retrouvez ci-joint le bilan de votre activité pour {month}.",
+        "intro":    "Bonjour {name},<br><br>Votre rapport analytics du mois de <strong>{month}</strong> pour <strong>{tenant}</strong> est disponible en pièce jointe.",
+        "cta":      "Voir mes analytics en ligne →",
+        "kpi_vues": "vues de page",
+        "kpi_dem":  "demandes",
+        "kpi_rdv":  "rendez-vous",
+        "footer":   "Vous recevez ce rapport car vous êtes abonné(e) à Klientys.",
+    },
+    "en": {
+        "subject":  "Your analytics report for {month} — {tenant}",
+        "title":    "Your monthly report is ready",
+        "sub":      "Please find attached your activity summary for {month}.",
+        "intro":    "Hello {name},<br><br>Your analytics report for <strong>{month}</strong> ({tenant}) is available as an attachment.",
+        "cta":      "View my analytics online →",
+        "kpi_vues": "page views",
+        "kpi_dem":  "leads",
+        "kpi_rdv":  "appointments",
+        "footer":   "You receive this report because you have an active Klientys subscription.",
+    },
+    "de": {
+        "subject":  "Ihr Analytics-Bericht {month} — {tenant}",
+        "title":    "Ihr Monatsbericht ist bereit",
+        "sub":      "Ihr Aktivitätsbericht für {month} liegt als Anhang bei.",
+        "intro":    "Hallo {name},<br><br>Ihr Analytics-Bericht für <strong>{month}</strong> ({tenant}) ist als Anhang verfügbar.",
+        "cta":      "Analytics online anzeigen →",
+        "kpi_vues": "Seitenaufrufe",
+        "kpi_dem":  "Anfragen",
+        "kpi_rdv":  "Termine",
+        "footer":   "Sie erhalten diesen Bericht, weil Sie Klientys abonniert haben.",
+    },
+    "nl": {
+        "subject":  "Uw analytics rapport {month} — {tenant}",
+        "title":    "Uw maandrapport is klaar",
+        "sub":      "Uw activiteitsoverzicht voor {month} vindt u als bijlage.",
+        "intro":    "Hallo {name},<br><br>Uw analytics rapport voor <strong>{month}</strong> ({tenant}) is beschikbaar als bijlage.",
+        "cta":      "Analytics online bekijken →",
+        "kpi_vues": "paginaweergaven",
+        "kpi_dem":  "aanvragen",
+        "kpi_rdv":  "afspraken",
+        "footer":   "U ontvangt dit rapport omdat u een actief Klientys-abonnement heeft.",
+    },
+}
+
+
+def send_monthly_report(
+    owner_email: str,
+    owner_name: str,
+    tenant_name: str,
+    country: str,
+    month_label: str,
+    summary: dict,
+    pdf_bytes: bytes,
+    dashboard_url: str,
+) -> None:
+    """Envoie le rapport analytics mensuel avec le PDF en pièce jointe."""
+    lang = _crm_lang(country)
+    t = _MONTHLY_REPORT_I18N.get(lang, _MONTHLY_REPORT_I18N["fr"])
+    logo_url = _KLIENTYS_LOGO.format(frontend_url=settings.frontend_url)
+
+    pv  = summary.get("pageviews", 0)
+    ld  = summary.get("leads_total", 0)
+    appts = summary.get("appointments_total", 0)
+    conv  = summary.get("conversion_appt_rate")
+
+    def _kpi_box(value, label, color="#0D4B58"):
+        return (
+            f'<td style="text-align:center;padding:0 16px">'
+            f'<div style="font-size:26px;font-weight:800;color:{color}">{value}</div>'
+            f'<div style="font-size:11px;color:#5C7A8A;margin-top:2px">{label}</div>'
+            f'</td>'
+        )
+
+    kpi_row = (
+        '<table style="width:100%;border-collapse:collapse;margin:20px 0"><tr>'
+        + _kpi_box(f"{pv:,}".replace(",", " "), t["kpi_vues"])
+        + '<td style="color:rgba(170,189,216,.15);font-size:24px;text-align:center">|</td>'
+        + _kpi_box(ld, t["kpi_dem"], "#DDAA40")
+        + '<td style="color:rgba(170,189,216,.15);font-size:24px;text-align:center">|</td>'
+        + _kpi_box(appts, t["kpi_rdv"], "#1D7A4A")
+        + '</tr></table>'
+    )
+
+    conv_row = ""
+    if conv is not None:
+        conv_row = (
+            f'<div style="background:rgba(221,170,64,.1);border-radius:8px;padding:10px 16px;'
+            f'text-align:center;margin-bottom:20px">'
+            f'<span style="color:#DDAA40;font-size:18px;font-weight:800">{conv}%</span>'
+            f'<span style="color:#AAC0D8;font-size:11px;margin-left:8px">conversion</span>'
+            f'</div>'
+        )
+
+    header = f"""
+    <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:28px 36px">
+      <img src="{logo_url}" height="30" alt="Klientys" style="margin-bottom:16px;display:block"/>
+      <h1 style="color:#fff;font-size:20px;font-weight:800;margin:0">{t['title']}</h1>
+      <p style="color:rgba(255,255,255,.6);margin:4px 0 0;font-size:12px">{t['sub'].format(month=month_label)}</p>
+    </div>"""
+
+    body = f"""
+      <p style="color:#EEF2F5;font-size:14px;line-height:1.7;margin:0 0 8px">
+        {t['intro'].format(name=owner_name or tenant_name, tenant=tenant_name, month=month_label)}
+      </p>
+      {kpi_row}
+      {conv_row}
+      <div style="text-align:center;margin:24px 0">
+        <a href="{dashboard_url}" style="{_BTN.replace('#4f46e5','#0D4B58')}">
+          {t['cta']}
+        </a>
+      </div>
+    """
+
+    footer = f'<p style="color:#5C7A8A;font-size:11px;line-height:1.6;margin:0">{t["footer"]}</p>'
+
+    # Nom du fichier PDF en fonction de la langue
+    safe_month = month_label.lower().replace(" ", "-").replace("é", "e").replace("û", "u")
+    pdf_filename = f"rapport-{safe_month}.pdf"
+
+    resend.Emails.send({
+        "from":    f"Klientys <{settings.email_from}>",
+        "to":      [owner_email],
+        "subject": t["subject"].format(month=month_label, tenant=tenant_name),
+        "html":    _klientys_email_wrapper(header, body, footer),
+        "attachments": [{
+            "filename": pdf_filename,
+            "content":  list(pdf_bytes),
+        }],
     })

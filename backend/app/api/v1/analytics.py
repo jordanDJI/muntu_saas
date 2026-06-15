@@ -19,11 +19,11 @@ CREATE INDEX IF NOT EXISTS idx_site_event_tenant_created
 
 import re
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime, timezone, timedelta
-import httpx, hmac, hashlib, json, base64
+import io, httpx, hmac, hashlib, json, base64
 from app.middleware.tenant import get_current_tenant
 from app.middleware.rate_limit import check_rate
 from app.core.supabase import get_supabase_admin as get_supabase
@@ -38,7 +38,7 @@ _VALID_EVENT_TYPES = frozenset({
 })
 _VALID_SECTIONS = frozenset({
     "hero", "a-propos", "prestations", "contact",
-    "services", "about", "footer",
+    "services", "about", "footer", "galerie", "temoignages",
 })
 _SLUG_RE = re.compile(r'^[a-z0-9\-]{1,80}$')
 _SESSION_RE = re.compile(r'^[a-zA-Z0-9\-_]{8,100}$')
@@ -225,6 +225,144 @@ async def get_summary(days: int = 30, tenant_id: str = Depends(get_current_tenan
         "conversion_lead_rate": conv_lead,
         "conversion_appt_rate": conv_appt,
     }
+
+
+# ── PDF report ───────────────────────────────────────────────────────────────
+
+async def _build_summary(sb, tenant_id: str, since: str, until: Optional[str] = None) -> dict:
+    """Reusable summary builder for a given time window."""
+    leads_r = (
+        sb.table("lead").select("id, source, status")
+        .eq("tenant_id", tenant_id).gte("created_at", since)
+    )
+    if until:
+        leads_r = leads_r.lte("created_at", until)
+    leads = leads_r.execute().data or []
+
+    leads_by_source: dict = {}
+    leads_by_status: dict = {}
+    for lead in leads:
+        src = lead.get("source") or "inconnu"
+        st  = lead.get("status") or "inconnu"
+        leads_by_source[src] = leads_by_source.get(src, 0) + 1
+        leads_by_status[st]  = leads_by_status.get(st, 0) + 1
+
+    cal_r  = sb.table("calendar").select("id").eq("tenant_id", tenant_id).execute()
+    cal_id = (cal_r.data or [{}])[0].get("id") if cal_r.data else None
+    appts: list = []
+    appts_by_status: dict = {}
+    if cal_id:
+        q = (sb.table("appointment").select("id, status")
+             .eq("calendar_id", cal_id).gte("created_at", since))
+        if until:
+            q = q.lte("created_at", until)
+        appts = q.execute().data or []
+        for a in appts:
+            st = a.get("status") or "inconnu"
+            appts_by_status[st] = appts_by_status.get(st, 0) + 1
+
+    contacts_r = sb.table("contact").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+
+    pageviews = unique_sessions = form_opens = form_submits = chatbot_conversations = chatbot_messages = 0
+    sections_viewed: dict = {}
+    cta_clicks: dict = {}
+    try:
+        q = (sb.table("site_event").select("event_type, session_id, section, data")
+             .eq("tenant_id", tenant_id).gte("created_at", since))
+        if until:
+            q = q.lte("created_at", until)
+        sessions: set = set()
+        for ev in (q.execute().data or []):
+            t = ev.get("event_type", "")
+            sessions.add(ev.get("session_id", ""))
+            if t == "pageview":       pageviews += 1
+            elif t == "form_open":    form_opens += 1
+            elif t == "form_submit":  form_submits += 1
+            elif t == "chatbot_open": chatbot_conversations += 1
+            elif t == "chatbot_message": chatbot_messages += 1
+            elif t == "section_view" and ev.get("section"):
+                sec = ev["section"]
+                sections_viewed[sec] = sections_viewed.get(sec, 0) + 1
+            elif t == "cta_click":
+                action = (ev.get("data") or {}).get("action", "autre")
+                cta_clicks[action] = cta_clicks.get(action, 0) + 1
+        unique_sessions = len(sessions)
+    except Exception:
+        pass
+
+    confirmed_appts = sum(1 for a in appts if a.get("status") == "confirmed")
+    conv_appt = round(min(confirmed_appts / len(leads) * 100, 100.0), 1) if leads else None
+    conv_lead = round(len(leads) / pageviews * 100, 1) if pageviews > 0 else None
+
+    return {
+        "contacts_total": contacts_r.count or 0,
+        "leads_total": len(leads),
+        "leads_by_source": leads_by_source,
+        "leads_by_status": leads_by_status,
+        "appointments_total": len(appts),
+        "appointments_by_status": appts_by_status,
+        "pageviews": pageviews,
+        "unique_sessions": unique_sessions,
+        "sections_viewed": sections_viewed,
+        "form_opens": form_opens,
+        "form_submits": form_submits,
+        "chatbot_conversations": chatbot_conversations,
+        "chatbot_messages": chatbot_messages,
+        "cta_clicks": cta_clicks,
+        "conversion_lead_rate": conv_lead,
+        "conversion_appt_rate": conv_appt,
+    }
+
+
+@router.get("/report.pdf")
+async def download_analytics_report(
+    days: int = Query(30, ge=1, le=365),
+    month: Optional[str] = Query(None, description="YYYY-MM — si fourni, ignore days"),
+    tenant_id: str = Depends(get_current_tenant),
+):
+    """Génère et retourne le rapport analytics en PDF."""
+    from app.services.pdf import generate_report_pdf
+    import calendar as _cal
+
+    sb = get_supabase()
+
+    # Récupère le nom du tenant
+    t_row = sb.table("tenant").select("name").eq("id", tenant_id).single().execute()
+    tenant_name = (t_row.data or {}).get("name", "Mon établissement")
+
+    # Détermine la fenêtre temporelle
+    now = datetime.now(timezone.utc)
+    if month:
+        try:
+            year, m = [int(x) for x in month.split("-")]
+            since = datetime(year, m, 1, tzinfo=timezone.utc).isoformat()
+            last_day = _cal.monthrange(year, m)[1]
+            until = datetime(year, m, last_day, 23, 59, 59, tzinfo=timezone.utc).isoformat()
+            period_label = datetime(year, m, 1).strftime("%B %Y")
+        except Exception:
+            raise HTTPException(400, "Format month invalide, attendu YYYY-MM")
+    else:
+        since = (now - timedelta(days=days)).isoformat()
+        until = None
+        period_label = f"{days} derniers jours"
+
+    summary = await _build_summary(sb, tenant_id, since, until)
+
+    try:
+        pdf_bytes = generate_report_pdf(
+            tenant_name=tenant_name,
+            period_label=period_label,
+            summary=summary,
+        )
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+
+    filename = f"rapport-{month or f'{days}j'}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── ROI / Demand potential (Google Trends via pytrends) ───────────────────────

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,6 +7,7 @@ from app.core.supabase import get_supabase_admin
 from app.core.config import settings
 from app.middleware.tenant import get_current_user
 from app.services.tenant_setup import provision_tenant
+from app.services.email import send_welcome_email
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
 _log = logging.getLogger(__name__)
@@ -123,5 +125,21 @@ async def setup_tenant(body: TenantSetupIn, user: dict = Depends(get_current_use
             _resp.raise_for_status()
     except Exception as e:
         _log.error("Failed to update app_metadata for user %s: %s", user_id, e)
+
+    # Email de bienvenue (non bloquant — erreur ignorée)
+    try:
+        await asyncio.to_thread(
+            send_welcome_email,
+            owner_email=email,
+            owner_name=body.first_name,
+            tenant_name=body.tenant_name,
+            country=body.country,
+            dashboard_url=f"{settings.frontend_url}/dashboard",
+            site_builder_url=f"{settings.frontend_url}/dashboard/site-builder",
+            calendar_url=f"{settings.frontend_url}/dashboard/appointments",
+            site_url=f"{settings.frontend_url}/{body.tenant_slug}",
+        )
+    except Exception as e:
+        _log.warning("Welcome email failed for %s: %s", email, e)
 
     return {"tenant_id": tenant_id, "slug": body.tenant_slug}

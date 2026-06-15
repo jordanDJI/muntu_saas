@@ -262,9 +262,26 @@ export const api = {
   deleteAccount: () => apiFetch("/api/v1/users/delete-account", { method: "POST" }),
   getIntegrationsStatus: () => apiFetch<{ stripe: boolean; resend: boolean; gemini: boolean; whatsapp: boolean }>("/api/v1/users/integrations/status"),
 
+  // Complétion du profil
+  getProfileCompletion: () => apiFetch<{ score: number; steps: { key: string; done: boolean; link: string }[] }>("/api/v1/profile/completion"),
+
   // Analytics
   getAnalyticsSummary: (days = 30) => apiFetch<any>(`/api/v1/analytics/summary?days=${days}`),
   getRoiPotential: (period = "month") => apiFetch<any>(`/api/v1/analytics/roi-potential?period=${period}`),
+  downloadAnalyticsReport: async (days = 30): Promise<void> => {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/v1/analytics/report.pdf?days=${days}`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rapport-analytics-${days}j.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
 
   // Google Analytics (GA4)
   getGoogleAnalyticsStatus: () => apiFetch<{ connected: boolean; property_configured: boolean; ga4_property_id: string | null; connected_at: string | null }>("/api/v1/analytics/google/status"),

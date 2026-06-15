@@ -16,11 +16,13 @@ ESSENTIEL_FEATURES: dict = {
     "campaigns": False,
     "attachments_max": 0,
     "attachment_file_max_mb": 0,
+    "gallery_photos_limit": 8,
 }
 
 BUSINESS_FEATURES: dict = {
     "max_contacts": -1,
     "max_team_members": -1,
+    "max_tenants": 3,
     "analytics": True,
     "analytics_roi": True,
     "agent_vitrine": True,
@@ -36,6 +38,7 @@ BUSINESS_FEATURES: dict = {
     "campaigns": True,
     "attachments_max": 10,
     "attachment_file_max_mb": 45,
+    "gallery_photos_limit": 24,
 }
 
 
@@ -57,6 +60,7 @@ PRO_FEATURES: dict = {
     "campaigns": True,
     "attachments_max": 5,
     "attachment_file_max_mb": 45,
+    "gallery_photos_limit": 16,
 }
 
 PLAN_FEATURES: dict = {

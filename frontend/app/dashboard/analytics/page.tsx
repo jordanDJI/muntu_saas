@@ -86,11 +86,69 @@ const CTA_LABELS: Record<string, string> = {
 };
 
 const SECTION_LABELS: Record<string, string> = {
-  hero:        "Accueil",
-  "a-propos":  "À propos",
-  prestations: "Prestations",
-  contact:     "Contact",
+  hero:         "Accueil",
+  "a-propos":   "À propos",
+  prestations:  "Prestations",
+  contact:      "Contact",
+  galerie:      "Galerie",
+  temoignages:  "Témoignages",
+  services:     "Services",
+  about:        "À propos",
+  footer:       "Pied de page",
 };
+
+const SECTION_COLORS: Record<string, string> = {
+  hero:         "#4E7EA8",
+  "a-propos":   "#6B8A7A",
+  prestations:  "#0D4B58",
+  contact:      "#1D7A4A",
+  galerie:      "#7C5DBF",
+  temoignages:  "#C47B1E",
+  services:     "#1A7A8F",
+  about:        "#6B8A7A",
+  footer:       "#AAB0C0",
+};
+
+function SectionIcon({ section }: { section: string }) {
+  const cls = "w-4 h-4";
+  switch (section) {
+    case "hero": return (
+      <svg className={cls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+      </svg>
+    );
+    case "a-propos": case "about": return (
+      <svg className={cls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+      </svg>
+    );
+    case "prestations": case "services": return (
+      <svg className={cls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+      </svg>
+    );
+    case "contact": return (
+      <svg className={cls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+      </svg>
+    );
+    case "galerie": return (
+      <svg className={cls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+      </svg>
+    );
+    case "temoignages": return (
+      <svg className={cls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+      </svg>
+    );
+    default: return (
+      <svg className={cls} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"/>
+      </svg>
+    );
+  }
+}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -189,6 +247,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading]     = useState(true);
   const [err, setErr]             = useState("");
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -199,6 +258,13 @@ export default function AnalyticsPage() {
     } catch (e: any) { setErr(e.message); }
     finally { setLoading(false); }
   }, [days]);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try { await api.downloadAnalyticsReport(days); }
+    catch (e: any) { setErr(`PDF : ${e.message}`); }
+    finally { setDownloading(false); }
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -252,6 +318,25 @@ export default function AnalyticsPage() {
           <span className={`w-1.5 h-1.5 rounded-full ${hasBehavioural ? "bg-green-500" : "bg-amber-400"}`} />
           {hasBehavioural ? "Tracking actif" : "Tracking inactif"}
         </div>
+
+        {/* PDF download */}
+        <button
+          onClick={handleDownload}
+          disabled={downloading || !data}
+          title="Télécharger le rapport PDF"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+        >
+          {downloading ? (
+            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+          )}
+          {downloading ? "Génération…" : "PDF"}
+        </button>
 
         {/* Refresh */}
         <button onClick={load} disabled={loading}
@@ -406,16 +491,79 @@ export default function AnalyticsPage() {
             {hasBehavioural ? (
               <div className="grid sm:grid-cols-2 gap-4">
                 <Card>
-                  <CardTitle>Sections les plus consultées</CardTitle>
+                  <div className="flex items-center justify-between mb-4">
+                    <CardTitle>Sections les plus consultées</CardTitle>
+                    {Object.keys(data.sections_viewed).length > 0 && (
+                      <span className="text-xs text-gray-400">
+                        {Object.keys(data.sections_viewed).length} section{Object.keys(data.sections_viewed).length > 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
                   {Object.keys(data.sections_viewed).length === 0
                     ? <Empty text="Aucune section trackée." />
-                    : <div className="space-y-3">
-                        {Object.entries(data.sections_viewed)
-                          .sort(([, a], [, b]) => b - a)
-                          .map(([sec, n]) => (
-                            <BarRow key={sec} label={SECTION_LABELS[sec] ?? sec} value={n} max={maxSection} color="#0891b2" />
-                          ))}
-                      </div>}
+                    : (() => {
+                        const sorted = Object.entries(data.sections_viewed).sort(([, a], [, b]) => b - a);
+                        const total  = sorted.reduce((s, [, n]) => s + n, 0);
+                        const topSec = sorted[0];
+                        return (
+                          <div>
+                            <div className="space-y-2.5">
+                              {sorted.map(([sec, n]) => {
+                                const color = SECTION_COLORS[sec] ?? "#0891b2";
+                                const pct   = Math.round(n / Math.max(maxSection, 1) * 100);
+                                const viewP = data.pageviews > 0 ? Math.round(n / data.pageviews * 100) : 0;
+                                return (
+                                  <div key={sec} className="flex items-center gap-3">
+                                    {/* Icône */}
+                                    <div
+                                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                                      style={{ backgroundColor: `${color}18`, color }}
+                                    >
+                                      <SectionIcon section={sec} />
+                                    </div>
+                                    {/* Barre + label */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="text-sm font-medium text-gray-700 truncate">
+                                          {SECTION_LABELS[sec] ?? sec}
+                                        </span>
+                                        <span className="text-xs text-gray-400 ml-2 shrink-0">
+                                          {viewP}% des vues
+                                        </span>
+                                      </div>
+                                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                        <div
+                                          className="h-1.5 rounded-full transition-all"
+                                          style={{ width: `${pct}%`, background: color }}
+                                        />
+                                      </div>
+                                    </div>
+                                    {/* Compteur */}
+                                    <span className="text-sm font-bold text-gray-800 w-7 text-right shrink-0">{n}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {/* Résumé bas de card */}
+                            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+                              <span className="text-xs text-gray-400">
+                                Section la + visitée
+                              </span>
+                              <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                                <span
+                                  className="inline-block w-2 h-2 rounded-full"
+                                  style={{ background: SECTION_COLORS[topSec[0]] ?? "#0891b2" }}
+                                />
+                                {SECTION_LABELS[topSec[0]] ?? topSec[0]}
+                                <span className="text-gray-400 font-normal ml-1">
+                                  ({data.pageviews > 0 ? Math.round(topSec[1] / data.pageviews * 100) : 0}% des vues)
+                                </span>
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()
+                  }
                 </Card>
 
                 <Card>

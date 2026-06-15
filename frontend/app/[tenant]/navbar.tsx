@@ -10,12 +10,13 @@ interface NavBarProps {
   hasServices: boolean;
   showAbout: boolean;
   hasDescription: boolean;
+  hasGallery?: boolean;
   isPreview: boolean;
 }
 
 export default function NavBar({
   logoOption, logoUrl, title, colors,
-  showServices, hasServices, showAbout, hasDescription, isPreview,
+  showServices, hasServices, showAbout, hasDescription, hasGallery, isPreview,
 }: NavBarProps) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -42,6 +43,7 @@ export default function NavBar({
   const links = [
     showServices && hasServices && { href: "#prestations", label: "Prestations" },
     showAbout && hasDescription && { href: "#a-propos", label: "À propos" },
+    hasGallery && { href: "#galerie", label: "Galerie" },
     { href: "#contact", label: "Contact" },
   ].filter(Boolean) as { href: string; label: string }[];
 

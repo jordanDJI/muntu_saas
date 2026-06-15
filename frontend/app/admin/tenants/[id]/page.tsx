@@ -50,7 +50,15 @@ const STATUS_LABEL: Record<string, string> = {
   active: "Actif", trialing: "Stripe trial", trial: "Essai", trial_expired: "Expiré", suspended: "Suspendu",
 };
 
-const KNOWN_FEATURES = ["analytics", "agent_vitrine", "agent_support", "agent_assistant", "custom_domain", "booking", "crm", "multi_page_site", "multi_tenant", "campaigns", "attachments_max", "attachment_file_max_mb"];
+const KNOWN_FEATURES = [
+  "analytics", "analytics_roi",
+  "agent_vitrine", "agent_support", "agent_assistant",
+  "booking", "crm", "campaigns",
+  "custom_domain", "embed_widget", "custom_css",
+  "multi_page_site", "multi_tenant",
+  "max_contacts", "max_team_members", "max_tenants",
+  "attachments_max", "attachment_file_max_mb", "gallery_photos_limit",
+];
 
 export default function TenantDetailPage() {
   const { id }   = useParams<{ id: string }>();
@@ -187,7 +195,7 @@ export default function TenantDetailPage() {
     </div>
   );
 
-  const { tenant, owner, subscription, site, domain, counts, overrides, action_log } = data;
+  const { tenant, owner, subscription, site, domain, counts, profile, trial_reminders_sent, overrides, action_log } = data;
   const st = tenant.computed_status;
   const badge = STATUS_BADGE[st] ?? STATUS_BADGE.suspended;
 
@@ -286,14 +294,53 @@ export default function TenantDetailPage() {
           </InfoCard>
 
           <InfoCard title="Données">
-            <Row label="RDV"          value={String(counts.appointments)} />
-            <Row label="Contacts"     value={String(counts.contacts)}     />
-            <Row label="Leads"        value={String(counts.leads)}        />
-            <Row label="Campagnes"    value={String(counts.campaigns ?? 0)} />
-            <Row label="Rappels"      value={String(counts.reminders ?? 0)} />
+            <Row label="RDV"            value={String(counts.appointments)} />
+            <Row label="Contacts"       value={String(counts.contacts)}     />
+            <Row label="Leads"          value={String(counts.leads)}        />
+            <Row label="Tags CRM"       value={String(counts.tags ?? 0)}    />
+            <Row label="Campagnes"      value={String(counts.campaigns ?? 0)} />
+            <Row label="Rappels CRM"    value={String(counts.reminders ?? 0)} />
             <Row label="Pièces jointes" value={String(counts.attachments ?? 0)} />
-            <Row label="Site"         value={site ? `${site.title ?? "Sans titre"} (${site.status})` : "Aucun"} />
-            <Row label="Domaine"      value={domain ? `${domain.domain} (${domain.status})` : "Aucun"} />
+            <Row label="Site"           value={site ? `${site.title ?? "Sans titre"} (${site.status})` : "Aucun"} />
+            <Row label="Domaine"        value={domain ? `${domain.domain} (${domain.status})` : "Aucun"} />
+          </InfoCard>
+
+          <InfoCard title="Profil &amp; onboarding">
+            {profile && (
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs" style={{ color: K.muted }}>Score de complétion</span>
+                  <span className="text-sm font-bold" style={{ color: profile.score >= 80 ? K.success : profile.score >= 40 ? K.warning : K.danger }}>
+                    {profile.score}%
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(170,189,216,0.1)" }}>
+                  <div className="h-full rounded-full transition-all"
+                    style={{ width: `${profile.score}%`, background: profile.score >= 80 ? K.success : profile.score >= 40 ? K.warning : K.danger }} />
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {profile.steps?.map((s: any) => (
+                    <span key={s.key} className="text-[10px] px-1.5 py-0.5 rounded"
+                      style={{ background: s.done ? "rgba(74,202,122,0.1)" : "rgba(224,96,96,0.1)", color: s.done ? K.success : K.danger }}>
+                      {s.done ? "✓" : "✗"} {s.key}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div>
+              <span className="text-xs" style={{ color: K.muted }}>Rappels trial envoyés</span>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {(trial_reminders_sent?.length ?? 0) === 0 ? (
+                  <span className="text-xs" style={{ color: "rgba(170,189,216,0.3)" }}>Aucun</span>
+                ) : trial_reminders_sent.map((d: number) => (
+                  <span key={d} className="text-[10px] px-1.5 py-0.5 rounded font-mono"
+                    style={{ background: "rgba(221,170,64,0.1)", color: K.warning, border: "1px solid rgba(221,170,64,0.2)" }}>
+                    J-{d}
+                  </span>
+                ))}
+              </div>
+            </div>
           </InfoCard>
 
           <InfoCard title="Infos tenant">

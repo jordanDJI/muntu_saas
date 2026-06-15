@@ -10,6 +10,7 @@ import { AtoutIconSVG } from "../../lib/atout-icons";
 import { getSectorVocab } from "../../lib/sectorVocabulary";
 import CookieBanner from "../../components/CookieBanner";
 import TrackingScripts from "../../components/TrackingScripts";
+import GallerySection from "../../components/GallerySection";
 
 // Palettes de couleurs applicables via CSS inline (évite les problèmes de purge Tailwind)
 const COLOR_HEX: Record<string, { hero: string; accent: string; light: string }> = {
@@ -198,6 +199,8 @@ export default async function TenantSitePage({
   const tracking = siteStyle.tracking ?? {};
   const photoUrls = siteStyle.photo_urls ?? {};
   const videoUrls = siteStyle.video_urls ?? {};
+  const galleryPhotos: string[] = siteStyle.gallery_photos ?? [];
+  const galleryDisplay: "horizontal" | "vertical" = siteStyle.gallery_display ?? "horizontal";
   const customCss: string = siteStyle.custom_css ?? "";
   const pagesEnabled: string[] = siteStyle.pages_enabled ?? ["home", "about", "services", "contact"];
   const showAbout = pagesEnabled.includes("about") && (isPreview || !!site.description);
@@ -265,6 +268,7 @@ export default async function TenantSitePage({
         hasServices={(site.service_offer?.length ?? 0) > 0}
         showAbout={showAbout}
         hasDescription={!!site.description}
+        hasGallery={galleryPhotos.length > 0}
         isPreview={isPreview}
       />
 
@@ -511,7 +515,7 @@ export default async function TenantSitePage({
 
       {/* ── TÉMOIGNAGES ──────────────────────────────────────────────────── */}
       {testimonials.length > 0 && (
-        <section className="py-20 px-6 bg-white" data-reveal>
+        <section id="temoignages" className="py-20 px-6 bg-white" data-reveal>
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-12">
               <span className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-4" style={{ backgroundColor: colors.light, color: colors.hero }}>
@@ -546,6 +550,11 @@ export default async function TenantSitePage({
             </div>
           </div>
         </section>
+      )}
+
+      {/* ── GALERIE ──────────────────────────────────────────────────────── */}
+      {galleryPhotos.length > 0 && (
+        <GallerySection photos={galleryPhotos} display={galleryDisplay} accentColor={colors.accent} />
       )}
 
       {/* ── CONTACT ──────────────────────────────────────────────────────── */}
@@ -703,74 +712,108 @@ export default async function TenantSitePage({
         />
       )}
 
-      {/* ── Schema.org LocalBusiness ─────────────────────────────────────── */}
-      {!isPreview && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "LocalBusiness",
-              name: site.title,
-              description: site.tagline ?? site.description ?? undefined,
-              url: `${APP_URL}/${tenantSlug}`,
-              ...(site.phone && { telephone: site.phone }),
-              ...(site.email_contact && { email: site.email_contact }),
-              ...(site.address && {
-                address: (() => {
-                  const parts = site.site_style?.address_parts;
-                  if (parts?.city) {
-                    return {
-                      "@type": "PostalAddress",
-                      streetAddress: parts.street ?? undefined,
-                      postalCode: parts.postal_code ?? undefined,
-                      addressLocality: parts.city,
-                      addressCountry: parts.country ?? site.tenant?.country ?? "FR",
-                    };
-                  }
-                  return { "@type": "PostalAddress", streetAddress: site.address };
-                })(),
-              }),
-              ...(zones.length > 0 && {
-                areaServed: zones.map((z: string) => ({ "@type": "City", name: z })),
-              }),
-              ...(testimonials.length > 0 && {
-                aggregateRating: {
-                  "@type": "AggregateRating",
-                  ratingValue: (testimonials.reduce((s: number, t: any) => s + (t.rating ?? 5), 0) / testimonials.length).toFixed(1),
-                  reviewCount: testimonials.length,
-                  bestRating: "5",
-                  worstRating: "1",
-                },
-                review: testimonials.map((t: any) => ({
-                  "@type": "Review",
-                  reviewRating: { "@type": "Rating", ratingValue: String(t.rating ?? 5), bestRating: "5" },
-                  author: { "@type": "Person", name: t.author_name },
-                  reviewBody: t.content,
-                })),
-              }),
-              ...(site.service_offer?.length > 0 && {
-                hasOfferCatalog: {
-                  "@type": "OfferCatalog",
-                  name: "Prestations",
-                  itemListElement: site.service_offer.map((o: any) => ({
-                    "@type": "Offer",
-                    itemOffered: {
-                      "@type": "Service",
-                      name: o.name,
-                      ...(o.description && { description: o.description }),
-                      ...(o.price_eur && { offers: { "@type": "Offer", price: o.price_eur, priceCurrency: "EUR" } }),
-                    },
+      {/* ── Schema.org ──────────────────────────────────────────────────── */}
+      {!isPreview && (() => {
+        const SCHEMA_TYPES: Record<string, string> = {
+          health:     "Physician",
+          beauty:     "BeautySalon",
+          coaching:   "SportsActivityLocation",
+          finance:    "FinancialService",
+          trade:      "HomeAndConstructionBusiness",
+          restaurant: "FoodEstablishment",
+          commerce:   "Store",
+          other:      "LocalBusiness",
+        };
+        const schemaType = SCHEMA_TYPES[sector] ?? "LocalBusiness";
+
+        const DAY_SCHEMA: Record<string, string> = {
+          mon: "https://schema.org/Monday",
+          tue: "https://schema.org/Tuesday",
+          wed: "https://schema.org/Wednesday",
+          thu: "https://schema.org/Thursday",
+          fri: "https://schema.org/Friday",
+          sat: "https://schema.org/Saturday",
+          sun: "https://schema.org/Sunday",
+        };
+        const openingHoursSpec = Object.entries(openingHours)
+          .filter(([, v]) => v?.open)
+          .map(([day, v]) => ({
+            "@type": "OpeningHoursSpecification",
+            dayOfWeek: DAY_SCHEMA[day],
+            opens: v.from,
+            closes: v.to,
+          }));
+
+        return (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": schemaType,
+                name: site.title,
+                description: site.tagline ?? site.description ?? undefined,
+                url: `${APP_URL}/${tenantSlug}`,
+                ...(site.phone && { telephone: site.phone }),
+                ...(site.email_contact && { email: site.email_contact }),
+                ...(site.address && {
+                  address: (() => {
+                    const parts = site.site_style?.address_parts;
+                    if (parts?.city) {
+                      return {
+                        "@type": "PostalAddress",
+                        streetAddress: parts.street ?? undefined,
+                        postalCode: parts.postal_code ?? undefined,
+                        addressLocality: parts.city,
+                        addressCountry: parts.country ?? site.tenant?.country ?? "FR",
+                      };
+                    }
+                    return { "@type": "PostalAddress", streetAddress: site.address };
+                  })(),
+                }),
+                ...(openingHoursSpec.length > 0 && { openingHoursSpecification: openingHoursSpec }),
+                ...(galleryPhotos.length > 0 && { image: galleryPhotos }),
+                ...(zones.length > 0 && {
+                  areaServed: zones.map((z: string) => ({ "@type": "City", name: z })),
+                }),
+                ...(testimonials.length > 0 && {
+                  aggregateRating: {
+                    "@type": "AggregateRating",
+                    ratingValue: (testimonials.reduce((s: number, t: any) => s + (t.rating ?? 5), 0) / testimonials.length).toFixed(1),
+                    reviewCount: testimonials.length,
+                    bestRating: "5",
+                    worstRating: "1",
+                  },
+                  review: testimonials.map((t: any) => ({
+                    "@type": "Review",
+                    reviewRating: { "@type": "Rating", ratingValue: String(t.rating ?? 5), bestRating: "5" },
+                    author: { "@type": "Person", name: t.author_name },
+                    reviewBody: t.content,
                   })),
-                },
+                }),
+                ...(site.service_offer?.length > 0 && {
+                  hasOfferCatalog: {
+                    "@type": "OfferCatalog",
+                    name: "Prestations",
+                    itemListElement: site.service_offer.map((o: any) => ({
+                      "@type": "Offer",
+                      itemOffered: {
+                        "@type": "Service",
+                        name: o.name,
+                        ...(o.description && { description: o.description }),
+                        ...(o.price_eur && { offers: { "@type": "Offer", price: o.price_eur, priceCurrency: "EUR" } }),
+                      },
+                    })),
+                  },
+                }),
+                ...(Object.values(social).some(Boolean) && {
+                  sameAs: [social.facebook, social.instagram, social.linkedin].filter(Boolean),
+                }),
               }),
-              ...(Object.values(social).some(Boolean) && {
-                sameAs: [social.facebook, social.instagram, social.linkedin].filter(Boolean),
-              }),
-            }),
-          }}
-        />
-      )}
+            }}
+          />
+        );
+      })()}
     </main>
   );
 }

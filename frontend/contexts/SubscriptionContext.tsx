@@ -19,6 +19,7 @@ export type PlanFeatures = {
   campaigns: boolean;
   attachments_max: number;
   attachment_file_max_mb: number;
+  gallery_photos_limit: number;
 };
 
 export type FeatureKey = keyof PlanFeatures;
@@ -40,6 +41,7 @@ const ESSENTIEL_FEATURES: PlanFeatures = {
   campaigns: false,
   attachments_max: 0,
   attachment_file_max_mb: 0,
+  gallery_photos_limit: 8,
 };
 
 type SubscriptionCtx = {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, supabase } from "../../lib/api";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useSectorVocab } from "../../lib/useSectorVocab";
+import CompletionCard from "../../components/CompletionCard";
 
 const DemandPotentialCard = dynamic(() => import("./analytics/DemandPotentialCard"), { ssr: false });
 
@@ -180,6 +181,9 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Complétion du profil */}
+      <CompletionCard />
 
       {/* KPIs */}
       {[showKpi("new_leads"), showKpi("pending"), showKpi("confirmed"), showKpi("contacts")].some(Boolean) && (

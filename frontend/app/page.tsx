@@ -283,6 +283,7 @@ export default function LandingPage() {
               <p>{t.lp_feat2_d}</p>
               <ul className="l-feat-list">
                 <li>Créneaux disponibles en temps réel</li>
+                <li>Réservations de groupe (capacité par créneau configurable)</li>
                 <li>Confirmation + rappel email automatique</li>
                 <li>Gestion des indisponibilités &amp; congés</li>
                 <li>Widget embarquable sur votre site actuel</li>
@@ -302,6 +303,7 @@ export default function LandingPage() {
                 <li>Export CSV &amp; import de contacts</li>
                 <li>Agents IA Telegram, WhatsApp &amp; email</li>
                 <li>Analytics comportementaux + potentiel de demande locale</li>
+                <li>Connexion Google Analytics 4 native</li>
               </ul>
             </div>
 
@@ -430,7 +432,7 @@ export default function LandingPage() {
               <p className="l-price-desc">{t.lp_plan1_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
-                <li>Site vitrine complet</li>
+                <li>Site vitrine complet (8 photos galerie)</li>
                 <li>Réservations en ligne</li>
                 <li>100 contacts CRM</li>
                 <li>Emails automatiques (RDV, rappels)</li>
@@ -455,14 +457,15 @@ export default function LandingPage() {
               <p className="l-price-desc">{t.lp_plan2_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
-                <li>Site vitrine complet</li>
-                <li>Réservations illimitées</li>
+                <li>Site vitrine complet (16 photos galerie)</li>
+                <li>Réservations illimitées + de groupe</li>
                 <li>1 000 contacts CRM</li>
                 <li>Timeline, Kanban &amp; notes horodatées</li>
                 <li><strong>5 pièces jointes/contact</strong> (ordonnances, devis…)</li>
                 <li>Campagnes email ciblées</li>
                 <li>3 agents IA (vitrine, support client, assistant)</li>
-                <li>Analytics + Potentiel de demande locale</li>
+                <li>Analytics comportementaux + demande locale</li>
+                <li>Connexion Google Analytics 4</li>
                 <li>Domaine personnalisé inclus</li>
                 <li>Widget embarquable sur site externe</li>
                 <li>Support prioritaire 24/7</li>
@@ -482,14 +485,14 @@ export default function LandingPage() {
               <p className="l-price-desc">{t.lp_plan3_d}</p>
               <div className="l-price-divider" />
               <ul className="l-price-features">
-                <li>Tout du plan Pro</li>
+                <li>Tout du plan Pro (24 photos galerie)</li>
                 <li>Contacts illimités</li>
                 <li><strong>10 pièces jointes/contact</strong> · packs supplémentaires disponibles</li>
                 <li>Campagnes email illimitées</li>
                 <li>Personnalisation CSS avancée</li>
-                <li>Multi-espaces de travail</li>
+                <li><strong>Jusqu&apos;à 3 espaces de travail indépendants</strong></li>
                 <li>Membres d&apos;équipe illimités</li>
-                <li>Calendriers séparés par membre</li>
+                <li>Calendrier indépendant par espace de travail</li>
                 <li>Onboarding personnalisé</li>
                 <li>Refonte design par notre équipe — 1 site inclus (sur demande)</li>
                 <li>Account manager dédié</li>

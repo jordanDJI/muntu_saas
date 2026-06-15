@@ -1,10 +1,31 @@
 import stripe
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from pydantic import BaseModel
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin
 from app.core.config import settings
 from app.services.subscription import get_tenant_plan
+
+logger = logging.getLogger(__name__)
+
+
+def _get_owner_info(supabase, tenant_id: str) -> dict:
+    """Retourne {email, name, tenant_name, country} du propriétaire d'un tenant."""
+    try:
+        tenant = supabase.table("tenant").select("name, country").eq("id", tenant_id).single().execute().data or {}
+        owner_m = supabase.table("membership").select("user_id").eq("tenant_id", tenant_id).eq("role", "owner").limit(1).execute()
+        if not owner_m.data:
+            return {}
+        user_id = owner_m.data[0]["user_id"]
+        user_res = supabase.auth.admin.get_user_by_id(user_id)
+        user = user_res.user if user_res else None
+        email = user.email if user else None
+        name = ((user.user_metadata or {}).get("full_name") or (user.user_metadata or {}).get("name") or "") if user else ""
+        return {"email": email, "name": name, "tenant_name": tenant.get("name", ""), "country": tenant.get("country", "BE")}
+    except Exception as exc:
+        logger.warning("_get_owner_info failed for tenant %s: %s", tenant_id, exc)
+        return {}
 
 stripe.api_key = settings.stripe_secret_key.strip()
 
@@ -151,6 +172,24 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
             customer_id = session.get("customer")
             if customer_id:
                 supabase.table("tenant").update({"stripe_customer_id": customer_id}).eq("id", tenant_id).execute()
+            # Email de confirmation d'abonnement
+            try:
+                plan_row = supabase.table("plan_subscription").select("name").eq("id", plan_id).maybe_single().execute()
+                plan_name = (plan_row.data or {}).get("name", "Pro")
+                owner = _get_owner_info(supabase, tenant_id)
+                if owner.get("email"):
+                    from app.services.email import send_subscription_confirmed
+                    send_subscription_confirmed(
+                        owner_email=owner["email"],
+                        owner_name=owner["name"],
+                        tenant_name=owner["tenant_name"],
+                        country=owner["country"],
+                        plan_name=plan_name,
+                        dashboard_url=f"{settings.frontend_url}/dashboard",
+                        subscription_settings_url=f"{settings.frontend_url}/dashboard/settings?section=abonnement",
+                    )
+            except Exception as exc:
+                logger.warning("send_subscription_confirmed failed: %s", exc)
 
     elif event["type"] == "customer.subscription.updated":
         sub = event["data"]["object"]
@@ -171,6 +210,23 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
         if stripe_sub_id:
             supabase = get_supabase_admin()
             supabase.table("subscription").update({"status": "past_due"}).eq("stripe_subscription_id", stripe_sub_id).execute()
+            # Email d'alerte de paiement échoué
+            try:
+                sub_row = supabase.table("subscription").select("tenant_id").eq("stripe_subscription_id", stripe_sub_id).maybe_single().execute()
+                failed_tenant_id = (sub_row.data or {}).get("tenant_id")
+                if failed_tenant_id:
+                    owner = _get_owner_info(supabase, failed_tenant_id)
+                    if owner.get("email"):
+                        from app.services.email import send_subscription_payment_failed
+                        send_subscription_payment_failed(
+                            owner_email=owner["email"],
+                            owner_name=owner["name"],
+                            tenant_name=owner["tenant_name"],
+                            country=owner["country"],
+                            billing_portal_url=f"{settings.frontend_url}/dashboard/settings?section=abonnement",
+                        )
+            except Exception as exc:
+                logger.warning("send_subscription_payment_failed failed: %s", exc)
 
     return {"received": True}
 

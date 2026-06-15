@@ -73,6 +73,38 @@ def _compute_status(tenant: dict, sub_map: dict, now: datetime) -> str:
     return "trial" if now < end else "trial_expired"
 
 
+def _compute_profile_score(sb, tenant_id: str, site: dict | None) -> dict:
+    """Score de complétion du profil (0-100) — même logique que /profile/completion."""
+    s = site or {}
+    site_style = s.get("site_style") or {}
+    site_id = s.get("id")
+
+    has_title   = bool((s.get("title") or "").strip())
+    photo_urls  = site_style.get("photo_urls") or {}
+    has_photos  = bool(site_style.get("logo_url")) or any(v for v in photo_urls.values() if v)
+    is_pub      = s.get("status") == "published"
+
+    has_slots = False
+    cal = sb.table("calendar").select("id").eq("tenant_id", tenant_id).maybe_single().execute()
+    if cal.data:
+        sl = sb.table("availability_slot").select("id", count="exact").eq("calendar_id", cal.data["id"]).execute()
+        has_slots = (sl.count or 0) > 0
+
+    has_offers = False
+    if site_id:
+        of = sb.table("service_offer").select("id", count="exact").eq("site_id", site_id).execute()
+        has_offers = (of.count or 0) > 0
+
+    steps = [
+        {"key": "title",     "done": has_title},
+        {"key": "photos",    "done": has_photos},
+        {"key": "slots",     "done": has_slots},
+        {"key": "offers",    "done": has_offers},
+        {"key": "published", "done": is_pub},
+    ]
+    return {"score": int(sum(1 for st in steps if st["done"]) / len(steps) * 100), "steps": steps}
+
+
 def _auto_unpublish_expired_sites(sb, now: datetime) -> int:
     """Dépublie automatiquement les sites des tenants expirés depuis 90+ jours.
     Appelé en tâche de fond lors du chargement de la page Relances.
@@ -189,6 +221,10 @@ async def get_metrics(admin=Depends(viewer_or_above)):
     logo_pending   = sb.table("logo_request").select("id", count="exact").eq("status", "pending").execute().count or 0
     design_pending = sb.table("design_request").select("id", count="exact").eq("status", "pending").execute().count or 0
 
+    # Relances CRM en retard (due_date dépassée, statut pending)
+    reminders_overdue = sb.table("contact_reminder").select("id", count="exact") \
+        .lt("due_date", now.isoformat()).eq("status", "pending").execute().count or 0
+
     # Churn rate (essai expiré sans conversion / total des tenants arrivés à terme)
     expired_or_paid = paid + expired
     churn_rate = round(expired / max(1, expired_or_paid) * 100, 1)
@@ -207,10 +243,11 @@ async def get_metrics(admin=Depends(viewer_or_above)):
         "arr":                   mrr * 12,
         "churn_rate":            churn_rate,
         "contacts_total":        contacts_total,
-        "campaigns_30d":         campaigns_30d,
-        "logo_requests_pending": logo_pending,
+        "campaigns_30d":           campaigns_30d,
+        "logo_requests_pending":   logo_pending,
         "design_requests_pending": design_pending,
-        "plan_distribution":     plan_dist,
+        "reminders_overdue":       reminders_overdue,
+        "plan_distribution":       plan_dist,
     }
 
 
@@ -221,6 +258,7 @@ async def list_tenants(
     admin=Depends(viewer_or_above),
     search: Optional[str] = None,
     status: Optional[str] = Query(None),
+    sector: Optional[str] = Query(None),
     page: int = 1,
     page_size: int = 25,
 ):
@@ -230,6 +268,8 @@ async def list_tenants(
     q = sb.table("tenant").select("id, name, slug, sector, country, created_at, suspended_at, trial_extended_until, is_active")
     if search:
         q = q.or_(f"name.ilike.%{search}%,slug.ilike.%{search}%")
+    if sector:
+        q = q.eq("sector", sector)
     tenants = q.order("created_at", desc=True).execute().data or []
 
     subs = sb.table("subscription").select("tenant_id, status, plan_id").execute().data or []
@@ -301,9 +341,18 @@ async def get_tenant(tenant_id: str, admin=Depends(viewer_or_above)):
     campaigns   = sb.table("email_campaign").select("id", count="exact").eq("tenant_id", tenant_id).execute()
     reminders   = sb.table("contact_reminder").select("id", count="exact").eq("tenant_id", tenant_id).execute()
     attachments = sb.table("contact_attachment").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+    tags        = sb.table("contact_tag").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+
+    # Rappels d'essai déjà envoyés (seuils en jours)
+    trial_reminders = [
+        r["days_before"]
+        for r in (sb.table("trial_reminder_log").select("days_before").eq("tenant_id", tenant_id).execute().data or [])
+    ]
 
     overrides = sb.table("tenant_feature_override").select("*").eq("tenant_id", tenant_id).execute().data or []
     logs = sb.table("admin_action_log").select("*").eq("target_tenant_id", tenant_id).order("created_at", desc=True).limit(30).execute().data or []
+
+    profile = _compute_profile_score(sb, tenant_id, site)
 
     sub_map = {tenant_id: sub} if sub else {}
     return {
@@ -319,7 +368,10 @@ async def get_tenant(tenant_id: str, admin=Depends(viewer_or_above)):
             "campaigns":    campaigns.count or 0,
             "reminders":    reminders.count or 0,
             "attachments":  attachments.count or 0,
+            "tags":         tags.count or 0,
         },
+        "profile": profile,
+        "trial_reminders_sent": sorted(trial_reminders),
         "overrides": overrides,
         "action_log": logs,
     }

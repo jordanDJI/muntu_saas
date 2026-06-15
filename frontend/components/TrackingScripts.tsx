@@ -82,7 +82,7 @@ export default function TrackingScripts({ tracking, tenantSlug, apiUrl, consentK
                     if(e.isIntersecting&&!seen[e.target.id]){seen[e.target.id]=1;send('section_view',e.target.id);}
                   });
                 },{threshold:0.3});
-                ['hero','a-propos','prestations','contact'].forEach(function(id){
+                ['hero','a-propos','prestations','galerie','temoignages','contact'].forEach(function(id){
                   var el=document.getElementById(id);if(el)obs.observe(el);
                 });
               }

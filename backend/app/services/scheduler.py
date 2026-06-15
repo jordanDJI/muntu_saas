@@ -4,7 +4,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime, timedelta, timezone
 from app.core.supabase import get_supabase_admin
-from app.services.email import send_appointment_reminder, send_crm_reminder_to_contact
+from app.services.email import send_appointment_reminder, send_crm_reminder_to_contact, send_monthly_report
 
 scheduler = AsyncIOScheduler(timezone="Europe/Brussels")
 logger = logging.getLogger(__name__)
@@ -209,6 +209,248 @@ async def send_crm_auto_reminders() -> None:
             logger.error("CRM auto-reminder failed for %s: %s", row.get("id"), exc)
 
 
+# ── Rappels expiration trial ─────────────────────────────────────────────────
+
+async def send_trial_reminders() -> None:
+    """
+    Envoie les rappels d'expiration du trial J-7, J-3, J-1.
+    Utilise trial_reminder_log pour éviter les doublons.
+    Migration requise : 044_trial_reminder_log.sql
+    """
+    from app.services.email import send_trial_reminder
+    from app.core.config import settings as cfg
+    from datetime import date
+
+    sb = get_supabase_admin()
+    today = datetime.now(timezone.utc).date()
+    TRIAL_DAYS = 14
+    THRESHOLDS = {7, 3, 1}
+
+    # Fenêtre normale : tenants créés dans les 21 derniers jours
+    normal_start = (today - timedelta(days=21)).isoformat() + "T00:00:00+00:00"
+    # Fenêtre extended : trial_extended_until dans les 8 prochains jours
+    ext_start = today.isoformat() + "T00:00:00+00:00"
+    ext_end   = (today + timedelta(days=8)).isoformat() + "T23:59:59+00:00"
+
+    try:
+        res_normal = (
+            sb.table("tenant")
+            .select("id, name, country, created_at, trial_extended_until, suspended_at, membership(role, app_user(email, first_name))")
+            .gte("created_at", normal_start)
+            .eq("is_active", True)
+            .execute()
+        )
+        res_extended = (
+            sb.table("tenant")
+            .select("id, name, country, created_at, trial_extended_until, suspended_at, membership(role, app_user(email, first_name))")
+            .gte("trial_extended_until", ext_start)
+            .lte("trial_extended_until", ext_end)
+            .eq("is_active", True)
+            .execute()
+        )
+        all_tenants = {t["id"]: t for t in (res_normal.data or []) + (res_extended.data or [])}
+    except Exception as exc:
+        logger.error("Trial reminders: tenant query failed: %s", exc)
+        return
+
+    for tenant in all_tenants.values():
+        if tenant.get("suspended_at"):
+            continue
+
+        # Calcul de la date d'expiration du trial
+        try:
+            created_date = datetime.fromisoformat(
+                tenant["created_at"].replace("Z", "+00:00")
+            ).astimezone(timezone.utc).date()
+        except Exception:
+            continue
+
+        ext_raw = tenant.get("trial_extended_until")
+        if ext_raw:
+            try:
+                ext_date = datetime.fromisoformat(
+                    ext_raw.replace("Z", "+00:00")
+                ).astimezone(timezone.utc).date()
+                trial_end = max(created_date + timedelta(days=TRIAL_DAYS), ext_date)
+            except Exception:
+                trial_end = created_date + timedelta(days=TRIAL_DAYS)
+        else:
+            trial_end = created_date + timedelta(days=TRIAL_DAYS)
+
+        days_remaining = (trial_end - today).days
+        if days_remaining not in THRESHOLDS:
+            continue
+
+        tenant_id = tenant["id"]
+
+        # Pas d'abonnement Stripe actif
+        try:
+            sub = sb.table("subscription").select("id").eq("tenant_id", tenant_id).in_("status", ["active", "trialing"]).maybe_single().execute()
+            if sub.data:
+                continue
+        except Exception:
+            continue
+
+        # Déjà envoyé ?
+        try:
+            already = sb.table("trial_reminder_log").select("id").eq("tenant_id", tenant_id).eq("days_before", days_remaining).maybe_single().execute()
+            if already.data:
+                continue
+        except Exception:
+            pass
+
+        # Owner
+        memberships = tenant.get("membership") or []
+        owner = None
+        for m in memberships:
+            if m.get("role") == "owner" and (m.get("app_user") or {}).get("email"):
+                owner = m["app_user"]
+                break
+        if not owner:
+            for m in memberships:
+                if (m.get("app_user") or {}).get("email"):
+                    owner = m["app_user"]
+                    break
+        if not owner:
+            logger.warning("Trial reminder: no owner email for tenant %s", tenant_id)
+            continue
+
+        # Résumé d'activité
+        contacts_n = leads_n = appts_n = 0
+        try:
+            contacts_n = sb.table("contact").select("id", count="exact").eq("tenant_id", tenant_id).execute().count or 0
+            leads_n    = sb.table("lead").select("id", count="exact").eq("tenant_id", tenant_id).execute().count or 0
+            cal = sb.table("calendar").select("id").eq("tenant_id", tenant_id).maybe_single().execute()
+            if cal.data:
+                appts_n = sb.table("appointment").select("id", count="exact").eq("calendar_id", cal.data["id"]).execute().count or 0
+        except Exception as exc:
+            logger.warning("Trial reminder: summary query failed for %s: %s", tenant_id, exc)
+
+        try:
+            await asyncio.to_thread(
+                send_trial_reminder,
+                owner_email=owner["email"],
+                owner_name=owner.get("first_name", ""),
+                tenant_name=tenant["name"],
+                country=tenant.get("country", "BE"),
+                days_left=days_remaining,
+                summary={"contacts": contacts_n, "leads": leads_n, "appointments": appts_n},
+                upgrade_url=f"{cfg.frontend_url}/dashboard/settings?section=abonnement",
+            )
+            sb.table("trial_reminder_log").insert({"tenant_id": tenant_id, "days_before": days_remaining}).execute()
+            logger.info("Trial reminder (%dd) sent → tenant %s", days_remaining, tenant_id)
+        except Exception as exc:
+            logger.error("Trial reminder failed for tenant %s: %s", tenant_id, exc)
+
+
+# ── Rapports mensuels analytics ──────────────────────────────────────────────
+
+async def send_monthly_reports() -> None:
+    """
+    1er du mois à 9h — génère et envoie le rapport analytics PDF
+    du mois précédent à tous les tenants actifs (non suspendus, non trial_expired).
+    """
+    import calendar as _cal
+    from app.services.pdf import generate_report_pdf
+    from app.core.config import settings as cfg
+
+    sb = get_supabase_admin()
+    now = datetime.now(timezone.utc)
+
+    # Fenêtre = mois précédent
+    first_this = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_prev  = first_this - timedelta(seconds=1)
+    first_prev = last_prev.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    since = first_prev.isoformat()
+    until = last_prev.isoformat()
+    month_label = first_prev.strftime("%B %Y")
+
+    # Tenants actifs avec abonnement (active ou trialing) et owner
+    try:
+        subs = (
+            sb.table("subscription")
+            .select("tenant_id")
+            .in_("status", ["active", "trialing"])
+            .execute()
+        )
+        tenant_ids = [r["tenant_id"] for r in (subs.data or [])]
+    except Exception as exc:
+        logger.error("monthly_reports: subscription query failed: %s", exc)
+        return
+
+    if not tenant_ids:
+        logger.info("monthly_reports: aucun tenant actif ce mois")
+        return
+
+    try:
+        tenants = (
+            sb.table("tenant")
+            .select("id, name, country, suspended_at, membership(role, app_user(email, first_name))")
+            .in_("id", tenant_ids)
+            .eq("is_active", True)
+            .execute()
+        ).data or []
+    except Exception as exc:
+        logger.error("monthly_reports: tenant query failed: %s", exc)
+        return
+
+    for tenant in tenants:
+        if tenant.get("suspended_at"):
+            continue
+
+        tenant_id   = tenant["id"]
+        tenant_name = tenant.get("name", "Mon établissement")
+        country     = tenant.get("country", "BE")
+
+        # Owner
+        memberships = tenant.get("membership") or []
+        owner = None
+        for m in memberships:
+            if m.get("role") == "owner" and (m.get("app_user") or {}).get("email"):
+                owner = m["app_user"]
+                break
+        if not owner:
+            continue
+
+        # Résumé du mois précédent
+        try:
+            # Import local pour éviter la dépendance circulaire
+            from app.api.v1.analytics import _build_summary
+            summary = await _build_summary(sb, tenant_id, since, until)
+        except Exception as exc:
+            logger.error("monthly_reports: summary failed for %s: %s", tenant_id, exc)
+            continue
+
+        # Génération PDF
+        try:
+            pdf_bytes = generate_report_pdf(
+                tenant_name=tenant_name,
+                period_label=month_label,
+                summary=summary,
+            )
+        except Exception as exc:
+            logger.error("monthly_reports: PDF generation failed for %s: %s", tenant_id, exc)
+            continue
+
+        # Envoi email
+        try:
+            dashboard_url = f"{cfg.frontend_url}/dashboard/analytics"
+            await asyncio.to_thread(
+                send_monthly_report,
+                owner_email=owner["email"],
+                owner_name=owner.get("first_name", ""),
+                tenant_name=tenant_name,
+                country=country,
+                month_label=month_label,
+                summary=summary,
+                pdf_bytes=pdf_bytes,
+                dashboard_url=dashboard_url,
+            )
+            logger.info("monthly_report sent → tenant %s (%s)", tenant_id, month_label)
+        except Exception as exc:
+            logger.error("monthly_reports: email failed for %s: %s", tenant_id, exc)
+
+
 # ── Démarrage / arrêt ─────────────────────────────────────────────────────────
 
 def start_scheduler() -> None:
@@ -233,6 +475,25 @@ def start_scheduler() -> None:
         hour=8,
         minute=0,
         id="crm_auto_reminders",
+        replace_existing=True,
+    )
+    # Rappels expiration trial J-7, J-3, J-1 : chaque jour à 9h00
+    scheduler.add_job(
+        send_trial_reminders,
+        "cron",
+        hour=9,
+        minute=0,
+        id="trial_reminders",
+        replace_existing=True,
+    )
+    # Rapport analytics mensuel : 1er du mois à 9h30
+    scheduler.add_job(
+        send_monthly_reports,
+        "cron",
+        day=1,
+        hour=9,
+        minute=30,
+        id="monthly_reports",
         replace_existing=True,
     )
     scheduler.start()

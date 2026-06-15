@@ -23,6 +23,7 @@ SECTION_DIMS: dict[str, tuple[int, int]] = {
     "logo":     (400,  200),   # mode contain (pas de crop)
     "offer":    (800,  600),
     "avatar":   (300,  300),
+    "gallery":  (1200, 800),   # galerie — paysage cover
 }
 
 

@@ -68,6 +68,7 @@ export default function TenantsPage() {
   const params     = useSearchParams();
   const [search,   setSearch]   = useState(params.get("search") ?? "");
   const [status,   setStatus]   = useState(params.get("status") ?? "");
+  const [sector,   setSector]   = useState(params.get("sector") ?? "");
   const [page,     setPage]     = useState(1);
   const [data,     setData]     = useState<any>(null);
   const [loading,  setLoading]  = useState(true);
@@ -80,12 +81,13 @@ export default function TenantsPage() {
   const [createErr,  setCreateErr]  = useState("");
   const [createOk,   setCreateOk]   = useState(false);
 
-  const load = useCallback(async (s: string, st: string, p: number) => {
+  const load = useCallback(async (s: string, st: string, sec: string, p: number) => {
     setLoading(true); setError("");
     try {
       const qs = new URLSearchParams({ page: String(p), page_size: "25" });
-      if (s)  qs.set("search", s);
-      if (st) qs.set("status", st);
+      if (s)   qs.set("search", s);
+      if (st)  qs.set("status", st);
+      if (sec) qs.set("sector", sec);
       const res = await adminFetch<any>(`/api/v1/admin/tenants?${qs}`);
       setData(res);
       setAllItems(res.items ?? []);
@@ -93,10 +95,11 @@ export default function TenantsPage() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(search, status, page); }, [search, status, page, load]);
+  useEffect(() => { load(search, status, sector, page); }, [search, status, sector, page, load]);
 
   const handleSearch = (v: string) => { setSearch(v); setPage(1); };
   const handleStatus = (v: string) => { setStatus(v); setPage(1); };
+  const handleSector = (v: string) => { setSector(v); setPage(1); };
   const slugify = (v: string) => v.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -185,13 +188,28 @@ export default function TenantsPage() {
         </div>
       </div>
 
-      {/* Recherche */}
-      <div className="flex gap-3 mb-4">
+      {/* Recherche + filtre secteur */}
+      <div className="flex flex-wrap gap-3 mb-4">
         <input type="text" placeholder="Nom, slug ou email…" value={search}
           onChange={(e) => handleSearch(e.target.value)}
           className="w-full max-w-sm rounded-lg px-4 py-2 text-sm focus:outline-none"
           style={{ background: K.card, border: `1px solid rgba(170,189,216,0.15)`, color: K.text }}
         />
+        <select value={sector} onChange={(e) => handleSector(e.target.value)}
+          className="rounded-lg px-3 py-2 text-sm focus:outline-none"
+          style={{ background: K.card, border: `1px solid rgba(170,189,216,0.15)`, color: sector ? K.text : K.muted }}>
+          <option value="">Tous secteurs</option>
+          {Object.entries(SECTORS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+        {(search || sector) && (
+          <button onClick={() => { handleSearch(""); handleSector(""); }}
+            className="px-3 py-2 text-xs rounded-lg transition-colors"
+            style={{ background: "rgba(170,189,216,0.07)", color: K.muted }}>
+            × Réinitialiser
+          </button>
+        )}
       </div>
 
       {/* Onglets statut */}
