@@ -7,10 +7,18 @@ async def provision_tenant(tenant_id: str, user_id: str, tenant_name: str) -> No
     Called both from onboarding (first tenant) and from the multi-tenant creation endpoint."""
     sb = get_supabase_admin()
 
-    sb.table("calendar").insert({
+    cal_res = sb.table("calendar").insert({
         "tenant_id": tenant_id,
         "name": "Principal",
     }).execute()
+    cal_id = cal_res.data[0]["id"]
+
+    # Créneaux par défaut : lun–ven, 09h–12h et 13h–17h
+    sb.table("availability_slot").insert([
+        {"calendar_id": cal_id, "day_of_week": d, "start_time": start, "end_time": end, "is_active": True}
+        for d in range(5)
+        for start, end in [("09:00", "12:00"), ("13:00", "17:00")]
+    ]).execute()
 
     sb.table("pipeline_stage").insert([
         {"tenant_id": tenant_id, "name": "Nouveau",  "position": 1},
