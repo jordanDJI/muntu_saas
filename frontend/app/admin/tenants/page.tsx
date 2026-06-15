@@ -107,7 +107,7 @@ export default function TenantsPage() {
     try {
       await adminFetch("/api/v1/admin/tenants", { method: "POST", body: JSON.stringify({ ...form, password: form.password || undefined }) });
       setCreateOk(true); setForm(BLANK_FORM);
-      setTimeout(() => { setShowCreate(false); setCreateOk(false); load(search, status, page); }, 1500);
+      setTimeout(() => { setShowCreate(false); setCreateOk(false); load(search, status, sector, page); }, 1500);
     } catch (e: any) { setCreateErr(e.message); }
     finally { setCreating(false); }
   };
