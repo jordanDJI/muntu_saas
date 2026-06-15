@@ -18,4 +18,3 @@ pytrends==4.9.2
 ovh==1.0.0
 google-auth==2.37.0
 weasyprint>=62.0
-xhtml2pdf>=0.2.15
