@@ -688,6 +688,24 @@ const fr = {
   lp_trust_cancel: "Annulation à tout moment",
   lp_trust_support:"Support humain inclus",
 
+  // ── Secrétariat (Business) ───────────────────────────────────────────────────
+  nav_secretary:      "Secrétariat",
+  sec_title:          "Planning — tous les praticiens",
+  sec_view_day:       "Jour",
+  sec_view_week:      "Semaine",
+  sec_view_month:     "Mois",
+  sec_no_appts:       "Aucun rendez-vous pour cette période",
+  sec_confirm:        "Confirmer",
+  sec_cancel_appt:    "Annuler le RDV",
+  sec_note_ph:        "Ajouter une note…",
+  sec_note_save:      "Enregistrer",
+  sec_practitioner:   "Praticien",
+  sec_note_saved:     "Note enregistrée",
+  sec_status_updated: "Statut mis à jour",
+  sec_today:          "Aujourd'hui",
+  sec_loading:        "Chargement…",
+  sec_cancelled:      "Annulé",
+
   nav_mobile_open: "Menu",
 };
 
@@ -1342,6 +1360,23 @@ const en: T = {
   lp_trust_gdpr:   "GDPR compliant",
   lp_trust_cancel: "Cancel anytime",
   lp_trust_support:"Human support included",
+
+  nav_secretary:      "Secretary",
+  sec_title:          "Schedule — all practitioners",
+  sec_view_day:       "Day",
+  sec_view_week:      "Week",
+  sec_view_month:     "Month",
+  sec_no_appts:       "No appointments for this period",
+  sec_confirm:        "Confirm",
+  sec_cancel_appt:    "Cancel appointment",
+  sec_note_ph:        "Add a note…",
+  sec_note_save:      "Save",
+  sec_practitioner:   "Practitioner",
+  sec_note_saved:     "Note saved",
+  sec_status_updated: "Status updated",
+  sec_today:          "Today",
+  sec_loading:        "Loading…",
+  sec_cancelled:      "Cancelled",
 
   nav_mobile_open: "Menu",
 };
@@ -1998,6 +2033,23 @@ const de: T = {
   lp_trust_cancel: "Jederzeit kündbar",
   lp_trust_support:"Menschlicher Support inklusive",
 
+  nav_secretary:      "Sekretariat",
+  sec_title:          "Planung — alle Behandler",
+  sec_view_day:       "Tag",
+  sec_view_week:      "Woche",
+  sec_view_month:     "Monat",
+  sec_no_appts:       "Keine Termine für diesen Zeitraum",
+  sec_confirm:        "Bestätigen",
+  sec_cancel_appt:    "Termin absagen",
+  sec_note_ph:        "Notiz hinzufügen…",
+  sec_note_save:      "Speichern",
+  sec_practitioner:   "Behandler",
+  sec_note_saved:     "Notiz gespeichert",
+  sec_status_updated: "Status aktualisiert",
+  sec_today:          "Heute",
+  sec_loading:        "Lädt…",
+  sec_cancelled:      "Abgesagt",
+
   nav_mobile_open: "Menü",
 };
 
@@ -2652,6 +2704,23 @@ const nl: T = {
   lp_trust_gdpr:   "AVG-conform",
   lp_trust_cancel: "Op elk moment opzegbaar",
   lp_trust_support:"Menselijke ondersteuning inbegrepen",
+
+  nav_secretary:      "Secretariaat",
+  sec_title:          "Planning — alle behandelaars",
+  sec_view_day:       "Dag",
+  sec_view_week:      "Week",
+  sec_view_month:     "Maand",
+  sec_no_appts:       "Geen afspraken voor deze periode",
+  sec_confirm:        "Bevestigen",
+  sec_cancel_appt:    "Afspraak annuleren",
+  sec_note_ph:        "Notitie toevoegen…",
+  sec_note_save:      "Opslaan",
+  sec_practitioner:   "Behandelaar",
+  sec_note_saved:     "Notitie opgeslagen",
+  sec_status_updated: "Status bijgewerkt",
+  sec_today:          "Vandaag",
+  sec_loading:        "Laden…",
+  sec_cancelled:      "Geannuleerd",
 
   nav_mobile_open: "Menu",
 };

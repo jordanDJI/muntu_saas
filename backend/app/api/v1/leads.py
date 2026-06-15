@@ -3,7 +3,7 @@ from uuid import UUID
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin
 from app.models.lead import LeadCreateIn, LeadUpdateIn, LeadOut
-from app.services.email import send_lead_notification, send_lead_acknowledgement
+from app.services.email import send_lead_notification, send_lead_acknowledgement, get_tenant_brand
 from app.api.v1.booking import _get_team_emails, _TEAM_EMAIL_ERROR
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
@@ -109,7 +109,16 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
     # Accusé de réception au prospect
     if contact.get("email"):
         contact_name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip()
-        background_tasks.add_task(send_lead_acknowledgement, contact["email"], contact_name, tenant["name"])
+        brand = get_tenant_brand(supabase, tenant_id)
+        background_tasks.add_task(
+            send_lead_acknowledgement,
+            contact["email"],
+            contact_name,
+            tenant["name"],
+            primary_color=brand["primary_color"],
+            logo_url=brand["logo_url"],
+            logo_option=brand["logo_option"],
+        )
 
     return {"id": lead["id"], "status": "created"}
 

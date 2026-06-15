@@ -94,7 +94,8 @@ def _apply_global_flags(features: dict, flags: list) -> dict:
 
 def _apply_overrides(features: dict, overrides: list) -> dict:
     """Applique les tenant_feature_override. Priorité maximale — écrase flags globaux.
-    Booléens : valeur de l'override. Numériques : override désactivé → 0."""
+    Booléens : valeur de l'override.
+    Numériques : value_int si défini, sinon enabled=False → 0 (kill switch)."""
     if not overrides:
         return features
     result = dict(features)
@@ -106,7 +107,10 @@ def _apply_overrides(features: dict, overrides: list) -> dict:
         if isinstance(val, bool):
             result[key] = bool(o["enabled"])
         elif isinstance(val, (int, float)):
-            if not o["enabled"]:
+            v = o.get("value_int")
+            if v is not None:
+                result[key] = int(v)
+            elif not o["enabled"]:
                 result[key] = 0
     return result
 
@@ -127,7 +131,7 @@ async def get_tenant_plan(tenant_id: str) -> dict:
     global_flags = flags_res.data or []
 
     # Overrides par tenant (priorité maximale, écrase les flags globaux)
-    ov_res = sb.table("tenant_feature_override").select("feature_key, enabled").eq("tenant_id", tenant_id).execute()
+    ov_res = sb.table("tenant_feature_override").select("feature_key, enabled, value_int").eq("tenant_id", tenant_id).execute()
     overrides = ov_res.data or []
 
     # 1. Abonnement actif ou en période de grâce Stripe

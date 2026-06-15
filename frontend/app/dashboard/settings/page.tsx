@@ -1120,8 +1120,8 @@ function SectionPreferences() {
 
 // ── Section Membres ───────────────────────────────────────────────────────────
 
-const ROLE_LABEL: Record<string, string> = { owner: "Propriétaire", admin: "Admin", member: "Membre" };
-const ROLE_OPTIONS = [{ value: "admin", label: "Admin" }, { value: "member", label: "Membre" }];
+const ROLE_LABEL: Record<string, string> = { owner: "Propriétaire", admin: "Admin", member: "Membre", secretary: "Secrétaire" };
+const ROLE_OPTIONS = [{ value: "admin", label: "Admin" }, { value: "member", label: "Membre" }, { value: "secretary", label: "Secrétaire" }];
 
 function SectionMembres() {
   const [members, setMembers]   = useState<any[]>([]);

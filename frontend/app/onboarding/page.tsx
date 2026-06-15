@@ -71,10 +71,10 @@ export default function OnboardingPage() {
               headers: { Authorization: `Bearer ${session.access_token}` },
             });
             if (res.ok) {
-              const tenants = await res.json();
-              if (Array.isArray(tenants) && tenants.length > 0) {
-                // Le tenant existe — c'était une fausse alerte, on redirige vers le dashboard
-                window.location.replace("/dashboard");
+              const memberships = await res.json();
+              if (Array.isArray(memberships) && memberships.length > 0) {
+                const isOnlySecretary = memberships.every((m: any) => m.role === "secretary");
+                window.location.replace(isOnlySecretary ? "/dashboard/secretary" : "/dashboard");
                 return;
               }
             }

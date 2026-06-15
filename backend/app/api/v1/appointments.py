@@ -5,7 +5,7 @@ from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.core.config import settings
 from app.models.appointment import AppointmentCreateIn, AppointmentUpdateIn, AppointmentOut
-from app.services.email import send_appointment_confirmation, send_appointment_cancellation
+from app.services.email import send_appointment_confirmation, send_appointment_cancellation, get_tenant_brand
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -75,6 +75,7 @@ async def create_appointment(
     tenant = supabase.table("tenant").select("name, timezone").eq("id", tenant_id).single().execute().data
 
     if contact and contact.get("email") and tenant:
+        brand = get_tenant_brand(supabase, tenant_id)
         background_tasks.add_task(
             send_appointment_confirmation,
             contact_email=contact["email"],
@@ -82,6 +83,9 @@ async def create_appointment(
             appointment=appt,
             tenant_name=tenant.get("name", ""),
             tz_name=tenant.get("timezone", "UTC"),
+            primary_color=brand["primary_color"],
+            logo_url=brand["logo_url"],
+            logo_option=brand["logo_option"],
         )
 
     contact_name = (
@@ -157,6 +161,7 @@ async def confirm_appointment(
     tenant = supabase.table("tenant").select("name, timezone").eq("id", tenant_id).single().execute().data
 
     if contact and contact.get("email") and tenant:
+        brand = get_tenant_brand(supabase, tenant_id)
         background_tasks.add_task(
             send_appointment_confirmation,
             contact_email=contact["email"],
@@ -164,6 +169,9 @@ async def confirm_appointment(
             appointment=appt,
             tenant_name=tenant.get("name", ""),
             tz_name=tenant.get("timezone", "UTC"),
+            primary_color=brand["primary_color"],
+            logo_url=brand["logo_url"],
+            logo_option=brand["logo_option"],
         )
 
     return appt
@@ -194,6 +202,7 @@ async def cancel_appointment(
         tenant = supabase.table("tenant").select("name, slug, timezone").eq("id", tenant_id).single().execute().data
         if contact and contact.get("email") and tenant:
             booking_url = f"{settings.frontend_url}/{tenant.get('slug', '')}"
+            brand = get_tenant_brand(supabase, tenant_id)
             background_tasks.add_task(
                 send_appointment_cancellation,
                 contact_email=contact["email"],
@@ -203,6 +212,9 @@ async def cancel_appointment(
                 booking_url=booking_url,
                 was_pending=was_pending,
                 tz_name=tenant.get("timezone", "UTC"),
+                primary_color=brand["primary_color"],
+                logo_url=brand["logo_url"],
+                logo_option=brand["logo_option"],
             )
 
     return appt

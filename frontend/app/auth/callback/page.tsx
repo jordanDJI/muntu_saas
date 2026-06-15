@@ -48,6 +48,13 @@ export default function AuthCallbackPage() {
         return;
       }
 
+      // Invitation équipe → retour sur la page /join pour acceptation
+      const inviteToken = url.searchParams.get("invite");
+      if (inviteToken) {
+        router.replace(`/join?token=${inviteToken}`);
+        return;
+      }
+
       // Compte support → accès direct au panel admin, jamais d'onboarding
       const meta = session.user.app_metadata ?? {};
       if (meta.support_role === "viewer" || meta.support_role === "support" || meta.is_super_admin) {
@@ -58,7 +65,7 @@ export default function AuthCallbackPage() {
       setMsg("Vérification de votre espace…");
 
       // Vérifier si l'utilisateur a déjà un tenant — avec retry (backend froid, JWKS, réseau)
-      let hasTenant = false;
+      let memberships: { id: string; role: string }[] = [];
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           if (attempt > 0) await new Promise(r => setTimeout(r, 800 * attempt));
@@ -66,17 +73,23 @@ export default function AuthCallbackPage() {
             headers: { Authorization: `Bearer ${session.access_token}` },
           });
           if (res.ok) {
-            const tenants = await res.json();
-            hasTenant = Array.isArray(tenants) && tenants.length > 0;
+            memberships = await res.json();
             break; // succès — on sort de la boucle
           }
           if (res.status === 401) break; // token invalide — inutile de retenter
         } catch { /* réseau — on retente */ }
       }
 
+      const hasTenant = Array.isArray(memberships) && memberships.length > 0;
+      const isOnlySecretary = hasTenant && memberships.every((m: any) => m.role === "secretary");
+
       if (hasTenant) {
         localStorage.removeItem("klientys_pending_setup");
         localStorage.removeItem("klientys_tenant_id");
+        if (isOnlySecretary) {
+          router.replace("/dashboard/secretary");
+          return;
+        }
         const provider = session.user.app_metadata?.provider;
         if (provider === "google" || provider === "linkedin_oidc" || provider === "facebook") {
           try {

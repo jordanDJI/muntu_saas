@@ -4,7 +4,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime, timedelta, timezone
 from app.core.supabase import get_supabase_admin
-from app.services.email import send_appointment_reminder, send_crm_reminder_to_contact, send_monthly_report
+from app.services.email import send_appointment_reminder, send_crm_reminder_to_contact, send_monthly_report, get_tenant_brand
 
 scheduler = AsyncIOScheduler(timezone="Europe/Brussels")
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ async def send_appointment_reminders() -> None:
     try:
         result = (
             supabase.table("appointment")
-            .select("*, contact(first_name, last_name, email), calendar(tenant(name))")
+            .select("*, contact(first_name, last_name, email), calendar(tenant_id, tenant(name))")
             .eq("status", "confirmed")
             .is_("reminder_sent_at", "null")
             .gte("scheduled_at", window_start)
@@ -43,7 +43,10 @@ async def send_appointment_reminders() -> None:
         if not email:
             continue
 
-        tenant_name = (appt.get("calendar") or {}).get("tenant", {}).get("name", "")
+        cal = appt.get("calendar") or {}
+        tenant_name = cal.get("tenant", {}).get("name", "")
+        tenant_id = cal.get("tenant_id", "")
+        brand = get_tenant_brand(supabase, tenant_id) if tenant_id else {"primary_color": "", "logo_url": "", "logo_option": "text_only"}
         try:
             await asyncio.to_thread(
                 send_appointment_reminder,
@@ -51,6 +54,9 @@ async def send_appointment_reminders() -> None:
                 contact_name=f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip(),
                 appointment=appt,
                 tenant_name=tenant_name,
+                primary_color=brand["primary_color"],
+                logo_url=brand["logo_url"],
+                logo_option=brand["logo_option"],
             )
             supabase.table("appointment").update(
                 {"reminder_sent_at": now.isoformat()}

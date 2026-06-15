@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant
-from app.services.email import send_campaign_email
+from app.services.email import send_campaign_email, get_tenant_brand
 from app.services.telegram import send_message as tg_send
 
 router = APIRouter(prefix="/campaigns", tags=["Campaigns"])
@@ -139,6 +139,7 @@ async def send_campaign(
     if not contacts:
         raise HTTPException(422, "Aucun contact avec email dans ce segment")
 
+    brand = get_tenant_brand(sb, tenant_id)
     sent_count = 0
     failed_count = 0
 
@@ -162,6 +163,9 @@ async def send_campaign(
                 body=personalized_body,
                 sender_name=sender_name,
                 reply_url=reply_url,
+                primary_color=brand["primary_color"],
+                logo_url=brand["logo_url"],
+                logo_option=brand["logo_option"],
             )
             sent_count += 1
         except Exception:

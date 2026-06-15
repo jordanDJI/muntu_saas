@@ -578,6 +578,7 @@ async def delete_flag(key: str, admin=Depends(get_current_admin)):
 class OverrideIn(BaseModel):
     feature_key: str
     enabled:     bool
+    value_int:   Optional[int] = None  # pour les features numériques (max_contacts, etc.)
     note:        Optional[str] = None
 
 @router.post("/tenants/{tenant_id}/overrides")

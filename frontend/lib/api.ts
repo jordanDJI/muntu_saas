@@ -265,6 +265,12 @@ export const api = {
   // Complétion du profil
   getProfileCompletion: () => apiFetch<{ score: number; steps: { key: string; done: boolean; link: string }[] }>("/api/v1/profile/completion"),
 
+  // Secrétariat (Business) — vue unifiée multi-tenant
+  getSecretaryAppointments: (date: string, view: "day" | "week" | "month" = "day") =>
+    apiFetch<any[]>(`/api/v1/secretary/appointments?date=${date}&view=${view}`),
+  updateSecretaryAppointment: (id: string, body: { status?: string; notes?: string }) =>
+    apiFetch<any>(`/api/v1/secretary/appointments/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
   // Analytics
   getAnalyticsSummary: (days = 30) => apiFetch<any>(`/api/v1/analytics/summary?days=${days}`),
   getRoiPotential: (period = "month") => apiFetch<any>(`/api/v1/analytics/roi-potential?period=${period}`),

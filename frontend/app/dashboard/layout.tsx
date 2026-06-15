@@ -633,7 +633,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     // Fast path: read session from localStorage immediately, no server roundtrip
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
         // Compte support → le dashboard tenant n'a pas de sens pour eux
         const meta = session.user.app_metadata ?? {};
@@ -643,6 +643,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
         const prefs = session.user.user_metadata?.ui_prefs ?? {};
         setDarkMode(prefs.darkMode ?? false);
+
+        // Compte secrétariat : tous les memberships ont le rôle "secretary"
+        // → rediriger vers la vue unifiée sans passer par getMyTenant()
+        try {
+          const allTenants = await api.getMyTenants();
+          const isSecretary = allTenants.length > 0 && allTenants.every((t: any) => t.role === "secretary");
+          if (isSecretary) {
+            if (!window.location.pathname.startsWith("/dashboard/secretary")) {
+              window.location.replace("/dashboard/secretary");
+            } else {
+              setReady(true);
+            }
+            return;
+          }
+        } catch {
+          // Ignore — continue avec le flux normal
+        }
+
         api.getMyTenant()
           .then((tenant) => {
             setTenantSlug(tenant.slug ?? "");

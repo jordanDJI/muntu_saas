@@ -878,14 +878,18 @@ def _handle_calendar_action(sb, tenant_id: str, text: str) -> str | None:
             email = contact.get("email")
             if email:
                 try:
-                    from app.services.email import send_appointment_confirmation
+                    from app.services.email import send_appointment_confirmation, get_tenant_brand
                     tenant_res = sb.table("tenant").select("name").eq("id", tenant_id).single().execute()
                     tenant_name = (tenant_res.data or {}).get("name", "")
+                    brand = get_tenant_brand(sb, tenant_id)
                     send_appointment_confirmation(
                         contact_email=email,
                         contact_name=contact_name,
                         appointment=matched,
                         tenant_name=tenant_name,
+                        primary_color=brand["primary_color"],
+                        logo_url=brand["logo_url"],
+                        logo_option=brand["logo_option"],
                     )
                 except Exception as exc:
                     logger.warning("Email confirmation Telegram échoué : %s", exc)

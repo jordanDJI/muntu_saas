@@ -392,8 +392,16 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
         contact_name = f"{body.first_name} {body.last_name}".strip()
         # Accusé de réception au visiteur
         try:
-            from app.services.email import send_lead_acknowledgement
-            send_lead_acknowledgement(body.email, contact_name, tenant.get("name", ""))
+            from app.services.email import send_lead_acknowledgement, get_tenant_brand
+            brand = get_tenant_brand(sb, tenant["id"])
+            send_lead_acknowledgement(
+                body.email,
+                contact_name,
+                tenant.get("name", ""),
+                primary_color=brand["primary_color"],
+                logo_url=brand["logo_url"],
+                logo_option=brand["logo_option"],
+            )
         except Exception as exc:
             logger.error("Email client lead ack failed: %s", exc)
         # Notification au tenant avec le message du visiteur
@@ -537,7 +545,9 @@ def _email_tenant_pending(sb, tenant: dict, contact: dict, appointment: dict, me
 def _email_client_booking_received(tenant: dict, first_name: str, last_name: str, email: str, appointment: dict) -> None:
     """Envoie un accusé de réception au client après sa demande de rendez-vous."""
     try:
-        from app.services.email import send_booking_request_received
+        from app.services.email import send_booking_request_received, get_tenant_brand
+        from app.core.supabase import get_supabase_admin as _get_sb
+        brand = get_tenant_brand(_get_sb(), tenant["id"])
         contact_name = f"{first_name} {last_name}".strip()
         send_booking_request_received(
             contact_email=email,
@@ -545,6 +555,9 @@ def _email_client_booking_received(tenant: dict, first_name: str, last_name: str
             appointment=appointment,
             tenant_name=tenant.get("name", ""),
             tz_name=tenant.get("timezone", "UTC"),
+            primary_color=brand["primary_color"],
+            logo_url=brand["logo_url"],
+            logo_option=brand["logo_option"],
         )
     except Exception as exc:
         logger.error("Email client booking received failed: %s", exc)

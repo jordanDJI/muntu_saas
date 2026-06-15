@@ -5,7 +5,58 @@ from app.core.config import settings
 
 resend.api_key = settings.resend_api_key
 
-_BTN = "background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block"
+_BTN = "background:#0D4B58;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block"
+_BTN_GOLD = "background:#DDAA40;color:#07222F;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block"
+
+
+def get_tenant_brand(sb, tenant_id: str) -> dict:
+    """Retourne primary_color, logo_url, logo_option depuis le site_style du tenant."""
+    try:
+        res = sb.table("site").select("site_style").eq("tenant_id", tenant_id).limit(1).execute()
+        if res.data:
+            style = res.data[0].get("site_style") or {}
+            return {
+                "primary_color": style.get("primary_color", ""),
+                "logo_url": style.get("logo_url", ""),
+                "logo_option": style.get("logo_option", "text_only"),
+            }
+    except Exception:
+        pass
+    return {"primary_color": "", "logo_url": "", "logo_option": "text_only"}
+
+
+def _tenant_email_wrapper(
+    tenant_name: str,
+    body_html: str,
+    primary_color: str = "",
+    logo_url: str = "",
+    logo_option: str = "text_only",
+) -> str:
+    """Enveloppe HTML pour les emails envoyés au nom d'un tenant vers ses clients."""
+    brand = _hex(primary_color) if primary_color else "#0D4B58"
+    if logo_url and logo_option not in ("text_only", ""):
+        header_content = (
+            f'<img src="{logo_url}" alt="{tenant_name}"'
+            f' style="max-height:52px;max-width:200px;object-fit:contain;display:block">'
+        )
+    else:
+        header_content = (
+            f'<span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-.01em">'
+            f'{tenant_name}</span>'
+        )
+    return f"""
+    <div style="background:#f0f4f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;padding:40px 16px;min-height:100%">
+      <div style="max-width:540px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)">
+        <div style="background:{brand};padding:24px 32px">{header_content}</div>
+        <div style="padding:32px 32px 28px">{body_html}</div>
+        <div style="background:#f8fafc;border-top:1px solid #e8ecf0;padding:16px 32px">
+          <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6">
+            Vous recevez cet email car vous êtes client(e) de <strong style="color:#6b7280">{tenant_name}</strong>. En cas de question, répondez directement à cet email.
+          </p>
+        </div>
+      </div>
+    </div>
+    """
 
 
 def _fmt_dt(iso_str: str, tz_name: str = "UTC") -> str:
@@ -22,23 +73,41 @@ def _fmt_dt(iso_str: str, tz_name: str = "UTC") -> str:
 
 
 def send_lead_notification(tenant_email: str, lead: dict, contact: dict) -> None:
+    contact_name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or "—"
+    notes_row = f"""
+      <tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px;vertical-align:top">Motif</td>
+      <td style="padding:7px 0;color:#EEF2F5;font-size:13px">{lead.get('notes')}</td></tr>
+    """ if lead.get('notes') else ""
+    header = """
+    <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:28px 32px">
+      <p style="color:rgba(255,255,255,.6);font-size:12px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.06em">Nouvelle demande</p>
+      <h1 style="color:#fff;font-size:20px;font-weight:800;margin:0;letter-spacing:-.02em">Demande reçue via votre site</h1>
+    </div>"""
+    body = f"""
+      <table style="width:100%;border-collapse:collapse;margin:0 0 24px">
+        <tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px">Nom</td>
+            <td style="padding:7px 0;color:#EEF2F5;font-size:13px;font-weight:600">{contact_name}</td></tr>
+        <tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px">Email</td>
+            <td style="padding:7px 0;color:#EEF2F5;font-size:13px">{contact.get('email', '—')}</td></tr>
+        <tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px">Téléphone</td>
+            <td style="padding:7px 0;color:#EEF2F5;font-size:13px">{contact.get('phone', '—')}</td></tr>
+        <tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px">Type</td>
+            <td style="padding:7px 0;color:#EEF2F5;font-size:13px">{lead.get('request_type', '—')}</td></tr>
+        <tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px">Canal</td>
+            <td style="padding:7px 0;color:#EEF2F5;font-size:13px">{lead.get('source', '—')}</td></tr>
+        {notes_row}
+      </table>
+      <div style="text-align:center">
+        <a href="{settings.frontend_url}/dashboard/leads/{lead.get('id')}"
+           style="{_BTN_GOLD}">Voir la demande →</a>
+      </div>
+    """
+    footer = '<p style="color:#5C7A8A;font-size:12px;margin:0">Connectez-vous à votre espace Klientys pour traiter cette demande.</p>'
     resend.Emails.send({
         "from": f"{settings.email_from_name} <{settings.email_from}>",
         "to": [tenant_email],
-        "subject": f"Nouvelle demande de {contact.get('first_name')} {contact.get('last_name')}",
-        "html": f"""
-        <h2>Nouvelle demande reçue</h2>
-        <p><strong>Nom :</strong> {contact.get('first_name')} {contact.get('last_name')}</p>
-        <p><strong>Email :</strong> {contact.get('email', '—')}</p>
-        <p><strong>Téléphone :</strong> {contact.get('phone', '—')}</p>
-        <p><strong>Type :</strong> {lead.get('request_type')}</p>
-        <p><strong>Canal :</strong> {lead.get('source')}</p>
-        {f"<p><strong>Motif :</strong> {lead.get('notes')}</p>" if lead.get('notes') else ""}
-        <br>
-        <a href="{settings.frontend_url}/dashboard/leads/{lead.get('id')}" style="{_BTN}">
-            Voir la demande →
-        </a>
-        """,
+        "subject": f"Nouvelle demande de {contact_name}",
+        "html": _klientys_email_wrapper(header, body, footer),
     })
 
 
@@ -65,57 +134,73 @@ def send_appointment_pending_tenant(
     message_block = ""
     if message and message.strip():
         message_block = f"""
-        <div style="margin:16px 0;padding:14px 16px;background:#f8fafc;border-left:4px solid #4f46e5;border-radius:4px">
-          <p style="margin:0 0 4px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em">Message du client</p>
-          <p style="margin:0;color:#1e293b;white-space:pre-wrap">{message.strip()}</p>
+        <div style="margin:20px 0;padding:14px 18px;background:rgba(13,75,88,.25);border-left:3px solid #1A6E82;border-radius:0 8px 8px 0">
+          <p style="margin:0 0 4px;font-size:11px;color:#8BA5B5;text-transform:uppercase;letter-spacing:.06em">Message du client</p>
+          <p style="margin:0;color:#EEF2F5;font-size:13px;line-height:1.6;white-space:pre-wrap">{message.strip()}</p>
         </div>"""
 
+    group_row = (
+        f'<tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px">Groupe</td>'
+        f'<td style="padding:7px 0;color:#EEF2F5;font-size:13px"><strong>{party_size} personnes</strong></td></tr>'
+        if party_size > 1 else ""
+    )
+
+    header = f"""
+    <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:28px 32px">
+      <p style="color:rgba(255,255,255,.6);font-size:12px;margin:0 0 4px;text-transform:uppercase;letter-spacing:.06em">Rendez-vous en attente</p>
+      <h1 style="color:#fff;font-size:20px;font-weight:800;margin:0;letter-spacing:-.02em">Nouveau RDV à confirmer</h1>
+      <p style="color:rgba(255,255,255,.7);font-size:13px;margin:6px 0 0">{tenant_name}</p>
+    </div>"""
+    body = f"""
+      <table style="width:100%;border-collapse:collapse;margin:0 0 8px">
+        <tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px">Client</td>
+            <td style="padding:7px 0;color:#EEF2F5;font-size:13px;font-weight:600">{contact_name}</td></tr>
+        <tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px">Email</td>
+            <td style="padding:7px 0;color:#EEF2F5;font-size:13px">{contact.get('email', '—')}</td></tr>
+        <tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px">Téléphone</td>
+            <td style="padding:7px 0;color:#EEF2F5;font-size:13px">{contact.get('phone', '—')}</td></tr>
+        <tr><td style="padding:7px 16px 7px 0;color:#8BA5B5;font-size:13px">Date</td>
+            <td style="padding:7px 0;color:#DDAA40;font-size:13px;font-weight:700">{date_str}</td></tr>
+        {group_row}
+      </table>
+      {message_block}
+      <div style="text-align:center;margin-top:24px">
+        <a href="{dashboard_url}" style="{_BTN_GOLD}">Gérer ce rendez-vous →</a>
+      </div>
+    """
+    footer = '<p style="color:#5C7A8A;font-size:12px;margin:0">Si vous confirmez, le client recevra automatiquement un email de confirmation.</p>'
     resend.Emails.send({
         "from": f"{settings.email_from_name} <{settings.email_from}>",
         "to": [tenant_email],
         "subject": f"Nouveau RDV en attente — {contact_name}" + (f" ({party_size} pers.)" if party_size > 1 else ""),
-        "html": f"""
-        <h2>Nouveau rendez-vous en attente de confirmation</h2>
-        <p>Bonjour,</p>
-        <p>Un nouveau rendez-vous vient d'être demandé via votre site :</p>
-        <table style="margin:16px 0;border-collapse:collapse">
-          <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Client</td><td><strong>{contact_name}</strong></td></tr>
-          <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Email</td><td>{contact.get('email', '—')}</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Téléphone</td><td>{contact.get('phone', '—')}</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Date</td><td><strong>{date_str}</strong></td></tr>
-          {group_row}
-        </table>
-        {message_block}
-        <p>Connectez-vous à votre espace <strong>{tenant_name}</strong> pour confirmer ou refuser ce rendez-vous.</p>
-        <br>
-        <a href="{dashboard_url}" style="{_BTN}">Gérer ce rendez-vous →</a>
-        <br><br>
-        <p style="color:#6b7280;font-size:13px">
-          Si vous confirmez, le client recevra automatiquement un email de confirmation.
-        </p>
-        """,
+        "html": _klientys_email_wrapper(header, body, footer),
     })
 
 
-def send_appointment_confirmation(contact_email: str, contact_name: str, appointment: dict, tenant_name: str, tz_name: str = "UTC") -> None:
+def send_appointment_confirmation(contact_email: str, contact_name: str, appointment: dict, tenant_name: str, tz_name: str = "UTC", primary_color: str = "", logo_url: str = "", logo_option: str = "text_only") -> None:
     date_str = _fmt_dt(appointment.get("scheduled_at", ""), tz_name)
-
     party_size = appointment.get("party_size", 1)
-    group_line = f"<p>Réservation pour <strong>{party_size} personnes</strong>.</p>" if party_size > 1 else ""
-
+    group_line = f'<p style="color:#374151;font-size:14px;margin:0 0 12px">Réservation pour <strong>{party_size} personnes</strong>.</p>' if party_size > 1 else ""
+    body = f"""
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#e6f9f0;line-height:52px;font-size:24px">✓</div>
+      </div>
+      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">Rendez-vous confirmé !</h2>
+      <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 20px;text-align:center">
+        Bonjour <strong>{contact_name}</strong>, votre rendez-vous est confirmé.
+      </p>
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px 20px;margin-bottom:20px">
+        <p style="color:#374151;font-size:13px;margin:0 0 6px"><strong>Avec</strong> : {tenant_name}</p>
+        <p style="color:#0D4B58;font-size:15px;font-weight:700;margin:0"><strong>{date_str}</strong></p>
+      </div>
+      {group_line}
+      <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">Vous recevrez un rappel 24 h avant votre rendez-vous.<br>En cas d'empêchement, merci de nous prévenir dès que possible.</p>
+    """
     resend.Emails.send({
         "from": f"{tenant_name} <{settings.email_from}>",
         "to": [contact_email],
-        "subject": "Confirmation de votre rendez-vous",
-        "html": f"""
-        <h2>Rendez-vous confirmé ✓</h2>
-        <p>Bonjour {contact_name},</p>
-        <p>Votre rendez-vous avec <strong>{tenant_name}</strong> est confirmé
-        pour le <strong>{date_str}</strong>.</p>
-        {group_line}
-        <p>Vous recevrez un rappel 24 h avant.</p>
-        <p style="color:#6b7280;font-size:13px">En cas d'empêchement, merci de prévenir dès que possible.</p>
-        """,
+        "subject": f"Rendez-vous confirmé — {tenant_name}",
+        "html": _tenant_email_wrapper(tenant_name, body, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option),
     })
 
 
@@ -127,6 +212,9 @@ def send_appointment_cancellation(
     booking_url: str = "",
     was_pending: bool = False,
     tz_name: str = "UTC",
+    primary_color: str = "",
+    logo_url: str = "",
+    logo_option: str = "text_only",
 ) -> None:
     """
     Email au client lors d'une annulation ou d'un refus de RDV.
@@ -139,72 +227,126 @@ def send_appointment_cancellation(
     group_line = f"<p>Réservation concernée : <strong>{party_size} personnes</strong>.</p>" if party_size > 1 else ""
 
     if was_pending:
-        subject = "Votre demande de rendez-vous n'a pas pu être acceptée"
+        subject = f"Votre demande de rendez-vous — {tenant_name}"
+        cta = f'<div style="text-align:center;margin-top:20px"><a href="{booking_url}" style="{_BTN}">Choisir un autre créneau →</a></div>' if booking_url else ""
         body = f"""
-        <h2>Demande de rendez-vous non confirmée</h2>
-        <p>Bonjour {contact_name},</p>
-        <p>Votre demande de rendez-vous avec <strong>{tenant_name}</strong>
-        pour le <strong>{date_str}</strong> n'a malheureusement pas pu être acceptée.</p>
-        {group_line}
-        <p>Vous pouvez choisir un autre créneau directement en ligne :</p>
-        {f'<br><a href="{booking_url}" style="{_BTN}">Choisir un autre créneau →</a><br>' if booking_url else ""}
-        <br>
-        <p style="color:#6b7280;font-size:13px">
-          N'hésitez pas à nous contacter si vous avez des questions.
-        </p>
+          <div style="text-align:center;margin-bottom:20px">
+            <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#fff3cd;line-height:52px;font-size:24px">⚠</div>
+          </div>
+          <h2 style="color:#111827;font-size:18px;font-weight:700;margin:0 0 12px;text-align:center">Demande non confirmée</h2>
+          <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 16px">
+            Bonjour <strong>{contact_name}</strong>,<br><br>
+            Votre demande de rendez-vous avec <strong>{tenant_name}</strong> pour le <strong>{date_str}</strong>
+            n'a malheureusement pas pu être acceptée.
+          </p>
+          {f'<p style="color:#374151;font-size:14px;margin:0 0 4px">Réservation concernée : <strong>{party_size} personnes</strong>.</p>' if party_size > 1 else ""}
+          <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0 0 4px">Vous pouvez choisir un autre créneau directement en ligne.</p>
+          {cta}
         """
     else:
-        subject = "Annulation de votre rendez-vous"
+        subject = f"Annulation de votre rendez-vous — {tenant_name}"
+        cta = f'<div style="text-align:center;margin-top:20px"><a href="{booking_url}" style="{_BTN}">Reprendre rendez-vous →</a></div>' if booking_url else ""
         body = f"""
-        <h2>Rendez-vous annulé</h2>
-        <p>Bonjour {contact_name},</p>
-        <p>Votre rendez-vous avec <strong>{tenant_name}</strong>
-        prévu le <strong>{date_str}</strong> a été annulé.</p>
-        <p>N'hésitez pas à reprendre contact pour convenir d'une nouvelle date.</p>
-        {f'<br><a href="{booking_url}" style="{_BTN}">Reprendre rendez-vous →</a><br>' if booking_url else ""}
+          <div style="text-align:center;margin-bottom:20px">
+            <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#fee2e2;line-height:52px;font-size:24px">✕</div>
+          </div>
+          <h2 style="color:#111827;font-size:18px;font-weight:700;margin:0 0 12px;text-align:center">Rendez-vous annulé</h2>
+          <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 16px">
+            Bonjour <strong>{contact_name}</strong>,<br><br>
+            Votre rendez-vous avec <strong>{tenant_name}</strong> prévu le <strong>{date_str}</strong> a été annulé.
+          </p>
+          <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">N'hésitez pas à reprendre contact pour convenir d'une nouvelle date.</p>
+          {cta}
         """
 
     resend.Emails.send({
         "from": f"{tenant_name} <{settings.email_from}>",
         "to": [contact_email],
         "subject": subject,
-        "html": body,
+        "html": _tenant_email_wrapper(tenant_name, body, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option),
     })
 
 
 def send_team_invite(email: str, tenant_name: str, invite_url: str, role: str) -> None:
-    role_labels = {"owner": "Propriétaire", "admin": "Administrateur", "member": "Membre"}
+    role_labels = {
+        "owner": "Propriétaire",
+        "admin": "Administrateur",
+        "member": "Membre",
+        "secretary": "Secrétaire",
+    }
     role_label = role_labels.get(role, role.capitalize())
     resend.Emails.send({
         "from": f"{settings.email_from_name} <{settings.email_from}>",
         "to": [email],
-        "subject": f"Invitation à rejoindre {tenant_name}",
+        "subject": f"Invitation à rejoindre {tenant_name} sur Klientys",
         "html": f"""
-        <h2>Vous avez été invité(e) à rejoindre {tenant_name}</h2>
-        <p>Vous avez reçu une invitation en tant que <strong>{role_label}</strong>.</p>
-        <p>Cliquez sur le bouton ci-dessous pour accepter :</p>
-        <br>
-        <a href="{invite_url}" style="{_BTN}">Accepter l'invitation →</a>
-        <br><br>
-        <p style="color:#6b7280;font-size:13px;">Ce lien est valable 7 jours. Si vous n'attendiez pas cette invitation, ignorez cet email.</p>
+        <div style="background:#07222F;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:40px 16px;min-height:100%">
+          <div style="max-width:520px;margin:0 auto">
+            <div style="text-align:center;margin-bottom:32px">
+              <span style="font-size:22px;font-weight:800;color:#FFFFFF;letter-spacing:-0.5px">Klientys</span>
+            </div>
+            <div style="background:#0D1B25;border:1px solid rgba(170,189,216,0.10);border-radius:14px;padding:36px 32px">
+              <div style="width:52px;height:52px;border-radius:50%;background:rgba(13,75,88,0.5);border:1px solid rgba(42,143,165,0.4);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:22px;text-align:center;line-height:52px">✉</div>
+              <h1 style="font-size:20px;font-weight:800;color:#FFFFFF;text-align:center;margin:0 0 8px">
+                Invitation à rejoindre une équipe
+              </h1>
+              <p style="font-size:14px;color:#8BA5B5;text-align:center;margin:0 0 28px;line-height:1.6">
+                Vous avez été invité(e) à rejoindre<br>
+                <strong style="color:#DDAA40">{tenant_name}</strong> en tant que <strong style="color:#FFFFFF">{role_label}</strong>.
+              </p>
+              <div style="background:rgba(4,14,21,0.5);border:1px solid rgba(170,189,216,0.08);border-radius:10px;padding:14px 18px;margin-bottom:28px">
+                <p style="margin:0;font-size:13px;color:#8BA5B5">
+                  Email de l'invitation : <span style="color:#FFFFFF;font-weight:600">{email}</span>
+                </p>
+              </div>
+              <div style="text-align:center;margin-bottom:24px">
+                <a href="{invite_url}" style="background:linear-gradient(135deg,#0D4B58,#1A6E82);color:#FFFFFF;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;display:inline-block;letter-spacing:0.2px">
+                  Accepter l'invitation →
+                </a>
+              </div>
+              <p style="font-size:12px;color:#5C7A8A;text-align:center;margin:0;line-height:1.6">
+                Ce lien est valable <strong style="color:#8BA5B5">7 jours</strong>.<br>
+                Si vous n'attendiez pas cette invitation, ignorez cet email.
+              </p>
+            </div>
+            <p style="text-align:center;font-size:11px;color:#3A5A6A;margin-top:24px">
+              Klientys — Plateforme de gestion pour indépendants et TPE
+            </p>
+          </div>
+        </div>
         """,
     })
 
 
-def send_lead_acknowledgement(contact_email: str, contact_name: str, tenant_name: str) -> None:
+def send_lead_acknowledgement(
+    contact_email: str,
+    contact_name: str,
+    tenant_name: str,
+    primary_color: str = "",
+    logo_url: str = "",
+    logo_option: str = "text_only",
+) -> None:
     """Accuse de réception au prospect après soumission du formulaire de contact."""
+    body = f"""
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#e6f9f0;line-height:52px;font-size:24px">✓</div>
+      </div>
+      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">Merci, {contact_name} !</h2>
+      <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 16px;text-align:center">
+        Votre message a bien été reçu par <strong>{tenant_name}</strong>.
+      </p>
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px 18px">
+        <p style="color:#374151;font-size:13px;line-height:1.6;margin:0">
+          Nous examinerons votre demande et vous recontacterons dans les meilleurs délais.<br>
+          Si vous avez une urgence, n'hésitez pas à nous appeler directement.
+        </p>
+      </div>
+    """
     resend.Emails.send({
         "from": f"{tenant_name} <{settings.email_from}>",
         "to": [contact_email],
         "subject": f"{tenant_name} — Votre message a bien été reçu",
-        "html": f"""
-        <h2>Merci, {contact_name} !</h2>
-        <p>Votre message a bien été reçu par <strong>{tenant_name}</strong>.</p>
-        <p>Nous examinerons votre demande et vous recontacterons dans les meilleurs délais.</p>
-        <p style="color:#6b7280;font-size:13px">
-          Si vous avez une urgence, n'hésitez pas à nous appeler directement.
-        </p>
-        """,
+        "html": _tenant_email_wrapper(tenant_name, body, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option),
     })
 
 
@@ -216,63 +358,69 @@ def send_support_account_invite(email: str, role: str, setup_link: str) -> None:
         "support": "Vous pouvez consulter les informations des tenants, confirmer les emails, réinitialiser les mots de passe, prolonger les périodes d'essai, synchroniser Stripe et réinitialiser les domaines.",
     }
     perms_text = role_perms.get(role, "")
+    setup_block = f"""
+      <p style="color:#AAC0D8;font-size:14px;line-height:1.65;margin:0 0 20px">
+        Définissez votre mot de passe pour accéder au panel :
+      </p>
+      <div style="text-align:center;margin-bottom:16px">
+        <a href="{setup_link}" style="{_BTN_GOLD}">Définir mon mot de passe →</a>
+      </div>
+      <p style="color:#5C7A8A;font-size:12px;text-align:center;margin:0">Ce lien est valable 24h.</p>
+    """ if setup_link else ""
+    header = """
+    <div style="background:linear-gradient(135deg,#07222F 0%,#0D4B58 100%);padding:28px 32px;border-bottom:1px solid rgba(221,170,64,.3)">
+      <p style="color:#DDAA40;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:0 0 4px">Accès interne</p>
+      <h1 style="color:#fff;font-size:20px;font-weight:800;margin:0;letter-spacing:-.02em">Compte support Klientys</h1>
+    </div>"""
+    body = f"""
+      <p style="color:#EEF2F5;font-size:14px;line-height:1.65;margin:0 0 20px">
+        Un compte support vous a été créé avec le niveau <strong style="color:#DDAA40">{role_label}</strong>.
+      </p>
+      <div style="background:rgba(13,75,88,.35);border:1px solid rgba(26,110,130,.4);border-radius:10px;padding:14px 18px;margin-bottom:24px">
+        <p style="color:#8BA5B5;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px">Vos permissions</p>
+        <p style="color:#AAC0D8;font-size:13px;line-height:1.6;margin:0">{perms_text}</p>
+      </div>
+      {setup_block}
+    """
+    footer = '<p style="color:#5C7A8A;font-size:12px;margin:0">Cet email est confidentiel et destiné uniquement à son destinataire.</p>'
     resend.Emails.send({
         "from": f"Klientys Admin <{settings.email_from}>",
         "to": [email],
         "subject": "Votre accès support Klientys",
-        "html": f"""
-        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
-          <h2 style="font-size:20px;font-weight:700;color:#111;margin-bottom:8px">
-            Accès support Klientys
-          </h2>
-          <p style="color:#444;line-height:1.65;margin-bottom:16px">
-            Un compte support vous a été créé sur la plateforme Klientys avec le niveau
-            <strong>{role_label}</strong>.
-          </p>
-          <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px 18px;margin-bottom:24px">
-            <p style="margin:0;font-size:13px;color:#0369a1;line-height:1.6">
-              <strong>Vos permissions :</strong><br>{perms_text}
-            </p>
-          </div>
-          {"" if not setup_link else f'<p style="color:#444;margin-bottom:20px">Définissez votre mot de passe pour accéder au panel :</p><a href="{setup_link}" style="{_BTN}">Définir mon mot de passe →</a><br><br><p style="font-size:12px;color:#9ca3af">Ce lien est valable 24h.</p>'}
-        </div>
-        """,
+        "html": _klientys_email_wrapper(header, body, footer),
     })
 
 
 def send_impersonation_notice(tenant_email: str, tenant_name: str, admin_email: str, accessed_at: str) -> None:
     """Notifie le tenant qu'un administrateur Klientys a accédé à son compte."""
+    header = """
+    <div style="background:linear-gradient(135deg,#78350f 0%,#b45309 100%);padding:28px 32px">
+      <p style="color:rgba(255,255,255,.7);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:0 0 4px">Sécurité</p>
+      <h1 style="color:#fff;font-size:20px;font-weight:800;margin:0;letter-spacing:-.02em">Accès administrateur à votre compte</h1>
+    </div>"""
+    body = f"""
+      <p style="color:#EEF2F5;font-size:14px;line-height:1.65;margin:0 0 20px">
+        Un administrateur Klientys a accédé à votre espace <strong style="color:#DDAA40">{tenant_name}</strong>
+        le <strong>{accessed_at}</strong> à des fins de support ou de maintenance.
+      </p>
+      <div style="background:rgba(221,170,64,.08);border:1px solid rgba(221,170,64,.25);border-radius:10px;padding:14px 18px;margin-bottom:20px">
+        <p style="color:#AAC0D8;font-size:13px;line-height:1.6;margin:0">
+          Cet accès est strictement encadré par nos
+          <a href="https://klientys.co/legal/cgu" style="color:#2A8FA5;text-decoration:none">Conditions Générales d'Utilisation</a>
+          (article 13). Il est tracé et auditable. Aucune donnée bancaire n'est accessible par ce biais.
+        </p>
+      </div>
+      <p style="color:#8BA5B5;font-size:13px;line-height:1.6;margin:0">
+        Si vous n'avez pas sollicité de support et que cet accès vous semble anormal, contactez-nous immédiatement à
+        <a href="mailto:support@klientys.co" style="color:#2A8FA5;text-decoration:none">support@klientys.co</a>.
+      </p>
+    """
+    footer = '<p style="color:#5C7A8A;font-size:12px;margin:0">Klientys SRL — Ce message est généré automatiquement.</p>'
     resend.Emails.send({
         "from": f"Klientys Sécurité <{settings.email_from}>",
         "to": [tenant_email],
         "subject": "Accès administrateur à votre compte Klientys",
-        "html": f"""
-        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px 24px">
-          <h2 style="font-size:20px;font-weight:700;color:#111;margin-bottom:8px">
-            Accès administrateur à votre compte
-          </h2>
-          <p style="color:#444;line-height:1.65;margin-bottom:16px">
-            Un administrateur Klientys a accédé à votre espace <strong>{tenant_name}</strong>
-            le <strong>{accessed_at}</strong> à des fins de support ou de maintenance.
-          </p>
-          <div style="background:#fef9ec;border:1px solid #f5d87a;border-radius:8px;padding:14px 18px;margin-bottom:24px">
-            <p style="margin:0;font-size:13px;color:#7a5800;line-height:1.6">
-              Cet accès est strictement encadré par nos
-              <a href="https://klientys.co/legal/cgu" style="color:#7a5800">Conditions Générales d'Utilisation</a>
-              (article 13). Il est tracé et auditable. Aucune donnée bancaire n'est accessible par ce biais.
-            </p>
-          </div>
-          <p style="color:#444;line-height:1.65;margin-bottom:24px">
-            Si vous n'avez pas sollicité de support et que cet accès vous semble anormal,
-            contactez-nous immédiatement à
-            <a href="mailto:support@klientys.co" style="color:#4f46e5">support@klientys.co</a>.
-          </p>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin-bottom:24px">
-          <p style="font-size:12px;color:#9ca3af;line-height:1.6">
-            Klientys SRL — Ce message est généré automatiquement, merci de ne pas y répondre directement.
-          </p>
-        </div>
-        """,
+        "html": _klientys_email_wrapper(header, body, footer),
     })
 
 
@@ -282,46 +430,71 @@ def send_booking_request_received(
     appointment: dict,
     tenant_name: str,
     tz_name: str = "UTC",
+    primary_color: str = "",
+    logo_url: str = "",
+    logo_option: str = "text_only",
 ) -> None:
     """Accuse de réception au client après une demande de rendez-vous (statut pending)."""
     date_str = _fmt_dt(appointment.get("scheduled_at", ""), tz_name)
-
+    body = f"""
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#e6f9f0;line-height:52px;font-size:24px">✓</div>
+      </div>
+      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">Demande reçue !</h2>
+      <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 20px;text-align:center">
+        Bonjour <strong>{contact_name}</strong>, votre demande a bien été enregistrée.
+      </p>
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px 20px;margin-bottom:20px">
+        <p style="color:#374151;font-size:13px;margin:0 0 6px"><strong>Avec</strong> : {tenant_name}</p>
+        <p style="color:#0D4B58;font-size:15px;font-weight:700;margin:0">{date_str}</p>
+      </div>
+      <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">
+        Le professionnel va examiner votre demande et vous enverra une confirmation par email.<br>
+        Si vous ne pouvez finalement pas vous déplacer, merci de nous le signaler dès que possible.
+      </p>
+    """
     resend.Emails.send({
         "from": f"{tenant_name} <{settings.email_from}>",
         "to": [contact_email],
         "subject": f"{tenant_name} — Votre demande de rendez-vous a été reçue",
-        "html": f"""
-        <h2>Demande de rendez-vous reçue ✓</h2>
-        <p>Bonjour {contact_name},</p>
-        <p>Votre demande de rendez-vous avec <strong>{tenant_name}</strong>
-        pour le <strong>{date_str}</strong> a bien été enregistrée.</p>
-        <p>Le professionnel va examiner votre demande et vous enverra une confirmation par email.</p>
-        <p style="color:#6b7280;font-size:13px">
-          Si vous ne pouvez finalement pas vous déplacer, merci de nous le signaler dès que possible.
-        </p>
-        """,
+        "html": _tenant_email_wrapper(tenant_name, body, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option),
     })
 
 
-def send_appointment_reminder(contact_email: str, contact_name: str, appointment: dict, tenant_name: str) -> None:
+def send_appointment_reminder(
+    contact_email: str,
+    contact_name: str,
+    appointment: dict,
+    tenant_name: str,
+    primary_color: str = "",
+    logo_url: str = "",
+    logo_option: str = "text_only",
+) -> None:
     from datetime import datetime
     try:
         dt = datetime.fromisoformat(appointment.get("scheduled_at", "").replace("Z", "+00:00"))
         date_str = dt.strftime("%A %d/%m/%Y à %H:%M")
     except Exception:
         date_str = appointment.get("scheduled_at", "—")
-
+    body = f"""
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#fef3c7;line-height:52px;font-size:24px">🔔</div>
+      </div>
+      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">Rappel de rendez-vous</h2>
+      <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 20px;text-align:center">
+        Bonjour <strong>{contact_name}</strong>, votre rendez-vous est demain !
+      </p>
+      <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px 20px;margin-bottom:16px">
+        <p style="color:#374151;font-size:13px;margin:0 0 6px"><strong>Avec</strong> : {tenant_name}</p>
+        <p style="color:#92400e;font-size:15px;font-weight:700;margin:0">{date_str}</p>
+      </div>
+      <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">En cas d'empêchement, merci de nous prévenir dès que possible.</p>
+    """
     resend.Emails.send({
         "from": f"{tenant_name} <{settings.email_from}>",
         "to": [contact_email],
-        "subject": "Rappel : votre rendez-vous demain",
-        "html": f"""
-        <h2>Rappel de rendez-vous</h2>
-        <p>Bonjour {contact_name},</p>
-        <p>Votre rendez-vous avec <strong>{tenant_name}</strong> est prévu
-        le <strong>{date_str}</strong>.</p>
-        <p>En cas d'empêchement, merci de nous prévenir dès que possible.</p>
-        """,
+        "subject": f"Rappel — votre rendez-vous demain avec {tenant_name}",
+        "html": _tenant_email_wrapper(tenant_name, body, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option),
     })
 
 
@@ -1404,6 +1577,9 @@ async def send_campaign_email(
     body: str,
     sender_name: str,
     reply_url: str = "",
+    primary_color: str = "",
+    logo_url: str = "",
+    logo_option: str = "text_only",
 ) -> None:
     """Envoie un email de campagne à un contact."""
     body_html = "".join(
@@ -1416,19 +1592,10 @@ async def send_campaign_email(
         f'<a href="{reply_url}" style="color:#6b7280;text-decoration:underline">'
         f'Pour répondre à ce message, cliquez ici →</a></p>'
     ) if reply_url else ""
-    html = f"""
-    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff">
-      <div style="margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid #4f46e5">
-        <span style="font-size:20px;font-weight:700;color:#4f46e5">{sender_name}</span>
-      </div>
+    html = _tenant_email_wrapper(sender_name, f"""
       {body_html}
-      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
-      <p style="color:#9ca3af;font-size:12px;margin:0">
-        Vous recevez cet email car vous êtes client de {sender_name}.
-      </p>
       {reply_block}
-    </div>
-    """
+    """, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option)
     resend.Emails.send({
         "from": f"{sender_name} <{settings.email_from}>",
         "to":   [to_email],

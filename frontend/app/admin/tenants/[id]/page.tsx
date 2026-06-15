@@ -50,15 +50,24 @@ const STATUS_LABEL: Record<string, string> = {
   active: "Actif", trialing: "Stripe trial", trial: "Essai", trial_expired: "Expiré", suspended: "Suspendu",
 };
 
-const KNOWN_FEATURES = [
+const BOOL_FEATURES = [
   "analytics", "analytics_roi",
   "agent_vitrine", "agent_support", "agent_assistant",
   "booking", "crm", "campaigns",
   "custom_domain", "embed_widget", "custom_css",
   "multi_page_site", "multi_tenant",
-  "max_contacts", "max_team_members", "max_tenants",
-  "attachments_max", "attachment_file_max_mb", "gallery_photos_limit",
 ];
+
+const NUMERIC_FEATURES: Record<string, { label: string; min: number; max: number }> = {
+  max_contacts:          { label: "Max contacts",            min: -1, max: 100000 },
+  max_team_members:      { label: "Max membres équipe",      min: -1, max: 100    },
+  max_tenants:           { label: "Max tenants",             min: -1, max: 50     },
+  attachments_max:       { label: "Max pièces jointes",      min: 0,  max: 100    },
+  attachment_file_max_mb:{ label: "Taille max fichier (Mo)", min: 0,  max: 500    },
+  gallery_photos_limit:  { label: "Max photos galerie",      min: 0,  max: 100    },
+};
+
+const KNOWN_FEATURES = [...BOOL_FEATURES, ...Object.keys(NUMERIC_FEATURES)];
 
 export default function TenantDetailPage() {
   const { id }   = useParams<{ id: string }>();
@@ -78,9 +87,10 @@ export default function TenantDetailPage() {
   const [suspendReason,  setSuspendReason]  = useState("");
   const [editField,      setEditField]      = useState<"name"|"slug"|"sector"|"country"|null>(null);
   const [editVal,        setEditVal]        = useState("");
-  const [overrideKey,    setOverrideKey]    = useState(KNOWN_FEATURES[0]);
-  const [overrideOn,     setOverrideOn]     = useState(true);
-  const [overrideNote,   setOverrideNote]   = useState("");
+  const [overrideKey,      setOverrideKey]      = useState(KNOWN_FEATURES[0]);
+  const [overrideOn,       setOverrideOn]       = useState(true);
+  const [overrideValueInt, setOverrideValueInt] = useState<number>(100);
+  const [overrideNote,     setOverrideNote]     = useState("");
   const [newOwnerEmail,  setNewOwnerEmail]  = useState("");
 
   const load = useCallback(async () => {
@@ -164,12 +174,23 @@ export default function TenantDetailPage() {
     } catch (e: any) { showToast(`Erreur : ${e.message}`, false); setBusy(false); }
   };
 
+  const isNumericFeature = (key: string) => key in NUMERIC_FEATURES;
+
   const setOverride = async () => {
     setBusy(true);
     try {
+      const body: Record<string, unknown> = {
+        feature_key: overrideKey,
+        enabled: overrideOn,
+        note: overrideNote || null,
+      };
+      if (isNumericFeature(overrideKey)) {
+        body.value_int = overrideValueInt;
+        body.enabled = true;
+      }
       await adminFetch(`/api/v1/admin/tenants/${id}/overrides`, {
         method: "POST",
-        body: JSON.stringify({ feature_key: overrideKey, enabled: overrideOn, note: overrideNote }),
+        body: JSON.stringify(body),
       });
       showToast("Override enregistré ✓", true);
       await load();
@@ -515,20 +536,39 @@ export default function TenantDetailPage() {
           <div className="flex flex-wrap gap-2 mb-5 items-end">
             <div>
               <label className="text-xs block mb-1" style={{ color: K.muted }}>Feature</label>
-              <select value={overrideKey} onChange={(e) => setOverrideKey(e.target.value)}
+              <select value={overrideKey} onChange={(e) => { setOverrideKey(e.target.value); setOverrideValueInt(NUMERIC_FEATURES[e.target.value]?.min ?? 0); }}
                 className="rounded px-2 py-1 text-xs focus:outline-none"
                 style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.2)`, color: K.text }}>
-                {KNOWN_FEATURES.map((f) => <option key={f} value={f}>{f}</option>)}
+                <optgroup label="Booléennes">
+                  {BOOL_FEATURES.map((f) => <option key={f} value={f}>{f}</option>)}
+                </optgroup>
+                <optgroup label="Numériques">
+                  {Object.entries(NUMERIC_FEATURES).map(([k, v]) => <option key={k} value={k}>{v.label} ({k})</option>)}
+                </optgroup>
               </select>
             </div>
             <div>
-              <label className="text-xs block mb-1" style={{ color: K.muted }}>Valeur</label>
-              <select value={overrideOn ? "1" : "0"} onChange={(e) => setOverrideOn(e.target.value === "1")}
-                className="rounded px-2 py-1 text-xs focus:outline-none"
-                style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.2)`, color: K.text }}>
-                <option value="1">Activé</option>
-                <option value="0">Désactivé</option>
-              </select>
+              <label className="text-xs block mb-1" style={{ color: K.muted }}>
+                {isNumericFeature(overrideKey) ? "Valeur (-1 = illimité)" : "Valeur"}
+              </label>
+              {isNumericFeature(overrideKey) ? (
+                <input
+                  type="number"
+                  value={overrideValueInt}
+                  min={NUMERIC_FEATURES[overrideKey]?.min ?? 0}
+                  max={NUMERIC_FEATURES[overrideKey]?.max ?? 99999}
+                  onChange={(e) => setOverrideValueInt(parseInt(e.target.value) || 0)}
+                  className="w-28 rounded px-2 py-1 text-xs focus:outline-none"
+                  style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.2)`, color: K.text }}
+                />
+              ) : (
+                <select value={overrideOn ? "1" : "0"} onChange={(e) => setOverrideOn(e.target.value === "1")}
+                  className="rounded px-2 py-1 text-xs focus:outline-none"
+                  style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.2)`, color: K.text }}>
+                  <option value="1">Activé</option>
+                  <option value="0">Désactivé</option>
+                </select>
+              )}
             </div>
             <div className="flex-1 min-w-32">
               <label className="text-xs block mb-1" style={{ color: K.muted }}>Note (optionnel)</label>
@@ -561,12 +601,19 @@ export default function TenantDetailPage() {
                   <tr key={o.id} style={{ borderBottom: "1px solid rgba(170,189,216,0.04)" }}>
                     <td className="py-2 font-mono" style={{ color: K.tealXL }}>{o.feature_key}</td>
                     <td className="py-2">
-                      <span className="px-1.5 py-0.5 rounded text-xs"
-                        style={o.enabled
-                          ? { background: "rgba(74,202,122,0.1)", color: K.success }
-                          : { background: "rgba(224,96,96,0.1)", color: K.danger }}>
-                        {o.enabled ? "On" : "Off"}
-                      </span>
+                      {o.value_int != null ? (
+                        <span className="px-1.5 py-0.5 rounded text-xs font-mono"
+                          style={{ background: "rgba(221,170,64,0.12)", color: "#DDAA40" }}>
+                          {o.value_int === -1 ? "∞ illimité" : o.value_int}
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded text-xs"
+                          style={o.enabled
+                            ? { background: "rgba(74,202,122,0.1)", color: K.success }
+                            : { background: "rgba(224,96,96,0.1)", color: K.danger }}>
+                          {o.enabled ? "On" : "Off"}
+                        </span>
+                      )}
                     </td>
                     <td className="py-2" style={{ color: K.muted }}>{o.note ?? "—"}</td>
                     <td className="py-2 text-right">

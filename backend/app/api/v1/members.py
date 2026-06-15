@@ -27,7 +27,7 @@ from app.services.activity import log_activity
 router = APIRouter(prefix="/members", tags=["members"])
 logger = logging.getLogger(__name__)
 
-_VALID_ROLES = {"owner", "admin", "member"}
+_VALID_ROLES = {"owner", "admin", "member", "secretary"}
 
 
 class InviteIn(BaseModel):
