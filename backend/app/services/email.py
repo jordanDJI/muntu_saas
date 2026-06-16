@@ -280,39 +280,29 @@ def send_team_invite(email: str, tenant_name: str, invite_url: str, role: str) -
         "to": [email],
         "subject": f"Invitation à rejoindre {tenant_name} sur Klientys",
         "html": f"""
-        <div style="background:#07222F;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:40px 16px;min-height:100%">
-          <div style="max-width:520px;margin:0 auto">
-            <div style="text-align:center;margin-bottom:32px">
-              <span style="font-size:22px;font-weight:800;color:#FFFFFF;letter-spacing:-0.5px">Klientys</span>
-            </div>
-            <div style="background:#0D1B25;border:1px solid rgba(170,189,216,0.10);border-radius:14px;padding:36px 32px">
-              <div style="width:52px;height:52px;border-radius:50%;background:rgba(13,75,88,0.5);border:1px solid rgba(42,143,165,0.4);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:22px;text-align:center;line-height:52px">✉</div>
-              <h1 style="font-size:20px;font-weight:800;color:#FFFFFF;text-align:center;margin:0 0 8px">
-                Invitation à rejoindre une équipe
-              </h1>
-              <p style="font-size:14px;color:#8BA5B5;text-align:center;margin:0 0 28px;line-height:1.6">
-                Vous avez été invité(e) à rejoindre<br>
-                <strong style="color:#DDAA40">{tenant_name}</strong> en tant que <strong style="color:#FFFFFF">{role_label}</strong>.
-              </p>
-              <div style="background:rgba(4,14,21,0.5);border:1px solid rgba(170,189,216,0.08);border-radius:10px;padding:14px 18px;margin-bottom:28px">
-                <p style="margin:0;font-size:13px;color:#8BA5B5">
-                  Email de l'invitation : <span style="color:#FFFFFF;font-weight:600">{email}</span>
-                </p>
-              </div>
-              <div style="text-align:center;margin-bottom:24px">
-                <a href="{invite_url}" style="background:linear-gradient(135deg,#0D4B58,#1A6E82);color:#FFFFFF;padding:14px 32px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;display:inline-block;letter-spacing:0.2px">
-                  Accepter l'invitation →
-                </a>
-              </div>
-              <p style="font-size:12px;color:#5C7A8A;text-align:center;margin:0;line-height:1.6">
-                Ce lien est valable <strong style="color:#8BA5B5">7 jours</strong>.<br>
-                Si vous n'attendiez pas cette invitation, ignorez cet email.
-              </p>
-            </div>
-            <p style="text-align:center;font-size:11px;color:#3A5A6A;margin-top:24px">
-              Klientys — Plateforme de gestion pour indépendants et TPE
-            </p>
-          </div>
+        <div style="font-family:'DM Sans',Arial,sans-serif;max-width:520px;margin:0 auto;background:#040E15;color:#EEF2F5;padding:40px 36px;border-radius:16px">
+          <img src="https://klientys.co/logo.png" height="36" style="margin-bottom:28px"/>
+          <h2 style="font-size:20px;font-weight:800;margin:0 0 12px;letter-spacing:-.02em">
+            Vous avez été invité(e) à rejoindre une équipe
+          </h2>
+          <p style="color:#AAC0D8;font-size:15px;line-height:1.6;margin:0 0 8px">
+            <strong style="color:#DDAA40">{tenant_name}</strong> vous invite à rejoindre son espace Klientys en tant que <strong style="color:#EEF2F5">{role_label}</strong>.
+          </p>
+          <p style="color:#AAC0D8;font-size:13px;line-height:1.6;margin:0 0 28px">
+            Invitation envoyée à : <strong style="color:#EEF2F5">{email}</strong><br/>
+            Ce lien expire dans <strong style="color:#EEF2F5">7 jours</strong>.
+          </p>
+          <a href="{invite_url}"
+             style="display:inline-block;background:#DDAA40;color:#07222F;padding:13px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px">
+            Accepter l'invitation →
+          </a>
+          <p style="color:#5C7A8A;font-size:12px;margin-top:36px;line-height:1.6">
+            Si vous n'attendiez pas cette invitation, ignorez cet email — aucune action n'est requise.
+          </p>
+          <hr style="border:none;border-top:1px solid rgba(170,189,216,.12);margin:24px 0"/>
+          <p style="color:#5C7A8A;font-size:11px;margin:0">
+            Klientys · <a href="https://klientys.co" style="color:#2A8FA5;text-decoration:none">klientys.co</a>
+          </p>
         </div>
         """,
     })
