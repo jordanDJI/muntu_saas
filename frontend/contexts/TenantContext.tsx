@@ -39,6 +39,12 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
 
     setTenants(data);
+    const isSecretary = data.length > 0 && data.every((t) => t.role === "secretary");
+    if (isSecretary) {
+      // Les secrétaires n'ont pas de tenant propre — ne pas écrire X-Tenant-Id en localStorage
+      localStorage.removeItem("klientys_tenant_id");
+      return;
+    }
     const stored = localStorage.getItem("klientys_tenant_id");
     const active = data.find((t) => t.id === stored) ?? data[0] ?? null;
     setActiveTenant(active);
