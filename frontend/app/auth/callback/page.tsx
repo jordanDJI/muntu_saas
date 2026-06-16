@@ -49,8 +49,22 @@ export default function AuthCallbackPage() {
       }
 
       // Invitation équipe → retour sur la page /join pour acceptation
-      const inviteToken = url.searchParams.get("invite");
+      // Fallback localStorage : Supabase peut stripper les query params de emailRedirectTo dans certaines configs PKCE.
+      // Le token stocké est { token, ts } — expiré après 24h pour éviter les redirections fantômes.
+      let inviteToken = url.searchParams.get("invite");
+      if (!inviteToken) {
+        try {
+          const raw = localStorage.getItem("klientys_pending_invite");
+          if (raw) {
+            const { token: t, ts } = JSON.parse(raw);
+            const TWENTY_FOUR_H = 24 * 60 * 60 * 1000;
+            if (t && ts && Date.now() - ts < TWENTY_FOUR_H) inviteToken = t;
+            else localStorage.removeItem("klientys_pending_invite"); // expiré — nettoyage
+          }
+        } catch { localStorage.removeItem("klientys_pending_invite"); }
+      }
       if (inviteToken) {
+        localStorage.removeItem("klientys_pending_invite");
         router.replace(`/join?token=${inviteToken}`);
         return;
       }
