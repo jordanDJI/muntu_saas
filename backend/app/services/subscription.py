@@ -71,6 +71,7 @@ PLAN_FEATURES: dict = {
 
 
 TRIAL_DAYS = 14
+BUSINESS_INCLUDED_MAX = 2  # espaces secondaires gratuits inclus dans un plan Business
 
 
 def _apply_global_flags(features: dict, flags: list) -> dict:
@@ -120,6 +121,73 @@ def _build_features(base: dict, global_flags: list, overrides: list) -> dict:
     return _apply_overrides(_apply_global_flags(base, global_flags), overrides)
 
 
+def _check_business_included(sb, tenant_id: str, global_flags: list, overrides: list) -> dict | None:
+    """Retourne plan Essentiel 'included' si ce tenant est un espace secondaire
+    d'un owner ayant un Business actif sur un autre tenant.
+    Les BUSINESS_INCLUDED_MAX plus anciens espaces sans abonnement propre sont inclus.
+    """
+    # Propriétaire de ce tenant
+    owner_res = sb.table("membership").select("user_id").eq("tenant_id", tenant_id).eq("role", "owner").limit(1).execute()
+    if not owner_res.data:
+        return None
+    owner_id = owner_res.data[0]["user_id"]
+
+    # Tous les tenants de cet owner
+    memberships = sb.table("membership").select("tenant_id").eq("user_id", owner_id).eq("role", "owner").execute()
+    all_ids = [m["tenant_id"] for m in (memberships.data or [])]
+    if len(all_ids) < 2:
+        return None  # Pas d'autres espaces
+
+    # Abonnements actifs parmi ces tenants (avec nom du plan)
+    active_subs = (
+        sb.table("subscription")
+        .select("tenant_id, status, plan:plan_id(name)")
+        .in_("tenant_id", all_ids)
+        .in_("status", ["active", "trialing"])
+        .execute()
+    )
+
+    business_tenant_id = None
+    tenants_with_own_sub = set()
+    for sub in (active_subs.data or []):
+        tenants_with_own_sub.add(sub["tenant_id"])
+        plan_name = (sub.get("plan") or {}).get("name")
+        if plan_name == "Business" and sub["tenant_id"] != tenant_id:
+            business_tenant_id = sub["tenant_id"]
+
+    if not business_tenant_id:
+        return None  # Pas de Business actif chez cet owner
+
+    # Ce tenant a déjà son propre abonnement actif → ne pas appliquer "included"
+    if tenant_id in tenants_with_own_sub:
+        return None
+
+    # Candidats : tous les tenants de l'owner sauf le Business et ceux avec abonnement propre
+    candidate_ids = [t for t in all_ids if t != business_tenant_id and t not in tenants_with_own_sub]
+    if tenant_id not in candidate_ids:
+        return None
+
+    # Ordonner par date de création — les plus anciens bénéficient en premier
+    tenants_data = (
+        sb.table("tenant")
+        .select("id, created_at")
+        .in_("id", candidate_ids)
+        .order("created_at")
+        .execute()
+    )
+    ordered_ids = [t["id"] for t in (tenants_data.data or [])]
+
+    if tenant_id not in ordered_ids[:BUSINESS_INCLUDED_MAX]:
+        return None
+
+    return {
+        "plan_name": "Essentiel",
+        "status": "included",
+        "features": _build_features(ESSENTIEL_FEATURES, global_flags, overrides),
+        "trial_days_left": None,
+    }
+
+
 async def get_tenant_plan(tenant_id: str) -> dict:
     from app.core.supabase import get_supabase_admin
     from datetime import datetime, timezone, timedelta
@@ -155,7 +223,12 @@ async def get_tenant_plan(tenant_id: str) -> dict:
             "trial_days_left": None,
         }
 
-    # 2. Pas d'abonnement → vérifier la fenêtre d'essai
+    # 2. Espace secondaire inclus dans un Business (priorité sur le trial)
+    included = _check_business_included(sb, tenant_id, global_flags, overrides)
+    if included:
+        return included
+
+    # 3. Pas d'abonnement → vérifier la fenêtre d'essai
     tenant = sb.table("tenant").select("created_at, trial_extended_until").eq("id", tenant_id).maybe_single().execute()
     if tenant and tenant.data and tenant.data.get("created_at"):
         now = datetime.now(timezone.utc)
@@ -181,8 +254,6 @@ async def get_tenant_plan(tenant_id: str) -> dict:
                 "trial_days_left": days_left,
             }
 
-        # Essai expiré — tout verrouillé. Les flags globaux n'ont pas d'effet ici
-        # (tout est déjà False), mais les overrides par tenant s'appliquent toujours.
         expired_features = {k: (False if isinstance(v, bool) else 0) for k, v in ESSENTIEL_FEATURES.items()}
         return {
             "plan_name": None,

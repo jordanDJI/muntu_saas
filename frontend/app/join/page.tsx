@@ -73,33 +73,26 @@ function JoinContent() {
     if (password.length < 8) { setAuthError("Le mot de passe doit contenir au moins 8 caractères."); return; }
     setAuthLoading(true);
     try {
-      // Persisté en localStorage car Supabase peut stripper les query params de emailRedirectTo.
-      // Le timestamp permet d'expirer l'entrée après 24h (= durée de validité du lien Supabase).
-      localStorage.setItem("klientys_pending_invite", JSON.stringify({ token, ts: Date.now() }));
       const { data, error } = await supabase.auth.signUp({
         email: invite!.email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?invite=${token}`,
+          // /auth/invite/[token] : le token est dans le PATH → toujours préservé par Supabase,
+          // contrairement aux query params que Supabase peut stripper lors du redirect PKCE.
+          emailRedirectTo: `${window.location.origin}/auth/invite/${token}`,
         },
       });
-      if (error) {
-        localStorage.removeItem("klientys_pending_invite");
-        setAuthError(error.message);
-        return;
-      }
+      if (error) { setAuthError(error.message); return; }
 
       // Email déjà enregistré → Supabase retourne un succès silencieux sans envoyer d'email
       // Signe distinctif : user.identities est vide
       if (data.user && (data.user.identities?.length ?? 0) === 0) {
-        localStorage.removeItem("klientys_pending_invite");
         setAuthError("Un compte existe déjà avec cet email. Utilisez l'onglet \"J'ai déjà un compte\".");
         return;
       }
 
       // Confirmation email désactivée dans Supabase → session immédiate sans email
       if (data.session) {
-        localStorage.removeItem("klientys_pending_invite");
         await api.acceptInvite(token);
         await supabase.auth.refreshSession();
         setStatus("done");

@@ -62,15 +62,53 @@ def _parse_dt(s: str) -> datetime:
     return dt
 
 
-def _compute_status(tenant: dict, sub_map: dict, now: datetime) -> str:
+def _compute_status(tenant: dict, sub_map: dict, now: datetime, included_set: set | None = None) -> str:
     if tenant.get("suspended_at"):
         return "suspended"
     sub = sub_map.get(tenant["id"])
     if sub:
         return sub.get("status", "active")
+    if included_set and tenant["id"] in included_set:
+        return "included"
     ext = tenant.get("trial_extended_until")
     end = _parse_dt(ext) if ext else _parse_dt(tenant["created_at"]) + timedelta(days=14)
     return "trial" if now < end else "trial_expired"
+
+
+def _compute_included_set(subs_with_plan: list, owner_memberships: list, all_tenant_dates: list) -> set:
+    """Calcule en bulk les tenant_ids 'inclus' dans un Business (max 2 par owner).
+    subs_with_plan : [{tenant_id, status, plan:{name}}] — abonnements actifs/trialing uniquement.
+    owner_memberships : [{tenant_id, user_id}] — memberships role=owner.
+    all_tenant_dates : [{id, created_at}] — tous les tenants (pour l'ordre d'ancienneté).
+    """
+    from app.services.subscription import BUSINESS_INCLUDED_MAX
+
+    tenant_plan_map: dict[str, str] = {}
+    tenants_with_sub: set = set()
+    for sub in subs_with_plan:
+        t_id = sub["tenant_id"]
+        tenants_with_sub.add(t_id)
+        plan_name = (sub.get("plan") or {}).get("name")
+        if plan_name:
+            tenant_plan_map[t_id] = plan_name
+
+    user_tenants: dict[str, list] = {}
+    for m in owner_memberships:
+        user_tenants.setdefault(m["user_id"], []).append(m["tenant_id"])
+
+    created_map = {t["id"]: t.get("created_at", "") for t in all_tenant_dates}
+
+    included: set = set()
+    for tenant_ids in user_tenants.values():
+        business_tid = next((t for t in tenant_ids if tenant_plan_map.get(t) == "Business"), None)
+        if not business_tid:
+            continue
+        candidates = [t for t in tenant_ids if t != business_tid and t not in tenants_with_sub]
+        candidates.sort(key=lambda t: created_map.get(t, ""))
+        for t in candidates[:BUSINESS_INCLUDED_MAX]:
+            included.add(t)
+
+    return included
 
 
 def _compute_profile_score(sb, tenant_id: str, site: dict | None) -> dict:
@@ -181,12 +219,15 @@ async def get_metrics(admin=Depends(viewer_or_above)):
     now = datetime.now(timezone.utc)
 
     tenants = sb.table("tenant").select("id, created_at, suspended_at, trial_extended_until").execute().data or []
-    subs = sb.table("subscription").select("tenant_id, status").in_("status", ["active", "trialing"]).execute().data or []
+    subs = sb.table("subscription").select("tenant_id, status, plan:plan_id(name)").in_("status", ["active", "trialing"]).execute().data or []
     sub_map = {s["tenant_id"]: s for s in subs}
 
-    counts: dict[str, int] = {"total": len(tenants), "trial": 0, "trial_expired": 0, "active": 0, "trialing": 0, "suspended": 0}
+    owner_memberships = sb.table("membership").select("tenant_id, user_id").eq("role", "owner").execute().data or []
+    included_set = _compute_included_set(subs, owner_memberships, tenants)
+
+    counts: dict[str, int] = {"total": len(tenants), "trial": 0, "trial_expired": 0, "active": 0, "trialing": 0, "suspended": 0, "included": 0}
     for t in tenants:
-        st = _compute_status(t, sub_map, now)
+        st = _compute_status(t, sub_map, now, included_set)
         counts[st] = counts.get(st, 0) + 1
 
     seven_ago  = (now - timedelta(days=7)).isoformat()
@@ -272,11 +313,16 @@ async def list_tenants(
         q = q.eq("sector", sector)
     tenants = q.order("created_at", desc=True).execute().data or []
 
-    subs = sb.table("subscription").select("tenant_id, status, plan_id").execute().data or []
+    subs = sb.table("subscription").select("tenant_id, status, plan_id, plan:plan_id(name)").execute().data or []
     sub_map = {s["tenant_id"]: s for s in subs}
 
     owners = sb.table("membership").select("tenant_id, user_id").eq("role", "owner").execute().data or []
     owner_map = {m["tenant_id"]: m["user_id"] for m in owners}
+
+    # Pour l'included_set on a besoin des dates de tous les tenants (pas seulement la page courante)
+    all_tenant_dates = sb.table("tenant").select("id, created_at").execute().data or []
+    active_subs = [s for s in subs if s.get("status") in ("active", "trialing")]
+    included_set = _compute_included_set(active_subs, owners, all_tenant_dates)
 
     # Récupère les emails en batch depuis Supabase Auth
     email_map: dict[str, str] = {}
@@ -294,7 +340,7 @@ async def list_tenants(
 
     result = []
     for t in tenants:
-        st = _compute_status(t, sub_map, now)
+        st = _compute_status(t, sub_map, now, included_set)
         if status and st != status:
             continue
         uid = owner_map.get(t["id"])
