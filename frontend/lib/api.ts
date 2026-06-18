@@ -215,7 +215,8 @@ export const api = {
   // Membres d'équipe
   getMembers: () => apiFetch<{ members: any[]; pending: any[] }>("/api/v1/members/"),
   getMyRole: () => apiFetch<{ role: string }>("/api/v1/members/me/role"),
-  inviteMember: (body: { email: string; role: string }) =>
+  getMyPermissions: () => apiFetch<{ role: string; permissions: string[] }>("/api/v1/members/me/permissions"),
+  inviteMember: (body: { email: string; role: string; permissions?: string[] }) =>
     apiFetch("/api/v1/members/invite", { method: "POST", body: JSON.stringify(body) }),
   cancelInvite: (inviteId: string) =>
     apiFetch(`/api/v1/members/invite/${inviteId}`, { method: "DELETE" }),
@@ -223,8 +224,12 @@ export const api = {
     apiFetch<{ email: string; role: string; tenant_name: string }>(`/api/v1/members/invite/${token}`),
   acceptInvite: (token: string) =>
     apiFetch<{ status: string; tenant_id: string }>(`/api/v1/members/invite/${token}/accept`, { method: "POST" }),
+  signupViaInvite: (token: string, password: string) =>
+    apiFetch<{ status: string; email: string }>(`/api/v1/members/invite/${token}/signup`, { method: "POST", body: JSON.stringify({ password }) }),
   updateMemberRole: (userId: string, role: string) =>
     apiFetch(`/api/v1/members/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  updateMemberPermissions: (userId: string, permissions: string[]) =>
+    apiFetch(`/api/v1/members/${userId}/permissions`, { method: "PATCH", body: JSON.stringify({ permissions }) }),
   removeMember: (userId: string) =>
     apiFetch(`/api/v1/members/${userId}`, { method: "DELETE" }),
 
@@ -270,6 +275,10 @@ export const api = {
     apiFetch<any[]>(`/api/v1/secretary/appointments?date=${date}&view=${view}`),
   updateSecretaryAppointment: (id: string, body: { status?: string; notes?: string }) =>
     apiFetch<any>(`/api/v1/secretary/appointments/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  getSecretarySites: () =>
+    apiFetch<{ tenant_id: string; tenant_name: string; tenant_slug: string; site_title: string | null; site_status: string | null }[]>("/api/v1/secretary/sites"),
+  getSecretaryActivityLog: (limit = 20, offset = 0) =>
+    apiFetch<any[]>(`/api/v1/secretary/activity-log?limit=${limit}&offset=${offset}`),
 
   // Analytics
   getAnalyticsSummary: (days = 30) => apiFetch<any>(`/api/v1/analytics/summary?days=${days}`),

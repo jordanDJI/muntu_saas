@@ -40,7 +40,12 @@ function fmtShort(d: Date, lang: string) {
 function fmtMonth(d: Date, lang: string) {
   return d.toLocaleDateString(locale(lang), { month: "long", year: "numeric" });
 }
-function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
+function isoDate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 function addDays(d: Date, n: number) {
   const r = new Date(d); r.setDate(r.getDate() + n); return r;
@@ -142,7 +147,7 @@ export default function SecretaryPage() {
   const VIEW_LABELS: Record<View, string> = { day: t.sec_view_day, week: t.sec_view_week, month: t.sec_view_month };
 
   return (
-    <div className="min-h-screen pt-14 pb-12" style={{ background: "var(--bg-main, #f8fafc)" }}>
+    <div className="min-h-screen pb-12 bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-6">
 
         {/* Header */}

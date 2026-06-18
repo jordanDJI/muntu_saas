@@ -31,13 +31,24 @@ const TOUR_REQUIRED_FEATURE: Partial<Record<string, FeatureKey>> = {
 };
 
 const NAV_HREFS = [
-  { href: "/dashboard",              tKey: "nav_db",       icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg> },
-  { href: "/dashboard/contacts",     tKey: "nav_contacts",  icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-4a4 4 0 11-8 0 4 4 0 018 0z"/></svg> },
-  { href: "/dashboard/appointments", tKey: "nav_appts",    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M16 2v4M8 2v4M3 10h18"/></svg> },
-  { href: "/dashboard/site-builder", tKey: "nav_site",      icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path strokeLinecap="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg> },
-  { href: "/dashboard/analytics",    tKey: "nav_analytics", icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg> },
-  { href: "/dashboard/agents",       tKey: "nav_agents",    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104A9 9 0 0112 3c4.97 0 9 4.03 9 9s-4.03 9-9 9-9-4.03-9-9c0-1.04.177-2.04.5-2.97"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4"/></svg> },
-] as const;
+  { href: "/dashboard",              tKey: "nav_db",        perm: null,            icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg> },
+  { href: "/dashboard/contacts",     tKey: "nav_contacts",  perm: "crm",           icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-4a4 4 0 11-8 0 4 4 0 018 0z"/></svg> },
+  { href: "/dashboard/appointments", tKey: "nav_appts",     perm: "calendar",      icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M16 2v4M8 2v4M3 10h18"/></svg> },
+  { href: "/dashboard/site-builder", tKey: "nav_site",      perm: "site_builder",  icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path strokeLinecap="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg> },
+  { href: "/dashboard/analytics",    tKey: "nav_analytics", perm: "analytics",     icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg> },
+  { href: "/dashboard/agents",       tKey: "nav_agents",    perm: "agents",        icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104A9 9 0 0112 3c4.97 0 9 4.03 9 9s-4.03 9-9 9-9-4.03-9-9c0-1.04.177-2.04.5-2.97"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4"/></svg> },
+];
+
+// Paths qui nécessitent une permission spécifique (pour bloquer l'accès direct)
+const PERM_PATHS: Record<string, string> = {
+  "/dashboard/contacts":     "crm",
+  "/dashboard/leads":        "crm",
+  "/dashboard/reminders":    "crm",
+  "/dashboard/appointments": "calendar",
+  "/dashboard/site-builder": "site_builder",
+  "/dashboard/analytics":    "analytics",
+  "/dashboard/agents":       "agents",
+};
 
 const SECTORS = [
   { value: "health",   label: "Santé" },
@@ -609,20 +620,38 @@ function TrialBanner() {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [isSecretary, setIsSecretary] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [tenantSlug, setTenantSlug] = useState("");
   const [darkMode, setDarkMode] = useState(false);
+  const [memberRole, setMemberRole] = useState<string>("owner");
+  const [memberPermissions, setMemberPermissions] = useState<string[]>(["crm","calendar","site_builder","analytics","agents"]);
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useLanguage();
   const { vocab } = useSectorVocab();
 
-  const NAV = NAV_HREFS.map((n) => ({
-    ...n,
-    label: n.tKey === "nav_contacts" ? vocab.contacts
-         : n.tKey === "nav_appts"    ? vocab.appointments
-         : t[n.tKey],
-  }));
+  const NAV = NAV_HREFS
+    .filter((n) => {
+      if (!n.perm) return true;
+      if (memberRole === "owner" || memberRole === "admin") return true;
+      return memberPermissions.includes(n.perm);
+    })
+    .map((n) => ({
+      ...n,
+      label: n.tKey === "nav_contacts" ? vocab.contacts
+           : n.tKey === "nav_appts"    ? vocab.appointments
+           : t[n.tKey],
+    }));
+
+  // Bloquer l'accès direct à une section non autorisée
+  useEffect(() => {
+    if (!ready || memberRole === "owner" || memberRole === "admin") return;
+    const permKey = Object.entries(PERM_PATHS).find(([p]) => pathname.startsWith(p))?.[1];
+    if (permKey && !memberPermissions.includes(permKey)) {
+      router.replace("/dashboard");
+    }
+  }, [pathname, ready, memberRole, memberPermissions, router]);
 
   // Listen for live dark mode toggle from settings page
   useEffect(() => {
@@ -650,6 +679,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           const allTenants = await api.getMyTenants();
           const isSecretary = allTenants.length > 0 && allTenants.every((t: any) => t.role === "secretary");
           if (isSecretary) {
+            setIsSecretary(true);
             if (!window.location.pathname.startsWith("/dashboard/secretary")) {
               window.location.replace("/dashboard/secretary");
             } else {
@@ -662,8 +692,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
 
         api.getMyTenant()
-          .then((tenant) => {
+          .then(async (tenant) => {
             setTenantSlug(tenant.slug ?? "");
+            try {
+              const { role, permissions } = await api.getMyPermissions();
+              setMemberRole(role);
+              setMemberPermissions(permissions);
+            } catch {
+              // Ignore — accès complet par défaut
+            }
             setReady(true);
           })
           .catch(() => {
@@ -699,6 +736,78 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--l-teal-xl)", borderTopColor: "transparent" }} />
+      </div>
+    );
+  }
+
+  // Secrétaire : layout dédié avec nav (calendrier, sites, paramètres, déconnexion)
+  if (isSecretary) {
+    const secNav = [
+      {
+        href: "/dashboard/secretary",
+        label: "Calendrier",
+        icon: <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M16 2v4M8 2v4M3 10h18"/></svg>,
+      },
+      {
+        href: "/dashboard/secretary/sites",
+        label: "Sites",
+        icon: <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path strokeLinecap="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg>,
+      },
+      {
+        href: "/dashboard/secretary/settings",
+        label: "Paramètres",
+        icon: <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>,
+      },
+    ];
+    return (
+      <div {...(darkMode ? { "data-dash-dark": "" } : {})} className="min-h-screen bg-gray-50">
+        <nav className="fixed top-0 inset-x-0 z-50 h-14" style={{ background: "var(--bg-nav)", borderBottom: "1px solid rgba(170,189,216,.1)" }}>
+          <div className="h-full px-3 md:px-5 flex items-center gap-2">
+
+            {/* Logo */}
+            <div className="flex items-center gap-2 shrink-0 mr-3">
+              <img src="/logo.png" alt="Klientys" className="h-9 w-auto" />
+              <div className="hidden sm:flex flex-col leading-tight">
+                <span className="font-semibold text-white text-sm tracking-wide" style={{ fontFamily: "Georgia, Palatino, serif", fontStyle: "italic" }}>Klientys</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(170,189,216,.5)" }}>Secrétaire</span>
+              </div>
+            </div>
+
+            {/* Nav links */}
+            <div className="flex items-center gap-0.5 flex-1">
+              {secNav.map(({ href, label, icon }) => {
+                const active = pathname === href || (href !== "/dashboard/secretary" && pathname.startsWith(href));
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    title={label}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      active ? "text-white" : "text-slate-300 hover:text-white hover:bg-white/10"
+                    }`}
+                    style={active ? { background: "rgba(13,75,88,.45)" } : undefined}
+                  >
+                    {icon}
+                    <span className="hidden sm:inline">{label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Déconnexion */}
+            <button
+              onClick={async () => { await supabase.auth.signOut(); window.location.replace("/login"); }}
+              title="Déconnexion"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h6a2 2 0 012 2v1"/>
+              </svg>
+              <span className="hidden md:inline">Déconnexion</span>
+            </button>
+          </div>
+        </nav>
+        <div className="pt-14">{children}</div>
       </div>
     );
   }

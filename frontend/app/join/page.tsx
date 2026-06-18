@@ -92,35 +92,21 @@ function JoinContent() {
     if (password.length < 8) { setAuthError("Le mot de passe doit contenir au moins 8 caractères."); return; }
     setAuthLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
+      // Le backend crée l'utilisateur via Supabase Admin API (email_confirm: true).
+      // Pas de flow PKCE → fonctionne dans n'importe quel navigateur / webview email.
+      await api.signupViaInvite(token, password);
+
+      // Connexion immédiate — l'email est déjà confirmé côté backend
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: invite!.email,
         password,
-        options: {
-          // /auth/invite/[token] : le token est dans le PATH → toujours préservé par Supabase,
-          // contrairement aux query params que Supabase peut stripper lors du redirect PKCE.
-          emailRedirectTo: `${window.location.origin}/auth/invite/${token}`,
-        },
       });
-      if (error) { setAuthError(error.message); return; }
+      if (signInError) { setAuthError(signInError.message); return; }
 
-      // Email déjà enregistré → Supabase retourne un succès silencieux sans envoyer d'email
-      // Signe distinctif : user.identities est vide
-      if (data.user && (data.user.identities?.length ?? 0) === 0) {
-        setAuthError("Un compte existe déjà avec cet email. Utilisez l'onglet \"J'ai déjà un compte\".");
-        return;
-      }
-
-      // Confirmation email désactivée dans Supabase → session immédiate sans email
-      if (data.session) {
-        await api.acceptInvite(token);
-        await supabase.auth.refreshSession();
-        setStatus("done");
-        const dest = invite?.role === "secretary" ? "/dashboard/secretary" : "/dashboard";
-        setTimeout(() => router.push(dest), 2000);
-        return;
-      }
-
-      setStatus("verify_email");
+      await supabase.auth.refreshSession();
+      setStatus("done");
+      const dest = invite?.role === "secretary" ? "/dashboard/secretary" : "/dashboard";
+      setTimeout(() => router.push(dest), 2000);
     } catch (e: any) {
       setAuthError(e.message || "Erreur lors de la création du compte.");
     } finally {

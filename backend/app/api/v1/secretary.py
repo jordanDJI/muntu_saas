@@ -17,19 +17,49 @@ class SecretaryApptUpdate(BaseModel):
 
 
 def _get_secretary_tenants(sb, user_id: str) -> list[tuple[str, dict]]:
-    """Returns [(tenant_id, tenant_row), ...] for tenants where this user has role='secretary'."""
-    res = (
+    """Retourne tous les tenants accessibles au secrétaire.
+    Si le secrétaire est invité sur un tenant d'un propriétaire, il voit TOUS les tenants de ce propriétaire.
+    """
+    # 1. Memberships directs avec role=secretary
+    direct_res = (
         sb.table("membership")
         .select("tenant_id, tenant(id, name, slug)")
         .eq("user_id", user_id)
         .eq("role", "secretary")
         .execute()
     )
-    return [
-        (m["tenant_id"], m.get("tenant") or {})
-        for m in (res.data or [])
-        if m.get("tenant")
-    ]
+    direct_tenant_ids = [m["tenant_id"] for m in (direct_res.data or [])]
+    if not direct_tenant_ids:
+        return []
+
+    # 2. Trouver les propriétaires de ces tenants
+    owner_res = (
+        sb.table("membership")
+        .select("user_id")
+        .in_("tenant_id", direct_tenant_ids)
+        .eq("role", "owner")
+        .execute()
+    )
+    owner_ids = list({m["user_id"] for m in (owner_res.data or [])})
+    if not owner_ids:
+        return [(m["tenant_id"], m.get("tenant") or {}) for m in (direct_res.data or []) if m.get("tenant")]
+
+    # 3. Tous les tenants possédés par ces propriétaires
+    all_res = (
+        sb.table("membership")
+        .select("tenant_id, tenant(id, name, slug)")
+        .in_("user_id", owner_ids)
+        .eq("role", "owner")
+        .execute()
+    )
+    seen: set[str] = set()
+    result = []
+    for m in (all_res.data or []):
+        tid = m["tenant_id"]
+        if tid not in seen and m.get("tenant"):
+            seen.add(tid)
+            result.append((tid, m.get("tenant") or {}))
+    return result
 
 
 @router.get("/appointments")
@@ -94,6 +124,56 @@ async def get_secretary_appointments(
 
     all_appts.sort(key=lambda a: a.get("scheduled_at") or "")
     return all_appts
+
+
+@router.get("/activity-log")
+async def get_secretary_activity_log(
+    limit: int = 20,
+    offset: int = 0,
+    user: dict = Depends(get_current_user),
+):
+    """Journaux d'activité du secrétaire sur tous ses tenants accessibles."""
+    sb = get_supabase_admin()
+    tenant_rows = _get_secretary_tenants(sb, user["sub"])
+    tenant_ids = [tid for tid, _ in tenant_rows]
+
+    if not tenant_ids:
+        return []
+
+    res = (
+        sb.table("activity_log")
+        .select("id, action, detail, created_at, tenant(name)")
+        .in_("tenant_id", tenant_ids)
+        .eq("user_id", user["sub"])
+        .order("created_at", desc=True)
+        .range(offset, offset + limit - 1)
+        .execute()
+    )
+    return res.data or []
+
+
+@router.get("/sites")
+async def get_secretary_sites(user: dict = Depends(get_current_user)):
+    """Retourne les sites publics des tenants accessibles au secrétaire."""
+    sb = get_supabase_admin()
+    tenant_rows = _get_secretary_tenants(sb, user["sub"])
+
+    if not tenant_rows:
+        return []
+
+    results = []
+    for tid, tenant in tenant_rows:
+        site_res = sb.table("site").select("id, title, status").eq("tenant_id", tid).limit(1).execute()
+        site = site_res.data[0] if site_res.data else None
+        results.append({
+            "tenant_id": tid,
+            "tenant_name": tenant.get("name", ""),
+            "tenant_slug": tenant.get("slug", ""),
+            "site_title": site.get("title") if site else None,
+            "site_status": site.get("status") if site else None,
+        })
+
+    return results
 
 
 @router.patch("/appointments/{appointment_id}")

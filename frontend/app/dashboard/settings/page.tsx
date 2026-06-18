@@ -1120,19 +1120,89 @@ function SectionPreferences() {
 
 // ── Section Membres ───────────────────────────────────────────────────────────
 
-const ROLE_LABEL: Record<string, string> = { owner: "Propriétaire", admin: "Admin", member: "Membre", secretary: "Secrétaire" };
-const ROLE_OPTIONS = [{ value: "admin", label: "Admin" }, { value: "member", label: "Membre" }, { value: "secretary", label: "Secrétaire" }];
+const ALL_PERMS = ["crm", "calendar", "site_builder", "analytics", "agents"];
+
+function useTeamT() {
+  const { t } = useLanguage();
+  const roleLabel = (role: string) => ({
+    owner: t.team_role_owner, admin: t.team_role_admin,
+    member: t.team_role_member, secretary: t.team_role_secretary,
+  }[role] ?? role);
+  const permLabel = (key: string) => ({
+    crm: t.team_perm_crm, calendar: t.team_perm_calendar,
+    site_builder: t.team_perm_site_builder, analytics: t.team_perm_analytics,
+    agents: t.team_perm_agents,
+  }[key] ?? key);
+  return { t, roleLabel, permLabel };
+}
+
+function PermCheckboxes({
+  perms, onChange, disabled = false,
+}: { perms: string[]; onChange: (p: string[]) => void; disabled?: boolean }) {
+  const { permLabel } = useTeamT();
+  const toggle = (key: string) => {
+    onChange(perms.includes(key) ? perms.filter(p => p !== key) : [...perms, key]);
+  };
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {ALL_PERMS.map((key) => {
+        const label = permLabel(key);
+        const checked = perms.includes(key);
+        return (
+          <label
+            key={key}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer select-none transition-colors ${
+              disabled
+                ? "opacity-40 cursor-not-allowed border-gray-200 text-gray-400 bg-gray-50"
+                : checked
+                  ? "border-primary-400 bg-primary-50 text-primary-700"
+                  : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"
+            }`}
+          >
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={checked}
+              disabled={disabled}
+              onChange={() => !disabled && toggle(key)}
+            />
+            <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+              checked ? "bg-primary-600 border-primary-600" : "border-gray-300 bg-white"
+            }`}>
+              {checked && (
+                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+              )}
+            </span>
+            {label}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
 
 function SectionMembres() {
+  const { t, roleLabel, permLabel } = useTeamT();
   const [members, setMembers]   = useState<any[]>([]);
   const [pending, setPending]   = useState<any[]>([]);
   const [myRole, setMyRole]     = useState<string>("member");
   const [loading, setLoading]   = useState(true);
   const [email, setEmail]       = useState("");
   const [role, setRole]         = useState("member");
+  const [invitePerms, setInvitePerms] = useState<string[]>(ALL_PERMS);
+  const [editingPerms, setEditingPerms] = useState<Record<string, string[]>>({});
   const [inviting, setInviting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [success, setSuccess]   = useState<string | null>(null);
+
+  const ROLE_OPTIONS = [
+    { value: "admin",     label: t.team_role_admin },
+    { value: "member",    label: t.team_role_member },
+    { value: "secretary", label: t.team_role_secretary },
+  ];
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1150,19 +1220,22 @@ function SectionMembres() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleInvite = async () => {
-    if (!email.trim()) return;
+  const confirmPerms = (role === "admin" || role === "secretary") ? ALL_PERMS : invitePerms;
+
+  const handleConfirmInvite = async () => {
     setInviting(true);
+    setShowConfirm(false);
     setError(null);
     setSuccess(null);
     try {
-      const res = await api.inviteMember({ email: email.trim(), role }) as any;
+      const res = await api.inviteMember({ email: email.trim(), role, permissions: confirmPerms }) as any;
       if (res.email_sent) {
-        setSuccess(`Invitation envoyée à ${email.trim()}`);
+        setSuccess(`${t.team_invite_btn} → ${email.trim()}`);
       } else {
-        setSuccess(`Invitation créée. Copiez ce lien et envoyez-le manuellement :\n${res.invite_url}`);
+        setSuccess(`Invitation créée. Copiez ce lien :\n${res.invite_url}`);
       }
       setEmail("");
+      setInvitePerms(ALL_PERMS);
       load();
     } catch (e: any) {
       setError(e.message);
@@ -1189,8 +1262,20 @@ function SectionMembres() {
     }
   };
 
+  const handlePermsSave = async (userId: string) => {
+    const perms = editingPerms[userId];
+    if (!perms) return;
+    try {
+      await api.updateMemberPermissions(userId, perms);
+      setEditingPerms(prev => { const next = { ...prev }; delete next[userId]; return next; });
+      load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
   const handleRemove = async (userId: string) => {
-    if (!confirm("Retirer ce membre de l'équipe ?")) return;
+    if (!confirm(t.team_remove_confirm)) return;
     try {
       await api.removeMember(userId);
       load();
@@ -1203,7 +1288,79 @@ function SectionMembres() {
 
   return (
     <>
-      <SectionTitle title="Équipe" subtitle="Gérez les membres qui ont accès à votre espace." />
+      {/* Modal de confirmation d'invitation */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.45)" }}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-5">
+            <h2 className="text-lg font-bold text-gray-900">{t.team_confirm_title}</h2>
+
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="w-9 h-9 rounded-full bg-primary-100 flex items-center justify-center text-primary-600 font-bold text-sm shrink-0">
+                  {email.trim().slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-0.5">{t.team_confirm_email}</p>
+                  <p className="text-sm font-medium text-gray-900 break-all">{email.trim()}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-0.5">{t.team_confirm_role}</p>
+                  <p className="text-sm font-medium text-gray-900">{roleLabel(role)}</p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{t.team_confirm_access}</p>
+                {role === "admin" || role === "secretary" ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    {t.team_perm_all}
+                  </span>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {confirmPerms.length === 0 ? (
+                      <span className="text-xs text-gray-400">Aucun accès</span>
+                    ) : confirmPerms.map(p => (
+                      <span key={p} className="text-xs px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-100 font-medium">
+                        {permLabel(p)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                {t.team_confirm_cancel}
+              </button>
+              <button
+                onClick={handleConfirmInvite}
+                disabled={inviting}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
+                style={{ background: "#0D4B58" }}
+              >
+                {inviting ? t.team_inviting_btn : t.team_confirm_send}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <SectionTitle title={t.team_title} subtitle={t.team_subtitle} />
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>
@@ -1217,68 +1374,113 @@ function SectionMembres() {
       <Card>
         <h3 className="font-semibold text-sm text-gray-700">Membres actifs</h3>
         {loading ? <p className="text-sm text-gray-400">Chargement…</p> : (
-          <div className="space-y-1">
+          <div className="divide-y">
             {members.map(m => {
               const initials = [m.first_name, m.last_name].filter(Boolean).map((s: string) => s[0]).join("").toUpperCase() || m.email?.slice(0, 2).toUpperCase() || "?";
               const displayName = [m.first_name, m.last_name].filter(Boolean).join(" ") || m.email;
+              const isEditingPerms = m.user_id in editingPerms;
+              const currentPerms = editingPerms[m.user_id] ?? (m.permissions || ALL_PERMS);
+              const showPermsEdit = canManage && m.role === "member";
               return (
-                <div key={m.id} className="flex items-center justify-between py-2.5 border-b last:border-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-xs font-bold text-primary-600">
-                      {initials}
+                <div key={m.id} className="py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-xs font-bold text-primary-600">
+                        {initials}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{displayName}</p>
+                        <p className="text-xs text-gray-400">{m.email}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{displayName}</p>
-                      <p className="text-xs text-gray-400">{m.email}</p>
+                    <div className="flex items-center gap-2">
+                      {canManage && m.role !== "owner" ? (
+                        <select
+                          value={m.role}
+                          onChange={e => handleRoleChange(m.user_id, e.target.value)}
+                          className="text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                        >
+                          {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      ) : (
+                        <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                          {roleLabel(m.role)}
+                        </span>
+                      )}
+                      {showPermsEdit && !isEditingPerms && (
+                        <button
+                          onClick={() => setEditingPerms(prev => ({ ...prev, [m.user_id]: m.permissions || ALL_PERMS }))}
+                          className="text-xs text-primary-500 hover:text-primary-700 border border-primary-200 rounded-lg px-2 py-1 transition-colors"
+                        >
+                          {t.team_access_btn}
+                        </button>
+                      )}
+                      {canManage && m.role !== "owner" && (
+                        <button
+                          onClick={() => handleRemove(m.user_id)}
+                          className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                        >
+                          ✕
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {canManage && m.role !== "owner" ? (
-                      <select
-                        value={m.role}
-                        onChange={e => handleRoleChange(m.user_id, e.target.value)}
-                        className="text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
-                      >
-                        {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    ) : (
-                      <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                        {ROLE_LABEL[m.role] ?? m.role}
-                      </span>
-                    )}
-                    {canManage && m.role !== "owner" && (
-                      <button
-                        onClick={() => handleRemove(m.user_id)}
-                        className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                        title="Retirer"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
+
+                  {/* Panneau d'édition des permissions */}
+                  {isEditingPerms && (
+                    <div className="mt-3 ml-11 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-xs font-semibold text-gray-600 mb-2">{t.team_perms_title}</p>
+                      <PermCheckboxes perms={currentPerms} onChange={p => setEditingPerms(prev => ({ ...prev, [m.user_id]: p }))} />
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => handlePermsSave(m.user_id)}
+                          className="text-xs bg-primary-600 text-white px-3 py-1.5 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+                        >
+                          {t.team_save_btn}
+                        </button>
+                        <button
+                          onClick={() => setEditingPerms(prev => { const next = { ...prev }; delete next[m.user_id]; return next; })}
+                          className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 transition-colors"
+                        >
+                          {t.team_cancel_btn}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Aperçu des permissions pour les membres (lecture seule si pas en édition) */}
+                  {!isEditingPerms && m.role === "member" && (
+                    <div className="mt-1.5 ml-11 flex flex-wrap gap-1.5">
+                      {(m.permissions || ALL_PERMS).map((p: string) => (
+                        <span key={p} className="text-xs px-2 py-0.5 rounded-full bg-primary-50 text-primary-600 border border-primary-100">
+                          {permLabel(p)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
-            {members.length === 0 && <p className="text-sm text-gray-400">Aucun membre pour l'instant.</p>}
+            {members.length === 0 && <p className="text-sm text-gray-400 py-2">{t.team_empty}</p>}
           </div>
         )}
 
         {pending.length > 0 && (
           <div className="mt-4 pt-4 border-t">
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Invitations en attente</h4>
+            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{t.team_pending_title}</h4>
             <div className="space-y-1">
               {pending.map(p => (
                 <div key={p.id} className="flex items-center justify-between py-2">
                   <div>
                     <p className="text-sm text-gray-700">{p.email}</p>
-                    <p className="text-xs text-gray-400">{ROLE_LABEL[p.role] ?? p.role} · Expire le {new Date(p.expires_at).toLocaleDateString("fr-BE")}</p>
+                    <p className="text-xs text-gray-400">{roleLabel(p.role)} · {t.team_pending_expires} {new Date(p.expires_at).toLocaleDateString()}</p>
                   </div>
                   {canManage && (
                     <button
                       onClick={() => handleCancelInvite(p.id)}
                       className="text-xs text-red-400 hover:text-red-600 transition-colors"
                     >
-                      Annuler
+                      {t.team_cancel_invite}
                     </button>
                   )}
                 </div>
@@ -1290,32 +1492,43 @@ function SectionMembres() {
 
       {canManage && (
         <Card>
-          <h3 className="font-semibold text-sm text-gray-700">Inviter un membre</h3>
-          <p className="text-sm text-gray-500">Un email d'invitation sera envoyé à l'adresse saisie.</p>
-          <div className="flex gap-2">
+          <h3 className="font-semibold text-sm text-gray-700">{t.team_invite_title}</h3>
+          <p className="text-sm text-gray-500">{t.team_invite_subtitle}</p>
+          <div className="flex gap-2 flex-wrap sm:flex-nowrap">
             <input
               type="email"
               value={email}
               onChange={e => { setEmail(e.target.value); setError(null); setSuccess(null); }}
-              onKeyDown={e => e.key === "Enter" && handleInvite()}
-              placeholder="email@exemple.com"
-              className="border rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-primary-400"
+              onKeyDown={e => e.key === "Enter" && email.trim() && setShowConfirm(true)}
+              placeholder={t.team_invite_email_ph}
+              className="border rounded-lg px-3 py-2 text-sm flex-1 min-w-0 focus:outline-none focus:ring-2 focus:ring-primary-400"
             />
             <select
               value={role}
-              onChange={e => setRole(e.target.value)}
+              onChange={e => { setRole(e.target.value); if (e.target.value !== "member") setInvitePerms(ALL_PERMS); }}
               className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             >
               {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             <button
-              onClick={handleInvite}
+              onClick={() => email.trim() && setShowConfirm(true)}
               disabled={inviting || !email.trim()}
-              className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-40 transition-colors"
+              className="bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-40 transition-colors shrink-0"
             >
-              {inviting ? "Envoi…" : "Inviter"}
+              {inviting ? t.team_inviting_btn : t.team_invite_btn}
             </button>
           </div>
+
+          {/* Checkboxes d'accès — uniquement pour le rôle "member" */}
+          {role === "member" && (
+            <div className="border-t pt-4 mt-2">
+              <p className="text-xs font-semibold text-gray-600 mb-1">
+                {t.team_perms_title}
+                <span className="ml-2 font-normal text-gray-400">{t.team_perms_note}</span>
+              </p>
+              <PermCheckboxes perms={invitePerms} onChange={setInvitePerms} />
+            </div>
+          )}
         </Card>
       )}
     </>
@@ -2512,16 +2725,30 @@ const SECTION_MAP: Record<Exclude<Section, "domaine">, React.FC> = {
   activite:      SectionActivite,
 };
 
+// Sections réservées aux owner/admin (jamais visibles pour les "member")
+const OWNER_ONLY_SECTIONS = new Set<Section>(["abonnement", "membres"]);
+
 export default function SettingsPage() {
   const router = useRouter();
   const { t } = useLanguage();
   const [active, setActive] = useState<Section>("profil");
+  const [myRole, setMyRole] = useState<string>("owner");
 
   useEffect(() => {
+    api.getMyRole().then(({ role }) => setMyRole(role)).catch(() => {});
     const s = new URLSearchParams(window.location.search).get("section");
     if (s && s in SECTION_MAP) setActive(s as Section);
   }, []);
-  const activeItem = NAV.find(n => n.key === active)!;
+
+  const isMember = myRole === "member";
+  const visibleNAV = isMember ? NAV.filter(n => !OWNER_ONLY_SECTIONS.has(n.key)) : NAV;
+
+  // Si un membre tente d'accéder à une section restreinte, on le redirige vers profil
+  useEffect(() => {
+    if (isMember && OWNER_ONLY_SECTIONS.has(active)) setActive("profil");
+  }, [isMember, active]);
+
+  const activeItem = visibleNAV.find(n => n.key === active) ?? visibleNAV[0];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -2545,7 +2772,7 @@ export default function SettingsPage() {
           onChange={e => setActive(e.target.value as Section)}
           className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary-400"
         >
-          {NAV.map(item => (
+          {visibleNAV.map(item => (
             <option key={item.key} value={item.key}>
               {item.icon}  {item.label}
             </option>
@@ -2557,7 +2784,7 @@ export default function SettingsPage() {
         {/* Sidebar desktop */}
         <aside id="settings-nav" className="w-56 shrink-0 py-6 px-3 hidden md:block">
           <nav className="space-y-0.5">
-            {NAV.map(item => (
+            {visibleNAV.map(item => (
               <button
                 key={item.key}
                 id={`settings-${item.key}-btn`}
