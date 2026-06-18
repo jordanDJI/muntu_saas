@@ -17,6 +17,7 @@ function JoinContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
+  const needsResend = searchParams.get("resend") === "1";
 
   const [invite, setInvite] = useState<{ email: string; role: string; tenant_name: string } | null>(null);
   const [status, setStatus] = useState<Status>("loading");
@@ -26,7 +27,9 @@ function JoinContent() {
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   // Formulaire auth inline
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  // Si ?resend=1 : pré-sélectionner "Créer un compte" pour que l'utilisateur puisse
+  // re-déclencher l'envoi d'un email depuis CE navigateur (nouveau code_verifier PKCE)
+  const [authMode, setAuthMode] = useState<"login" | "signup">(needsResend ? "signup" : "login");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
@@ -247,6 +250,14 @@ function JoinContent() {
     if (status === "auth") {
       return (
         <>
+          {/* Bannière résend : lien ouvert dans un autre navigateur */}
+          {needsResend && (
+            <div style={{ background: "rgba(221,170,64,.08)", border: "1px solid rgba(221,170,64,.25)", borderRadius: "10px", padding: "12px 14px", marginBottom: "20px", fontSize: "13px", color: "var(--l-text-2)", lineHeight: 1.6 }}>
+              <strong style={{ color: "#DDAA40" }}>Lien ouvert dans un nouveau navigateur.</strong>{" "}
+              Entrez à nouveau votre mot de passe ci-dessous — un nouvel email de confirmation sera envoyé à ouvrir <em>dans ce navigateur</em>.
+            </div>
+          )}
+
           {/* En-tête invite */}
           <div style={{ textAlign: "center", marginBottom: "24px" }}>
             <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(13,75,88,.4)", border: "1px solid rgba(42,143,165,.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: "20px" }}>✉</div>

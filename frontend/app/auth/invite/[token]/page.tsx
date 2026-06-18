@@ -21,13 +21,16 @@ export default function AuthInvitePage() {
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
-          setMsg("Lien invalide ou expiré. Redirection…");
-          setTimeout(() => router.replace(`/join?token=${token}&expired=1`), 2000);
+          // L'échange PKCE échoue quand le lien est ouvert dans un navigateur différent
+          // de celui où le signup a été initié (le code_verifier est dans l'autre localStorage).
+          // Solution : rediriger vers /join sans session — l'utilisateur peut re-signup
+          // dans CE navigateur pour recevoir un nouveau lien valide ici.
+          setMsg("Redirection vers le formulaire…");
+          setTimeout(() => router.replace(`/join?token=${token}&resend=1`), 800);
           return;
         }
       }
 
-      // Token dans le path → toujours préservé, même si Supabase a strippé les query params
       router.replace(`/join?token=${token}`);
     };
 
