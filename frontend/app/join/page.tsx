@@ -21,6 +21,8 @@ function JoinContent() {
   const [invite, setInvite] = useState<{ email: string; role: string; tenant_name: string } | null>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [errorMsg, setErrorMsg] = useState("");
+  const [errorKind, setErrorKind] = useState<"network" | "invalid">("invalid");
+  const [retryCount, setRetryCount] = useState(0);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   // Formulaire auth inline
@@ -31,20 +33,34 @@ function JoinContent() {
   const [authError, setAuthError] = useState("");
 
   useEffect(() => {
-    if (!token) { setStatus("error"); setErrorMsg("Lien d'invitation invalide."); return; }
-    Promise.all([api.getInvite(token), supabase.auth.getUser()])
-      .then(([data, { data: { user } }]) => {
-        setInvite(data);
-        if (!user) { setStatus("auth"); return; }
-        setCurrentUserEmail(user.email ?? null);
-        if ((user.email ?? "").toLowerCase() !== data.email.toLowerCase()) {
-          setStatus("mismatch");
-        } else {
-          setStatus("ready");
+    if (!token) { setStatus("error"); setErrorKind("invalid"); setErrorMsg("Lien d'invitation invalide."); return; }
+
+    const loadInvite = async () => {
+      // Retry jusqu'à 3 fois avec backoff — absorbe les cold starts Railway
+      let lastErr: any;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 800 * attempt));
+          const [data, { data: { user } }] = await Promise.all([api.getInvite(token), supabase.auth.getUser()]);
+          setInvite(data);
+          if (!user) { setStatus("auth"); return; }
+          setCurrentUserEmail(user.email ?? null);
+          setStatus((user.email ?? "").toLowerCase() !== data.email.toLowerCase() ? "mismatch" : "ready");
+          return;
+        } catch (e: any) {
+          lastErr = e;
+          const isNetwork = e.message?.includes("indisponible") || e.message?.includes("fetch");
+          if (!isNetwork) break; // erreur métier (404, 410…) → pas de retry
         }
-      })
-      .catch((e: any) => { setStatus("error"); setErrorMsg(e.message || "Invitation invalide ou expirée."); });
-  }, [token]);
+      }
+      const isNetwork = lastErr?.message?.includes("indisponible") || lastErr?.message?.includes("fetch");
+      setErrorKind(isNetwork ? "network" : "invalid");
+      setErrorMsg(lastErr?.message || "Invitation invalide ou expirée.");
+      setStatus("error");
+    };
+
+    loadInvite();
+  }, [token, retryCount]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,14 +164,32 @@ function JoinContent() {
     }
 
     if (status === "error") {
+      const isNetwork = errorKind === "network";
       return (
         <>
-          <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "rgba(191,51,51,.15)", border: "1px solid rgba(191,51,51,.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: "20px", color: "#FC8181" }}>✕</div>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", marginBottom: "8px", color: "var(--l-text)", letterSpacing: "-.02em", textAlign: "center" }}>Invitation invalide</h1>
-          <p style={{ color: "var(--l-text-2)", fontSize: "14px", marginBottom: "28px", textAlign: "center" }}>{errorMsg}</p>
-          <Link href="/" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "11px 16px", borderRadius: "10px", border: "1px solid rgba(170,189,216,.18)", background: "rgba(255,255,255,.05)", color: "var(--l-text)", fontSize: "14px", fontWeight: 500, textDecoration: "none" }}>
-            Retour à l'accueil
-          </Link>
+          <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: isNetwork ? "rgba(221,170,64,.1)" : "rgba(191,51,51,.15)", border: `1px solid ${isNetwork ? "rgba(221,170,64,.3)" : "rgba(191,51,51,.3)"}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: "20px", color: isNetwork ? "#DDAA40" : "#FC8181" }}>
+            {isNetwork ? "⏳" : "✕"}
+          </div>
+          <h1 style={{ fontSize: "22px", fontWeight: 800, fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif", marginBottom: "8px", color: "var(--l-text)", letterSpacing: "-.02em", textAlign: "center" }}>
+            {isNetwork ? "Connexion impossible" : "Invitation invalide"}
+          </h1>
+          <p style={{ color: "var(--l-text-2)", fontSize: "14px", marginBottom: "28px", textAlign: "center" }}>
+            {isNetwork ? "Le serveur est temporairement indisponible. Votre invitation est toujours valide." : errorMsg}
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {isNetwork && (
+              <button
+                onClick={() => { setStatus("loading"); setErrorMsg(""); setRetryCount(c => c + 1); }}
+                className="l-btn l-btn-primary"
+                style={{ width: "100%", justifyContent: "center" }}
+              >
+                Réessayer →
+              </button>
+            )}
+            <Link href="/" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "11px 16px", borderRadius: "10px", border: "1px solid rgba(170,189,216,.18)", background: "rgba(255,255,255,.05)", color: "var(--l-text)", fontSize: "14px", fontWeight: 500, textDecoration: "none" }}>
+              Retour à l'accueil
+            </Link>
+          </div>
         </>
       );
     }
