@@ -80,4 +80,8 @@ async def get_public_site(slug: str, preview: bool = Query(False)):
     domain_res = sb.table("custom_domain").select("domain").eq("tenant_id", tenant["id"]).eq("status", "active").limit(1).execute()
     custom_domain = domain_res.data[0]["domain"] if domain_res.data else None
 
-    return {**site_res.data, "tenant": {**tenant, "country": tenant_res.data[0].get("country", "FR"), "sector": tenant_res.data[0].get("sector", "other"), "custom_domain": custom_domain}}
+    site_data = dict(site_res.data)
+    # Ne jamais exposer le secret PayPal dans l'API publique
+    site_data.pop("paypal_client_secret", None)
+
+    return {**site_data, "tenant": {**tenant, "country": tenant_res.data[0].get("country", "FR"), "sector": tenant_res.data[0].get("sector", "other"), "custom_domain": custom_domain}}

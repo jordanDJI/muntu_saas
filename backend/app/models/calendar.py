@@ -69,6 +69,7 @@ class PublicBookIn(BaseModel):
     request_type: Literal["contact", "appointment"] = "appointment"
     contact_type: Literal["individual", "company"] = "individual"
     party_size: int = Field(default=1, ge=1, le=500)  # nb de personnes (restaurant: table de 4)
+    custom_answers: Optional[dict] = Field(default_factory=dict)  # { "q_id": "réponse" }
 
     @field_validator("email")
     @classmethod

@@ -17,6 +17,8 @@ function _track(slug: string, type: string, section?: string, data?: object) {
 
 type Slot = { start: string; end: string; label: string; spots_left?: number; capacity?: number; max_party_size?: number };
 type Mode = "contact" | "appointment";
+type BookingQuestion = { id: string; label: string; type: "text" | "textarea" | "select"; options?: string[]; required: boolean };
+type DepositCfg = { enabled: boolean; amount: number; currency: string; paypal_client_id: string };
 
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DAYS_FR = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
@@ -268,20 +270,33 @@ export default function ContactForm({
   accentColor = "#4f46e5",
   offers = [],
   vocab,
+  bookingQuestions = [],
+  depositConfig,
 }: {
   tenantSlug: string;
   accentColor?: string;
   offers?: { id: string; name: string }[];
   vocab?: SectorVocabMini;
+  bookingQuestions?: BookingQuestion[];
+  depositConfig?: DepositCfg;
 }) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
   const bookingCta = vocab?.booking_cta ?? "Prendre rendez-vous";
   const partySizeLabel = vocab?.party_size_label ?? "Nombre de personnes";
   const partySizeHint = vocab?.party_size_hint ?? null;
 
+  const depositEnabled = depositConfig?.enabled && depositConfig.paypal_client_id;
+  const hasQuestions   = bookingQuestions.length > 0;
+
   const [mode, setMode] = useState<Mode>("contact");
-  const [step, setStep] = useState<"date" | "slot" | "form">("date");
+  const [step, setStep] = useState<"date" | "slot" | "form" | "payment">("date");
   const [partySize, setPartySize] = useState(1);
+  const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
+  const [paypalReady, setPaypalReady] = useState(false);
+  const [paypalError, setPaypalError] = useState("");
+  const paypalRendered = useRef(false);
+  const pendingPayload = useRef<any>(null);
+
 
   useEffect(() => {
     if (window.location.hash === "#rdv") {
@@ -332,17 +347,39 @@ export default function ContactForm({
     setStep("form");
   };
 
+  const _buildApptBody = () => ({
+    first_name: fields.first_name,
+    last_name: fields.last_name,
+    email: fields.email,
+    phone: fields.phone || undefined,
+    message: fields.message,
+    service_offer_id: fields.service_offer_id || undefined,
+    request_type: "appointment",
+    scheduled_at: selectedSlot!.start,
+    slot_duration_min: Math.round(
+      (new Date(selectedSlot!.end).getTime() - new Date(selectedSlot!.start).getTime()) / 60000
+    ),
+    contact_type: fields.contact_type,
+    party_size: partySize,
+    custom_answers: customAnswers,
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setSubmitting(true);
-    try {
-      let url: string;
-      let body: any;
 
-      if (mode === "contact") {
-        url = `${apiUrl}/api/v1/leads/public/${tenantSlug}`;
-        body = {
+    // Validate required questions
+    for (const q of bookingQuestions) {
+      if (q.required && !customAnswers[q.id]?.trim()) {
+        setError(`La question « ${q.label} » est obligatoire.`);
+        return;
+      }
+    }
+
+    if (mode === "contact") {
+      setSubmitting(true);
+      try {
+        const body = {
           first_name: fields.first_name,
           last_name: fields.last_name,
           email: fields.email,
@@ -353,42 +390,122 @@ export default function ContactForm({
           request_type: "contact",
           contact_type: fields.contact_type,
         };
-      } else {
-        url = `${apiUrl}/api/v1/booking/${tenantSlug}/book`;
-        body = {
-          first_name: fields.first_name,
-          last_name: fields.last_name,
-          email: fields.email,
-          phone: fields.phone || undefined,
-          message: fields.message,
-          service_offer_id: fields.service_offer_id || undefined,
-          request_type: "appointment",
-          scheduled_at: selectedSlot!.start,
-          slot_duration_min: Math.round(
-            (new Date(selectedSlot!.end).getTime() - new Date(selectedSlot!.start).getTime()) / 60000
-          ),
-          contact_type: fields.contact_type,
-          party_size: partySize,
-        };
-      }
+        const res = await fetch(`${apiUrl}/api/v1/leads/public/${tenantSlug}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail ?? "Erreur"); }
+        setSubmitted(true);
+        _track(tenantSlug, "form_submit", "contact", { mode });
+      } catch (err: any) { setError(err.message ?? "Une erreur est survenue"); }
+      finally { setSubmitting(false); }
+      return;
+    }
 
-      const res = await fetch(url, {
+    // Appointment + deposit → PayPal step
+    if (depositEnabled) {
+      pendingPayload.current = _buildApptBody();
+      paypalRendered.current = false;
+      setPaypalError("");
+      setStep("payment");
+      return;
+    }
+
+    // Appointment without deposit → direct submit
+    setSubmitting(true);
+    try {
+      const body = _buildApptBody();
+      const res = await fetch(`${apiUrl}/api/v1/booking/${tenantSlug}/book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail ?? "Erreur lors de l'envoi");
-      }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail ?? "Erreur lors de l'envoi"); }
       setSubmitted(true);
       _track(tenantSlug, "form_submit", "contact", { mode });
-    } catch (err: any) {
-      setError(err.message ?? "Une erreur est survenue");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err: any) { setError(err.message ?? "Une erreur est survenue"); }
+    finally { setSubmitting(false); }
   };
+
+  // Load PayPal SDK + render buttons when entering payment step
+  useEffect(() => {
+    if (step !== "payment") return;
+
+    const clientId = depositConfig?.paypal_client_id?.trim();
+    const currency = depositConfig?.currency || "EUR";
+    const amount = depositConfig?.amount ?? 0;
+
+    console.log("[PayPal] step=payment | clientId=", clientId ? clientId.slice(0, 8) + "…" : "VIDE/MANQUANT");
+
+    if (!clientId) {
+      setPaypalError("Client ID PayPal manquant. Vérifiez Formulaire → onglet Paiement.");
+      return;
+    }
+
+    const renderButtons = () => {
+      if (paypalRendered.current) return;
+      paypalRendered.current = true;
+      setPaypalReady(true);
+      const w = window as any;
+      w.paypal.Buttons({
+        style: { layout: "vertical", color: "blue", shape: "rect", label: "pay" },
+        createOrder: async () => {
+          const r = await fetch(`${apiUrl}/api/v1/booking/${tenantSlug}/paypal-order`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount, currency, description: "Acompte réservation" }),
+          });
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.detail ?? "Erreur création order PayPal");
+          }
+          return (await r.json()).order_id;
+        },
+        onApprove: async (data: any) => {
+          setSubmitting(true); setPaypalError("");
+          try {
+            const body = { ...pendingPayload.current, paypal_order_id: data.orderID };
+            const r = await fetch(`${apiUrl}/api/v1/booking/${tenantSlug}/paypal-capture`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+            if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail ?? "Erreur paiement"); }
+            setSubmitted(true);
+            _track(tenantSlug, "form_submit", "contact", { mode: "appointment", deposit: "paid" });
+          } catch (e: any) { setPaypalError(e.message ?? "Paiement non complété."); }
+          finally { setSubmitting(false); }
+        },
+        onError: (err: any) => { console.error("[PayPal] button error:", err); setPaypalError("Une erreur PayPal est survenue."); },
+        onCancel: () => setPaypalError("Paiement annulé."),
+      }).render("#paypal-buttons");
+    };
+
+    // SDK already loaded
+    if ((window as any).paypal) {
+      console.log("[PayPal] SDK déjà présent, rendu des boutons…");
+      renderButtons();
+      return;
+    }
+
+    // Script already in DOM (e.g. re-render) — wait for it
+    const existing = document.querySelector('script[src*="paypal.com/sdk"]') as HTMLScriptElement | null;
+    if (existing) {
+      console.log("[PayPal] script déjà dans le DOM, attente du load…");
+      existing.addEventListener("load", renderButtons);
+      existing.addEventListener("error", () => setPaypalError("Impossible de charger PayPal."));
+      return;
+    }
+
+    // Inject SDK
+    console.log("[PayPal] injection du script SDK…");
+    const script = document.createElement("script");
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=${currency}&intent=capture`;
+    script.onload = () => { console.log("[PayPal] SDK chargé !"); renderButtons(); };
+    script.onerror = () => setPaypalError("Impossible de charger le module de paiement PayPal.");
+    document.head.appendChild(script);
+  }, [step]);
 
   if (submitted) {
     return (
@@ -407,6 +524,9 @@ export default function ContactForm({
       </div>
     );
   }
+
+  const totalSteps = 3 + (depositEnabled ? 1 : 0);
+  const stepNum = step === "date" ? 1 : step === "slot" ? 2 : step === "form" ? 3 : 4;
 
   return (
     <div className="space-y-5">
@@ -448,26 +568,33 @@ export default function ContactForm({
       {mode === "appointment" && (
         <div className="space-y-4">
           {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            <button
-              onClick={() => setStep("date")}
+          <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
+            <button onClick={() => setStep("date")}
               className={`font-medium ${step === "date" ? "text-gray-900" : "hover:underline"}`}
-              style={step === "date" ? { color: accentColor } : {}}
-            >
+              style={step === "date" ? { color: accentColor } : {}}>
               1. Date
             </button>
             <span>›</span>
-            <button
-              onClick={() => step === "form" ? setStep("slot") : undefined}
-              className={`font-medium ${step === "slot" ? "text-gray-900" : step === "form" ? "hover:underline" : "cursor-default"}`}
-              style={step === "slot" ? { color: accentColor } : {}}
-            >
+            <button onClick={() => (step === "form" || step === "payment") ? setStep("slot") : undefined}
+              className={`font-medium ${step === "slot" ? "text-gray-900" : (step === "form" || step === "payment") ? "hover:underline" : "cursor-default"}`}
+              style={step === "slot" ? { color: accentColor } : {}}>
               2. Créneau
             </button>
             <span>›</span>
-            <span className={`font-medium ${step === "form" ? "text-gray-900" : "cursor-default"}`} style={step === "form" ? { color: accentColor } : {}}>
+            <button onClick={() => step === "payment" ? setStep("form") : undefined}
+              className={`font-medium ${step === "form" ? "text-gray-900" : step === "payment" ? "hover:underline" : "cursor-default"}`}
+              style={step === "form" ? { color: accentColor } : {}}>
               3. Coordonnées
-            </span>
+            </button>
+            {depositEnabled && (
+              <>
+                <span>›</span>
+                <span className={`font-medium ${step === "payment" ? "text-gray-900" : "cursor-default"}`}
+                  style={step === "payment" ? { color: accentColor } : {}}>
+                  4. Paiement
+                </span>
+              </>
+            )}
           </div>
 
           {/* Party size — affiché si secteur 1:N (restaurant…) */}
@@ -520,11 +647,11 @@ export default function ContactForm({
             </div>
           )}
 
-          {/* Étape 3 — Formulaire */}
+          {/* Étape 3 — Formulaire + questions personnalisées */}
           {step === "form" && selectedSlot && (
             <form onSubmit={handleSubmit} onFocus={trackOpen} data-track-form="appointment" className="space-y-3">
               <div className="flex items-center gap-2 mb-1">
-                <button onClick={() => setStep("slot")} className="text-xs text-gray-400 hover:text-gray-600">← Créneaux</button>
+                <button type="button" onClick={() => setStep("slot")} className="text-xs text-gray-400 hover:text-gray-600">← Créneaux</button>
                 <p className="text-sm font-medium text-gray-700">
                   {selectedDate?.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
                   {" à "}
@@ -537,6 +664,48 @@ export default function ContactForm({
                 offers={offers}
                 mode="appointment"
               />
+
+              {/* Questions personnalisées */}
+              {hasQuestions && (
+                <div className="space-y-3 pt-2 border-t">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quelques questions</p>
+                  {bookingQuestions.map(q => (
+                    <div key={q.id}>
+                      <label className="block text-sm text-gray-700 mb-1">
+                        {q.label}{q.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </label>
+                      {q.type === "textarea" ? (
+                        <textarea
+                          value={customAnswers[q.id] ?? ""}
+                          onChange={e => setCustomAnswers(a => ({ ...a, [q.id]: e.target.value }))}
+                          rows={3}
+                          className="w-full border rounded-lg px-3 py-2 text-sm resize-y"
+                          required={q.required}
+                        />
+                      ) : q.type === "select" ? (
+                        <select
+                          value={customAnswers[q.id] ?? ""}
+                          onChange={e => setCustomAnswers(a => ({ ...a, [q.id]: e.target.value }))}
+                          className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                          required={q.required}
+                        >
+                          <option value="">Sélectionnez…</option>
+                          {(q.options ?? []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={customAnswers[q.id] ?? ""}
+                          onChange={e => setCustomAnswers(a => ({ ...a, [q.id]: e.target.value }))}
+                          className="w-full border rounded-lg px-3 py-2 text-sm"
+                          required={q.required}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <button
                 type="submit"
@@ -544,9 +713,36 @@ export default function ContactForm({
                 className="w-full text-white py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ backgroundColor: accentColor }}
               >
-                {submitting ? "Confirmation…" : "Confirmer le rendez-vous"}
+                {submitting
+                  ? "Confirmation…"
+                  : depositEnabled
+                  ? "Continuer vers le paiement →"
+                  : "Confirmer le rendez-vous"}
               </button>
             </form>
+          )}
+
+          {/* Étape 4 — Paiement PayPal */}
+          {step === "payment" && depositConfig && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <button type="button" onClick={() => { setStep("form"); paypalRendered.current = false; }}
+                  className="text-xs text-gray-400 hover:text-gray-600">← Coordonnées</button>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+                <p className="text-sm font-semibold text-gray-800">Acompte requis</p>
+                <p className="text-2xl font-bold mt-1" style={{ color: accentColor }}>
+                  {depositConfig.amount} {depositConfig.currency}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Requis pour confirmer votre réservation</p>
+              </div>
+              {paypalError && <p className="text-red-500 text-sm text-center">{paypalError}</p>}
+              {submitting && <p className="text-sm text-gray-500 text-center">Validation du paiement…</p>}
+              <div id="paypal-buttons" />
+              {!paypalReady && !paypalError && (
+                <p className="text-xs text-gray-400 text-center animate-pulse">Chargement de PayPal…</p>
+              )}
+            </div>
           )}
         </div>
       )}

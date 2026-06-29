@@ -468,4 +468,34 @@ export const api = {
       return r.json();
     });
   },
+
+  // PayPal public endpoints (no auth)
+  publicCreatePaypalOrder: (tenantSlug: string, body: object) => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    return fetch(`${apiUrl}/api/v1/booking/${tenantSlug}/paypal-order`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(async (r) => {
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail ?? `HTTP ${r.status}`); }
+      return r.json() as Promise<{ order_id: string; approve_url: string }>;
+    });
+  },
+  publicCapturePaypalAndBook: (tenantSlug: string, body: object) => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    return fetch(`${apiUrl}/api/v1/booking/${tenantSlug}/paypal-capture`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(async (r) => {
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail ?? `HTTP ${r.status}`); }
+      return r.json();
+    });
+  },
+
+  // Booking config (questions + dépôt PayPal) — tenant authentifié
+  getBookingConfig: (siteId: string) =>
+    apiFetch<{ booking_questions: any[]; deposit: any; paypal_configured: boolean }>(`/api/v1/sites/${siteId}/booking-config`),
+  updateBookingConfig: (siteId: string, body: object) =>
+    apiFetch(`/api/v1/sites/${siteId}/booking-config`, { method: "PATCH", body: JSON.stringify(body) }),
 };

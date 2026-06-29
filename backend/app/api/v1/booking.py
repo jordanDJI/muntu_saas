@@ -8,6 +8,7 @@ from calendar import monthrange
 from datetime import datetime, timedelta, timezone, time as dtime, date
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel
 from app.core.supabase import get_supabase_admin
 from app.middleware.rate_limit import check_rate
 from app.models.calendar import PublicBookIn
@@ -498,6 +499,8 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
     }
     if body.message and body.message.strip():
         appt_row["notes"] = body.message.strip()
+    if body.custom_answers:
+        appt_row["custom_answers"] = body.custom_answers
 
     appt = sb.table("appointment").insert(appt_row).execute().data[0]
 
@@ -600,3 +603,168 @@ def _notify_tenant_pending(sb, tenant_id: str, first_name: str, last_name: str,
     if cfg.get("telegram_bot_token") and cfg.get("telegram_notify_chat_id"):
         from app.services.telegram import send_message
         send_message(cfg["telegram_bot_token"], cfg["telegram_notify_chat_id"], msg)
+
+
+# ── PayPal deposit endpoints ──────────────────────────────────────────────────
+
+class _PaypalOrderIn(BaseModel):
+    """Corps de la requête pour créer un order PayPal avant la réservation."""
+    amount: float
+    currency: str = "EUR"
+    description: str = "Acompte réservation"
+
+
+class _PaypalCaptureIn(PublicBookIn):
+    """Corps de la requête pour capturer un paiement et créer le RDV en même temps."""
+    paypal_order_id: str
+
+
+@router.post("/{tenant_slug}/paypal-order", status_code=201)
+async def create_paypal_order(tenant_slug: str, body: _PaypalOrderIn, request: Request):
+    """
+    Crée un order PayPal côté backend.
+    Retourne { order_id, approve_url } — le frontend affiche les boutons PayPal avec order_id.
+    Le dépôt doit être activé (site_style.deposit.enabled = true) et les credentials PayPal configurés.
+    """
+    check_rate(request, "paypal_order", max_calls=10, window_seconds=300)
+    sb = get_supabase_admin()
+    tenant, _ = _get_tenant_and_calendar(sb, tenant_slug)
+
+    site_res = (
+        sb.table("site")
+        .select("site_style, paypal_client_secret")
+        .eq("tenant_id", tenant["id"])
+        .execute()
+    )
+    site = (site_res.data or [{}])[0]
+    style = site.get("site_style") or {}
+    deposit = style.get("deposit") or {}
+
+    if not deposit.get("enabled"):
+        raise HTTPException(status_code=400, detail="Le dépôt PayPal n'est pas activé pour ce professionnel.")
+
+    client_id = deposit.get("paypal_client_id", "")
+    client_secret = site.get("paypal_client_secret", "")
+    sandbox = bool(deposit.get("sandbox", False))
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=400, detail="Credentials PayPal non configurés.")
+
+    from app.services.paypal import create_order
+    try:
+        result = create_order(
+            client_id=client_id,
+            client_secret=client_secret,
+            amount=body.amount,
+            currency=body.currency,
+            description=body.description,
+            sandbox=sandbox,
+        )
+    except Exception as exc:
+        logger.error("PayPal create_order tenant %s : %s", tenant["id"], exc)
+        raise HTTPException(status_code=502, detail="Erreur PayPal lors de la création de l'order.")
+
+    return result
+
+
+@router.post("/{tenant_slug}/paypal-capture", status_code=201)
+async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, request: Request):
+    """
+    Capture le paiement PayPal puis crée le RDV (statut pending, deposit_status paid).
+    Si la capture échoue, le RDV n'est PAS créé.
+    """
+    check_rate(request, "paypal_capture", max_calls=5, window_seconds=300)
+    sb = get_supabase_admin()
+    tenant, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
+
+    # Bloquer les emails de l'équipe
+    if body.email and body.email.strip().lower() in _get_team_emails(sb, tenant["id"]):
+        raise HTTPException(status_code=403, detail=_TEAM_EMAIL_ERROR)
+
+    site_res = (
+        sb.table("site")
+        .select("site_style, paypal_client_secret")
+        .eq("tenant_id", tenant["id"])
+        .execute()
+    )
+    site = (site_res.data or [{}])[0]
+    style = site.get("site_style") or {}
+    deposit = style.get("deposit") or {}
+    client_id = deposit.get("paypal_client_id", "")
+    client_secret = site.get("paypal_client_secret", "")
+    sandbox = bool(deposit.get("sandbox", False))
+
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=400, detail="Credentials PayPal non configurés.")
+
+    # 1. Capturer le paiement
+    from app.services.paypal import capture_order
+    try:
+        payment = capture_order(client_id, client_secret, body.paypal_order_id, sandbox=sandbox)
+    except Exception as exc:
+        logger.error("PayPal capture_order %s tenant %s : %s", body.paypal_order_id, tenant["id"], exc)
+        raise HTTPException(status_code=402, detail="Paiement PayPal non complété. Veuillez réessayer.")
+
+    # 2. Trouver ou créer le contact
+    contact_res = (
+        sb.table("contact")
+        .select("id")
+        .eq("tenant_id", tenant["id"])
+        .eq("email", body.email)
+        .execute()
+    )
+    if contact_res.data:
+        contact_id = contact_res.data[0]["id"]
+    else:
+        new_contact = sb.table("contact").insert({
+            "tenant_id": tenant["id"],
+            "first_name": body.first_name,
+            "last_name": body.last_name,
+            "email": body.email,
+            "phone": body.phone,
+            "contact_type": body.contact_type,
+        }).execute().data[0]
+        contact_id = new_contact["id"]
+
+    ensure_lead(sb, tenant["id"], contact_id, "website", status="scheduled",
+                request_type="b2c_appointment", notes=body.message or None)
+
+    # 3. Créer le RDV
+    if not body.scheduled_at:
+        raise HTTPException(status_code=400, detail="scheduled_at requis")
+
+    tz = _tenant_tz(tenant)
+    if body.scheduled_at.tzinfo is not None:
+        scheduled_at_store = body.scheduled_at.astimezone(tz).replace(tzinfo=None)
+    else:
+        scheduled_at_store = body.scheduled_at
+    end_at = scheduled_at_store + timedelta(minutes=body.slot_duration_min)
+
+    appt_row: dict = {
+        "calendar_id": cal_id,
+        "contact_id": contact_id,
+        "service_offer_id": str(body.service_offer_id) if body.service_offer_id else None,
+        "scheduled_at": scheduled_at_store.isoformat(),
+        "end_at": end_at.isoformat(),
+        "status": "pending",
+        "type": "b2c_appointment",
+        "audience_type": "b2c",
+        "party_size": body.party_size,
+        "deposit_status": "paid",
+        "deposit_amount": payment["amount"],
+        "deposit_paypal_order_id": body.paypal_order_id,
+    }
+    if body.message and body.message.strip():
+        appt_row["notes"] = body.message.strip()
+    if body.custom_answers:
+        appt_row["custom_answers"] = body.custom_answers
+
+    appt = sb.table("appointment").insert(appt_row).execute().data[0]
+
+    _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name,
+                           scheduled_at_store.isoformat(), message=body.message)
+    _email_tenant_pending(sb, tenant, {"first_name": body.first_name, "last_name": body.last_name,
+                                        "email": body.email, "phone": body.phone}, appt,
+                          message=body.message)
+    _email_client_booking_received(tenant, body.first_name, body.last_name, body.email, appt)
+
+    return {"type": "appointment", "id": appt["id"], "deposit_status": "paid", "deposit_amount": payment["amount"]}

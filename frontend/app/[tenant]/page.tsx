@@ -663,6 +663,8 @@ export default async function TenantSitePage({
                 accentColor={colors.accent}
                 offers={(site.service_offer ?? []).map((o: any) => ({ id: o.id, name: o.name }))}
                 vocab={sectorVocab}
+                bookingQuestions={(site.site_style?.booking_questions ?? []) as any[]}
+                depositConfig={site.site_style?.deposit}
               />
             </div>
           </div>

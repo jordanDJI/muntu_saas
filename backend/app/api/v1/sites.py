@@ -161,6 +161,68 @@ async def replace_testimonials(site_id: UUID, testimonials: list[TestimonialIn],
     return {"replaced": len(testimonials)}
 
 
+# ── Booking config (questions + dépôt PayPal) ─────────────────────────────────
+
+from pydantic import BaseModel
+from typing import Optional, Any
+
+
+class BookingConfigIn(BaseModel):
+    booking_questions: Optional[list[dict]] = None
+    deposit: Optional[dict] = None
+    paypal_client_secret: Optional[str] = None
+
+
+@router.get("/{site_id}/booking-config")
+async def get_booking_config(site_id: UUID, tenant_id: str = Depends(get_current_tenant)):
+    sb = get_supabase()
+    _assert_owner(sb, str(site_id), tenant_id)
+    res = sb.table("site").select("site_style, paypal_client_secret").eq("id", str(site_id)).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+    style = res.data.get("site_style") or {}
+    return {
+        "booking_questions": style.get("booking_questions") or [],
+        "deposit": style.get("deposit") or {},
+        "paypal_configured": bool(res.data.get("paypal_client_secret")),
+    }
+
+
+@router.patch("/{site_id}/booking-config")
+async def update_booking_config(site_id: UUID, body: BookingConfigIn, tenant_id: str = Depends(get_current_tenant)):
+    """
+    Met à jour la config questions + dépôt PayPal du site.
+    booking_questions et deposit sont mergés dans site_style.
+    paypal_client_secret est stocké dans une colonne séparée (jamais exposé publiquement).
+    """
+    sb = get_supabase()
+    _assert_owner(sb, str(site_id), tenant_id)
+
+    site_res = sb.table("site").select("site_style").eq("id", str(site_id)).single().execute()
+    current_style = (site_res.data or {}).get("site_style") or {}
+
+    updates: dict[str, Any] = {}
+
+    if body.booking_questions is not None:
+        current_style["booking_questions"] = body.booking_questions
+        updates["site_style"] = current_style
+
+    if body.deposit is not None:
+        existing_deposit = current_style.get("deposit") or {}
+        existing_deposit.update(body.deposit)
+        current_style["deposit"] = existing_deposit
+        updates["site_style"] = current_style
+
+    if body.paypal_client_secret is not None:
+        updates["paypal_client_secret"] = body.paypal_client_secret or None
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="Aucune donnée à mettre à jour")
+
+    sb.table("site").update(updates).eq("id", str(site_id)).execute()
+    return {"ok": True}
+
+
 # ── Helper ────────────────────────────────────────────────────────────────────
 
 def _assert_owner(sb, site_id: str, tenant_id: str):

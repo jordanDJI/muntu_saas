@@ -841,6 +841,242 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
   );
 }
 
+// ── FormPanel (questions personnalisées + acompte PayPal) ─────────────────────
+
+type BookingQuestion = {
+  id: string;
+  label: string;
+  type: "text" | "textarea" | "select";
+  options?: string[];
+  required: boolean;
+};
+
+type DepositConfig = {
+  enabled: boolean;
+  amount: number;
+  currency: string;
+  paypal_client_id: string;
+  sandbox?: boolean;
+};
+
+function FormPanel({ siteId, onClose }: { siteId: string; onClose: () => void }) {
+  const { t } = useLanguage();
+  const [questions, setQuestions] = useState<BookingQuestion[]>([]);
+  const [deposit, setDeposit]     = useState<DepositConfig>({ enabled: false, amount: 25, currency: "EUR", paypal_client_id: "", sandbox: false });
+  const [paypalSecret, setPaypalSecret] = useState("");
+  const [paypalConfigured, setPaypalConfigured] = useState(false);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [saved, setSaved]         = useState(false);
+  const [tab, setTab]             = useState<"questions" | "deposit">("questions");
+
+  useEffect(() => {
+    api.getBookingConfig(siteId).then(cfg => {
+      setQuestions(cfg.booking_questions || []);
+      if (cfg.deposit && Object.keys(cfg.deposit).length) {
+        setDeposit({ enabled: false, amount: 25, currency: "EUR", paypal_client_id: "", ...cfg.deposit });
+      }
+      setPaypalConfigured(cfg.paypal_configured || false);
+    }).catch(console.error).finally(() => setLoading(false));
+  }, [siteId]);
+
+  const addQuestion = () =>
+    setQuestions(q => [...q, { id: `q_${Date.now()}`, label: "", type: "text", required: false }]);
+
+  const removeQuestion = (id: string) =>
+    setQuestions(q => q.filter(x => x.id !== id));
+
+  const updateQuestion = (id: string, patch: Partial<BookingQuestion>) =>
+    setQuestions(q => q.map(x => x.id === id ? { ...x, ...patch } : x));
+
+  const save = async () => {
+    setSaving(true); setSaved(false);
+    try {
+      const cleanedQuestions = questions.map(q => ({
+        ...q,
+        options: q.options?.filter(o => o.trim() !== ""),
+      }));
+      const body: Record<string, any> = { booking_questions: cleanedQuestions, deposit };
+      if (paypalSecret.trim()) body.paypal_client_secret = paypalSecret.trim();
+      await api.updateBookingConfig(siteId, body);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+      if (paypalSecret.trim()) { setPaypalConfigured(true); setPaypalSecret(""); }
+    } catch(e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex justify-end">
+      <div className="bg-white w-full max-w-md h-full flex flex-col shadow-2xl">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-bold">{t.bq_panel_title}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b">
+          {(["questions", "deposit"] as const).map(tab_ => (
+            <button key={tab_} onClick={() => setTab(tab_)}
+              className={`flex-1 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === tab_ ? "border-primary-600 text-primary-700" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+              {tab_ === "questions" ? "📋 " + t.bq_panel_title : "💳 " + t.dep_title}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-auto p-4">
+          {loading ? (
+            <p className="text-sm text-gray-400 text-center py-8">Chargement…</p>
+          ) : tab === "questions" ? (
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">{t.bq_panel_subtitle}</p>
+
+              {questions.length === 0 && (
+                <p className="text-sm text-gray-400 text-center py-4">{t.bq_empty}</p>
+              )}
+
+              {questions.map((q, i) => (
+                <div key={q.id} className="border rounded-xl p-3 space-y-2 bg-gray-50">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 font-medium w-5 shrink-0">{i + 1}</span>
+                    <input
+                      value={q.label}
+                      onChange={e => updateQuestion(q.id, { label: e.target.value })}
+                      placeholder={t.bq_question_label}
+                      className="flex-1 border rounded-lg px-2.5 py-1.5 text-sm"
+                    />
+                    <button onClick={() => removeQuestion(q.id)} className="text-red-400 hover:text-red-600 text-xs shrink-0">
+                      {t.bq_delete}
+                    </button>
+                  </div>
+                  <div className="flex gap-2 items-center pl-7">
+                    <select
+                      value={q.type}
+                      onChange={e => updateQuestion(q.id, { type: e.target.value as any, options: undefined })}
+                      className="border rounded-lg px-2 py-1 text-xs bg-white">
+                      <option value="text">{t.bq_type_text}</option>
+                      <option value="textarea">{t.bq_type_textarea}</option>
+                      <option value="select">{t.bq_type_select}</option>
+                    </select>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                      <input type="checkbox" checked={q.required}
+                        onChange={e => updateQuestion(q.id, { required: e.target.checked })}
+                        className="rounded border-gray-300 text-primary-600" />
+                      {t.bq_required}
+                    </label>
+                  </div>
+                  {q.type === "select" && (
+                    <div className="pl-7">
+                      <label className="text-xs text-gray-500 block mb-1">{t.bq_options_label}</label>
+                      <textarea
+                        value={(q.options || []).join("\n")}
+                        onChange={e => updateQuestion(q.id, { options: e.target.value.split("\n") })}
+                        rows={3}
+                        className="w-full border rounded-lg px-2.5 py-1.5 text-xs resize-none"
+                        placeholder="Option A&#10;Option B&#10;Option C"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              <button onClick={addQuestion}
+                className="w-full border-2 border-dashed border-primary-300 text-primary-600 py-2 rounded-xl text-sm hover:bg-primary-50">
+                {t.bq_add}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-xs text-gray-500">{t.dep_subtitle}</p>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <button onClick={() => setDeposit(d => ({ ...d, enabled: !d.enabled }))}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${deposit.enabled ? "bg-primary-600" : "bg-gray-300"}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${deposit.enabled ? "left-5" : "left-0.5"}`} />
+                </button>
+                <span className="text-sm font-medium">{t.dep_enable}</span>
+              </label>
+
+              {deposit.enabled && (
+                <div className="space-y-3 border rounded-xl p-3 bg-gray-50">
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs font-medium text-gray-500 block mb-1">{t.dep_amount}</label>
+                      <input type="number" min={1} step={0.5}
+                        value={deposit.amount}
+                        onChange={e => setDeposit(d => ({ ...d, amount: Number(e.target.value) }))}
+                        className="w-full border rounded-lg px-2.5 py-1.5 text-sm" />
+                    </div>
+                    <div className="w-20">
+                      <label className="text-xs font-medium text-gray-500 block mb-1">{t.dep_currency}</label>
+                      <select value={deposit.currency} onChange={e => setDeposit(d => ({ ...d, currency: e.target.value }))}
+                        className="w-full border rounded-lg px-2 py-1.5 text-sm bg-white">
+                        <option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">{t.dep_paypal_id}</label>
+                    <input
+                      value={deposit.paypal_client_id}
+                      onChange={e => setDeposit(d => ({ ...d, paypal_client_id: e.target.value.trim() }))}
+                      placeholder="AZxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      className={`w-full border rounded-lg px-2.5 py-1.5 text-sm font-mono ${deposit.paypal_client_id.includes("@") ? "border-red-400 bg-red-50" : ""}`}
+                    />
+                    {deposit.paypal_client_id.includes("@") && (
+                      <p className="text-xs text-red-500 mt-0.5">⚠️ Ceci ressemble à une adresse email. Le Client ID PayPal est une longue chaîne alphanumérique (ex : AZxxxxx…), disponible sur developer.paypal.com → My Apps & Credentials.</p>
+                    )}
+                    {!deposit.paypal_client_id.includes("@") && (
+                      <p className="text-xs text-gray-400 mt-0.5">{t.dep_paypal_id_hint}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">{t.dep_paypal_secret}</label>
+                    {paypalConfigured && !paypalSecret && (
+                      <p className="text-xs text-green-600 mb-1">✓ {t.dep_paypal_configured}</p>
+                    )}
+                    <input type="password"
+                      value={paypalSecret}
+                      onChange={e => setPaypalSecret(e.target.value)}
+                      placeholder={t.dep_paypal_secret_ph}
+                      className="w-full border rounded-lg px-2.5 py-1.5 text-sm font-mono"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={!!deposit.sandbox}
+                      onChange={e => setDeposit(d => ({ ...d, sandbox: e.target.checked }))}
+                      className="rounded border-gray-300 text-amber-500" />
+                    <span className="text-xs text-amber-700 font-medium">Mode Sandbox (test) — désactiver en production</span>
+                  </label>
+
+                  <details className="text-xs text-gray-500">
+                    <summary className="cursor-pointer hover:text-gray-700 font-medium">{t.dep_how_title}</summary>
+                    <ol className="mt-2 space-y-1 pl-2">
+                      <li>{t.dep_how_1}</li>
+                      <li>{t.dep_how_2}</li>
+                      <li>{t.dep_how_3}</li>
+                    </ol>
+                  </details>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t">
+          <button onClick={save} disabled={saving}
+            className="w-full bg-primary-600 text-white py-2 rounded-lg font-semibold hover:bg-primary-700 disabled:opacity-50">
+            {saved ? t.bq_saved : saving ? "Enregistrement…" : tab === "questions" ? t.bq_save : t.dep_save}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page principale ───────────────────────────────────────────────────────────
 
 export default function AppointmentsPage() {
@@ -854,6 +1090,8 @@ export default function AppointmentsPage() {
   const [offers, setOffers]             = useState<{id:string;name:string}[]>([]);
   const [showAvail, setShowAvail]       = useState(false);
   const [showBlock, setShowBlock]       = useState(false);
+  const [showForm, setShowForm]         = useState(false);
+  const [formSiteId, setFormSiteId]     = useState<string | null>(null);
   const [selectedAppt, setSelectedAppt] = useState<Appointment|null>(null);
   const [creating, setCreating]         = useState<{day:Date;startH:number;startM:number}|null>(null);
   const [allowPast, setAllowPast]       = useState(false);
@@ -865,6 +1103,7 @@ export default function AppointmentsPage() {
     Promise.all([api.getAvailability(), api.getBlocked(), api.getSites()]).then(async ([avail, blk, sites]) => {
       setAvailability(avail); setBlocked(blk);
       if (sites[0]) {
+        setFormSiteId(sites[0].id);
         const off = await api.getSiteOffers(sites[0].id);
         setOffers(off.map((o: any) => ({ id: o.id, name: o.name })));
       }
@@ -1097,6 +1336,10 @@ export default function AppointmentsPage() {
           className="text-xs sm:text-sm px-2.5 py-1.5 border border-red-300 text-red-500 rounded-lg hover:bg-red-50 shrink-0">
           🚫 <span className="hidden sm:inline">Bloquer</span>
         </button>
+        <button onClick={()=>setShowForm(true)} disabled={!formSiteId}
+          className="text-xs sm:text-sm px-2.5 py-1.5 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 shrink-0 disabled:opacity-40">
+          📋 <span className="hidden sm:inline">Formulaire</span>
+        </button>
 
         {/* Ligne 2 : vue + navigation */}
         <div className="w-full flex items-center gap-2 flex-wrap">
@@ -1197,6 +1440,9 @@ export default function AppointmentsPage() {
           }}
           onClose={() => setShowBlock(false)}
         />
+      )}
+      {showForm && formSiteId && (
+        <FormPanel siteId={formSiteId} onClose={() => setShowForm(false)} />
       )}
       {creating && (
         <NewApptCard

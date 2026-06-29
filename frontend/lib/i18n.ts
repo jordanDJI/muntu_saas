@@ -744,6 +744,48 @@ const fr = {
   team_perm_agents:         "Agents IA",
   team_perm_all:            "Accès complet",
   team_remove_confirm:      "Retirer ce membre de l'équipe ?",
+
+  // ── Questions personnalisées RDV ──────────────────────────────────────────
+  bq_panel_title:        "Formulaire de réservation",
+  bq_panel_subtitle:     "Questions posées aux clients lors de la prise de RDV",
+  bq_add:                "+ Ajouter une question",
+  bq_question_label:     "Intitulé de la question",
+  bq_question_type:      "Type de réponse",
+  bq_type_text:          "Texte court",
+  bq_type_textarea:      "Texte long",
+  bq_type_select:        "Choix unique (liste)",
+  bq_options_label:      "Options (une par ligne)",
+  bq_required:           "Obligatoire",
+  bq_save:               "Enregistrer les questions",
+  bq_saved:              "Questions enregistrées ✓",
+  bq_delete:             "Supprimer",
+  bq_empty:              "Aucune question — cliquez sur « + Ajouter »",
+
+  // ── Dépôt PayPal ─────────────────────────────────────────────────────────
+  dep_title:             "Acompte à la réservation",
+  dep_subtitle:          "Demandez un acompte PayPal pour sécuriser vos rendez-vous",
+  dep_enable:            "Activer l'acompte",
+  dep_amount:            "Montant de l'acompte",
+  dep_currency:          "Devise",
+  dep_paypal_id:         "PayPal Client ID",
+  dep_paypal_id_hint:    "Depuis developer.paypal.com → Mes applications → Live",
+  dep_paypal_secret:     "PayPal Client Secret",
+  dep_paypal_secret_ph:  "Entrez votre Client Secret…",
+  dep_paypal_configured: "Secret PayPal configuré ✓",
+  dep_save:              "Enregistrer la config PayPal",
+  dep_saved:             "Config PayPal enregistrée ✓",
+  dep_how_title:         "Comment obtenir vos credentials PayPal ?",
+  dep_how_1:             "1. Connectez-vous sur developer.paypal.com",
+  dep_how_2:             "2. Mes applications → Créer une app (Live)",
+  dep_how_3:             "3. Copiez le Client ID et le Secret ci-dessus",
+
+  // ── Formulaire public (côté client) ──────────────────────────────────────
+  book_questions_title:  "Quelques questions",
+  book_paypal_title:     "Acompte requis",
+  book_paypal_desc:      "Un acompte de {amount} {currency} est demandé pour confirmer votre RDV.",
+  book_paypal_pay:       "Payer l'acompte via PayPal",
+  book_paypal_paid:      "Acompte payé ✓ — votre RDV est enregistré.",
+  book_paypal_error:     "Paiement non complété. Veuillez réessayer.",
 };
 
 const en: T = {
@@ -1453,6 +1495,48 @@ const en: T = {
   team_perm_agents:         "AI Agents",
   team_perm_all:            "Full access",
   team_remove_confirm:      "Remove this member from the team?",
+
+  // ── Custom booking questions ──────────────────────────────────────────────
+  bq_panel_title:        "Booking form",
+  bq_panel_subtitle:     "Questions asked to clients when booking an appointment",
+  bq_add:                "+ Add a question",
+  bq_question_label:     "Question label",
+  bq_question_type:      "Answer type",
+  bq_type_text:          "Short text",
+  bq_type_textarea:      "Long text",
+  bq_type_select:        "Single choice (dropdown)",
+  bq_options_label:      "Options (one per line)",
+  bq_required:           "Required",
+  bq_save:               "Save questions",
+  bq_saved:              "Questions saved ✓",
+  bq_delete:             "Delete",
+  bq_empty:              "No questions — click « + Add »",
+
+  // ── PayPal deposit ────────────────────────────────────────────────────────
+  dep_title:             "Deposit at booking",
+  dep_subtitle:          "Require a PayPal deposit to secure appointments",
+  dep_enable:            "Enable deposit",
+  dep_amount:            "Deposit amount",
+  dep_currency:          "Currency",
+  dep_paypal_id:         "PayPal Client ID",
+  dep_paypal_id_hint:    "From developer.paypal.com → My apps → Live",
+  dep_paypal_secret:     "PayPal Client Secret",
+  dep_paypal_secret_ph:  "Enter your Client Secret…",
+  dep_paypal_configured: "PayPal Secret configured ✓",
+  dep_save:              "Save PayPal config",
+  dep_saved:             "PayPal config saved ✓",
+  dep_how_title:         "How to get your PayPal credentials?",
+  dep_how_1:             "1. Log in at developer.paypal.com",
+  dep_how_2:             "2. My Apps → Create app (Live)",
+  dep_how_3:             "3. Copy the Client ID and Secret above",
+
+  // ── Public booking form (client-side) ────────────────────────────────────
+  book_questions_title:  "A few questions",
+  book_paypal_title:     "Deposit required",
+  book_paypal_desc:      "A deposit of {amount} {currency} is required to confirm your appointment.",
+  book_paypal_pay:       "Pay deposit via PayPal",
+  book_paypal_paid:      "Deposit paid ✓ — your appointment is confirmed.",
+  book_paypal_error:     "Payment not completed. Please try again.",
 };
 
 const de: T = {
@@ -2162,6 +2246,48 @@ const de: T = {
   team_perm_agents:         "KI-Agenten",
   team_perm_all:            "Vollzugriff",
   team_remove_confirm:      "Dieses Mitglied aus dem Team entfernen?",
+
+  // ── Benutzerdefinierte Buchungsfragen ─────────────────────────────────────
+  bq_panel_title:        "Buchungsformular",
+  bq_panel_subtitle:     "Fragen an Kunden bei der Terminbuchung",
+  bq_add:                "+ Frage hinzufügen",
+  bq_question_label:     "Fragentext",
+  bq_question_type:      "Antworttyp",
+  bq_type_text:          "Kurztext",
+  bq_type_textarea:      "Langtext",
+  bq_type_select:        "Einzelauswahl (Dropdown)",
+  bq_options_label:      "Optionen (eine pro Zeile)",
+  bq_required:           "Pflichtfeld",
+  bq_save:               "Fragen speichern",
+  bq_saved:              "Fragen gespeichert ✓",
+  bq_delete:             "Löschen",
+  bq_empty:              "Keine Fragen — klicken Sie auf « + Hinzufügen »",
+
+  // ── PayPal-Anzahlung ──────────────────────────────────────────────────────
+  dep_title:             "Anzahlung bei Buchung",
+  dep_subtitle:          "Fordern Sie eine PayPal-Anzahlung zur Terminsicherung an",
+  dep_enable:            "Anzahlung aktivieren",
+  dep_amount:            "Anzahlungsbetrag",
+  dep_currency:          "Währung",
+  dep_paypal_id:         "PayPal Client-ID",
+  dep_paypal_id_hint:    "Von developer.paypal.com → Meine Apps → Live",
+  dep_paypal_secret:     "PayPal Client Secret",
+  dep_paypal_secret_ph:  "Ihr Client Secret eingeben…",
+  dep_paypal_configured: "PayPal Secret konfiguriert ✓",
+  dep_save:              "PayPal-Konfiguration speichern",
+  dep_saved:             "PayPal-Konfiguration gespeichert ✓",
+  dep_how_title:         "Wie erhalte ich meine PayPal-Zugangsdaten?",
+  dep_how_1:             "1. Anmelden auf developer.paypal.com",
+  dep_how_2:             "2. Meine Apps → App erstellen (Live)",
+  dep_how_3:             "3. Client-ID und Secret oben einfügen",
+
+  // ── Öffentliches Buchungsformular (Kundenseite) ───────────────────────────
+  book_questions_title:  "Einige Fragen",
+  book_paypal_title:     "Anzahlung erforderlich",
+  book_paypal_desc:      "Eine Anzahlung von {amount} {currency} ist erforderlich, um Ihren Termin zu bestätigen.",
+  book_paypal_pay:       "Anzahlung über PayPal bezahlen",
+  book_paypal_paid:      "Anzahlung bezahlt ✓ — Ihr Termin ist bestätigt.",
+  book_paypal_error:     "Zahlung nicht abgeschlossen. Bitte erneut versuchen.",
 };
 
 const nl: T = {
@@ -2871,6 +2997,48 @@ const nl: T = {
   team_perm_agents:         "AI-agenten",
   team_perm_all:            "Volledige toegang",
   team_remove_confirm:      "Dit lid uit het team verwijderen?",
+
+  // ── Aangepaste boekingsvragen ─────────────────────────────────────────────
+  bq_panel_title:        "Boekingsformulier",
+  bq_panel_subtitle:     "Vragen aan klanten bij het boeken van een afspraak",
+  bq_add:                "+ Vraag toevoegen",
+  bq_question_label:     "Vraagtekst",
+  bq_question_type:      "Type antwoord",
+  bq_type_text:          "Korte tekst",
+  bq_type_textarea:      "Lange tekst",
+  bq_type_select:        "Enkelvoudige keuze (dropdown)",
+  bq_options_label:      "Opties (één per regel)",
+  bq_required:           "Verplicht",
+  bq_save:               "Vragen opslaan",
+  bq_saved:              "Vragen opgeslagen ✓",
+  bq_delete:             "Verwijderen",
+  bq_empty:              "Geen vragen — klik op « + Toevoegen »",
+
+  // ── PayPal-aanbetaling ────────────────────────────────────────────────────
+  dep_title:             "Aanbetaling bij boeking",
+  dep_subtitle:          "Vraag een PayPal-aanbetaling om afspraken te bevestigen",
+  dep_enable:            "Aanbetaling inschakelen",
+  dep_amount:            "Aanbetalingsbedrag",
+  dep_currency:          "Valuta",
+  dep_paypal_id:         "PayPal Client ID",
+  dep_paypal_id_hint:    "Van developer.paypal.com → Mijn apps → Live",
+  dep_paypal_secret:     "PayPal Client Secret",
+  dep_paypal_secret_ph:  "Voer uw Client Secret in…",
+  dep_paypal_configured: "PayPal Secret geconfigureerd ✓",
+  dep_save:              "PayPal-config opslaan",
+  dep_saved:             "PayPal-config opgeslagen ✓",
+  dep_how_title:         "Hoe krijg ik mijn PayPal-gegevens?",
+  dep_how_1:             "1. Inloggen op developer.paypal.com",
+  dep_how_2:             "2. Mijn apps → App aanmaken (Live)",
+  dep_how_3:             "3. Client ID en Secret hierboven invullen",
+
+  // ── Openbaar boekingsformulier (klantenkant) ──────────────────────────────
+  book_questions_title:  "Enkele vragen",
+  book_paypal_title:     "Aanbetaling vereist",
+  book_paypal_desc:      "Een aanbetaling van {amount} {currency} is vereist om uw afspraak te bevestigen.",
+  book_paypal_pay:       "Aanbetaling betalen via PayPal",
+  book_paypal_paid:      "Aanbetaling betaald ✓ — uw afspraak is bevestigd.",
+  book_paypal_error:     "Betaling niet voltooid. Probeer het opnieuw.",
 };
 
 export const translations: Record<Lang, T> = { fr, en, de, nl };
