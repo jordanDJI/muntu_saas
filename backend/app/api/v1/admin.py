@@ -1,5 +1,9 @@
+import logging
 from typing import Any, Dict, Optional
 from datetime import datetime, timedelta, timezone
+import stripe as stripe_lib
+
+logger = logging.getLogger(__name__)
 
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -60,6 +64,25 @@ def _parse_dt(s: str) -> datetime:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _get_owner_info(supabase, tenant_id: str) -> dict:
+    """Retourne {email, name, tenant_name, country} du propriétaire d'un tenant."""
+    import logging as _logging
+    try:
+        tenant = supabase.table("tenant").select("name, country").eq("id", tenant_id).single().execute().data or {}
+        owner_m = supabase.table("membership").select("user_id").eq("tenant_id", tenant_id).eq("role", "owner").limit(1).execute()
+        if not owner_m.data:
+            return {}
+        user_id = owner_m.data[0]["user_id"]
+        user_res = supabase.auth.admin.get_user_by_id(user_id)
+        user = user_res.user if user_res else None
+        email = user.email if user else None
+        name = ((user.user_metadata or {}).get("full_name") or (user.user_metadata or {}).get("name") or "") if user else ""
+        return {"email": email, "name": name, "tenant_name": tenant.get("name", ""), "country": tenant.get("country", "BE")}
+    except Exception as exc:
+        _logging.getLogger(__name__).warning("_get_owner_info failed for tenant %s: %s", tenant_id, exc)
+        return {}
 
 
 def _compute_status(tenant: dict, sub_map: dict, now: datetime, included_set: set | None = None) -> str:
@@ -262,9 +285,9 @@ async def get_metrics(admin=Depends(viewer_or_above)):
     logo_pending   = sb.table("logo_request").select("id", count="exact").eq("status", "pending").execute().count or 0
     design_pending = sb.table("design_request").select("id", count="exact").eq("status", "pending").execute().count or 0
 
-    # Relances CRM en retard (due_date dépassée, statut pending)
+    # Relances CRM en retard (due_date dépassée, non terminées)
     reminders_overdue = sb.table("contact_reminder").select("id", count="exact") \
-        .lt("due_date", now.isoformat()).eq("status", "pending").execute().count or 0
+        .lt("due_date", now.date().isoformat()).eq("done", False).execute().count or 0
 
     # Churn rate (essai expiré sans conversion / total des tenants arrivés à terme)
     expired_or_paid = paid + expired
@@ -1281,3 +1304,439 @@ async def unpublish_site(tenant_id: str, admin=Depends(support_or_above)):
     sb.table("site").update({"status": "draft"}).eq("tenant_id", tenant_id).execute()
     _log(admin, "unpublish_site", tenant_id, tenant["name"])
     return {"ok": True}
+
+
+# ── Facturation SaaS ───────────────────────────────────────────────────────────
+
+stripe_lib.api_key = settings.stripe_secret_key.strip()
+
+
+@router.get("/billing")
+async def get_billing_overview(admin=Depends(get_current_admin)):
+    """Vue d'ensemble de la facturation Klientys : MRR, ARR, past_due, nouveaux, churnés."""
+    sb = get_supabase_admin()
+    now = datetime.now(timezone.utc)
+    thirty_ago = (now - timedelta(days=30)).isoformat()
+
+    # Plans — lookup dict {id: {name, price_eur}}
+    plans_raw = sb.table("plan_subscription").select("id, name, price_eur").execute().data or []
+    plan_map: dict[str, dict] = {p["id"]: p for p in plans_raw}
+
+    # Toutes les subscriptions (sans FK join — plus compatible)
+    # Colonnes réelles : tenant_id, plan_id, stripe_subscription_id, status, start_date, expires_at
+    all_subs = sb.table("subscription").select(
+        "tenant_id, status, start_date, plan_id, stripe_subscription_id"
+    ).execute().data or []
+
+    # Enrichir chaque sub avec les infos du plan
+    for s in all_subs:
+        s["_plan"] = plan_map.get(s.get("plan_id") or "", {})
+
+    active_subs  = [s for s in all_subs if s["status"] in ("active", "trialing")]
+    past_due     = [s for s in all_subs if s["status"] == "past_due"]
+    new_subs_30d = [s for s in active_subs if (s.get("start_date") or "") >= thirty_ago]
+    churned_30d  = [s for s in all_subs if s["status"] == "canceled" and (s.get("start_date") or "") >= thirty_ago]
+
+    # MRR
+    mrr = sum((s["_plan"].get("price_eur") or 0) for s in active_subs)
+
+    # Répartition par plan
+    plan_dist: dict[str, dict] = {}
+    for s in active_subs:
+        name  = s["_plan"].get("name") or "Autre"
+        price = s["_plan"].get("price_eur") or 0
+        if name not in plan_dist:
+            plan_dist[name] = {"name": name, "count": 0, "mrr": 0}
+        plan_dist[name]["count"] += 1
+        plan_dist[name]["mrr"] = round(plan_dist[name]["mrr"] + price, 2)
+
+    # Tenant names — bulk fetch pour éviter N+1
+    all_tenant_ids = list({s["tenant_id"] for s in all_subs if s.get("tenant_id")})
+    tenant_name_map: dict[str, str] = {}
+    owner_email_map: dict[str, str] = {}
+    if all_tenant_ids:
+        t_res = sb.table("tenant").select("id, name").in_("id", all_tenant_ids).execute().data or []
+        tenant_name_map = {t["id"]: t["name"] for t in t_res}
+        # Memberships owners
+        m_res = sb.table("membership").select("tenant_id, user_id") \
+            .in_("tenant_id", all_tenant_ids).eq("role", "owner").execute().data or []
+        for m in m_res:
+            try:
+                u = sb.auth.admin.get_user_by_id(m["user_id"])
+                if u and u.user:
+                    owner_email_map[m["tenant_id"]] = u.user.email or ""
+            except Exception:
+                pass
+
+    def _enrich(items: list) -> list:
+        result = []
+        for s in items:
+            t_id = s.get("tenant_id", "")
+            result.append({
+                "tenant_id":    t_id,
+                "tenant_name":  tenant_name_map.get(t_id, ""),
+                "owner_email":  owner_email_map.get(t_id, ""),
+                "plan":         s["_plan"].get("name", ""),
+                "status":       s.get("status", ""),
+                "start_date":   s.get("start_date"),
+                "stripe_subscription_id": s.get("stripe_subscription_id"),
+            })
+        return result
+
+    # ── Stats Stripe temps réel (paiements par statut, 30 derniers jours) ────
+    thirty_ago_ts = int((now - timedelta(days=30)).timestamp())
+    stripe_stats = {
+        "revenue_30d":       0.0,
+        "revenue_onetime_30d": 0.0,
+        "pending_count":     0,
+        "pending_amount":    0.0,
+        "paid_30d_count":    0,
+        "paid_30d_amount":   0.0,
+        "voided_30d":        0,
+        "draft_count":       0,
+    }
+    try:
+        recent_inv = stripe_lib.Invoice.list(limit=100, created={"gte": thirty_ago_ts}).data
+        recent_sess = stripe_lib.checkout.Session.list(limit=100, created={"gte": thirty_ago_ts}).data
+        one_time_sess = [s for s in recent_sess if s.get("mode") == "payment"]
+
+        paid_inv  = [i for i in recent_inv if i["status"] == "paid"]
+        paid_sess = [s for s in one_time_sess if s.get("payment_status") == "paid"]
+        open_inv  = [i for i in recent_inv if i["status"] == "open"]
+        void_inv  = [i for i in recent_inv if i["status"] in ("void", "uncollectible")]
+        draft_inv = [i for i in recent_inv if i["status"] == "draft"]
+        exp_sess  = [s for s in one_time_sess if s.get("status") == "expired"]
+
+        stripe_stats["revenue_30d"]         = round(sum(i.get("amount_paid", 0) for i in paid_inv) / 100 +
+                                                     sum(s.get("amount_total", 0) for s in paid_sess) / 100, 2)
+        stripe_stats["revenue_onetime_30d"] = round(sum(s.get("amount_total", 0) for s in paid_sess) / 100, 2)
+        stripe_stats["pending_count"]       = len(open_inv)
+        stripe_stats["pending_amount"]      = round(sum(i.get("amount_due", 0) for i in open_inv) / 100, 2)
+        stripe_stats["paid_30d_count"]      = len(paid_inv) + len(paid_sess)
+        stripe_stats["paid_30d_amount"]     = stripe_stats["revenue_30d"]
+        stripe_stats["voided_30d"]          = len(void_inv) + len(exp_sess)
+        stripe_stats["draft_count"]         = len(draft_inv)
+    except stripe_lib.error.StripeError as exc:
+        logger.warning("stripe stats failed: %s", exc)
+
+    return {
+        "mrr":              mrr,
+        "arr":              mrr * 12,
+        "active_count":     len(active_subs),
+        "past_due_count":   len(past_due),
+        "churned_30d":      len(churned_30d),
+        "plan_breakdown":   sorted(plan_dist.values(), key=lambda x: -x["mrr"]),
+        "past_due_tenants": _enrich(past_due),
+        "new_subscribers":  _enrich(new_subs_30d),
+        "churned":          _enrich(churned_30d),
+        **stripe_stats,
+    }
+
+
+@router.post("/billing/past-due/{tenant_id}/send-reminder")
+async def billing_send_reminder(tenant_id: str, admin=Depends(get_current_admin)):
+    """Renvoie l'email de paiement échoué au propriétaire du tenant."""
+    sb = get_supabase_admin()
+    owner = _get_owner_info(sb, tenant_id)
+    if not owner.get("email"):
+        raise HTTPException(404, "Email propriétaire introuvable")
+    try:
+        from app.services.email import send_subscription_payment_failed
+        send_subscription_payment_failed(
+            owner_email=owner["email"],
+            owner_name=owner["name"],
+            tenant_name=owner["tenant_name"],
+            country=owner["country"],
+            billing_portal_url=f"{settings.frontend_url}/dashboard/settings?section=abonnement",
+        )
+    except Exception as exc:
+        raise HTTPException(500, f"Erreur envoi email : {exc}")
+    _log(admin, "billing_send_reminder", tenant_id, owner.get("tenant_name"))
+    return {"ok": True}
+
+
+@router.post("/billing/payments/{payment_id}/void")
+async def void_payment(payment_id: str, admin=Depends(get_current_admin)):
+    """Annule (void) une facture Stripe ouverte ou un brouillon."""
+    try:
+        if payment_id.startswith("in_"):
+            inv = stripe_lib.Invoice.retrieve(payment_id)
+            if inv["status"] == "draft":
+                stripe_lib.Invoice.delete(payment_id)
+                action = "deleted"
+            else:
+                stripe_lib.Invoice.void_invoice(payment_id)
+                action = "voided"
+        elif payment_id.startswith("cs_"):
+            stripe_lib.checkout.Session.expire(payment_id)
+            action = "expired"
+        else:
+            raise HTTPException(400, "ID non reconnu")
+    except stripe_lib.error.InvalidRequestError as exc:
+        raise HTTPException(400, str(exc.user_message or exc))
+    except stripe_lib.error.StripeError as exc:
+        raise HTTPException(502, str(exc.user_message or exc))
+    _log(admin, "void_payment", payload={"payment_id": payment_id, "action": action})
+    return {"ok": True, "action": action}
+
+
+@router.post("/billing/payments/{payment_id}/mark-paid")
+async def mark_payment_paid(payment_id: str, admin=Depends(get_current_admin)):
+    """Marque une facture Stripe ouverte comme payée hors-bande (sans débiter la carte)."""
+    if not payment_id.startswith("in_"):
+        raise HTTPException(400, "Action disponible uniquement sur les factures (in_*)")
+    try:
+        stripe_lib.Invoice.pay(payment_id, paid_out_of_band=True)
+    except stripe_lib.error.InvalidRequestError as exc:
+        raise HTTPException(400, str(exc.user_message or exc))
+    except stripe_lib.error.StripeError as exc:
+        raise HTTPException(502, str(exc.user_message or exc))
+    _log(admin, "mark_payment_paid", payload={"payment_id": payment_id})
+    return {"ok": True}
+
+
+@router.post("/billing/payments/{payment_id}/send")
+async def send_invoice_to_customer(payment_id: str, admin=Depends(get_current_admin)):
+    """Finalise et envoie une facture Stripe draft ou ouverte au client."""
+    if not payment_id.startswith("in_"):
+        raise HTTPException(400, "Action disponible uniquement sur les factures (in_*)")
+    try:
+        inv = stripe_lib.Invoice.retrieve(payment_id)
+        if inv["status"] == "draft":
+            stripe_lib.Invoice.finalize_invoice(payment_id)
+        stripe_lib.Invoice.send_invoice(payment_id)
+    except stripe_lib.error.InvalidRequestError as exc:
+        raise HTTPException(400, str(exc.user_message or exc))
+    except stripe_lib.error.StripeError as exc:
+        raise HTTPException(502, str(exc.user_message or exc))
+    _log(admin, "send_invoice", payload={"payment_id": payment_id})
+    return {"ok": True}
+
+
+_PAYMENT_TYPE_LABELS: dict[str, str] = {
+    "subscription":   "Abonnement",
+    "domain_purchase":"Achat domaine",
+    "custom_domain":  "Addon domaine",
+    "logo_request":   "Création logo",
+    "design_request": "Design personnalisé",
+    "other":          "Paiement ponctuel",
+}
+
+
+def _fmt_ts(ts: int | None, fmt: str = "iso") -> str:
+    if not ts:
+        return ""
+    dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+    return dt.isoformat() if fmt == "iso" else dt.strftime("%d/%m/%Y")
+
+
+@router.get("/billing/payments")
+async def list_all_payments(limit: int = 50, admin=Depends(get_current_admin)):
+    """Tous les paiements Klientys : abonnements récurrents + achats ponctuels (domaines, logos…)."""
+    sb = get_supabase_admin()
+    all_payments: list[dict] = []
+
+    # ── 1. Factures d'abonnement (récurrentes via Stripe Invoices) ────────────
+    try:
+        stripe_invoices = stripe_lib.Invoice.list(limit=min(limit, 100)).data
+        sub_ids = list({i["subscription"] for i in stripe_invoices if i.get("subscription")})
+        sub_tenant_map: dict[str, dict] = {}
+        if sub_ids:
+            rows = sb.table("subscription").select("tenant_id, stripe_subscription_id, plan_id") \
+                .in_("stripe_subscription_id", sub_ids).execute().data or []
+            plan_ids = list({r["plan_id"] for r in rows if r.get("plan_id")})
+            plan_name_map: dict[str, str] = {}
+            if plan_ids:
+                p_rows = sb.table("plan_subscription").select("id, name").in_("id", plan_ids).execute().data or []
+                plan_name_map = {p["id"]: p["name"] for p in p_rows}
+            t_ids = list({r["tenant_id"] for r in rows if r.get("tenant_id")})
+            t_name_map: dict[str, str] = {}
+            if t_ids:
+                t_rows = sb.table("tenant").select("id, name").in_("id", t_ids).execute().data or []
+                t_name_map = {t["id"]: t["name"] for t in t_rows}
+            for r in rows:
+                sub_tenant_map[r["stripe_subscription_id"]] = {
+                    "tenant_id":   r["tenant_id"],
+                    "tenant_name": t_name_map.get(r["tenant_id"], ""),
+                    "plan":        plan_name_map.get(r.get("plan_id") or "", ""),
+                }
+        for inv in stripe_invoices:
+            info  = sub_tenant_map.get(inv.get("subscription") or "", {})
+            plan  = info.get("plan", "")
+            amount = (inv.get("amount_paid") or inv.get("amount_due") or 0) / 100
+            all_payments.append({
+                "id":           inv["id"],
+                "type":         "subscription",
+                "label":        f"Abonnement {plan}".strip(),
+                "number":       inv.get("number") or inv["id"],
+                "amount":       amount,
+                "currency":     (inv.get("currency") or "eur").upper(),
+                "status":       inv.get("status", ""),
+                "created_ts":   inv.get("created") or 0,
+                "created":      _fmt_ts(inv.get("created")),
+                "period_start": _fmt_ts(inv.get("period_start"), "date"),
+                "period_end":   _fmt_ts(inv.get("period_end"), "date"),
+                "pdf_url":      inv.get("invoice_pdf") or "",
+                "customer_email": inv.get("customer_email") or "",
+                "tenant_id":    info.get("tenant_id", ""),
+                "tenant_name":  info.get("tenant_name", ""),
+                "plan":         plan,
+            })
+    except stripe_lib.error.StripeError as exc:
+        logger.warning("stripe invoices fetch failed: %s", exc)
+
+    # ── 2. Achats ponctuels (Stripe Checkout Sessions mode=payment) ───────────
+    try:
+        sessions = stripe_lib.checkout.Session.list(limit=min(limit, 100)).data
+        one_time = [s for s in sessions if s.get("mode") == "payment"]
+        meta_tenant_ids = list({
+            (s.get("metadata") or {}).get("tenant_id")
+            for s in one_time
+            if (s.get("metadata") or {}).get("tenant_id")
+        })
+        t_name_map2: dict[str, str] = {}
+        if meta_tenant_ids:
+            t_rows2 = sb.table("tenant").select("id, name").in_("id", meta_tenant_ids).execute().data or []
+            t_name_map2 = {t["id"]: t["name"] for t in t_rows2}
+
+        for s in one_time:
+            meta       = s.get("metadata") or {}
+            tenant_id  = meta.get("tenant_id", "")
+            raw_type   = meta.get("type") or meta.get("addon_type") or "other"
+            domain     = meta.get("domain", "")
+            label      = _PAYMENT_TYPE_LABELS.get(raw_type, "Paiement ponctuel")
+            if domain:
+                label = f"Achat domaine — {domain}"
+
+            pay_status = s.get("payment_status", "")
+            session_status = s.get("status", "")
+            if pay_status == "paid":
+                status = "paid"
+            elif session_status == "expired":
+                status = "void"
+            else:
+                status = "open"
+
+            all_payments.append({
+                "id":           s["id"],
+                "type":         raw_type,
+                "label":        label,
+                "number":       s["id"][:16],
+                "amount":       (s.get("amount_total") or 0) / 100,
+                "currency":     (s.get("currency") or "eur").upper(),
+                "status":       status,
+                "created_ts":   s.get("created") or 0,
+                "created":      _fmt_ts(s.get("created")),
+                "period_start": "",
+                "period_end":   "",
+                "pdf_url":      "",
+                "customer_email": s.get("customer_email") or "",
+                "tenant_id":    tenant_id,
+                "tenant_name":  t_name_map2.get(tenant_id, ""),
+                "plan":         "",
+            })
+    except stripe_lib.error.StripeError as exc:
+        logger.warning("stripe sessions fetch failed: %s", exc)
+
+    # Tri anti-chronologique
+    all_payments.sort(key=lambda x: x.pop("created_ts", 0), reverse=True)
+    return all_payments[:limit]
+
+
+@router.post("/billing/payments/{payment_id}/resend")
+async def resend_payment(payment_id: str, admin=Depends(get_current_admin)):
+    """Renvoie le reçu de paiement — gère les factures d'abonnement (in_*) et les achats ponctuels (cs_*)."""
+    sb   = get_supabase_admin()
+    from app.services.email import send_stripe_receipt
+
+    tenant_id    = None
+    owner: dict  = {}
+    target_email = ""
+    plan_name    = ""
+    amount       = 0.0
+    currency     = "EUR"
+    period_start = ""
+    period_end   = ""
+    inv_number   = payment_id
+    pdf_url      = ""
+    description  = "Paiement Klientys"
+
+    if payment_id.startswith("in_"):
+        # ── Facture d'abonnement Stripe ────────────────────────────────────────
+        try:
+            inv = stripe_lib.Invoice.retrieve(payment_id)
+        except stripe_lib.error.StripeError as exc:
+            raise HTTPException(404, f"Facture introuvable : {exc}")
+
+        stripe_sub_id = inv.get("subscription")
+        plan_id = None
+        if stripe_sub_id:
+            row = sb.table("subscription").select("tenant_id, plan_id") \
+                .eq("stripe_subscription_id", stripe_sub_id).maybe_single().execute()
+            if row.data:
+                tenant_id = row.data["tenant_id"]
+                plan_id   = row.data.get("plan_id")
+        if tenant_id:
+            owner = _get_owner_info(sb, tenant_id)
+        if plan_id:
+            p = sb.table("plan_subscription").select("name").eq("id", plan_id).maybe_single().execute()
+            plan_name = (p.data or {}).get("name", "Pro")
+
+        target_email = owner.get("email") or inv.get("customer_email", "")
+        amount       = (inv.get("amount_paid") or inv.get("amount_due") or 0) / 100
+        currency     = (inv.get("currency") or "eur").upper()
+        period_start = _fmt_ts(inv.get("period_start"), "date")
+        period_end   = _fmt_ts(inv.get("period_end"), "date")
+        inv_number   = inv.get("number") or payment_id
+        pdf_url      = inv.get("invoice_pdf") or ""
+        description  = f"Abonnement {plan_name}".strip()
+
+    elif payment_id.startswith("cs_"):
+        # ── Achat ponctuel (Checkout Session) ─────────────────────────────────
+        try:
+            session = stripe_lib.checkout.Session.retrieve(payment_id)
+        except stripe_lib.error.StripeError as exc:
+            raise HTTPException(404, f"Session introuvable : {exc}")
+
+        meta      = session.get("metadata") or {}
+        tenant_id = meta.get("tenant_id")
+        raw_type  = meta.get("type") or meta.get("addon_type") or "other"
+        domain    = meta.get("domain", "")
+        if tenant_id:
+            owner = _get_owner_info(sb, tenant_id)
+
+        target_email = owner.get("email") or session.get("customer_email", "")
+        amount       = (session.get("amount_total") or 0) / 100
+        currency     = (session.get("currency") or "eur").upper()
+        inv_number   = payment_id[:16]
+        description  = _PAYMENT_TYPE_LABELS.get(raw_type, "Paiement ponctuel")
+        if domain:
+            description = f"Achat de domaine — {domain}"
+        plan_name = description
+
+    else:
+        raise HTTPException(400, "ID de paiement non reconnu (attendu in_* ou cs_*)")
+
+    if not target_email:
+        raise HTTPException(404, "Email destinataire introuvable")
+
+    try:
+        send_stripe_receipt(
+            owner_email=target_email,
+            owner_name=owner.get("name", ""),
+            tenant_name=owner.get("tenant_name", ""),
+            country=owner.get("country", "BE"),
+            plan_name=plan_name or description,
+            amount=amount,
+            currency=currency,
+            period_start=period_start,
+            period_end=period_end,
+            invoice_number=inv_number,
+            pdf_url=pdf_url,
+        )
+    except Exception as exc:
+        raise HTTPException(500, f"Erreur envoi email : {exc}")
+
+    _log(admin, "resend_payment", tenant_id, owner.get("tenant_name"),
+         {"payment_id": payment_id, "email": target_email, "description": description})
+    return {"ok": True, "sent_to": target_email}

@@ -52,7 +52,7 @@ export default function CguPage() {
         Conditions Générales d'Utilisation
       </h1>
       <p style={{ ...P, marginBottom: "56px" }}>
-        Dernière mise à jour : 3 juin 2026 — Klientys SRL, Belgique
+        Dernière mise à jour : 3 juillet 2026 — Klientys SRL, Belgique
       </p>
 
       <div style={{ borderTop: "1px solid var(--l-border)", paddingTop: "48px" }}>
@@ -78,6 +78,7 @@ export default function CguPage() {
             <li>Un CRM léger (gestion des contacts et leads)</li>
             <li>Des agents IA de communication (chatbot vitrine, assistant tenant)</li>
             <li>Un tableau de bord analytics</li>
+            <li>Un module de facturation électronique (génération PDF A4 + XML UBL 2.1 conforme EN 16931, envoi par email, suivi des statuts)</li>
             <li>Des intégrations tierces optionnelles (Google Analytics, Telegram, WhatsApp)</li>
           </ul>
         </div>

@@ -204,6 +204,49 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
         supabase = get_supabase_admin()
         supabase.table("subscription").update({"status": "canceled"}).eq("stripe_subscription_id", stripe_sub_id).execute()
 
+    elif event["type"] == "invoice.payment_succeeded":
+        invoice = event["data"]["object"]
+        # Ignorer les factures à zéro (setup, essais gratuits)
+        if (invoice.get("amount_paid") or 0) == 0:
+            return {"received": True}
+        stripe_sub_id = invoice.get("subscription")
+        if stripe_sub_id:
+            supabase = get_supabase_admin()
+            sub_row = supabase.table("subscription").select("tenant_id, plan_id") \
+                .eq("stripe_subscription_id", stripe_sub_id).maybe_single().execute()
+            sub_data = sub_row.data or {}
+            paid_tenant_id = sub_data.get("tenant_id")
+            plan_id = sub_data.get("plan_id")
+            if paid_tenant_id:
+                try:
+                    from datetime import datetime as _dt
+                    plan_row = supabase.table("plan_subscription").select("name").eq("id", plan_id).maybe_single().execute()
+                    plan_name = (plan_row.data or {}).get("name", "Pro")
+                    owner = _get_owner_info(supabase, paid_tenant_id)
+                    if owner.get("email"):
+                        from app.services.email import send_stripe_receipt
+                        amount = (invoice.get("amount_paid") or 0) / 100
+                        currency = (invoice.get("currency") or "eur").upper()
+                        p_start = invoice.get("period_start") or 0
+                        p_end   = invoice.get("period_end") or 0
+                        period_start = _dt.fromtimestamp(p_start).strftime("%d/%m/%Y") if p_start else ""
+                        period_end   = _dt.fromtimestamp(p_end).strftime("%d/%m/%Y") if p_end else ""
+                        send_stripe_receipt(
+                            owner_email=owner["email"],
+                            owner_name=owner["name"],
+                            tenant_name=owner["tenant_name"],
+                            country=owner["country"],
+                            plan_name=plan_name,
+                            amount=amount,
+                            currency=currency,
+                            period_start=period_start,
+                            period_end=period_end,
+                            invoice_number=invoice.get("number", ""),
+                            pdf_url=invoice.get("invoice_pdf", ""),
+                        )
+                except Exception as exc:
+                    logger.warning("send_stripe_receipt failed: %s", exc)
+
     elif event["type"] == "invoice.payment_failed":
         invoice = event["data"]["object"]
         stripe_sub_id = invoice.get("subscription")

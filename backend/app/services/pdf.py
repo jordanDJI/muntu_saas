@@ -9,6 +9,7 @@ Installation :
   pip install weasyprint xhtml2pdf
 """
 import io
+import platform
 import logging
 from datetime import datetime, timezone
 
@@ -17,9 +18,10 @@ _log = logging.getLogger(__name__)
 # ── Détection des moteurs disponibles ────────────────────────────────────────
 
 def _try_weasyprint():
+    if platform.system() == "Windows":
+        return None  # GTK3 non disponible sur Windows sans installation manuelle
     try:
         from weasyprint import HTML as _W
-        # Test réel : génère un micro-PDF pour vérifier que Pango/Cairo sont là
         _W(string="<p>ok</p>").write_pdf()
         return _W
     except Exception:

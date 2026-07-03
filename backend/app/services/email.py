@@ -1560,6 +1560,142 @@ def send_subscription_payment_failed(
     })
 
 
+# ── Facturation électronique ─────────────────────────────────────────────────
+
+def send_invoice(
+    contact_email: str,
+    contact_name: str,
+    tenant_name: str,
+    invoice_number: str,
+    pdf_bytes: bytes,
+    ubl_bytes: bytes,
+    primary_color: str = "",
+    logo_url: str = "",
+    logo_option: str = "text_only",
+) -> None:
+    """Envoie une facture au client (PDF + UBL XML en pièces jointes)."""
+    body = f"""
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#e6f9f0;line-height:52px;font-size:24px">&#128196;</div>
+      </div>
+      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">Votre facture est disponible</h2>
+      <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 20px;text-align:center">
+        Bonjour <strong>{contact_name}</strong>, veuillez trouver ci-joint votre facture.
+      </p>
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px 20px;margin-bottom:20px">
+        <p style="color:#374151;font-size:13px;margin:0 0 4px"><strong>Émis par</strong> : {tenant_name}</p>
+        <p style="color:#0D4B58;font-size:15px;font-weight:700;margin:0">N° {invoice_number}</p>
+      </div>
+      <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">
+        Deux fichiers sont joints à cet email :<br>
+        <strong>{invoice_number}.pdf</strong> — facture lisible<br>
+        <strong>{invoice_number}.ubl.xml</strong> — format électronique UBL 2.1 (EU)
+      </p>
+    """
+    safe_number = invoice_number.replace("/", "-").replace("\\", "-")
+    resend.Emails.send({
+        "from": f"{tenant_name} <{settings.email_from}>",
+        "to": [contact_email],
+        "subject": f"Votre facture {invoice_number} — {tenant_name}",
+        "html": _tenant_email_wrapper(
+            tenant_name, body,
+            primary_color=primary_color,
+            logo_url=logo_url,
+            logo_option=logo_option,
+        ),
+        "attachments": [
+            {"filename": f"{safe_number}.pdf",     "content": list(pdf_bytes)},
+            {"filename": f"{safe_number}.ubl.xml", "content": list(ubl_bytes)},
+        ],
+    })
+
+
+def send_stripe_receipt(
+    owner_email: str,
+    owner_name: str,
+    tenant_name: str,
+    country: str,
+    plan_name: str,
+    amount: float,
+    currency: str,
+    period_start: str,
+    period_end: str,
+    invoice_number: str,
+    pdf_url: str,
+) -> None:
+    """Envoie le reçu de paiement Stripe au tenant après chaque prélèvement réussi."""
+    lang = _crm_lang(country)
+    t = _SUBSCRIPTION_I18N.get(lang, _SUBSCRIPTION_I18N["fr"])
+    logo_url = _KLIENTYS_LOGO.format(frontend_url=settings.frontend_url)
+
+    currency_symbol = {"EUR": "€", "USD": "$", "GBP": "£", "CHF": "CHF"}.get(currency.upper(), currency)
+    amount_fmt = f"{amount:,.2f} {currency_symbol}".replace(",", " ")
+
+    header = f"""
+    <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:32px 36px">
+      <img src="{logo_url}" height="34" alt="Klientys" style="margin-bottom:18px;display:block"/>
+      <h1 style="color:#fff;font-size:22px;font-weight:800;margin:0;letter-spacing:-.02em">
+        Reçu de paiement
+      </h1>
+      <p style="color:rgba(255,255,255,.65);margin:6px 0 0;font-size:13px">Votre abonnement Klientys a bien été renouvelé</p>
+    </div>"""
+
+    pdf_block = f"""
+      <div style="text-align:center;margin:20px 0">
+        <a href="{pdf_url}" target="_blank"
+           style="display:inline-block;background:#DDAA40;color:#07222F;padding:12px 28px;
+                  border-radius:10px;text-decoration:none;font-weight:800;font-size:14px;
+                  letter-spacing:-.01em">
+          ↓ Télécharger la facture PDF
+        </a>
+      </div>""" if pdf_url else ""
+
+    body = f"""
+      <p style="color:#EEF2F5;font-size:15px;line-height:1.65;margin:0 0 16px">
+        {t["greeting"]} {owner_name or tenant_name},
+      </p>
+      <p style="color:#AAC0D8;font-size:15px;line-height:1.65;margin:0 0 24px">
+        Votre paiement a bien été encaissé. Merci de votre confiance.
+      </p>
+      <div style="background:rgba(13,75,88,.35);border:1px solid rgba(26,110,130,.4);
+                  border-radius:12px;padding:16px 20px;margin:0 0 20px">
+        <table style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="color:#5C7A8A;font-size:13px;padding:4px 0">Plan</td>
+            <td style="color:#EEF2F5;font-size:13px;font-weight:700;text-align:right">{plan_name}</td>
+          </tr>
+          <tr>
+            <td style="color:#5C7A8A;font-size:13px;padding:4px 0">Période</td>
+            <td style="color:#EEF2F5;font-size:13px;text-align:right">{period_start} → {period_end}</td>
+          </tr>
+          <tr>
+            <td style="color:#5C7A8A;font-size:13px;padding:4px 0">N° facture</td>
+            <td style="color:#EEF2F5;font-size:13px;font-family:monospace;text-align:right">{invoice_number}</td>
+          </tr>
+          <tr style="border-top:1px solid rgba(26,110,130,.3)">
+            <td style="color:#DDAA40;font-size:16px;font-weight:800;padding:10px 0 4px">Total prélevé</td>
+            <td style="color:#DDAA40;font-size:18px;font-weight:800;text-align:right;padding:10px 0 4px">{amount_fmt}</td>
+          </tr>
+        </table>
+      </div>
+      {pdf_block}
+    """
+
+    footer = f"""
+      <p style="color:#5C7A8A;font-size:12px;line-height:1.6;margin:0">
+        Ce reçu est généré automatiquement par Stripe, prestataire de paiement de Klientys.<br>
+        Questions ? <a href="mailto:support@klientys.co" style="color:#2A8FA5;text-decoration:none">support@klientys.co</a>
+      </p>
+    """
+
+    resend.Emails.send({
+        "from":    f"Klientys <{settings.email_from}>",
+        "to":      [owner_email],
+        "subject": f"Reçu de paiement — {plan_name} — {amount_fmt}",
+        "html":    _klientys_email_wrapper(header, body, footer),
+    })
+
+
 async def send_campaign_email(
     to_email: str,
     to_name: str,

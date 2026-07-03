@@ -58,6 +58,14 @@ const LEAD_STATUS_CLS: Record<string, string> = {
   lost: "badge-status badge-lost",
 };
 
+const INV_STATUS: Record<string, { label: string; bg: string; text: string }> = {
+  draft:     { label: "Brouillon", bg: "#F9FAFB", text: "#6B7280" },
+  sent:      { label: "Envoyée",   bg: "#EFF6FF", text: "#2563EB" },
+  paid:      { label: "Payée",     bg: "#F0FDF4", text: "#16A34A" },
+  overdue:   { label: "En retard", bg: "#FEF2F2", text: "#DC2626" },
+  cancelled: { label: "Annulée",   bg: "#F9FAFB", text: "#9CA3AF" },
+};
+
 export default function ContactDetailPage() {
   const { t } = useLanguage();
   const { hasFeature, features } = useSubscription();
@@ -85,6 +93,8 @@ export default function ContactDetailPage() {
   const [sentIds, setSentIds] = useState<Set<string>>(new Set());
   const [modalReminderId, setModalReminderId] = useState<string | null>(null);
   const [showTagPicker, setShowTagPicker] = useState(false);
+
+  const [invoices, setInvoices] = useState<any[]>([]);
 
   // Pièces jointes
   const [attachments, setAttachments]     = useState<any[]>([]);
@@ -139,6 +149,9 @@ export default function ContactDetailPage() {
     fetchContact();
     fetchActivities();
     fetchAttachments();
+    api.getInvoices({ contact_id: id, limit: 50 })
+      .then((r: any) => setInvoices(Array.isArray(r) ? r : (r.invoices ?? [])))
+      .catch(() => {});
     api.getTags().then(setAllTags).catch(() => {});
     if (hasFeature("agent_support")) {
       api.getTelegramBotInfo().then(info => setBotUsername(info.username)).catch(() => {});
@@ -346,6 +359,20 @@ export default function ContactDetailPage() {
                       <p className="text-base sm:text-lg font-bold text-primary-700">{contact.appointments_count ?? 0}</p>
                       <p className="text-xs text-gray-400 mt-0.5">RDV</p>
                     </div>
+                    {(() => {
+                      const totalF = invoices
+                        .filter(i => i.status !== "cancelled")
+                        .reduce((s: number, i: any) => s + (i.total ?? 0), 0);
+                      if (totalF === 0) return null;
+                      return (
+                        <div className="text-center bg-violet-50 border border-violet-200 rounded-xl px-3 sm:px-5 py-2 sm:py-3">
+                          <p className="text-base sm:text-lg font-bold text-violet-600">
+                            {totalF.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">Facturé</p>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </>
@@ -435,6 +462,49 @@ export default function ContactDetailPage() {
                         </span>
                         <span className="text-xs text-gray-400">
                           {new Date(a.scheduled_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+          </div>
+
+          {/* Factures */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Factures</h3>
+              <div className="flex items-center gap-3">
+                {invoices.length > 0 && (
+                  <span className="text-xs text-gray-400">{invoices.length} total</span>
+                )}
+                <Link href="/dashboard/invoices"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-800 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/>
+                  </svg>
+                  Nouvelle
+                </Link>
+              </div>
+            </div>
+            {invoices.length === 0
+              ? <p className="text-sm text-gray-400">Aucune facture</p>
+              : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1 scrollbar-thin">
+                  {invoices.map((inv: any) => {
+                    const s = INV_STATUS[inv.status] ?? { label: inv.status, bg: "#F9FAFB", text: "#6B7280" };
+                    return (
+                      <div key={inv.id} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg flex-wrap">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
+                          style={{ background: s.bg, color: s.text }}>
+                          {s.label}
+                        </span>
+                        <span className="text-xs font-mono text-gray-700 flex-1 min-w-0 truncate">{inv.number}</span>
+                        <span className="text-sm font-semibold text-gray-900 whitespace-nowrap">
+                          {(inv.total ?? 0).toLocaleString("fr-FR", { style: "currency", currency: inv.currency ?? "EUR" })}
+                        </span>
+                        <span className="text-xs text-gray-400 whitespace-nowrap">
+                          {new Date(inv.issue_date).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
                         </span>
                       </div>
                     );
@@ -800,6 +870,37 @@ export default function ContactDetailPage() {
                   rows={3}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 resize-none"
                 />
+                {/* Hint factures impayées pour relance de paiement */}
+                {reminderType === "payment" && (() => {
+                  const unpaid = invoices.filter(i => i.status === "sent" || i.status === "overdue");
+                  if (unpaid.length === 0) return null;
+                  return (
+                    <div className="rounded-lg bg-violet-50 border border-violet-200 px-3 py-2.5 space-y-2">
+                      <p className="text-xs font-semibold text-violet-700">
+                        🧾 {unpaid.length} facture{unpaid.length > 1 ? "s" : ""} en attente de paiement — cliquez pour pré-remplir la note
+                      </p>
+                      <div className="space-y-1">
+                        {unpaid.map((inv: any) => (
+                          <button
+                            key={inv.id}
+                            type="button"
+                            onClick={() => setReminderNote(
+                              `Relance de paiement — Facture ${inv.number} du ${new Date(inv.issue_date).toLocaleDateString("fr-FR")} — ${(inv.total ?? 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}`
+                            )}
+                            className="w-full text-left flex items-center gap-2 p-2 rounded-lg bg-white border border-violet-200 hover:border-violet-500 hover:bg-violet-50 transition-colors">
+                            <span className="text-xs font-mono text-gray-700 flex-1">{inv.number}</span>
+                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${inv.status === "overdue" ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"}`}>
+                              {inv.status === "overdue" ? "En retard" : "Envoyée"}
+                            </span>
+                            <span className="text-xs font-semibold text-violet-700">
+                              {(inv.total ?? 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" })}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* Toggle auto-send */}
                 <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-600 select-none">
                   <input

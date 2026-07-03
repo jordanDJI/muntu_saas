@@ -34,6 +34,17 @@ const NAV_ALL = [
     ),
   },
   {
+    id: "billing",
+    href: "/admin/billing",
+    label: "Facturation",
+    minLevel: "super_admin" as SupportLevel,
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+      </svg>
+    ),
+  },
+  {
     href: "/admin/tenants",
     label: "Tenants",
     minLevel: "viewer" as SupportLevel,
@@ -129,6 +140,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [inactiveCount,  setInactiveCount]  = useState<number | null>(null);
   const [logoPending,    setLogoPending]    = useState<number | null>(null);
   const [designPending,  setDesignPending]  = useState<number | null>(null);
+  const [pastDueCount,   setPastDueCount]   = useState<number | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -145,9 +157,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         const { data: { session } } = await supabase.auth.getSession();
         const headers = { Authorization: `Bearer ${session?.access_token ?? ""}` };
 
-        const [inactiveRes, metricsRes] = await Promise.allSettled([
+        const [inactiveRes, metricsRes, billingRes] = await Promise.allSettled([
           fetch(`${API}/api/v1/admin/inactive-tenants?days=30`, { headers }),
           fetch(`${API}/api/v1/admin/metrics`, { headers }),
+          fetch(`${API}/api/v1/admin/billing`, { headers }),
         ]);
 
         if (inactiveRes.status === "fulfilled" && inactiveRes.value.ok) {
@@ -158,6 +171,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           const d = await metricsRes.value.json();
           setLogoPending(d.logo_requests_pending ?? 0);
           setDesignPending(d.design_requests_pending ?? 0);
+        }
+        if (billingRes.status === "fulfilled" && billingRes.value.ok) {
+          const d = await billingRes.value.json();
+          setPastDueCount(d.past_due_count ?? 0);
         }
       } catch { /* non bloquant */ }
     });
@@ -202,9 +219,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
             const itemId = (item as any).id;
             const badge  =
-              itemId === "relances"       && inactiveCount  ? inactiveCount  :
-              itemId === "logo-requests"  && logoPending    ? logoPending    :
-              itemId === "design-requests"&& designPending  ? designPending  : null;
+              itemId === "relances"        && inactiveCount  ? inactiveCount  :
+              itemId === "logo-requests"   && logoPending    ? logoPending    :
+              itemId === "design-requests" && designPending  ? designPending  :
+              itemId === "billing"         && pastDueCount   ? pastDueCount   : null;
             return (
               <Link
                 key={item.href}

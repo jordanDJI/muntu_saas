@@ -498,4 +498,39 @@ export const api = {
     apiFetch<{ booking_questions: any[]; deposit: any; paypal_configured: boolean }>(`/api/v1/sites/${siteId}/booking-config`),
   updateBookingConfig: (siteId: string, body: object) =>
     apiFetch(`/api/v1/sites/${siteId}/booking-config`, { method: "PATCH", body: JSON.stringify(body) }),
+
+  // Facturation électronique
+  getInvoiceSettings: () => apiFetch<any>("/api/v1/invoices/settings"),
+  updateInvoiceSettings: (body: object) => apiFetch("/api/v1/invoices/settings", { method: "PATCH", body: JSON.stringify(body) }),
+  getInvoices: (params?: { status?: string; contact_id?: string; limit?: number; offset?: number }) => {
+    const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) as any).toString() : "";
+    return apiFetch<{ invoices: any[]; total: number; offset: number; limit: number }>(`/api/v1/invoices/${qs}`);
+  },
+  createInvoice: (body: object) => apiFetch<any>("/api/v1/invoices/", { method: "POST", body: JSON.stringify(body) }),
+  getInvoice: (id: string) => apiFetch<any>(`/api/v1/invoices/${id}`),
+  updateInvoice: (id: string, body: object) => apiFetch<any>(`/api/v1/invoices/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteInvoice: (id: string) => apiFetch<void>(`/api/v1/invoices/${id}`, { method: "DELETE" }),
+  invoiceFromAppointment: (apptId: string) => apiFetch<any>(`/api/v1/invoices/from-appointment/${apptId}`, { method: "POST" }),
+  generateInvoiceFiles: (id: string) => apiFetch<any>(`/api/v1/invoices/${id}/generate`, { method: "POST" }),
+  sendInvoice: (id: string) => apiFetch<any>(`/api/v1/invoices/${id}/send`, { method: "POST" }),
+  markInvoicePaid: (id: string) => apiFetch<any>(`/api/v1/invoices/${id}/mark-paid`, { method: "POST" }),
+  cancelInvoice: (id: string) => apiFetch<any>(`/api/v1/invoices/${id}/cancel`, { method: "POST" }),
+  downloadInvoicePdf: async (id: string, number: string) => {
+    const headers = await getAuthHeaders();
+    const r = await fetch(`${API_URL}/api/v1/invoices/${id}/pdf`, { headers });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `${number}.pdf`; a.click();
+    URL.revokeObjectURL(url);
+  },
+  downloadInvoiceUbl: async (id: string, number: string) => {
+    const headers = await getAuthHeaders();
+    const r = await fetch(`${API_URL}/api/v1/invoices/${id}/ubl`, { headers });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `${number}.ubl.xml`; a.click();
+    URL.revokeObjectURL(url);
+  },
 };

@@ -14,7 +14,7 @@ import villes from "../../../data/villes.json";
 type Section =
   | "profil" | "securite" | "site" | "metriques"
   | "abonnement" | "notifications" | "preferences"
-  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire";
+  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire" | "facturation";
 
 const NAV: { key: Section; label: string; icon: string }[] = [
   { key: "profil",        label: "Profil",          icon: "👤" },
@@ -27,6 +27,7 @@ const NAV: { key: Section; label: string; icon: string }[] = [
   { key: "notifications", label: "Notifications",   icon: "🔔" },
   { key: "preferences",  label: "Préférences",     icon: "⚙️" },
   { key: "membres",       label: "Équipe",          icon: "👥" },
+  { key: "facturation",   label: "Facturation",     icon: "🧾" },
   { key: "integrations",  label: "Intégrations",    icon: "🔗" },
   { key: "export",        label: "Export & RGPD",   icon: "📤" },
   { key: "activite",      label: "Activité",        icon: "📋" },
@@ -1709,6 +1710,130 @@ function GoogleAnalyticsCard() {
 
 // ── Section Intégrations ──────────────────────────────────────────────────────
 
+// ── Section Facturation ───────────────────────────────────────────────────────
+
+function SectionFacturation() {
+  const [settings, setSettings] = useState<Record<string, any>>({});
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [saved, setSaved]       = useState(false);
+  const [err, setErr]           = useState("");
+
+  useEffect(() => {
+    api.getInvoiceSettings().then((d: any) => { setSettings(d ?? {}); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  function handleChange(field: string, value: string | number) {
+    setSettings((s: any) => ({ ...s, [field]: value }));
+    setSaved(false);
+  }
+
+  async function handleSave() {
+    setSaving(true); setErr(""); setSaved(false);
+    try {
+      await api.updateInvoiceSettings(settings);
+      setSaved(true);
+    } catch (e: any) { setErr(e.message ?? "Erreur lors de la sauvegarde."); }
+    finally { setSaving(false); }
+  }
+
+  if (loading) return <p className="text-sm text-gray-500">Chargement…</p>;
+
+  return (
+    <>
+      <SectionTitle title="Facturation" subtitle="Configurez vos informations de facturation pour vos clients." />
+      <Card>
+        <p className="text-sm font-semibold text-gray-700">Informations légales</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Numéro de TVA</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="BE0123456789"
+              value={settings.vat_number ?? ""}
+              onChange={e => handleChange("vat_number", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Préfixe de numérotation</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="FAC"
+              value={settings.prefix ?? "FAC"}
+              onChange={e => handleChange("prefix", e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">Ex : FAC-2025-0001</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Délai de paiement (jours)</label>
+            <input
+              type="number"
+              min={0}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={settings.payment_terms_days ?? 30}
+              onChange={e => handleChange("payment_terms_days", parseInt(e.target.value) || 0)}
+            />
+          </div>
+        </div>
+      </Card>
+      <Card>
+        <p className="text-sm font-semibold text-gray-700">Coordonnées bancaires</p>
+        <p className="text-xs text-gray-500">Apparaissent sur les factures pour faciliter le virement.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2">
+            <label className="text-xs font-medium text-gray-500 block mb-1">IBAN</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono"
+              placeholder="BE68 5390 0754 7034"
+              value={settings.bank_iban ?? ""}
+              onChange={e => handleChange("bank_iban", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">BIC / SWIFT</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono"
+              placeholder="GEBABEBB"
+              value={settings.bank_bic ?? ""}
+              onChange={e => handleChange("bank_bic", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Nom de la banque</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="BNP Paribas Fortis"
+              value={settings.bank_name ?? ""}
+              onChange={e => handleChange("bank_name", e.target.value)}
+            />
+          </div>
+        </div>
+      </Card>
+      <Card>
+        <p className="text-sm font-semibold text-gray-700">Note de bas de facture</p>
+        <textarea
+          rows={3}
+          className="w-full border rounded-lg px-3 py-2 text-sm"
+          placeholder="Merci pour votre confiance. Tout retard de paiement entraîne des pénalités de 10%/an."
+          value={settings.footer_note ?? ""}
+          onChange={e => handleChange("footer_note", e.target.value)}
+        />
+      </Card>
+      {err && <p className="text-sm text-red-500">{err}</p>}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-primary-600 text-white text-sm font-medium px-5 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-60"
+        >
+          {saving ? "Enregistrement…" : "Enregistrer"}
+        </button>
+        {saved && <span className="text-sm text-green-600 font-medium">✓ Sauvegardé</span>}
+      </div>
+    </>
+  );
+}
+
 function SectionIntegrations() {
   return (
     <>
@@ -2720,6 +2845,7 @@ const SECTION_MAP: Record<Exclude<Section, "domaine">, React.FC> = {
   notifications: SectionNotifications,
   preferences:   SectionPreferences,
   membres:       SectionMembres,
+  facturation:   SectionFacturation,
   integrations:  SectionIntegrations,
   export:        SectionExport,
   activite:      SectionActivite,

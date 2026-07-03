@@ -307,6 +307,20 @@ export default function LandingPage() {
               </ul>
             </div>
 
+            <div className="l-feat-card purple" data-r="" data-d="4">
+              <div className="l-feat-icon">🧾</div>
+              <h3>{t.lp_feat4_t}</h3>
+              <p>{t.lp_feat4_d}</p>
+              <ul className="l-feat-list">
+                <li>PDF professionnel aux couleurs de votre marque</li>
+                <li>Format UBL 2.1 conforme norme EU EN 16931</li>
+                <li>Génération automatique depuis un rendez-vous</li>
+                <li>Envoi par email avec pièces jointes (PDF + XML)</li>
+                <li>Suivi des statuts : Brouillon → Envoyée → Payée</li>
+                <li>Numérotation automatique (ex : FAC-2025-0001)</li>
+              </ul>
+            </div>
+
           </div>
         </div>
       </section>
@@ -466,6 +480,7 @@ export default function LandingPage() {
                 <li>3 agents IA (vitrine, support client, assistant)</li>
                 <li>Analytics comportementaux + demande locale</li>
                 <li>Connexion Google Analytics 4</li>
+                <li>Facturation électronique (PDF + UBL 2.1 EU)</li>
                 <li>Domaine personnalisé inclus</li>
                 <li>Widget embarquable sur site externe</li>
                 <li>Support prioritaire 24/7</li>
@@ -488,6 +503,7 @@ export default function LandingPage() {
                 <li>Tout du plan Pro (24 photos galerie)</li>
                 <li>Contacts illimités</li>
                 <li><strong>10 pièces jointes/contact</strong> · packs supplémentaires disponibles</li>
+                <li>Facturation illimitée (PDF + UBL 2.1 EU)</li>
                 <li>Campagnes email illimitées</li>
                 <li>Personnalisation CSS avancée</li>
                 <li><strong>Jusqu&apos;à 3 espaces de travail indépendants</strong></li>

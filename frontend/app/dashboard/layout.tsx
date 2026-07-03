@@ -37,6 +37,7 @@ const NAV_HREFS = [
   { href: "/dashboard/site-builder", tKey: "nav_site",      perm: "site_builder",  icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path strokeLinecap="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg> },
   { href: "/dashboard/analytics",    tKey: "nav_analytics", perm: "analytics",     icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg> },
   { href: "/dashboard/agents",       tKey: "nav_agents",    perm: "agents",        icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104A9 9 0 0112 3c4.97 0 9 4.03 9 9s-4.03 9-9 9-9-4.03-9-9c0-1.04.177-2.04.5-2.97"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4"/></svg> },
+  { href: "/dashboard/invoices",     tKey: "nav_invoices",  perm: "crm",           icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> },
 ];
 
 // Paths qui nécessitent une permission spécifique (pour bloquer l'accès direct)
@@ -48,6 +49,7 @@ const PERM_PATHS: Record<string, string> = {
   "/dashboard/site-builder": "site_builder",
   "/dashboard/analytics":    "analytics",
   "/dashboard/agents":       "agents",
+  "/dashboard/invoices":     "crm",
 };
 
 const SECTORS = [

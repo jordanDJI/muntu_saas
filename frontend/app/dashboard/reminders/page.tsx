@@ -8,7 +8,7 @@ import { useSectorVocab } from "../../../lib/useSectorVocab";
 
 const SendReminderModal = dynamic(() => import("../../../components/SendReminderModal"), { ssr: false });
 
-type Filter = "all" | "todo" | "done";
+type Filter = "all" | "todo" | "done" | "payment";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", {
@@ -32,7 +32,8 @@ export default function RemindersPage() {
     try {
       const params: Record<string, any> = {};
       if (filter === "todo") params.done = false;
-      if (filter === "done") params.done = true;
+      else if (filter === "done") params.done = true;
+      // "payment" et "all" : pas de filtre done → retourne tout
       const data = await api.getReminders(params);
       setReminders(data);
     } finally {
@@ -65,16 +66,23 @@ export default function RemindersPage() {
   const upcoming: any[] = [];
   const done: any[]     = [];
 
-  for (const r of reminders) {
+  const displayedReminders = filter === "payment"
+    ? reminders.filter(r => r.reminder_type === "payment")
+    : reminders;
+
+  for (const r of displayedReminders) {
     if (r.done) { done.push(r); continue; }
     if (r.due_date < todayStr) overdue.push(r);
     else upcoming.push(r);
   }
 
-  const FILTERS: { key: Filter; label: string }[] = [
-    { key: "all",  label: t.reminders_filter_all },
-    { key: "todo", label: t.reminders_filter_todo },
-    { key: "done", label: t.reminders_filter_done },
+  const paymentCount = reminders.filter(r => r.reminder_type === "payment" && !r.done).length;
+
+  const FILTERS: { key: Filter; label: string; count?: number }[] = [
+    { key: "all",     label: t.reminders_filter_all },
+    { key: "todo",    label: t.reminders_filter_todo },
+    { key: "done",    label: t.reminders_filter_done },
+    { key: "payment", label: "🧾 Paiements", count: paymentCount },
   ];
 
   return (
@@ -99,15 +107,22 @@ export default function RemindersPage() {
       </div>
 
       {/* Filtres */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         {FILTERS.map(f => (
           <button key={f.key} onClick={() => setFilter(f.key)}
-            className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
               filter === f.key
-                ? "bg-primary-600 text-white border-primary-600"
+                ? f.key === "payment"
+                  ? "bg-violet-600 text-white border-violet-600"
+                  : "bg-primary-600 text-white border-primary-600"
                 : "bg-white text-gray-500 border-gray-200 hover:border-primary-300 hover:text-primary-600"
             }`}>
             {f.label}
+            {f.count != null && f.count > 0 && (
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                filter === f.key ? "bg-white/20 text-white" : "bg-red-100 text-red-600"
+              }`}>{f.count}</span>
+            )}
           </button>
         ))}
       </div>
@@ -273,11 +288,15 @@ function ReminderRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-xs ${dateCls}`}>{formatDate(r.due_date)}</span>
-          {r.reminder_type && r.reminder_type !== "custom" && (
+          {r.reminder_type === "payment" ? (
+            <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-violet-100 text-violet-700">
+              🧾 {t[`reminder_type_payment`] ?? "Paiement"}
+            </span>
+          ) : r.reminder_type && r.reminder_type !== "custom" ? (
             <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">
               {t[`reminder_type_${r.reminder_type}`] ?? r.reminder_type}
             </span>
-          )}
+          ) : null}
           {r.contact && (
             <Link
               href={`/dashboard/contacts/${r.contact_id}`}
