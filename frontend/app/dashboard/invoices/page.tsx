@@ -16,6 +16,8 @@ type Invoice = {
   subtotal: number;
   tax_amount: number;
   total: number;
+  notes?: string;
+  payment_terms?: string;
   client_name?: string;
   client_email?: string;
   pdf_url?: string;
