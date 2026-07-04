@@ -641,7 +641,7 @@ export default async function TenantSitePage({
                   </div>
                 </div>
               )}
-              {(social.facebook || social.instagram || social.linkedin) && (
+              {(social.facebook || social.instagram || social.linkedin || social.tiktok || social.twitter) && (
                 <div className="flex gap-2 pt-1">
                   {social.facebook && (
                     <a href={social.facebook} data-track="social_facebook" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold hover:scale-110 transition-transform" style={{ backgroundColor: colors.accent }}>f</a>
@@ -651,6 +651,12 @@ export default async function TenantSitePage({
                   )}
                   {social.linkedin && (
                     <a href={social.linkedin} data-track="social_linkedin" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold hover:scale-110 transition-transform" style={{ backgroundColor: colors.accent }}>in</a>
+                  )}
+                  {social.tiktok && (
+                    <a href={social.tiktok} data-track="social_tiktok" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold hover:scale-110 transition-transform" style={{ backgroundColor: colors.accent }}>tt</a>
+                  )}
+                  {social.twitter && (
+                    <a href={social.twitter} data-track="social_twitter" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-bold hover:scale-110 transition-transform" style={{ backgroundColor: colors.accent }}>𝕏</a>
                   )}
                 </div>
               )}
@@ -809,7 +815,7 @@ export default async function TenantSitePage({
                   },
                 }),
                 ...(Object.values(social).some(Boolean) && {
-                  sameAs: [social.facebook, social.instagram, social.linkedin].filter(Boolean),
+                  sameAs: [social.facebook, social.instagram, social.linkedin, social.tiktok, social.twitter].filter(Boolean),
                 }),
               }),
             }}

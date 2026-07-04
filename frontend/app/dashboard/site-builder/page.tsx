@@ -203,6 +203,8 @@ export default function SiteBuilderPage() {
   const [facebook, setFacebook] = useState("");
   const [instagram, setInstagram] = useState("");
   const [linkedin, setLinkedin] = useState("");
+  const [tiktok, setTiktok] = useState("");
+  const [twitter, setTwitter] = useState("");
 
   // Secteur du tenant (chargé via api.getMyTenant)
   const [tenantSector, setTenantSector] = useState<string>("other");
@@ -369,6 +371,8 @@ export default function SiteBuilderPage() {
       setFacebook(s.social_links?.facebook ?? "");
       setInstagram(s.social_links?.instagram ?? "");
       setLinkedin(s.social_links?.linkedin ?? "");
+      setTiktok(s.social_links?.tiktok ?? "");
+      setTwitter(s.social_links?.twitter ?? "");
       setPhone2(s.social_links?.phone2 ?? "");
 
       // Zones
@@ -467,7 +471,7 @@ export default function SiteBuilderPage() {
           const fullAddress = [addressStreet, addressPostal, addressCity, addressCountry].filter(Boolean).join(", ");
           await api.updateSite(siteId, {
             phone, email_contact: emailContact, address: fullAddress,
-            social_links: { facebook, instagram, linkedin, ...(phone2 ? { phone2 } : {}) },
+            social_links: { facebook, instagram, linkedin, tiktok, twitter, ...(phone2 ? { phone2 } : {}) },
             site_style: buildSiteStyle(),
           });
           break;
@@ -1356,8 +1360,8 @@ export default function SiteBuilderPage() {
           <div className="bg-white rounded-xl shadow p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="font-semibold text-gray-800">Galerie de photos</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Section dédiée sur votre site public.</p>
+                <h2 className="font-semibold text-gray-800">{t.sb_gallery_title}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{t.sb_gallery_desc}</p>
               </div>
               <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
                 galleryPhotos.length >= galleryLimit ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"
@@ -1368,11 +1372,11 @@ export default function SiteBuilderPage() {
 
             {/* Mode d'affichage */}
             <div>
-              <p className="text-xs font-medium text-gray-600 mb-2">Mode d'affichage sur le site</p>
+              <p className="text-xs font-medium text-gray-600 mb-2">{t.sb_gallery_display}</p>
               <div className="grid grid-cols-2 gap-2">
                 {([
-                  { key: "horizontal", label: "Défilement horizontal" },
-                  { key: "vertical",   label: "Grille verticale" },
+                  { key: "horizontal", label: t.sb_gallery_horizontal },
+                  { key: "vertical",   label: t.sb_gallery_vertical },
                 ] as const).map((m) => (
                   <label key={m.key} className={`flex items-center gap-2 p-2.5 border rounded-lg cursor-pointer text-sm transition-colors ${
                     galleryDisplay === m.key
@@ -1532,6 +1536,8 @@ export default function SiteBuilderPage() {
               { label: "Facebook",  value: facebook,  set: setFacebook,  ph: "https://facebook.com/…" },
               { label: "Instagram", value: instagram, set: setInstagram, ph: "https://instagram.com/…" },
               { label: "LinkedIn",  value: linkedin,  set: setLinkedin,  ph: "https://linkedin.com/in/…" },
+              { label: "TikTok",    value: tiktok,    set: setTiktok,    ph: "https://tiktok.com/@…" },
+              { label: "X",         value: twitter,   set: setTwitter,   ph: "https://x.com/…" },
             ].map((r) => (
               <div key={r.label} className="flex gap-2 items-center">
                 <span className="w-24 text-sm text-gray-500">{r.label}</span>

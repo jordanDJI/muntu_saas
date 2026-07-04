@@ -37,18 +37,6 @@ function TagPill({ tag, onRemove }: { tag: any; onRemove?: () => void }) {
   );
 }
 
-const APPT_STATUS: Record<string, { label: string; cls: string }> = {
-  confirmed: { label: "Confirmé",   cls: "badge-status badge-confirmed" },
-  pending:   { label: "En attente", cls: "badge-status badge-new" },
-  cancelled: { label: "Annulé",     cls: "badge-status badge-lost" },
-  refused:   { label: "Refusé",     cls: "badge-status badge-lost" },
-};
-
-const LEAD_STATUS: Record<string, string> = {
-  new: "Nouveau", contacted: "Contacté", qualified: "Qualifié",
-  scheduled: "RDV planifié", converted: "Converti", lost: "Perdu",
-};
-
 const LEAD_STATUS_CLS: Record<string, string> = {
   new: "badge-status badge-new",
   contacted: "badge-status badge-contacted",
@@ -58,16 +46,32 @@ const LEAD_STATUS_CLS: Record<string, string> = {
   lost: "badge-status badge-lost",
 };
 
-const INV_STATUS: Record<string, { label: string; bg: string; text: string }> = {
-  draft:     { label: "Brouillon", bg: "#F9FAFB", text: "#6B7280" },
-  sent:      { label: "Envoyée",   bg: "#EFF6FF", text: "#2563EB" },
-  paid:      { label: "Payée",     bg: "#F0FDF4", text: "#16A34A" },
-  overdue:   { label: "En retard", bg: "#FEF2F2", text: "#DC2626" },
-  cancelled: { label: "Annulée",   bg: "#F9FAFB", text: "#9CA3AF" },
-};
-
 export default function ContactDetailPage() {
   const { t } = useLanguage();
+
+  const APPT_STATUS: Record<string, { label: string; cls: string }> = {
+    confirmed: { label: t.apt_status_confirmed, cls: "badge-status badge-confirmed" },
+    pending:   { label: t.apt_status_pending,   cls: "badge-status badge-new" },
+    cancelled: { label: t.apt_status_cancelled, cls: "badge-status badge-lost" },
+    refused:   { label: t.apt_status_refused,   cls: "badge-status badge-lost" },
+  };
+
+  const LEAD_STATUS: Record<string, string> = {
+    new:       t.lead_status_new,
+    contacted: t.lead_status_contacted,
+    qualified: t.lead_status_qualified,
+    scheduled: t.lead_status_scheduled,
+    converted: t.lead_status_converted,
+    lost:      t.lead_status_lost,
+  };
+
+  const INV_STATUS: Record<string, { label: string; bg: string; text: string }> = {
+    draft:     { label: t.inv_status_draft,      bg: "#F9FAFB", text: "#6B7280" },
+    sent:      { label: t.inv_status_sent,        bg: "#EFF6FF", text: "#2563EB" },
+    paid:      { label: t.inv_status_paid,        bg: "#F0FDF4", text: "#16A34A" },
+    overdue:   { label: t.inv_status_overdue,     bg: "#FEF2F2", text: "#DC2626" },
+    cancelled: { label: t.inv_status_cancelled,   bg: "#F9FAFB", text: "#9CA3AF" },
+  };
   const { hasFeature, features } = useSubscription();
   const { id } = useParams() as { id: string };
 
@@ -269,7 +273,7 @@ export default function ContactDetailPage() {
   );
 
   if (loading) return (
-    <div className="flex items-center justify-center py-24 text-gray-400">Chargement…</div>
+    <div className="flex items-center justify-center py-24 text-gray-400">{t.dash_loading}</div>
   );
   if (!contact) return (
     <div className="flex items-center justify-center py-24 text-red-500">Contact introuvable</div>
@@ -457,7 +461,7 @@ export default function ContactDetailPage() {
                       <div key={a.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg flex-wrap">
                         <span className={s.cls}>{s.label}</span>
                         <span className="text-sm text-gray-700 font-medium flex-1">
-                          {a.service_offer?.name ?? "Rendez-vous"}
+                          {a.service_offer?.name ?? t.apt_default_label}
                           {a.service_offer?.price_eur ? ` — ${a.service_offer.price_eur} €` : ""}
                         </span>
                         <span className="text-xs text-gray-400">
@@ -473,7 +477,7 @@ export default function ContactDetailPage() {
           {/* Factures */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Factures</h3>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.inv_title}</h3>
               <div className="flex items-center gap-3">
                 {invoices.length > 0 && (
                   <span className="text-xs text-gray-400">{invoices.length} total</span>
@@ -488,7 +492,7 @@ export default function ContactDetailPage() {
               </div>
             </div>
             {invoices.length === 0
-              ? <p className="text-sm text-gray-400">Aucune facture</p>
+              ? <p className="text-sm text-gray-400">{t.inv_empty}</p>
               : (
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-1 scrollbar-thin">
                   {invoices.map((inv: any) => {
@@ -920,7 +924,7 @@ export default function ContactDetailPage() {
                     onClick={addReminder}
                     disabled={addingReminder || !reminderDate}
                     className="flex-1 bg-primary-600 text-white rounded-lg py-2 text-sm font-semibold hover:bg-primary-700 disabled:opacity-50 transition-colors">
-                    {addingReminder ? "…" : "Enregistrer"}
+                    {addingReminder ? "…" : t.sett_save}
                   </button>
                   <button
                     onClick={() => setShowReminderForm(false)}

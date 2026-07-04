@@ -82,7 +82,7 @@ export default function RemindersPage() {
     { key: "all",     label: t.reminders_filter_all },
     { key: "todo",    label: t.reminders_filter_todo },
     { key: "done",    label: t.reminders_filter_done },
-    { key: "payment", label: "🧾 Paiements", count: paymentCount },
+    { key: "payment", label: t.reminders_filter_payment, count: paymentCount },
   ];
 
   return (
@@ -103,7 +103,7 @@ export default function RemindersPage() {
       {/* Header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold">{t.reminders_title}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{reminders.length} relance{reminders.length !== 1 ? "s" : ""}</p>
+        <p className="text-sm text-gray-500 mt-0.5">{reminders.length} {reminders.length !== 1 ? t.reminders_count_pl : t.reminders_count}</p>
       </div>
 
       {/* Filtres */}
@@ -128,7 +128,7 @@ export default function RemindersPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-16 text-gray-400">Chargement…</div>
+        <div className="text-center py-16 text-gray-400">{t.dash_loading}</div>
       ) : reminders.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">

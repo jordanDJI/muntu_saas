@@ -2,16 +2,11 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { api } from "../../../lib/api";
+import { useLanguage } from "../../../contexts/LanguageContext";
 
 const DemandMap = dynamic(() => import("./DemandMap"), { ssr: false });
 
-const PERIODS = [
-  { key: "week",    label: "Semaine" },
-  { key: "month",   label: "Mois" },
-  { key: "quarter", label: "Trimestre" },
-  { key: "year",    label: "Année" },
-] as const;
-type Period = (typeof PERIODS)[number]["key"];
+type Period = "week" | "month" | "quarter" | "year";
 
 function ScoreBar({ score }: { score: number }) {
   const color = score >= 67 ? "bg-green-500" : score >= 34 ? "bg-amber-400" : "bg-red-400";
@@ -44,10 +39,18 @@ function MiniChart({ points }: { points: { date: string; value: number }[] }) {
 }
 
 export default function DemandPotentialCard() {
+  const { t } = useLanguage();
   const [period, setPeriod] = useState<Period>("month");
   const [data, setData]     = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState("");
+
+  const PERIODS: { key: Period; label: string }[] = [
+    { key: "week",    label: t.dem_period_week },
+    { key: "month",   label: t.dem_period_month },
+    { key: "quarter", label: t.dem_period_quarter },
+    { key: "year",    label: t.dem_period_year },
+  ];
 
   const load = async (p: Period) => {
     setLoading(true); setError("");
@@ -75,8 +78,8 @@ export default function DemandPotentialCard() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <p className="text-sm font-semibold text-gray-800">Potentiel de demande locale</p>
-          <p className="text-xs text-gray-400 mt-0.5">Données Google Trends — indice 0–100</p>
+          <p className="text-sm font-semibold text-gray-800">{t.dem_title}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{t.dem_subtitle}</p>
         </div>
         <div className="flex gap-1">
           {PERIODS.map((per) => (
@@ -98,7 +101,7 @@ export default function DemandPotentialCard() {
       {loading && (
         <div className="flex items-center justify-center py-8 gap-2">
           <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-gray-400">Chargement des tendances…</span>
+          <span className="text-sm text-gray-400">{t.dem_loading}</span>
         </div>
       )}
 
@@ -108,10 +111,10 @@ export default function DemandPotentialCard() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
           </svg>
           <div>
-            <p className="text-xs font-semibold text-amber-800">Données indisponibles</p>
+            <p className="text-xs font-semibold text-amber-800">{t.dem_error_title}</p>
             <p className="text-xs text-amber-600 mt-0.5">
               {error.includes("inaccessible") || error.includes("localhost")
-                ? "Les données ne sont pas disponibles pour le moment. Veuillez réessayer dans quelques instants."
+                ? t.dem_error_msg
                 : error}
             </p>
           </div>
@@ -124,9 +127,9 @@ export default function DemandPotentialCard() {
           <div className="flex items-center gap-4 p-3 bg-primary-50 rounded-xl">
             <div className="text-3xl font-bold text-primary-700 w-12 text-center">{agg}</div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-primary-800">Score agrégé</p>
+              <p className="text-xs font-semibold text-primary-800">{t.dem_score}</p>
               <p className="text-[11px] text-primary-500 truncate">
-                Mots-clés : {keywords.slice(0, 3).join(", ")}
+                {t.dem_keywords} : {keywords.slice(0, 3).join(", ")}
               </p>
               <div className="mt-1.5"><ScoreBar score={agg} /></div>
             </div>
@@ -135,7 +138,7 @@ export default function DemandPotentialCard() {
           {/* Tendance */}
           {chart.length > 1 && (
             <div>
-              <p className="text-[11px] text-gray-400 mb-1">Tendance sur la période</p>
+              <p className="text-[11px] text-gray-400 mb-1">{t.dem_trend}</p>
               <MiniChart points={chart} />
             </div>
           )}
@@ -143,7 +146,7 @@ export default function DemandPotentialCard() {
           {/* Zones */}
           {zones.length > 0 ? (
             <div className="space-y-3">
-              <p className="text-xs font-semibold text-gray-700">Par zone d'intervention</p>
+              <p className="text-xs font-semibold text-gray-700">{t.dem_zones}</p>
               <div className="space-y-2">
                 {zones.map((z) => (
                   <div key={z.name} className="flex items-center gap-3">
@@ -160,14 +163,14 @@ export default function DemandPotentialCard() {
             </div>
           ) : (
             <p className="text-xs text-gray-400 italic text-center py-2">
-              Ajoutez des zones d'intervention dans le site-builder pour voir la demande par zone.
+              {t.dem_no_zones}
             </p>
           )}
 
           {/* Requêtes associées */}
           {related.length > 0 && (
             <div>
-              <p className="text-xs font-semibold text-gray-700 mb-2">Ce que cherchent vos clients</p>
+              <p className="text-xs font-semibold text-gray-700 mb-2">{t.dem_related}</p>
               <div className="flex flex-wrap gap-1.5">
                 {related.map((q) => (
                   <span key={q} className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{q}</span>
@@ -178,7 +181,7 @@ export default function DemandPotentialCard() {
 
           {data.cached_at && (
             <p className="text-[10px] text-gray-300 text-right">
-              Mis à jour {new Date(data.cached_at).toLocaleString("fr-BE", { dateStyle: "short", timeStyle: "short" })}
+              {t.dem_cached_at} {new Date(data.cached_at).toLocaleString("fr-BE", { dateStyle: "short", timeStyle: "short" })}
             </p>
           )}
         </>

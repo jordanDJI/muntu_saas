@@ -4,6 +4,7 @@ import { api, supabase } from "../../../lib/api";
 import { UpgradeGate } from "../components/UpgradeGate";
 import { useSubscription } from "../../../contexts/SubscriptionContext";
 import type { FeatureKey } from "../../../contexts/SubscriptionContext";
+import { useLanguage } from "../../../contexts/LanguageContext";
 
 const AGENT_FEATURE: Record<string, FeatureKey> = {
   support_client:   "agent_support",
@@ -12,18 +13,6 @@ const AGENT_FEATURE: Record<string, FeatureKey> = {
 
 const AGENT_ORDER = ["vitrine", "support_client", "assistant_tenant"] as const;
 type AgentType = typeof AGENT_ORDER[number];
-
-const SIDEBAR_LABELS: Record<AgentType, { name: string; role: string }> = {
-  vitrine:          { name: "Chatbot vitrine",  role: "Agent 1 · Site public" },
-  support_client:   { name: "Support client",   role: "Agent 2 · Telegram" },
-  assistant_tenant: { name: "Mon assistant",    role: "Agent 3 · Opérationnel" },
-};
-
-const AGENT_DESCRIPTIONS: Record<AgentType, string> = {
-  vitrine:          "Répond aux questions FAQ et gère les prises de rendez-vous sur votre site public.",
-  support_client:   "Accompagne vos clients via Telegram — documents, RDV, questions fréquentes.",
-  assistant_tenant: "Votre assistant personnel — planning, leads, résumés de conversations.",
-};
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 type Panel = AgentType | "syntheses";
@@ -38,6 +27,19 @@ function AgentIcon({ type }: { type: AgentType }) {
 
 export default function AgentsPage() {
   const { hasFeature } = useSubscription();
+  const { t } = useLanguage();
+
+  const SIDEBAR_LABELS: Record<AgentType, { name: string; role: string }> = {
+    vitrine:          { name: t.agt_vitrine_label,   role: t.agt_vitrine_role },
+    support_client:   { name: t.agt_support_label,   role: t.agt_support_role },
+    assistant_tenant: { name: t.agt_assistant_label, role: t.agt_assistant_role },
+  };
+
+  const AGENT_DESCRIPTIONS: Record<AgentType, string> = {
+    vitrine:          t.agt_vitrine_desc,
+    support_client:   t.agt_support_desc,
+    assistant_tenant: t.agt_assistant_desc,
+  };
   const [configs, setConfigs]             = useState<any[]>([]);
   const [syntheses, setSyntheses]         = useState<any[]>([]);
   const [selected, setSelected]           = useState<Panel>("assistant_tenant");
@@ -148,21 +150,21 @@ export default function AgentsPage() {
       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
       </svg>
-      Agents IA
+      {t.agt_back}
     </button>
   );
 
   // ── Config panel ──────────────────────────────────────────────────────────
   const ConfigPanel = ({ type }: { type: AgentType }) => {
     const cfg = config(type);
-    if (!cfg) return <div className="p-8 text-gray-400 text-sm">Chargement…</div>;
+    if (!cfg) return <div className="p-8 text-gray-400 text-sm">{t.dash_loading}</div>;
     return (
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-2xl w-full mx-auto">
 
         {/* Statut */}
         <div className="flex items-center justify-between bg-white rounded-xl border border-gray-200 px-4 sm:px-5 py-4">
           <div className="flex-1 min-w-0 pr-4">
-            <p className="font-medium text-gray-800">Statut de l'agent</p>
+            <p className="font-medium text-gray-800">{t.agt_agent_status}</p>
             <p className="text-xs text-gray-400 mt-0.5">{AGENT_DESCRIPTIONS[type]}</p>
           </div>
           <button
@@ -177,7 +179,7 @@ export default function AgentsPage() {
         {/* Prompt système */}
         <div className="bg-white rounded-xl border border-gray-200 px-4 sm:px-5 py-4 space-y-2">
           <label className="text-sm font-medium text-gray-700">
-            Prompt système <span className="text-gray-400 font-normal">(optionnel)</span>
+            {t.agt_system_prompt} <span className="text-gray-400 font-normal">{t.agt_optional}</span>
           </label>
           <textarea
             rows={5}
@@ -186,13 +188,13 @@ export default function AgentsPage() {
             placeholder={`Ex : Tu es l'assistant de ${userName || "votre nom"}, réponds toujours en français, sois bienveillant…`}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary-400 bg-gray-50"
           />
-          {saveOk === type && <p className="text-xs text-green-600">✓ Sauvegardé</p>}
+          {saveOk === type && <p className="text-xs text-green-600">{t.agt_saved}</p>}
         </div>
 
         {/* Agent 2 — info canal */}
         {type === "support_client" && (
           <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 sm:px-5 py-4 space-y-2">
-            <p className="text-sm font-medium text-blue-800">Canal Telegram</p>
+            <p className="text-sm font-medium text-blue-800">{t.agt_telegram_channel}</p>
             <p className="text-xs text-blue-700">Le bot est configuré dans l'Agent 3. Générez des liens d'invitation par contact depuis la page <strong>Demandes</strong>.</p>
             <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-2">
               <p className="text-xs text-amber-700"><strong>WhatsApp</strong> — en attente d'approbation Meta Business API.</p>
@@ -204,7 +206,7 @@ export default function AgentsPage() {
         {type === "assistant_tenant" && (
           <div className="space-y-4">
             <div className="bg-white rounded-xl border border-gray-200 px-4 sm:px-5 py-4 space-y-4">
-              <p className="text-sm font-semibold text-gray-700">Bot Telegram</p>
+              <p className="text-sm font-semibold text-gray-700">{t.agt_telegram_bot}</p>
               {(myRole === "owner" || myRole === "admin") ? (
                 <>
                   <div>
@@ -273,7 +275,7 @@ export default function AgentsPage() {
   // ── Synthèses panel ────────────────────────────────────────────────────────
   const SynthesesPanel = () => (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 max-w-2xl w-full mx-auto">
-      <h2 className="font-semibold text-gray-800 text-lg">Synthèses de conversations</h2>
+      <h2 className="font-semibold text-gray-800 text-lg">{t.agt_syntheses_title}</h2>
       {syntheses.length === 0
         ? <p className="text-gray-400 text-sm">Aucune synthèse générée pour le moment.</p>
         : syntheses.map((s) => (
@@ -303,7 +305,7 @@ export default function AgentsPage() {
         }`}
       >
         <div className="px-4 py-4 border-b border-gray-700">
-          <p className="text-white font-semibold text-sm">Agents IA</p>
+          <p className="text-white font-semibold text-sm">{t.agt_title}</p>
           <p className="text-gray-500 text-xs mt-0.5">Propulsé par Gemini</p>
         </div>
 
@@ -349,7 +351,7 @@ export default function AgentsPage() {
           <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
           </svg>
-          <span className="text-sm font-medium flex-1 text-left">Synthèses</span>
+          <span className="text-sm font-medium flex-1 text-left">{t.agt_syntheses}</span>
           {syntheses.length > 0 && (
             <span className="bg-primary-600 text-white text-xs font-semibold px-1.5 py-0.5 rounded-full leading-none">
               {syntheses.length}
@@ -386,7 +388,7 @@ export default function AgentsPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.9 9.9 0 01-4-.8L3 20l1.4-4.2A7.8 7.8 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                 </svg>
-                Chat
+                {t.agt_chat_tab}
               </button>
               <button
                 onClick={() => setActiveTab("config")}
@@ -397,7 +399,7 @@ export default function AgentsPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/>
                 </svg>
-                Configuration
+                {t.agt_config_tab}
               </button>
             </div>
             {activeTab === "chat" ? (
@@ -460,7 +462,7 @@ export default function AgentsPage() {
                       value={chatInput}
                       onChange={(e) => { setChatInput(e.target.value); e.target.style.height = "auto"; setInputHeight(Math.min(e.target.scrollHeight, 200)); }}
                       onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
-                      placeholder="Posez votre question…"
+                      placeholder={t.agt_question_ph}
                       disabled={!isChatActive}
                       className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 bg-gray-50 overflow-y-auto"
                       style={{ height: `${inputHeight}px` }}
@@ -500,7 +502,7 @@ export default function AgentsPage() {
           <>
             <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 shrink-0 flex items-center gap-3">
               <BackButton />
-              <p className="font-semibold text-gray-800">Synthèses récentes</p>
+              <p className="font-semibold text-gray-800">{t.agt_syntheses_recent}</p>
             </div>
             <SynthesesPanel />
           </>

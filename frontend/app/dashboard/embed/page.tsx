@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, supabase } from "../../../lib/api";
 import { UpgradeGate } from "../components/UpgradeGate";
+import { useLanguage } from "../../../contexts/LanguageContext";
 
-function CopyBlock({ label, code, id }: { label: string; code: string; id: string }) {
+function CopyBlock({ label, code, id, copyLabel, copiedLabel }: { label: string; code: string; id: string; copyLabel: string; copiedLabel: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
     navigator.clipboard.writeText(code);
@@ -17,7 +18,7 @@ function CopyBlock({ label, code, id }: { label: string; code: string; id: strin
         <label className="text-sm font-medium text-gray-700">{label}</label>
         <button onClick={copy}
           className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${copied ? "bg-green-100 text-green-700" : "bg-primary-50 text-primary-600 hover:bg-primary-100"}`}>
-          {copied ? "Copié ✓" : "Copier"}
+          {copied ? copiedLabel : copyLabel}
         </button>
       </div>
       <pre id={id} className="bg-gray-900 text-green-300 text-xs rounded-xl p-4 overflow-x-auto whitespace-pre-wrap leading-relaxed">
@@ -49,6 +50,7 @@ function WidgetCard({ number, title, subtitle, children }: WidgetCardProps) {
 }
 
 export default function EmbedPage() {
+  const { t } = useLanguage();
   const [tenantSlug, setTenantSlug] = useState("");
   const [siteData, setSiteData] = useState<{ ga4_id?: string; meta_pixel_id?: string; gtm_id?: string } | null>(null);
   const appUrl = typeof window !== "undefined" ? window.location.origin : "";
@@ -163,20 +165,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       <div className="bg-primary-50 border border-primary-100 rounded-xl px-4 py-3 space-y-2">
         <p className="text-sm font-semibold text-primary-800">Étape préalable : chargeur universel</p>
         <p className="text-xs text-primary-700">Ajoutez ce script une seule fois avant <code>&lt;/body&gt;</code> pour activer tous les widgets ci-dessous.</p>
-        {!loading && <CopyBlock label="Script universel (une fois par site)" code={loaderTag} id="loader-code" />}
+        {!loading && <CopyBlock label="Script universel (une fois par site)" code={loaderTag} id="loader-code" copyLabel={t.emb_copy} copiedLabel={t.emb_copied} />}
       </div>
 
       {/* 1 — Chatbot */}
-      <WidgetCard number={1} title="Chatbot IA" subtitle="Assistant flottant en bas à droite, accessible depuis toutes les pages">
+      <WidgetCard number={1} title={t.emb_chatbot_title} subtitle={t.emb_chatbot_desc}>
         {loading ? (
-          <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">Chargement…</div>
+          <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">{t.dash_loading}</div>
         ) : (
           <div className="space-y-4">
-            <CopyBlock label="Avec embed.js (recommandé)" code={chatbotSnippet} id="chatbot-code" />
+            <CopyBlock label={t.emb_with_js} code={chatbotSnippet} id="chatbot-code" copyLabel={t.emb_copy} copiedLabel={t.emb_copied} />
             <details className="text-xs text-gray-500 cursor-pointer">
               <summary className="hover:text-gray-700">Voir le code manuel (sans embed.js)</summary>
               <div className="mt-2">
-                <CopyBlock label="Code autonome" code={chatbotManualSnippet} id="chatbot-manual" />
+                <CopyBlock label="Code autonome" code={chatbotManualSnippet} id="chatbot-manual" copyLabel={t.emb_copy} copiedLabel={t.emb_copied} />
               </div>
             </details>
           </div>
@@ -184,12 +186,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </WidgetCard>
 
       {/* 2 — Booking */}
-      <WidgetCard number={2} title="Widget de réservation" subtitle="Calendrier + créneaux + formulaire — à intégrer sur une page dédiée">
+      <WidgetCard number={2} title={t.emb_booking_title} subtitle={t.emb_booking_desc}>
         {loading ? (
-          <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">Chargement…</div>
+          <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">{t.dash_loading}</div>
         ) : (
           <div className="space-y-4">
-            <CopyBlock label="Code à intégrer sur votre page" code={bookSnippet} id="book-code" />
+            <CopyBlock label={t.emb_code_label} code={bookSnippet} id="book-code" copyLabel={t.emb_copy} copiedLabel={t.emb_copied} />
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700">
               <p className="font-medium mb-1">Conseil d&apos;intégration</p>
               <p>Placez le widget dans un bloc centré de 480–600 px de large pour le meilleur rendu. Il s&apos;adapte automatiquement en hauteur selon l&apos;étape.</p>
@@ -199,12 +201,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </WidgetCard>
 
       {/* 3 — Contact */}
-      <WidgetCard number={3} title="Formulaire de contact" subtitle="Génère un lead dans votre dashboard à chaque envoi">
+      <WidgetCard number={3} title={t.emb_contact_title} subtitle={t.emb_contact_desc}>
         {loading ? (
-          <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">Chargement…</div>
+          <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">{t.dash_loading}</div>
         ) : (
           <div className="space-y-4">
-            <CopyBlock label="Code à intégrer sur votre page" code={contactSnippet} id="contact-code" />
+            <CopyBlock label={t.emb_code_label} code={contactSnippet} id="contact-code" copyLabel={t.emb_copy} copiedLabel={t.emb_copied} />
           </div>
         )}
       </WidgetCard>
@@ -220,9 +222,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           </div>
         ) : (
           <div className="space-y-6">
-            {ga4Script && <CopyBlock label="Google Analytics 4 — dans &lt;head&gt;" code={ga4Script} id="ga4-code" />}
-            {metaScript && <CopyBlock label="Meta Pixel — dans &lt;head&gt;" code={metaScript} id="meta-code" />}
-            {gtmScript && <CopyBlock label="Google Tag Manager — dans &lt;head&gt; et &lt;body&gt;" code={gtmScript} id="gtm-code" />}
+            {ga4Script && <CopyBlock label="Google Analytics 4 — dans &lt;head&gt;" code={ga4Script} id="ga4-code" copyLabel={t.emb_copy} copiedLabel={t.emb_copied} />}
+            {metaScript && <CopyBlock label="Meta Pixel — dans &lt;head&gt;" code={metaScript} id="meta-code" copyLabel={t.emb_copy} copiedLabel={t.emb_copied} />}
+            {gtmScript && <CopyBlock label="Google Tag Manager — dans &lt;head&gt; et &lt;body&gt;" code={gtmScript} id="gtm-code" copyLabel={t.emb_copy} copiedLabel={t.emb_copied} />}
           </div>
         )}
       </WidgetCard>

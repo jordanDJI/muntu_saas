@@ -16,22 +16,24 @@ type Section =
   | "abonnement" | "notifications" | "preferences"
   | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire" | "facturation";
 
-const NAV: { key: Section; label: string; icon: string }[] = [
-  { key: "profil",        label: "Profil",          icon: "👤" },
-  { key: "securite",      label: "Sécurité",        icon: "🔐" },
-  { key: "site",          label: "Mon site",        icon: "🌐" },
-  { key: "domaine",       label: "Domaine",         icon: "🔗" },
-  { key: "annuaire",      label: "Annuaire public",  icon: "📋" },
-  { key: "metriques",     label: "Métriques",       icon: "📊" },
-  { key: "abonnement",    label: "Abonnement",      icon: "💳" },
-  { key: "notifications", label: "Notifications",   icon: "🔔" },
-  { key: "preferences",  label: "Préférences",     icon: "⚙️" },
-  { key: "membres",       label: "Équipe",          icon: "👥" },
-  { key: "facturation",   label: "Facturation",     icon: "🧾" },
-  { key: "integrations",  label: "Intégrations",    icon: "🔗" },
-  { key: "export",        label: "Export & RGPD",   icon: "📤" },
-  { key: "activite",      label: "Activité",        icon: "📋" },
-];
+function getNav(t: any) {
+  return [
+    { key: "profil",        label: t.sett_nav_profil,        icon: "👤" },
+    { key: "securite",      label: t.sett_nav_securite,      icon: "🔐" },
+    { key: "site",          label: t.sett_nav_site,          icon: "🌐" },
+    { key: "domaine",       label: t.sett_nav_domaine,       icon: "🔗" },
+    { key: "annuaire",      label: t.sett_nav_annuaire,      icon: "📋" },
+    { key: "metriques",     label: t.sett_nav_metriques,     icon: "📊" },
+    { key: "abonnement",    label: t.sett_nav_abonnement,    icon: "💳" },
+    { key: "notifications", label: t.sett_nav_notifications, icon: "🔔" },
+    { key: "preferences",   label: t.sett_nav_preferences,   icon: "⚙️" },
+    { key: "membres",       label: t.sett_nav_membres,       icon: "👥" },
+    { key: "facturation",   label: t.sett_nav_facturation,   icon: "🧾" },
+    { key: "integrations",  label: t.sett_nav_integrations,  icon: "🔗" },
+    { key: "export",        label: t.sett_nav_export,        icon: "📤" },
+    { key: "activite",      label: t.sett_nav_activite,      icon: "📋" },
+  ] as const;
+}
 
 // ── Helpers UI ────────────────────────────────────────────────────────────────
 
@@ -48,11 +50,13 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle?: string })
   );
 }
 
-function SaveBtn({ loading, label = "Sauvegarder" }: { loading: boolean; label?: string }) {
+function SaveBtn({ loading, label }: { loading: boolean; label?: string }) {
+  const { t } = useLanguage();
+  const displayLabel = label ?? t.sett_save;
   return (
     <button type="submit" disabled={loading}
       className="bg-primary-600 text-white px-5 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium">
-      {loading ? "Sauvegarde…" : label}
+      {displayLabel}
     </button>
   );
 }
@@ -114,7 +118,7 @@ function SectionProfil() {
       setAvatarUrl(url);
       api.logActivity({ action: "Photo de profil mise à jour" }).catch(() => {});
     } catch (err: any) {
-      setMsg(`Erreur upload : ${err.message}`);
+      setMsg(`${t.sett_error_upload} : ${err.message}`);
     } finally {
       setUploadingAvatar(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -127,7 +131,7 @@ function SectionProfil() {
       await supabase.auth.updateUser({ data: { full_name: name, lang: ctxLang, timezone: tz } });
       api.logActivity({ action: "Profil mis à jour", detail: name || undefined }).catch(() => {});
       setMsg(t.sett_saved);
-    } catch { setMsg("Erreur lors de la sauvegarde."); }
+    } catch { setMsg(t.sett_error_save); }
     finally { setSaving(false); }
   };
 
@@ -135,7 +139,7 @@ function SectionProfil() {
 
   return (
     <>
-      <SectionTitle title="Profil utilisateur" subtitle="Vos informations personnelles et préférences de compte." />
+      <SectionTitle title={t.sett_profil_title} subtitle={t.sett_profil_subtitle} />
       <Card>
         <form onSubmit={save} className="space-y-4">
           <div className="flex items-center gap-4">
@@ -154,7 +158,7 @@ function SectionProfil() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingAvatar}
                 className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:cursor-wait"
-                title="Changer la photo"
+                title={t.sett_avatar_change}
               >
                 {uploadingAvatar ? (
                   <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
@@ -171,9 +175,9 @@ function SectionProfil() {
             <div>
               <p className="text-sm font-medium text-gray-700">{user?.email}</p>
               <p className="text-xs text-gray-400 mt-0.5">
-                Compte créé le {user?.created_at ? new Date(user.created_at).toLocaleDateString("fr-BE") : "—"}
+                {t.sett_created_at} {user?.created_at ? new Date(user.created_at).toLocaleDateString("fr-BE") : "—"}
               </p>
-              <p className="text-xs text-gray-400 mt-0.5">Survolez la photo pour la modifier</p>
+              <p className="text-xs text-gray-400 mt-0.5">{t.sett_avatar_hover}</p>
             </div>
           </div>
           <div>
@@ -221,6 +225,7 @@ function SectionProfil() {
 // ── Section Sécurité ──────────────────────────────────────────────────────────
 
 function SectionSecurite() {
+  const { t } = useLanguage();
   const [current, setCurrent]     = useState("");
   const [next, setNext]           = useState("");
   const [confirm, setConfirm]     = useState("");
@@ -238,17 +243,17 @@ function SectionSecurite() {
 
   const changePassword = async (e: React.FormEvent) => {
     e.preventDefault(); setMsg("");
-    if (next !== confirm) { setMsg("Erreur : les mots de passe ne correspondent pas."); return; }
-    if (next.length < 8)  { setMsg("Erreur : minimum 8 caractères."); return; }
+    if (next !== confirm) { setMsg(t.sett_sec_err_mismatch); return; }
+    if (next.length < 8)  { setMsg(t.sett_sec_err_short); return; }
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) throw new Error("Session introuvable");
       const { error: signErr } = await supabase.auth.signInWithPassword({ email: user.email, password: current });
-      if (signErr) throw new Error("Mot de passe actuel incorrect.");
+      if (signErr) throw new Error(t.sett_sec_err_wrong_pass);
       const { error } = await supabase.auth.updateUser({ password: next });
       if (error) throw error;
-      setMsg("Mot de passe modifié avec succès."); setCurrent(""); setNext(""); setConfirm("");
+      setMsg(t.sett_sec_changed_ok); setCurrent(""); setNext(""); setConfirm("");
       api.logActivity({ action: "Mot de passe modifié", detail: "Depuis les paramètres" }).catch(() => {});
     } catch (err: any) { setMsg(`Erreur : ${err.message}`); }
     finally { setSaving(false); }
@@ -263,43 +268,43 @@ function SectionSecurite() {
 
   return (
     <>
-      <SectionTitle title="Sécurité" subtitle="Gérez votre mot de passe et la sécurité de votre compte." />
+      <SectionTitle title={t.sett_sec_title} subtitle={t.sett_sec_subtitle} />
       <Card>
-        <h3 className="font-semibold text-gray-700 text-sm">Modifier le mot de passe</h3>
+        <h3 className="font-semibold text-gray-700 text-sm">{t.sett_sec_change_pass}</h3>
         {isOAuth ? (
           <p className="text-sm text-gray-500 bg-gray-50 border rounded-lg px-4 py-3">
-            Votre compte est connecté via Google. La modification du mot de passe n'est pas disponible pour les connexions OAuth.
+            {t.sett_sec_oauth_msg}
           </p>
         ) : (
           <form onSubmit={changePassword} className="space-y-3">
             <div>
-              <label className="block text-sm font-medium mb-1">Mot de passe actuel</label>
+              <label className="block text-sm font-medium mb-1">{t.sett_sec_current_pass}</label>
               <input type="password" value={current} onChange={e => setCurrent(e.target.value)} required
                 className="border rounded-lg px-3 py-2 w-full text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Nouveau mot de passe</label>
+              <label className="block text-sm font-medium mb-1">{t.sett_sec_new_pass}</label>
               <input type="password" value={next} onChange={e => setNext(e.target.value)} required minLength={8}
                 className="border rounded-lg px-3 py-2 w-full text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Confirmer le nouveau mot de passe</label>
+              <label className="block text-sm font-medium mb-1">{t.sett_sec_confirm_pass}</label>
               <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required
                 className="border rounded-lg px-3 py-2 w-full text-sm" />
             </div>
             <Feedback msg={msg} />
-            <SaveBtn loading={saving} label="Modifier le mot de passe" />
+            <SaveBtn loading={saving} label={t.sett_sec_change_btn} />
           </form>
         )}
       </Card>
       <Card>
-        <h3 className="font-semibold text-gray-700 text-sm">Mot de passe oublié ?</h3>
-        <p className="text-sm text-gray-500">Recevoir un lien de réinitialisation par email.</p>
+        <h3 className="font-semibold text-gray-700 text-sm">{t.sett_sec_forgot_title}</h3>
+        <p className="text-sm text-gray-500">{t.sett_sec_forgot_desc}</p>
         {resetSent ? (
-          <p className="text-green-600 text-sm">Email envoyé — vérifiez votre boîte mail.</p>
+          <p className="text-green-600 text-sm">{t.sett_sec_reset_sent}</p>
         ) : (
           <button onClick={sendReset} className="text-primary-600 text-sm hover:underline">
-            Envoyer le lien de réinitialisation
+            {t.sett_sec_reset_btn}
           </button>
         )}
       </Card>
@@ -310,6 +315,7 @@ function SectionSecurite() {
 // ── Section Site ──────────────────────────────────────────────────────────────
 
 function SectionSite() {
+  const { t } = useLanguage();
   const [site, setSite]                   = useState<any>(null);
   const [loading, setLoading]             = useState(true);
   const [saving, setSaving]               = useState(false);
@@ -340,8 +346,8 @@ function SectionSite() {
     e.preventDefault(); if (!site) return; setSaving(true); setMsg("");
     try {
       const updated = await api.updateSite(site.id, { title, absence_mode: absenceMode, absence_message: absenceMessage || null });
-      setSite(updated); setMsg("Modifications sauvegardées.");
-    } catch { setMsg("Erreur lors de la sauvegarde."); }
+      setSite(updated); setMsg(t.sett_site_saved);
+    } catch { setMsg(t.sett_error_save); }
     finally { setSaving(false); }
   };
 
@@ -351,9 +357,9 @@ function SectionSite() {
     try {
       await api.publishSite(site.id);
       setSite({ ...site, status: "published" });
-      setPublishMsg("✓ Site publié — visible par vos visiteurs.");
+      setPublishMsg(t.sett_site_published_msg);
     } catch (err: any) {
-      setPublishMsg(err?.message ?? "Erreur lors de la publication.");
+      setPublishMsg(err?.message ?? t.sett_site_err_publish);
     } finally { setPublishing(false); }
   };
 
@@ -363,34 +369,34 @@ function SectionSite() {
     try {
       await api.unpublishSite(site.id);
       setSite({ ...site, status: "draft" });
-      setPublishMsg("Site dépublié — plus visible en ligne.");
+      setPublishMsg(t.sett_site_unpublished_msg);
     } catch (err: any) {
-      setPublishMsg(err?.message ?? "Erreur lors de la dépublication.");
+      setPublishMsg(err?.message ?? t.sett_site_err_unpublish);
     } finally { setPublishing(false); }
   };
 
-  if (loading) return <p className="text-gray-400 text-sm">Chargement…</p>;
+  if (loading) return <p className="text-gray-400 text-sm">{t.dash_loading}</p>;
 
   return (
     <>
-      <SectionTitle title="Mon site" subtitle="Titre affiché, mode absence et publication de votre vitrine." />
+      <SectionTitle title={t.sett_site_title} subtitle={t.sett_site_subtitle} />
       <Card>
         <form onSubmit={save} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Titre affiché</label>
+            <label className="block text-sm font-medium mb-1">{t.sett_site_disp_title}</label>
             <input value={title} onChange={e => setTitle(e.target.value)} className="border rounded-lg px-3 py-2 w-full text-sm" />
           </div>
-          <Toggle checked={absenceMode} onChange={setAbsenceMode} label="Mode absence" />
+          <Toggle checked={absenceMode} onChange={setAbsenceMode} label={t.sett_site_absence} />
           {absenceMode && (
             <div>
-              <label className="block text-sm font-medium mb-1">Message d'absence</label>
+              <label className="block text-sm font-medium mb-1">{t.sett_site_absence}</label>
               <input value={absenceMessage} onChange={e => setAbsenceMessage(e.target.value)}
-                placeholder="Ex: Actuellement en congé, retour le 15 mai."
+                placeholder={t.sett_site_absence_ph}
                 className="border rounded-lg px-3 py-2 w-full text-sm" />
             </div>
           )}
           <Feedback msg={msg} />
-          <SaveBtn loading={saving} />
+          <SaveBtn loading={saving} label={saving ? t.sett_saving : t.sett_save} />
         </form>
       </Card>
       <Card>
@@ -402,12 +408,12 @@ function SectionSite() {
                 {site?.status === "published" ? (
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    Publié — visible en ligne
+                    {t.sett_site_published_badge}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 border border-gray-200 px-2.5 py-1 rounded-full">
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                    Brouillon — non visible
+                    {t.sett_site_draft_badge}
                   </span>
                 )}
               </div>
@@ -428,7 +434,7 @@ function SectionSite() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                 </svg>
-                Prévisualiser
+                {t.sett_site_preview}
               </a>
             )}
           </div>
@@ -438,9 +444,9 @@ function SectionSite() {
             <button onClick={handlePublish} disabled={publishing}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 transition-colors">
               {publishing ? (
-                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Publication en cours…</>
+                <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />{t.sett_site_publishing}</>
               ) : (
-                <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>Publier le site</>
+                <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>{t.sett_site_publish_btn}</>
               )}
             </button>
           )}
@@ -452,22 +458,22 @@ function SectionSite() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
               </svg>
-              Dépublier le site
+              {t.sett_site_unpublish_btn}
             </button>
           )}
 
           {site?.status === "published" && confirmDepublish && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
-              <p className="text-sm font-semibold text-red-800">Confirmer la dépublication ?</p>
-              <p className="text-xs text-red-600">Votre site ne sera plus accessible en ligne. Vos données sont conservées et vous pourrez le republier à tout moment.</p>
+              <p className="text-sm font-semibold text-red-800">{t.sett_site_depublish_title}</p>
+              <p className="text-xs text-red-600">{t.sett_site_depublish_info}</p>
               <div className="flex gap-2">
                 <button onClick={handleUnpublish} disabled={publishing}
                   className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-60">
-                  {publishing ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : "Confirmer"}
+                  {publishing ? <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : t.sett_confirm}
                 </button>
                 <button onClick={() => setConfirmDepublish(false)}
                   className="flex-1 px-3 py-2 rounded-lg font-medium text-sm bg-white text-gray-600 border border-gray-200 hover:bg-gray-50">
-                  Annuler
+                  {t.lay_cancel}
                 </button>
               </div>
             </div>
@@ -635,24 +641,25 @@ function DesignRequestCard() {
 
 // ── Section Métriques ─────────────────────────────────────────────────────────
 
-const METRIC_DEFS = [
-  { id: "new_leads",  label: "Nouvelles demandes",    desc: "Leads non traités en attente de réponse",               icon: "📨" },
-  { id: "pending",    label: "RDV en attente",         desc: "Rendez-vous à confirmer ou refuser",                    icon: "⏳" },
-  { id: "confirmed",  label: "RDV confirmés à venir",  desc: "Prochains rendez-vous confirmés dans votre agenda",     icon: "✅" },
-  { id: "contacts",   label: "Contacts distincts",     desc: "Nombre total de clients/prospects dans votre CRM",      icon: "👥" },
-  { id: "leads_30d",  label: "Demandes (30 jours)",    desc: "Nouvelles demandes reçues sur les 30 derniers jours",   icon: "📈" },
-  { id: "rdv_30d",    label: "RDV (30 jours)",         desc: "Rendez-vous créés ou confirmés ce mois",                icon: "📅" },
-  { id: "conv_rate",  label: "Taux de confirmation",   desc: "% de RDV confirmés parmi tous les RDV clôturés",        icon: "📊" },
-  { id: "activity",        label: "Activité hebdomadaire",         desc: "Graphique des demandes et RDV des 7 derniers jours",      icon: "📉" },
-  { id: "demand_potential", label: "Potentiel de demande locale",  desc: "Indice Google Trends pour vos zones d'intervention",      icon: "🌍" },
-];
-
-const ALL_METRIC_IDS = METRIC_DEFS.map((m) => m.id);
+const ALL_METRIC_IDS = ["new_leads", "pending", "confirmed", "contacts", "leads_30d", "rdv_30d", "conv_rate", "activity", "demand_potential"];
 
 function SectionMetriques() {
+  const { t } = useLanguage();
   const [enabled, setEnabled] = useState<string[]>(ALL_METRIC_IDS);
   const [saving, setSaving]   = useState(false);
   const [msg, setMsg]         = useState("");
+
+  const METRIC_DEFS = [
+    { id: "new_leads",        label: t.sett_met_kpi_new_leads, desc: t.sett_met_kpi_new_leads_d, icon: "📨" },
+    { id: "pending",          label: t.sett_met_kpi_pending,   desc: t.sett_met_kpi_pending_d,   icon: "⏳" },
+    { id: "confirmed",        label: t.sett_met_kpi_confirmed, desc: t.sett_met_kpi_confirmed_d, icon: "✅" },
+    { id: "contacts",         label: t.sett_met_kpi_contacts,  desc: t.sett_met_kpi_contacts_d,  icon: "👥" },
+    { id: "leads_30d",        label: t.sett_met_kpi_leads_30d, desc: t.sett_met_kpi_leads_30d_d, icon: "📈" },
+    { id: "rdv_30d",          label: t.sett_met_kpi_rdv_30d,   desc: t.sett_met_kpi_rdv_30d_d,   icon: "📅" },
+    { id: "conv_rate",        label: t.sett_met_kpi_conv,      desc: t.sett_met_kpi_conv_d,      icon: "📊" },
+    { id: "activity",         label: t.sett_met_kpi_activity,  desc: t.sett_met_kpi_activity_d,  icon: "📉" },
+    { id: "demand_potential", label: t.sett_met_kpi_demand,    desc: t.sett_met_kpi_demand_d,    icon: "🌍" },
+  ];
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -669,14 +676,14 @@ function SectionMetriques() {
     setSaving(true); setMsg("");
     try {
       await supabase.auth.updateUser({ data: { dashboard_kpis: enabled } });
-      setMsg("Préférences sauvegardées.");
-    } catch { setMsg("Erreur lors de la sauvegarde."); }
+      setMsg(t.sett_met_saved);
+    } catch { setMsg(t.sett_error_save); }
     finally { setSaving(false); }
   };
 
   return (
     <>
-      <SectionTitle title="Métriques" subtitle="Choisissez les indicateurs affichés sur votre tableau de bord." />
+      <SectionTitle title={t.sett_met_title} subtitle={t.sett_met_subtitle} />
       <Card>
         <p className="text-sm font-semibold text-gray-700">Indicateurs du tableau de bord</p>
         <p className="text-xs text-gray-400">Activez ou désactivez les métriques selon vos priorités.</p>
@@ -697,7 +704,7 @@ function SectionMetriques() {
         <Feedback msg={msg} />
         <button onClick={save} disabled={saving}
           className="bg-primary-600 text-white px-5 py-2 rounded-lg hover:bg-primary-700 disabled:opacity-50 text-sm font-medium">
-          {saving ? "Sauvegarde…" : "Enregistrer"}
+          {saving ? t.sett_saving : t.sett_met_save}
         </button>
       </Card>
       <DemandPotentialCard />
@@ -989,6 +996,7 @@ const NOTIF_DEFAULTS = {
 };
 
 function SectionNotifications() {
+  const { t } = useLanguage();
   const [prefs, setPrefs] = useState(NOTIF_DEFAULTS);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
@@ -1007,8 +1015,8 @@ function SectionNotifications() {
     setSaving(true); setMsg("");
     try {
       await supabase.auth.updateUser({ data: { notif_prefs: prefs } });
-      setMsg("Préférences sauvegardées.");
-    } catch { setMsg("Erreur lors de la sauvegarde."); }
+      setMsg(t.sett_notif_saved);
+    } catch { setMsg(t.sett_error_save); }
     finally { setSaving(false); }
   };
 
@@ -1018,33 +1026,33 @@ function SectionNotifications() {
 
   return (
     <>
-      <SectionTitle title="Notifications" subtitle="Choisissez comment et quand vous souhaitez être alerté." />
+      <SectionTitle title={t.sett_notif_title} subtitle={t.sett_notif_subtitle} />
       <Card>
-        <h3 className="font-semibold text-sm text-gray-700 mb-2">Email</h3>
+        <h3 className="font-semibold text-sm text-gray-700 mb-2">{t.sett_notif_email_title}</h3>
         <div className="space-y-3">
-          <Row k="email_new_lead"   label="Nouveau lead / demande de contact" />
-          <Row k="email_new_rdv"    label="Nouveau rendez-vous confirmé" />
-          <Row k="email_reminder"   label="Rappels de rendez-vous" />
-          <Row k="email_invoice"    label="Factures et renouvellements" />
-          <Row k="email_newsletter" label="Nouveautés et conseils" />
+          <Row k="email_new_lead"   label={t.sett_notif_new_lead} />
+          <Row k="email_new_rdv"    label={t.sett_notif_new_rdv} />
+          <Row k="email_reminder"   label={t.sett_notif_reminder} />
+          <Row k="email_invoice"    label={t.sett_notif_invoice} />
+          <Row k="email_newsletter" label={t.sett_notif_newsletter} />
         </div>
       </Card>
       <Card>
-        <h3 className="font-semibold text-sm text-gray-700 mb-2">SMS</h3>
+        <h3 className="font-semibold text-sm text-gray-700 mb-2">{t.sett_notif_sms_title}</h3>
         <div className="space-y-3">
-          <Row k="sms_rdv" label="Rappels de rendez-vous par SMS" />
+          <Row k="sms_rdv" label={t.sett_notif_sms_rdv} />
         </div>
         <p className="text-xs text-gray-400 mt-2">Les notifications SMS nécessitent un numéro de téléphone vérifié.</p>
       </Card>
       <Card>
-        <h3 className="font-semibold text-sm text-gray-700 mb-2">In-app</h3>
+        <h3 className="font-semibold text-sm text-gray-700 mb-2">{t.sett_notif_inapp_title}</h3>
         <div className="space-y-3">
-          <Row k="inapp_updates" label="Nouvelles fonctionnalités et mises à jour" />
+          <Row k="inapp_updates" label={t.sett_notif_inapp_upd} />
         </div>
       </Card>
       <div className="flex items-center gap-3">
         <button onClick={save} disabled={saving} className="bg-primary-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50">
-          {saving ? "Sauvegarde…" : "Sauvegarder"}
+          {saving ? t.sett_saving : t.sett_save}
         </button>
         <Feedback msg={msg} />
       </div>
@@ -1055,6 +1063,7 @@ function SectionNotifications() {
 // ── Section Préférences ───────────────────────────────────────────────────────
 
 function SectionPreferences() {
+  const { t } = useLanguage();
   const [darkMode, setDarkMode]     = useState(false);
   const [compactView, setCompact]   = useState(false);
   const [dateFormat, setDateFormat] = useState("dd/mm/yyyy");
@@ -1075,14 +1084,14 @@ function SectionPreferences() {
     setSaving(true); setMsg("");
     try {
       await supabase.auth.updateUser({ data: { ui_prefs: { darkMode, compactView, dateFormat } } });
-      setMsg("Préférences sauvegardées.");
-    } catch { setMsg("Erreur lors de la sauvegarde."); }
+      setMsg(t.sett_met_saved);
+    } catch { setMsg(t.sett_error_save); }
     finally { setSaving(false); }
   };
 
   return (
     <>
-      <SectionTitle title="Préférences" subtitle="Personnalisez l'apparence et le comportement de l'interface." />
+      <SectionTitle title={t.sett_pref_title} subtitle={t.sett_pref_subtitle} />
       <Card>
         <h3 className="font-semibold text-sm text-gray-700 mb-2">Apparence</h3>
         <div className="space-y-3">
@@ -1092,9 +1101,9 @@ function SectionPreferences() {
               setDarkMode(v);
               window.dispatchEvent(new CustomEvent("klientys-darkmode", { detail: { darkMode: v } }));
             }}
-            label="Mode sombre"
+            label={t.sett_pref_dark_mode}
           />
-          <Toggle checked={compactView} onChange={setCompact} label="Vue compacte (listes condensées)" />
+          <Toggle checked={compactView} onChange={setCompact} label={t.sett_pref_compact} />
         </div>
       </Card>
       <Card>
@@ -1111,7 +1120,7 @@ function SectionPreferences() {
       </Card>
       <div className="flex items-center gap-3">
         <button onClick={save} disabled={saving} className="bg-primary-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50">
-          {saving ? "Sauvegarde…" : "Sauvegarder"}
+          {saving ? t.sett_saving : t.sett_save}
         </button>
         <Feedback msg={msg} />
       </div>
@@ -1713,6 +1722,7 @@ function GoogleAnalyticsCard() {
 // ── Section Facturation ───────────────────────────────────────────────────────
 
 function SectionFacturation() {
+  const { t } = useLanguage();
   const [settings, setSettings] = useState<Record<string, any>>({});
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
@@ -1741,7 +1751,7 @@ function SectionFacturation() {
 
   return (
     <>
-      <SectionTitle title="Facturation" subtitle="Configurez vos informations de facturation pour vos clients." />
+      <SectionTitle title={t.sett_fact_title} subtitle={t.sett_fact_subtitle} />
       <Card>
         <p className="text-sm font-semibold text-gray-700">Informations légales</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1835,9 +1845,10 @@ function SectionFacturation() {
 }
 
 function SectionIntegrations() {
+  const { t } = useLanguage();
   return (
     <>
-      <SectionTitle title="Intégrations" subtitle="Connectez votre espace à des services tiers." />
+      <SectionTitle title={t.sett_int_title} subtitle={t.sett_int_subtitle} />
       <GoogleAnalyticsCard />
     </>
   );
@@ -1846,6 +1857,7 @@ function SectionIntegrations() {
 // ── Section Export & RGPD ─────────────────────────────────────────────────────
 
 function SectionExport() {
+  const { t } = useLanguage();
   const router = useRouter();
   const [delStep, setDelStep]       = useState(0);
   const [confirm, setConfirm]       = useState("");
@@ -1879,7 +1891,7 @@ function SectionExport() {
 
   return (
     <>
-      <SectionTitle title="Export & RGPD" subtitle="Vos droits sur vos données personnelles (RGPD / CCPA)." />
+      <SectionTitle title={t.sett_exp_title} subtitle={t.sett_exp_subtitle} />
       <Card>
         <h3 className="font-semibold text-sm text-gray-700">Exporter mes données</h3>
         <p className="text-sm text-gray-500">Téléchargez l'ensemble de vos données (contacts, rendez-vous, leads, paramètres) au format JSON.</p>
@@ -1955,6 +1967,7 @@ const ACTION_ICON: Record<string, string> = {
 const PAGE_SIZE = 10;
 
 function SectionActivite() {
+  const { t } = useLanguage();
   const [logs, setLogs]           = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1995,7 +2008,7 @@ function SectionActivite() {
 
   return (
     <>
-      <SectionTitle title="Journaux d'activité" subtitle="Historique des actions récentes sur votre compte." />
+      <SectionTitle title={t.sett_act_title} subtitle={t.sett_act_subtitle} />
       <Card>
         {loading ? (
           <p className="text-sm text-gray-400">Chargement…</p>
@@ -2036,6 +2049,7 @@ function SectionActivite() {
 // ── Section Domaine ───────────────────────────────────────────────────────────
 
 function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
+  const { t } = useLanguage();
   const [plan, setPlan]               = useState<any>(null);
   const [domainInfo, setDomainInfo]   = useState<any>(null);
   const [loadingInit, setLoadingInit] = useState(true);
@@ -2189,7 +2203,7 @@ function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
   if (loadingInit) {
     return (
       <>
-        <SectionTitle title="Domaine personnalisé" subtitle="Connectez votre site à votre propre nom de domaine." />
+        <SectionTitle title={t.sett_dom_title} subtitle={t.sett_dom_subtitle} />
         <p className="text-sm text-gray-400">Chargement…</p>
       </>
     );
@@ -2198,8 +2212,8 @@ function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
   return (
     <>
       <SectionTitle
-        title="Domaine personnalisé"
-        subtitle="Connectez votre site à votre propre nom de domaine (ex: www.monsite.be)."
+        title={t.sett_dom_title}
+        subtitle={t.sett_dom_subtitle}
       />
 
       {/* ── Accès verrouillé ── */}
@@ -2537,6 +2551,7 @@ const titleCaseZone = (s: string) =>
   s.replace(/(?:^|[\s-])\S/g, c => c.toUpperCase());
 
 function SectionAnnuaire() {
+  const { t } = useLanguage();
   const [listing, setListing]         = useState<any>(null);
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
@@ -2614,10 +2629,10 @@ function SectionAnnuaire() {
           primary_zone: primaryZone || zones[0] || "",
           accepts_booking: acceptsBooking,
         });
-        setMsg("Profil annuaire sauvegardé et visible publiquement.");
+        setMsg(t.sett_ann_listed);
       } else {
         if (listing) await api.directoryOptOut();
-        setMsg("Vous n'apparaissez plus dans l'annuaire.");
+        setMsg(t.sett_ann_unlisted);
       }
       setListing((prev: any) => ({ ...prev, is_listed: isListed }));
     } catch (err: any) {
@@ -2641,8 +2656,8 @@ function SectionAnnuaire() {
   return (
     <>
       <SectionTitle
-        title="Annuaire public"
-        subtitle="Apparaissez dans l'annuaire Klientys et soyez trouvé par vos clients locaux."
+        title={t.sett_ann_title}
+        subtitle={t.sett_ann_subtitle}
       />
 
       <form onSubmit={save} className="space-y-4">
@@ -2650,7 +2665,7 @@ function SectionAnnuaire() {
           <Toggle
             checked={isListed}
             onChange={setIsListed}
-            label={isListed ? "Visible dans l'annuaire public" : "Non listé dans l'annuaire"}
+            label={isListed ? t.sett_ann_listed : t.sett_ann_unlisted}
           />
           <p className="text-xs text-gray-400 mt-1">
             Quand activé, votre profil est indexé dans l'annuaire et référencé par les moteurs de recherche.
@@ -2800,14 +2815,14 @@ function SectionAnnuaire() {
             <Toggle
               checked={acceptsBooking}
               onChange={setAcceptsBooking}
-              label="Afficher l'option de réservation en ligne sur ma fiche"
+              label={t.sett_ann_booking}
             />
           </Card>
         )}
 
         <Feedback msg={msg} />
         <div className="flex items-center gap-3">
-          <SaveBtn loading={saving} label={saving ? "Sauvegarde…" : "Sauvegarder"} />
+          <SaveBtn loading={saving} label={saving ? t.sett_saving : t.sett_save} />
         </div>
       </form>
 
@@ -2857,6 +2872,7 @@ const OWNER_ONLY_SECTIONS = new Set<Section>(["abonnement", "membres"]);
 export default function SettingsPage() {
   const router = useRouter();
   const { t } = useLanguage();
+  const NAV = getNav(t);
   const [active, setActive] = useState<Section>("profil");
   const [myRole, setMyRole] = useState<string>("owner");
 

@@ -52,16 +52,17 @@ const PERM_PATHS: Record<string, string> = {
   "/dashboard/invoices":     "crm",
 };
 
-const SECTORS = [
-  { value: "health",   label: "Santé" },
-  { value: "coaching", label: "Coaching / Conseil" },
-  { value: "trade",    label: "Artisan / Commerce" },
-  { value: "beauty",   label: "Beauté / Bien-être" },
-  { value: "finance",  label: "Finance" },
-  { value: "other",    label: "Autre" },
+const SECTOR_KEYS = [
+  { value: "health",   tKey: "lay_sector_health" as const },
+  { value: "coaching", tKey: "lay_sector_coaching" as const },
+  { value: "trade",    tKey: "lay_sector_trade" as const },
+  { value: "beauty",   tKey: "lay_sector_beauty" as const },
+  { value: "finance",  tKey: "lay_sector_finance" as const },
+  { value: "other",    tKey: "lay_sector_other" as const },
 ];
 
 function NewTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+  const { t } = useLanguage();
   const [form, setForm] = useState({ name: "", slug: "", sector: "other", country: "BE" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -77,7 +78,7 @@ function NewTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated
       const result = await api.createTenant(form);
       onCreated(result.id);
     } catch (err: any) {
-      setError(err.message ?? "Erreur lors de la création");
+      setError(err.message ?? t.lay_workspace_err);
     } finally {
       setLoading(false);
     }
@@ -90,7 +91,7 @@ function NewTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated
         <div className="flex items-center justify-between mb-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest mb-0.5" style={{ color: "var(--l-gold)" }}>Business</p>
-            <h2 className="text-white font-bold text-lg">Nouvel espace de travail</h2>
+            <h2 className="text-white font-bold text-lg">{t.lay_new_workspace}</h2>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -102,10 +103,10 @@ function NewTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated
         <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
           {/* Nom */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Nom de l'espace *</label>
+            <label className="block text-xs font-medium text-slate-400 mb-1">{t.lay_workspace_name_lbl}</label>
             <input
               className="w-full rounded-lg px-3 py-2 text-sm text-white bg-white/5 border border-white/10 focus:outline-none focus:border-white/30 placeholder-slate-500"
-              placeholder="Ex: Clinique du Parc"
+              placeholder={t.lay_workspace_name_ph}
               value={form.name}
               onChange={(e) => { set("name", e.target.value); set("slug", slugify(e.target.value)); }}
               required
@@ -114,7 +115,7 @@ function NewTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
           {/* Slug */}
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">URL publique *</label>
+            <label className="block text-xs font-medium text-slate-400 mb-1">{t.lay_public_url_lbl}</label>
             <div className="flex items-center rounded-lg border border-white/10 bg-white/5 overflow-hidden">
               <span className="text-xs text-slate-500 px-3 py-2 border-r border-white/10 shrink-0">votre-domaine.com/</span>
               <input
@@ -129,17 +130,17 @@ function NewTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated
           {/* Secteur + Pays */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Secteur</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">{t.lay_sector_lbl}</label>
               <select
                 className="w-full rounded-lg px-3 py-2 text-sm text-white bg-white/5 border border-white/10 focus:outline-none focus:border-white/30"
                 value={form.sector}
                 onChange={(e) => set("sector", e.target.value)}
               >
-                {SECTORS.map((s) => <option key={s.value} value={s.value} style={{ background: "#07222F" }}>{s.label}</option>)}
+                {SECTOR_KEYS.map((s) => <option key={s.value} value={s.value} style={{ background: "#07222F" }}>{t[s.tKey]}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">Pays</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">{t.lay_country_lbl}</label>
               <select
                 className="w-full rounded-lg px-3 py-2 text-sm text-white bg-white/5 border border-white/10 focus:outline-none focus:border-white/30"
                 value={form.country}
@@ -154,7 +155,7 @@ function NewTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="flex-1 rounded-lg py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-white/10 transition-colors">
-              Annuler
+              {t.lay_cancel}
             </button>
             <button
               type="submit"
@@ -162,7 +163,7 @@ function NewTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated
               className="flex-1 rounded-lg py-2 text-sm font-semibold text-white transition-opacity"
               style={{ background: "var(--l-teal-xl)", opacity: loading ? 0.6 : 1 }}
             >
-              {loading ? "Création…" : "Créer l'espace"}
+              {loading ? t.lay_creating : t.lay_create_workspace}
             </button>
           </div>
         </form>
@@ -174,6 +175,7 @@ function NewTenantModal({ onClose, onCreated }: { onClose: () => void; onCreated
 function TenantSwitcher() {
   const { tenants, activeTenant, switchTenant, reload } = useTenant();
   const { hasFeature } = useSubscription();
+  const { t } = useLanguage();
   const canMultiTenant = hasFeature("multi_tenant");
   const [open, setOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -199,7 +201,7 @@ function TenantSwitcher() {
         <button
           onClick={() => setOpen((v) => !v)}
           className="inline-flex items-center gap-1.5 text-sm text-slate-300 hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-white/10 transition-colors max-w-[160px]"
-          title="Changer d'espace"
+          title={t.lay_switch_workspace}
         >
           <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
@@ -240,7 +242,7 @@ function TenantSwitcher() {
                   <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/>
                   </svg>
-                  <span>Nouvel espace</span>
+                  <span>{t.lay_new_workspace_btn}</span>
                   <span className="ml-auto text-xs font-semibold px-1.5 py-0.5 rounded" style={{ background: "rgba(221,170,64,.15)", color: "var(--l-gold)" }}>Business</span>
                 </button>
               </div>
@@ -294,6 +296,7 @@ function TourStarter() {
 function TourHelpMenu() {
   const { startOnborda } = useOnborda();
   const { hasFeature } = useSubscription();
+  const { t } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -340,7 +343,7 @@ function TourHelpMenu() {
           style={{ background: "var(--bg-nav)", border: "1px solid rgba(170,189,216,.15)" }}
         >
           <p className="text-xs font-semibold uppercase tracking-widest px-3 pb-1.5 pt-0.5" style={{ color: "rgba(170,189,216,.5)" }}>
-            Guides interactifs
+            {t.lay_guides_title}
           </p>
 
           {pageTour && (!TOUR_REQUIRED_FEATURE[pageTour] || hasFeature(TOUR_REQUIRED_FEATURE[pageTour]!)) && (
@@ -350,7 +353,7 @@ function TourHelpMenu() {
                 className="w-full text-left px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors flex items-center gap-2"
               >
                 <span className="text-base">▶</span>
-                <span className="font-medium">Guide de cette page</span>
+                <span className="font-medium">{t.lay_guide_page}</span>
               </button>
               <div className="h-px my-1" style={{ background: "rgba(170,189,216,.1)" }} />
             </>
@@ -377,6 +380,7 @@ function TourHelpMenu() {
 function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: string }) {
   const { startOnborda } = useOnborda();
   const { hasFeature } = useSubscription();
+  const { t } = useLanguage();
   const router = useRouter();
   const pageTour = PAGE_TOUR[pathname];
   const canSeePageTour = pageTour && (!TOUR_REQUIRED_FEATURE[pageTour] || hasFeature(TOUR_REQUIRED_FEATURE[pageTour]!));
@@ -395,14 +399,14 @@ function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: 
   return (
     <div className="px-1 space-y-0.5">
       <p className="text-xs font-semibold uppercase tracking-widest px-2 pb-1" style={{ color: "rgba(170,189,216,.5)" }}>
-        Guides interactifs
+        {t.lay_guides_title}
       </p>
       {canSeePageTour && (
         <button
           onClick={() => handleStart(pageTour)}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-white/10 transition-colors"
         >
-          <span>▶</span> Guide de cette page
+          <span>▶</span> {t.lay_guide_page}
         </button>
       )}
       <button
@@ -410,7 +414,7 @@ function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: 
         className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-colors"
         style={{ color: "#AABDD8" }}
       >
-        🗺 Visite guidée générale
+        {t.lay_guide_general}
       </button>
     </div>
   );
@@ -418,6 +422,7 @@ function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: 
 
 function ContactLimitBanner() {
   const { features, status, loading } = useSubscription();
+  const { t } = useLanguage();
   const [count, setCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -446,8 +451,8 @@ function ContactLimitBanner() {
     }}>
       <span style={{ color: isCritical ? "#FC8181" : "#DDAA40", fontWeight: 600 }}>
         {isCritical
-          ? `⚠️ Limite contacts atteinte presque — ${remaining} place${remaining > 1 ? "s" : ""} restante${remaining > 1 ? "s" : ""} sur ${max}`
-          : `⚠️ ${count} contacts sur ${max} — approche de la limite`}
+          ? t.lay_contact_limit_crit.replace("{remaining}", String(remaining)).replace("{max}", String(max))
+          : t.lay_contact_limit_warn.replace("{count}", String(count)).replace("{max}", String(max))}
       </span>
       <Link
         href="/dashboard/settings?section=abonnement"
@@ -458,13 +463,14 @@ function ContactLimitBanner() {
           textDecoration: "none",
         }}
       >
-        Passer au plan Business →
+        {t.lay_upgrade_business}
       </Link>
     </div>
   );
 }
 
 function RemindersBanner() {
+  const { t } = useLanguage();
   const [reminders, setReminders] = useState<any[]>([]);
   const [dismissed, setDismissed] = useState(false);
 
@@ -516,7 +522,7 @@ function RemindersBanner() {
             fontSize: "12px", padding: "5px 14px", borderRadius: "100px", textDecoration: "none",
           }}
         >
-          Voir les relances →
+          {t.lay_see_reminders}
         </Link>
         <button
           onClick={handleDismiss}
@@ -530,6 +536,7 @@ function RemindersBanner() {
 
 function TrialBanner() {
   const { status, trialDaysLeft, loading } = useSubscription();
+  const { t } = useLanguage();
   const pathname = usePathname();
   if (loading) return null;
 
@@ -550,20 +557,20 @@ function TrialBanner() {
         }}>
           <div style={{ fontSize: "40px", marginBottom: "16px" }}>⏰</div>
           <h2 style={{ color: "var(--text-primary)", fontSize: "22px", fontWeight: 700, marginBottom: "12px" }}>
-            Votre période d&apos;essai est terminée
+            {t.lay_trial_expired_title}
           </h2>
           <p style={{ color: "var(--text-muted)", fontSize: "14px", lineHeight: 1.6, marginBottom: "28px" }}>
-            Les 14 jours d&apos;essai gratuit sont écoulés. Choisissez un plan pour continuer à accéder à votre tableau de bord et à tous vos clients.
+            {t.lay_trial_expired_body}
           </p>
           <Link
             href="/dashboard/settings?section=abonnement"
             className="l-btn l-btn-primary"
             style={{ width: "100%", justifyContent: "center", textDecoration: "none" }}
           >
-            Choisir un plan →
+            {t.lay_trial_expired_cta}
           </Link>
           <p style={{ marginTop: "12px", fontSize: "12px", color: "var(--text-muted)" }}>
-            Vos données sont conservées · Annulation à tout moment
+            {t.lay_trial_data_safe}
           </p>
         </div>
       </div>
@@ -580,8 +587,8 @@ function TrialBanner() {
       }}>
         <span style={{ color: trialDaysLeft <= 1 ? "#FC8181" : "#DDAA40", fontWeight: 600 }}>
           {trialDaysLeft <= 1
-            ? "⚠️ Dernier jour d'essai gratuit !"
-            : `⚠️ Il vous reste ${trialDaysLeft} jours d'essai gratuit.`}
+            ? t.lay_trial_last_day
+            : t.lay_trial_days_left.replace("{days}", String(trialDaysLeft))}
         </span>
         <Link
           href="/dashboard/settings?section=abonnement"
@@ -591,7 +598,7 @@ function TrialBanner() {
             textDecoration: "none",
           }}
         >
-          S&apos;abonner maintenant →
+          {t.lay_trial_subscribe}
         </Link>
       </div>
     );
@@ -605,13 +612,13 @@ function TrialBanner() {
         gap: "16px", flexWrap: "wrap", fontSize: "13px",
       }}>
         <span style={{ color: "var(--text-muted)" }}>
-          🎉 Essai gratuit — {trialDaysLeft} jours restants
+          {t.lay_trial_free.replace("{days}", String(trialDaysLeft))}
         </span>
         <Link
           href="/dashboard/settings?section=abonnement"
           style={{ color: "var(--teal-l)", fontWeight: 600, textDecoration: "none", fontSize: "12px" }}
         >
-          Voir les plans →
+          {t.lay_trial_see_plans}
         </Link>
       </div>
     );
@@ -771,7 +778,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <img src="/logo.png" alt="Klientys" className="h-9 w-auto" />
               <div className="hidden sm:flex flex-col leading-tight">
                 <span className="font-semibold text-white text-sm tracking-wide" style={{ fontFamily: "Georgia, Palatino, serif", fontStyle: "italic" }}>Klientys</span>
-                <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(170,189,216,.5)" }}>Secrétaire</span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "rgba(170,189,216,.5)" }}>{t.lay_secretary_role}</span>
               </div>
             </div>
 
@@ -799,13 +806,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Déconnexion */}
             <button
               onClick={async () => { await supabase.auth.signOut(); window.location.replace("/login"); }}
-              title="Déconnexion"
+              title={t.nav_logout}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h6a2 2 0 012 2v1"/>
               </svg>
-              <span className="hidden md:inline">Déconnexion</span>
+              <span className="hidden md:inline">{t.nav_logout}</span>
             </button>
           </div>
         </nav>
@@ -872,13 +879,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 href={`/${tenantSlug}`}
                 target="_blank"
                 rel="noreferrer"
-                title="Voir mon site publié"
+                title={t.lay_my_published_site}
                 className="hidden md:inline-flex items-center gap-1.5 text-sm text-cyan-300 hover:text-white px-2 py-1.5 rounded-lg hover:bg-white/10 transition-colors"
               >
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                 </svg>
-                <span className="hidden lg:inline">Mon site</span>
+                <span className="hidden lg:inline">{t.lay_my_site}</span>
               </a>
             )}
 
@@ -968,7 +975,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                 </svg>
-                Mon site
+                {t.lay_my_site}
               </a>
             )}
 
@@ -986,7 +993,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h6a2 2 0 012 2v1" />
               </svg>
-              Déconnexion
+              {t.nav_logout}
             </button>
           </div>
         </div>

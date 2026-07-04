@@ -197,7 +197,7 @@ export default function SiteFooter({ site, colors, showAbout, showServices, trac
                 </p>
               )}
               {/* Réseaux sociaux */}
-              {(social.facebook || social.instagram || social.linkedin) && (
+              {(social.facebook || social.instagram || social.linkedin || social.tiktok || social.twitter) && (
                 <div className="flex gap-2 mt-5">
                   {social.facebook && (
                     <a href={social.facebook} target="_blank" rel="noreferrer"
@@ -213,6 +213,16 @@ export default function SiteFooter({ site, colors, showAbout, showServices, trac
                     <a href={social.linkedin} target="_blank" rel="noreferrer"
                       className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold hover:opacity-80 transition-opacity"
                       style={{ backgroundColor: "rgba(255,255,255,0.13)", color: "white" }}>in</a>
+                  )}
+                  {social.tiktok && (
+                    <a href={social.tiktok} target="_blank" rel="noreferrer"
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold hover:opacity-80 transition-opacity"
+                      style={{ backgroundColor: "rgba(255,255,255,0.13)", color: "white" }}>tt</a>
+                  )}
+                  {social.twitter && (
+                    <a href={social.twitter} target="_blank" rel="noreferrer"
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold hover:opacity-80 transition-opacity"
+                      style={{ backgroundColor: "rgba(255,255,255,0.13)", color: "white" }}>𝕏</a>
                   )}
                 </div>
               )}

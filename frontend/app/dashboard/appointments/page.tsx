@@ -37,8 +37,6 @@ type View = "week" | "month" | "day";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const DAYS_FR   = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-const DAYS_FULL = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 const HOUR_START = 7;
 const HOUR_END   = 20;
 const SLOT_H     = 64;
@@ -47,15 +45,18 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: "bg-gray-500 text-white opacity-50",
   pending:   "bg-accent-400 text-white",
 };
-const SOURCES = [
-  "Bouche à oreille",
-  "Google / Recherche en ligne",
-  "Réseaux sociaux",
-  "Site internet",
-  "Recommandation",
-  "Flyer / Affiche",
-  "Autre",
-];
+
+function getSources(t: any) {
+  return [
+    t.apt_source_word_of_mouth,
+    t.apt_source_google,
+    t.apt_source_social,
+    t.apt_source_website,
+    t.apt_source_referral,
+    t.apt_source_flyer,
+    t.apt_source_other,
+  ];
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ function ContactSearch({ onSelect, onCreateNew }: {
   onSelect: (c: Contact) => void;
   onCreateNew: (name: string) => void;
 }) {
+  const { t } = useLanguage();
   const [q, setQ]             = useState("");
   const [results, setResults] = useState<Contact[]>([]);
   const [open, setOpen]       = useState(false);
@@ -97,7 +99,7 @@ function ContactSearch({ onSelect, onCreateNew }: {
   return (
     <div className="relative">
       <input
-        placeholder="Rechercher un contact…"
+        placeholder={t.apt_search_contact}
         value={q}
         onChange={e => search(e.target.value)}
         onFocus={() => q.length >= 2 && setOpen(true)}
@@ -119,7 +121,7 @@ function ContactSearch({ onSelect, onCreateNew }: {
         <button
           onClick={() => { setOpen(false); onCreateNew(q); }}
           className="absolute top-full left-0 right-0 bg-white border rounded-lg shadow px-3 py-2 text-sm text-primary-600 hover:bg-primary-50 z-20 text-left">
-          + Nouveau client "{q}"
+          {t.apt_new_contact_q} "{q}"
         </button>
       )}
     </div>
@@ -141,12 +143,13 @@ function NewClientModal({ initialName, onConfirm, onClose }: {
   const [em, setEm]         = useState("");
   const [ph, setPh]         = useState("");
   const [source, setSource] = useState("");
+  const SOURCES = getSources(t);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b">
-          <h3 className="font-bold text-base">Nouveau client</h3>
+          <h3 className="font-bold text-base">{t.apt_new_contact}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
         <div className="p-5 space-y-3">
@@ -159,12 +162,12 @@ function NewClientModal({ initialName, onConfirm, onClose }: {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs font-medium text-gray-600">Prénom *</label>
+              <label className="text-xs font-medium text-gray-600">{t.apt_first_name}</label>
               <input value={fn} onChange={e => setFn(e.target.value)} placeholder="Marie"
                 className="w-full border rounded-lg px-3 py-2 text-sm mt-1"/>
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600">Nom</label>
+              <label className="text-xs font-medium text-gray-600">{t.apt_last_name}</label>
               <input value={ln} onChange={e => setLn(e.target.value)} placeholder="Dupont"
                 className="w-full border rounded-lg px-3 py-2 text-sm mt-1"/>
             </div>
@@ -176,16 +179,16 @@ function NewClientModal({ initialName, onConfirm, onClose }: {
               className="w-full border rounded-lg px-3 py-2 text-sm mt-1"/>
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600">Téléphone</label>
+            <label className="text-xs font-medium text-gray-600">{t.apt_phone}</label>
             <input type="tel" value={ph} onChange={e => setPh(e.target.value)}
               placeholder="+32 4xx xxx xxx"
               className="w-full border rounded-lg px-3 py-2 text-sm mt-1"/>
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600">Canal d'entrée</label>
+            <label className="text-xs font-medium text-gray-600">{t.apt_channel}</label>
             <select value={source} onChange={e => setSource(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 text-sm mt-1 text-gray-700 bg-white">
-              <option value="">-- Comment vous a-t-il trouvé ? --</option>
+              <option value="">{t.apt_channel_ph}</option>
               {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
@@ -340,6 +343,10 @@ const DEFAULT_RANGE: TimeRange = { start_time: "09:00", end_time: "18:00", slot_
 function AvailabilityPanel({ availability, onSave, onClose }: {
   availability: AvailSlot[]; onSave: () => void; onClose: () => void;
 }) {
+  const { t } = useLanguage();
+  const DAYS_FR   = t.apt_days_short as string[];
+  const DAYS_FULL = t.apt_days_full as string[];
+
   const [days, setDays] = useState<DaySlots[]>(() =>
     DAYS_FR.map((_, i) => {
       const daySlots = availability.filter(s => s.day_of_week === i);
@@ -390,7 +397,7 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
     <div className="fixed inset-0 bg-black/40 z-50 flex justify-end">
       <div className="bg-white w-full max-w-md h-full flex flex-col shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-bold">Horaires de disponibilité</h2>
+          <h2 className="text-lg font-bold">{t.apt_availability_title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
         <div className="flex-1 overflow-auto p-4 space-y-3">
@@ -402,7 +409,7 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
                   {d.is_active && (
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-1.5 text-xs text-gray-500" title="Nombre de réservations simultanées sur ce créneau">
-                        <span className="whitespace-nowrap">Créneaux simultanés</span>
+                        <span className="whitespace-nowrap">{t.apt_slots_simultaneous}</span>
                         <input
                           type="number" min={1} max={500}
                           value={d.capacity}
@@ -411,7 +418,7 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
                         />
                       </label>
                       <label className="flex items-center gap-1.5 text-xs text-gray-500" title="Nombre max de personnes par réservation (1 = solo)">
-                        <span className="whitespace-nowrap">Max pers.</span>
+                        <span className="whitespace-nowrap">{t.apt_max_persons}</span>
                         <input
                           type="number" min={1} max={500}
                           value={d.max_party_size}
@@ -431,10 +438,10 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
               {d.is_active && d.ranges.map((r, ri) => (
                 <div key={ri} className="flex gap-2 items-center flex-wrap bg-white rounded-lg px-2 py-1.5 border border-primary-100">
                   {ri === 0
-                    ? <span className="text-xs text-gray-400 w-12 shrink-0">Matin</span>
+                    ? <span className="text-xs text-gray-400 w-12 shrink-0">{t.apt_morning}</span>
                     : ri === 1
-                    ? <span className="text-xs text-gray-400 w-12 shrink-0">Après-midi</span>
-                    : <span className="text-xs text-gray-400 w-12 shrink-0">Plage {ri + 1}</span>
+                    ? <span className="text-xs text-gray-400 w-12 shrink-0">{t.apt_afternoon}</span>
+                    : <span className="text-xs text-gray-400 w-12 shrink-0">{t.apt_range.replace("{n}", String(ri + 1))}</span>
                   }
                   <input type="time" value={r.start_time} onChange={e => updRange(di, ri, { start_time: e.target.value })}
                     className="border rounded px-2 py-1 text-sm flex-1 min-w-[80px]" />
@@ -454,7 +461,7 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
               {d.is_active && d.ranges.length < 3 && (
                 <button onClick={() => addRange(di)}
                   className="text-xs text-primary-600 hover:text-primary-800 hover:underline pl-1">
-                  + Ajouter une plage (ex : après-midi)
+                  {t.apt_add_range}
                 </button>
               )}
             </div>
@@ -463,7 +470,7 @@ function AvailabilityPanel({ availability, onSave, onClose }: {
         <div className="p-4 border-t">
           <button onClick={save} disabled={saving}
             className="w-full bg-primary-600 text-white py-2 rounded-lg font-semibold hover:bg-primary-700 disabled:opacity-50">
-            {saving ? "Enregistrement…" : "Enregistrer"}
+            {saving ? t.apt_saving : t.apt_save}
           </button>
         </div>
       </div>
@@ -485,6 +492,7 @@ const BLOCK_COLORS = [
 function BlockPanel({ blocked, onSave, onClose }: {
   blocked: BlockedPeriod[]; onSave: () => void; onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const [editTarget, setEditTarget] = useState<BlockedPeriod | null>(null);
   const [startAt, setStartAt]       = useState("");
   const [endAt, setEndAt]           = useState("");
@@ -537,33 +545,33 @@ function BlockPanel({ blocked, onSave, onClose }: {
     <div className="fixed inset-0 bg-black/40 z-50 flex justify-end">
       <div className="bg-white w-full max-w-md h-full flex flex-col shadow-2xl">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-bold">Périodes bloquées</h2>
+          <h2 className="text-lg font-bold">{t.apt_blocked_title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">✕</button>
         </div>
         <div className="flex-1 overflow-auto p-4 space-y-4">
           <div className="border rounded-lg p-3 space-y-2 bg-gray-50">
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-gray-700">
-                {editTarget ? "Modifier le blocage" : "Ajouter un blocage"}
+                {editTarget ? t.apt_blocked_edit : t.apt_blocked_add}
               </p>
               {editTarget && (
                 <button onClick={resetForm} className="text-xs text-gray-400 hover:text-gray-600">
-                  ✕ Annuler
+                  {t.apt_blocked_cancel_btn}
                 </button>
               )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div><label className="text-xs text-gray-500">Début</label>
+              <div><label className="text-xs text-gray-500">{t.apt_blocked_start}</label>
                 <input type="datetime-local" value={startAt} onChange={e=>{setStartAt(e.target.value);setErr("");}}
                   className="w-full border rounded px-2 py-1 text-sm mt-0.5"/></div>
-              <div><label className="text-xs text-gray-500">Fin</label>
+              <div><label className="text-xs text-gray-500">{t.apt_blocked_end}</label>
                 <input type="datetime-local" value={endAt} onChange={e=>{setEndAt(e.target.value);setErr("");}}
                   className="w-full border rounded px-2 py-1 text-sm mt-0.5"/></div>
             </div>
-            <input type="text" placeholder="Motif (optionnel)" value={reason} onChange={e=>setReason(e.target.value)}
+            <input type="text" placeholder={t.apt_blocked_reason} value={reason} onChange={e=>setReason(e.target.value)}
               className="w-full border rounded px-2 py-1 text-sm"/>
             <div>
-              <p className="text-xs text-gray-500 mb-1.5">Couleur</p>
+              <p className="text-xs text-gray-500 mb-1.5">{t.apt_blocked_color}</p>
               <div className="flex gap-2">
                 {BLOCK_COLORS.map(c => (
                   <button key={c.key} type="button" title={c.label} onClick={() => setColor(c.key)}
@@ -621,6 +629,7 @@ function BlockedOverrideModal({ period, onConfirm, onClose }: {
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const { vocab } = useSectorVocab();
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
@@ -632,24 +641,24 @@ function BlockedOverrideModal({ period, onConfirm, onClose }: {
             </svg>
           </div>
           <div>
-            <h3 className="font-bold text-base">Plage bloquée</h3>
+            <h3 className="font-bold text-base">{t.apt_blocked_bar}</h3>
             <p className="text-sm text-gray-500 mt-0.5">
-              {period.reason ? `Motif : "${period.reason}"` : "Période actuellement bloquée"}
+              {period.reason ? `Motif : "${period.reason}"` : t.apt_blocked_override_title}
             </p>
           </div>
         </div>
         <p className="text-sm text-gray-700">
-          Vous êtes sur le point d'insérer {vocab.appointment.toLowerCase()} sur une plage de dates bloquées.
-          Voulez-vous continuer quand même ?
+          {t.apt_blocked_override_desc.replace("un rendez-vous", vocab.appointment.toLowerCase())}
+          {" "}Voulez-vous continuer quand même ?
         </p>
         <div className="flex gap-2">
           <button onClick={onClose}
             className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm hover:bg-gray-50 font-medium">
-            Annuler
+            {t.lay_cancel}
           </button>
           <button onClick={onConfirm}
             className="flex-1 bg-amber-500 text-white py-2 rounded-xl text-sm font-semibold hover:bg-amber-600">
-            Continuer quand même
+            {t.apt_blocked_continue}
           </button>
         </div>
       </div>
@@ -659,12 +668,6 @@ function BlockedOverrideModal({ period, onConfirm, onClose }: {
 
 
 // ── ApptModal ─────────────────────────────────────────────────────────────────
-
-const STATUS_LABELS_APPT: Record<string, string> = {
-  pending:   "En attente",
-  confirmed: "Confirmé",
-  cancelled: "Annulé",
-};
 
 function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
   appt: Appointment;
@@ -679,6 +682,12 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
   const router = useRouter();
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [invoiceErr, setInvoiceErr] = useState("");
+
+  const STATUS_LABELS_APPT: Record<string, string> = {
+    pending:   t.apt_status_pending,
+    confirmed: t.apt_status_confirmed,
+    cancelled: t.apt_status_cancelled,
+  };
 
   async function handleGenerateInvoice() {
     setGeneratingInvoice(true); setInvoiceErr("");
@@ -769,7 +778,7 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                   </svg>
-                  Modifier
+                  {t.inv_action_edit}
                 </button>
               )}
             </div>
@@ -788,11 +797,11 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
               <div className="flex gap-2">
                 <button onClick={() => onConfirm(appt.id)}
                   className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-700">
-                  Confirmer
+                  {t.apt_action_confirm}
                 </button>
                 <button onClick={() => onCancel(appt.id)}
                   className="flex-1 border border-red-300 text-red-500 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
-                  Refuser
+                  {t.apt_action_refuse}
                 </button>
               </div>
             )}
@@ -806,7 +815,7 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                   </svg>
-                  {generatingInvoice ? "Génération…" : "Générer une facture"}
+                  {generatingInvoice ? "Génération…" : t.apt_action_invoice}
                 </button>
                 {invoiceErr && <p className="text-xs text-red-500">{invoiceErr}</p>}
                 <button onClick={() => onCancel(appt.id)}
@@ -818,20 +827,20 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
           </>
         ) : (
           <>
-            <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide">Modifier {vocab.appointment.toLowerCase()}</p>
+            <p className="text-xs font-semibold text-primary-600 uppercase tracking-wide">{t.apt_edit_title}</p>
             <div className="space-y-2">
               <div>
-                <label className="text-xs font-medium text-gray-500">Date</label>
+                <label className="text-xs font-medium text-gray-500">{t.apt_date_lbl}</label>
                 <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm mt-0.5"/>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-500">Heure</label>
+                <label className="text-xs font-medium text-gray-500">{t.apt_time_lbl}</label>
                 <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm mt-0.5"/>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-500">Durée</label>
+                <label className="text-xs font-medium text-gray-500">{t.apt_duration_lbl}</label>
                 <select value={editDur} onChange={e => setEditDur(Number(e.target.value))}
                   className="w-full border rounded-lg px-3 py-2 text-sm mt-0.5 bg-white">
                   {[15,30,45,60,90,120].map(d => (
@@ -841,10 +850,10 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
               </div>
               {offers.length > 0 && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500">Prestation</label>
+                  <label className="text-xs font-medium text-gray-500">{t.apt_service_lbl}</label>
                   <select value={editService} onChange={e => setEditService(e.target.value)}
                     className="w-full border rounded-lg px-3 py-2 text-sm mt-0.5 bg-white text-gray-700">
-                    <option value="">Aucune prestation</option>
+                    <option value="">{t.apt_no_service}</option>
                     {offers.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                   </select>
                 </div>
@@ -854,11 +863,11 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
             <div className="flex gap-2 pt-1">
               <button onClick={() => { setEditing(false); setErr(""); }}
                 className="flex-1 border border-gray-200 text-gray-600 py-2 rounded-xl text-sm hover:bg-gray-50">
-                Annuler
+                {t.lay_cancel}
               </button>
               <button onClick={saveEdit} disabled={saving}
                 className="flex-1 bg-primary-600 text-white py-2 rounded-xl text-sm font-semibold hover:bg-primary-700 disabled:opacity-50">
-                {saving ? "Enregistrement…" : "Enregistrer"}
+                {saving ? t.apt_saving : t.apt_save}
               </button>
             </div>
           </>
@@ -953,7 +962,7 @@ function FormPanel({ siteId, onClose }: { siteId: string; onClose: () => void })
 
         <div className="flex-1 overflow-auto p-4">
           {loading ? (
-            <p className="text-sm text-gray-400 text-center py-8">Chargement…</p>
+            <p className="text-sm text-gray-400 text-center py-8">{t.apt_loading}</p>
           ) : tab === "questions" ? (
             <div className="space-y-3">
               <p className="text-xs text-gray-500">{t.bq_panel_subtitle}</p>
@@ -1096,7 +1105,7 @@ function FormPanel({ siteId, onClose }: { siteId: string; onClose: () => void })
         <div className="p-4 border-t">
           <button onClick={save} disabled={saving}
             className="w-full bg-primary-600 text-white py-2 rounded-lg font-semibold hover:bg-primary-700 disabled:opacity-50">
-            {saved ? t.bq_saved : saving ? "Enregistrement…" : tab === "questions" ? t.bq_save : t.dep_save}
+            {saved ? t.bq_saved : saving ? t.apt_saving : tab === "questions" ? t.bq_save : t.dep_save}
           </button>
         </div>
       </div>
@@ -1108,7 +1117,9 @@ function FormPanel({ siteId, onClose }: { siteId: string; onClose: () => void })
 
 export default function AppointmentsPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const { vocab } = useSectorVocab();
+  const DAYS_FR = t.apt_days_short as string[];
   const [view, setView]                 = useState<View>("week");
   const [anchor, setAnchor]             = useState<Date>(() => { const d=new Date(); d.setHours(0,0,0,0); return d; });
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -1357,15 +1368,15 @@ export default function AppointmentsPage() {
 
         <button id="appts-availability-btn" onClick={()=>setShowAvail(true)}
           className="text-xs sm:text-sm px-2.5 py-1.5 border border-primary-300 text-primary-600 rounded-lg hover:bg-primary-50 shrink-0">
-          ⚙ <span className="hidden sm:inline">Disponibilités</span>
+          ⚙ <span className="hidden sm:inline">{t.apt_toolbar_avail}</span>
         </button>
         <button onClick={()=>setShowBlock(true)}
           className="text-xs sm:text-sm px-2.5 py-1.5 border border-red-300 text-red-500 rounded-lg hover:bg-red-50 shrink-0">
-          🚫 <span className="hidden sm:inline">Bloquer</span>
+          🚫 <span className="hidden sm:inline">{t.apt_toolbar_block}</span>
         </button>
         <button onClick={()=>setShowForm(true)} disabled={!formSiteId}
           className="text-xs sm:text-sm px-2.5 py-1.5 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 shrink-0 disabled:opacity-40">
-          📋 <span className="hidden sm:inline">Formulaire</span>
+          📋 <span className="hidden sm:inline">{t.apt_toolbar_form}</span>
         </button>
 
         {/* Ligne 2 : vue + navigation */}
@@ -1374,7 +1385,7 @@ export default function AppointmentsPage() {
             {(["day","week","month"] as View[]).map(v=>(
               <button key={v} onClick={()=>{ setView(v); setCreating(null); }}
                 className={`px-2.5 py-1 rounded-md font-medium transition-colors text-xs sm:text-sm ${view===v?"bg-white shadow text-primary-600":"text-gray-600 hover:text-gray-800"}`}>
-                {v==="day"?"Jour":v==="week"?"Semaine":"Mois"}
+                {v==="day"?t.apt_view_day:v==="week"?t.apt_view_week:t.apt_view_month}
               </button>
             ))}
           </div>
@@ -1387,14 +1398,14 @@ export default function AppointmentsPage() {
             <button onClick={()=>navigate(1)} className="p-1.5 rounded hover:bg-gray-100 text-gray-600">▶</button>
             <button onClick={()=>{ const d=new Date(); d.setHours(0,0,0,0); setAnchor(d); setCreating(null); }}
               className="px-2 py-1 text-xs border rounded hover:bg-gray-50">
-              Auj.
+              {t.apt_today}
             </button>
           </div>
 
           <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none ml-auto">
             <input type="checkbox" checked={allowPast} onChange={e => setAllowPast(e.target.checked)}
               className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
-            Événements passés
+            {t.apt_past_events}
           </label>
         </div>
       </div>
@@ -1403,7 +1414,10 @@ export default function AppointmentsPage() {
       {!loading && appointments.filter(a => a.status === "pending").length > 0 && (
         <div id="appts-pending" className="bg-amber-50 border-b border-amber-200 px-4 py-2 space-y-1.5 shrink-0">
           <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
-            {appointments.filter(a => a.status === "pending").length} {vocab.appointments.toLowerCase()} en attente de confirmation
+            {appointments.filter(a => a.status === "pending").length}{" "}
+            {appointments.filter(a => a.status === "pending").length === 1
+              ? t.apt_pending_singular
+              : t.apt_pending_plural}
           </p>
           <div className="flex flex-wrap gap-2">
             {appointments.filter(a => a.status === "pending").map(a => (
@@ -1438,7 +1452,7 @@ export default function AppointmentsPage() {
       )}
 
       {loading ? (
-        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Chargement…</div>
+        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">{t.apt_loading}</div>
       ) : (
         <div id="appts-calendar" className="flex-1 overflow-hidden flex flex-col">
           {view==="month" && <MonthGrid/>}

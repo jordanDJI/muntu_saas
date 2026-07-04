@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
+import { useLanguage } from "../../../contexts/LanguageContext";
 import DemandPotentialCard from "./DemandPotentialCard";
 import { UpgradeGate } from "../components/UpgradeGate";
 
@@ -27,20 +28,7 @@ type Summary = {
   conversion_appt_rate: number | null;
 };
 
-// ── Label maps ────────────────────────────────────────────────────────────────
-
-const SOURCE_LABELS: Record<string, string> = {
-  site_form:                    "Formulaire site",
-  website:                      "Site internet",
-  dashboard:                    "Dashboard",
-  "Bouche à oreille":           "Bouche à oreille",
-  "Google / Recherche en ligne":"Google / Recherche",
-  "Réseaux sociaux":            "Réseaux sociaux",
-  "Recommandation":             "Recommandation",
-  "Flyer / Affiche":            "Flyer / Affiche",
-  "Autre":                      "Autre",
-  inconnu:                      "Inconnu",
-};
+// ── Static color maps (not i18n) ──────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
   new:         "#0D4B58",
@@ -52,49 +40,10 @@ const STATUS_COLORS: Record<string, string> = {
   inconnu:     "#e5e7eb",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  new:         "Nouveau",
-  contacted:   "Contacté",
-  qualified:   "Qualifié",
-  scheduled:   "RDV planifié",
-  closed_won:  "Gagné",
-  closed_lost: "Perdu",
-  inconnu:     "Inconnu",
-};
-
-const APPT_STATUS_LABELS: Record<string, string> = {
-  confirmed: "Confirmé",
-  pending:   "En attente",
-  cancelled: "Annulé",
-};
-
 const APPT_STATUS_COLORS: Record<string, string> = {
   confirmed: "#22c55e",
   pending:   "#f59e0b",
   cancelled: "#ef4444",
-};
-
-const CTA_LABELS: Record<string, string> = {
-  phone:            "Téléphone",
-  email:            "Email",
-  social_facebook:  "Facebook",
-  social_instagram: "Instagram",
-  social_linkedin:  "LinkedIn",
-  chatbot:          "Chatbot",
-  booking:          "Réservation",
-  autre:            "Autre",
-};
-
-const SECTION_LABELS: Record<string, string> = {
-  hero:         "Accueil",
-  "a-propos":   "À propos",
-  prestations:  "Prestations",
-  contact:      "Contact",
-  galerie:      "Galerie",
-  temoignages:  "Témoignages",
-  services:     "Services",
-  about:        "À propos",
-  footer:       "Pied de page",
 };
 
 const SECTION_COLORS: Record<string, string> = {
@@ -198,7 +147,8 @@ function Empty({ text }: { text: string }) {
 
 function DonutSlice({ data }: { data: { label: string; value: number; color: string }[] }) {
   const total = data.reduce((s, d) => s + d.value, 0);
-  if (total === 0) return <Empty text="Aucune donnée." />;
+  const { t } = useLanguage();
+  if (total === 0) return <Empty text={t.ana_no_data} />;
   return (
     <div className="space-y-2.5 mt-1">
       {data.map((d) => (
@@ -218,6 +168,7 @@ function DonutSlice({ data }: { data: { label: string; value: number; color: str
 function FunnelStep({ label, value, rate, color, isLast = false }: {
   label: string; value: number; rate?: number; color: string; isLast?: boolean;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="flex flex-col items-center">
       <div className="w-full rounded-xl text-white font-bold text-xl py-4 text-center" style={{ background: color }}>
@@ -225,7 +176,7 @@ function FunnelStep({ label, value, rate, color, isLast = false }: {
       </div>
       <p className="text-xs text-center text-gray-600 font-medium mt-1.5">{label}</p>
       {rate !== undefined && (
-        <p className="text-[10px] text-gray-400 mt-0.5">{rate}% du préc.</p>
+        <p className="text-[10px] text-gray-400 mt-0.5">{rate}{t.ana_pct_prev}</p>
       )}
       {!isLast && <div className="w-6 h-4 flex items-center justify-center text-gray-300 text-lg mt-1">↓</div>}
     </div>
@@ -234,20 +185,78 @@ function FunnelStep({ label, value, rate, color, isLast = false }: {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const PERIODS = [
-  { value: 7,  label: "7 jours" },
-  { value: 30, label: "30 jours" },
-  { value: 90, label: "90 jours" },
-] as const;
+// PERIODS built inside component below (needs t)
 
 export default function AnalyticsPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [days, setDays]           = useState<7 | 30 | 90>(30);
   const [data, setData]           = useState<Summary | null>(null);
   const [loading, setLoading]     = useState(true);
   const [err, setErr]             = useState("");
   const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
   const [downloading, setDownloading] = useState(false);
+
+  // ── i18n label maps (inside component so t is available) ─────────────────────
+
+  const SOURCE_LABELS: Record<string, string> = {
+    contact_form:   t.ana_source_form,
+    site_form:      t.ana_source_form,
+    website:        t.ana_source_web,
+    dashboard:      t.ana_source_dashboard,
+    "Bouche à oreille":            t.ana_source_word_of_mouth,
+    "Google / Recherche en ligne": t.ana_source_google,
+    "Réseaux sociaux":             t.ana_source_social,
+    "Recommandation":              t.ana_source_referral,
+    "Flyer / Affiche":             t.ana_source_flyer,
+    "Autre":                       t.ana_source_other,
+    inconnu:                       t.ana_source_unknown,
+  };
+
+  const STATUS_LABELS: Record<string, string> = {
+    new:         t.lead_status_new,
+    contacted:   t.lead_status_contacted,
+    qualified:   t.lead_status_qualified,
+    scheduled:   t.lead_status_scheduled,
+    closed_won:  t.lead_status_won,
+    closed_lost: t.lead_status_lost,
+    inconnu:     t.ana_source_unknown,
+  };
+
+  const APPT_STATUS_LABELS: Record<string, string> = {
+    confirmed: t.ana_appt_confirmed,
+    pending:   t.ana_appt_pending,
+    cancelled: t.ana_appt_cancelled,
+  };
+
+  const CTA_LABELS: Record<string, string> = {
+    phone:            t.ana_cta_phone,
+    email:            t.ana_cta_email,
+    social_facebook:  t.ana_cta_facebook,
+    social_instagram: t.ana_cta_instagram,
+    social_linkedin:  t.ana_cta_linkedin,
+    chatbot:          t.ana_cta_chatbot,
+    booking:          t.ana_cta_booking,
+    autre:            t.ana_cta_other,
+  };
+
+  const SECTION_LABELS: Record<string, string> = {
+    hero:         t.ana_section_home,
+    "a-propos":   t.ana_section_about,
+    about:        t.ana_section_about,
+    prestations:  t.ana_section_services,
+    services:     t.ana_section_services,
+    contact:      t.ana_section_contact,
+    galerie:      t.ana_section_gallery,
+    temoignages:  t.ana_section_reviews,
+    footer:       t.ana_section_footer,
+  };
+
+  const PERIODS = [
+    { value: 7  as const, label: t.ana_period_7d },
+    { value: 30 as const, label: t.ana_period_30d },
+    { value: 90 as const, label: t.ana_period_90d },
+  ];
 
   const load = useCallback(async () => {
     setLoading(true); setErr("");
@@ -301,14 +310,14 @@ export default function AnalyticsPage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
           </svg>
-          Retour
+          {t.sett_back}
         </button>
 
         <div className="flex-1">
           <h1 className="text-lg font-bold text-gray-900">Analytics</h1>
           {refreshedAt && (
             <p className="text-xs text-gray-400">
-              Mis à jour {refreshedAt.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" })}
+              {t.ana_updated_at} {refreshedAt.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" })}
             </p>
           )}
         </div>
@@ -316,14 +325,14 @@ export default function AnalyticsPage() {
         {/* Tracking badge */}
         <div className={`hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium ${hasBehavioural ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${hasBehavioural ? "bg-green-500" : "bg-amber-400"}`} />
-          {hasBehavioural ? "Tracking actif" : "Tracking inactif"}
+          {hasBehavioural ? t.ana_tracking_active : t.ana_tracking_inactive}
         </div>
 
         {/* PDF download */}
         <button
           onClick={handleDownload}
           disabled={downloading || !data}
-          title="Télécharger le rapport PDF"
+          title={t.ana_pdf_btn}
           className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors"
         >
           {downloading ? (
@@ -335,7 +344,7 @@ export default function AnalyticsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
             </svg>
           )}
-          {downloading ? "Génération…" : "PDF"}
+          {downloading ? t.sett_saving : "PDF"}
         </button>
 
         {/* Refresh */}
@@ -365,37 +374,37 @@ export default function AnalyticsPage() {
           {/* ── KPIs ─────────────────────────────────────────────────────── */}
           <div id="analytics-kpis" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <KpiCard
-              label="Vues de page"
+              label={t.ana_kpi_views}
               value={hasBehavioural ? data.pageviews.toLocaleString("fr-BE") : "—"}
-              sub={hasBehavioural ? `${data.unique_sessions} sessions` : "Tracking non actif"}
+              sub={hasBehavioural ? t.ana_sessions_sub.replace("{n}", String(data.unique_sessions)) : t.ana_tracking_inactive}
               color="#4E7EA8"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>}
             />
             <KpiCard
-              label="Demandes"
+              label={t.ana_kpi_leads}
               value={data.leads_total}
-              sub={`sur ${days} jours`}
+              sub={t.ana_on_period.replace("{n}", String(days))}
               color="#0D4B58"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>}
             />
             <KpiCard
-              label="Rendez-vous"
+              label={t.ana_kpi_appts}
               value={data.appointments_total}
-              sub={`${data.appointments_by_status["confirmed"] ?? 0} confirmés`}
+              sub={t.ana_confirmed_sub.replace("{n}", String(data.appointments_by_status["confirmed"] ?? 0))}
               color="#1D7A4A"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M16 2v4M8 2v4M3 10h18"/></svg>}
             />
             <KpiCard
-              label="Contacts"
+              label={t.ana_kpi_contacts}
               value={data.contacts_total}
-              sub="total CRM"
+              sub="CRM"
               color="#4A6757"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-4a4 4 0 11-8 0 4 4 0 018 0z"/></svg>}
             />
             <KpiCard
-              label="Conversion"
+              label={t.ana_kpi_conversion}
               value={data.conversion_appt_rate != null ? `${data.conversion_appt_rate}%` : "—"}
-              sub="Demandes → RDV confirmés"
+              sub={t.ana_conv_label}
               color="#DDAA40"
               icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>}
             />
@@ -403,16 +412,16 @@ export default function AnalyticsPage() {
 
           {/* ── Entonnoir ────────────────────────────────────────────────── */}
           <Card>
-            <CardTitle>Entonnoir de conversion</CardTitle>
+            <CardTitle>{t.ana_funnel_title}</CardTitle>
             <div className="grid grid-cols-5 gap-2">
-              <FunnelStep label="Vues" value={data.pageviews} color="#4E7EA8" />
-              <FunnelStep label="Form. ouvert" value={data.form_opens}
+              <FunnelStep label={t.ana_funnel_views} value={data.pageviews} color="#4E7EA8" />
+              <FunnelStep label={t.ana_funnel_form_open} value={data.form_opens}
                 rate={pct(data.form_opens, data.pageviews)} color="#2E94A8" />
-              <FunnelStep label="Soumis" value={data.form_submits}
+              <FunnelStep label={t.ana_funnel_submitted} value={data.form_submits}
                 rate={pct(data.form_submits, data.form_opens)} color="#1A7A8F" />
-              <FunnelStep label="Demandes" value={data.leads_total}
+              <FunnelStep label={t.ana_funnel_leads} value={data.leads_total}
                 rate={pct(data.leads_total, data.form_submits)} color="#0D4B58" />
-              <FunnelStep label="RDV" value={data.appointments_total}
+              <FunnelStep label={t.ana_funnel_appts} value={data.appointments_total}
                 rate={pct(data.appointments_total, data.leads_total)} color="#1D7A4A" isLast />
             </div>
             {!hasBehavioural && (
@@ -425,9 +434,9 @@ export default function AnalyticsPage() {
           {/* ── Sources + Statuts leads ──────────────────────────────────── */}
           <div className="grid sm:grid-cols-2 gap-4">
             <Card>
-              <CardTitle>Sources des demandes</CardTitle>
+              <CardTitle>{t.ana_sources_title}</CardTitle>
               {Object.keys(data.leads_by_source).length === 0
-                ? <Empty text="Aucune demande sur la période." />
+                ? <Empty text={t.ana_no_leads} />
                 : <div className="space-y-3">
                     {Object.entries(data.leads_by_source)
                       .sort(([, a], [, b]) => b - a)
@@ -438,7 +447,7 @@ export default function AnalyticsPage() {
             </Card>
 
             <Card>
-              <CardTitle>Pipeline des demandes</CardTitle>
+              <CardTitle>{t.ana_pipeline_title}</CardTitle>
               <DonutSlice data={leadStatusData} />
             </Card>
           </div>
@@ -446,29 +455,29 @@ export default function AnalyticsPage() {
           {/* ── Rendez-vous ──────────────────────────────────────────────── */}
           <div className="grid sm:grid-cols-2 gap-4">
             <Card>
-              <CardTitle>Rendez-vous par statut</CardTitle>
+              <CardTitle>{t.ana_appt_status_title}</CardTitle>
               <DonutSlice data={apptStatusData} />
             </Card>
 
             {/* Chatbot */}
             <Card>
-              <CardTitle>Activité chatbot IA</CardTitle>
+              <CardTitle>{t.ana_chatbot_title}</CardTitle>
               {!hasBehavioural
-                ? <Empty text="Tracking non actif — les données apparaîtront dès les premières visites." />
+                ? <Empty text={t.ana_no_tracking} />
                 : <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-primary-50 rounded-xl p-4 text-center">
                         <p className="text-2xl font-extrabold text-primary-700">{data.chatbot_conversations}</p>
-                        <p className="text-xs text-primary-500 mt-1">Conversations</p>
+                        <p className="text-xs text-primary-500 mt-1">{t.ana_chatbot_convs}</p>
                       </div>
                       <div className="bg-purple-50 rounded-xl p-4 text-center">
                         <p className="text-2xl font-extrabold text-purple-700">{data.chatbot_messages}</p>
-                        <p className="text-xs text-purple-500 mt-1">Messages</p>
+                        <p className="text-xs text-purple-500 mt-1">{t.ana_chatbot_msgs}</p>
                       </div>
                     </div>
                     {data.chatbot_conversations > 0 && (
                       <div className="text-sm text-gray-500 flex items-center justify-between border-t pt-3">
-                        <span>Messages par conversation</span>
+                        <span>{t.ana_chatbot_per_conv}</span>
                         <strong className="text-gray-800">
                           {(data.chatbot_messages / data.chatbot_conversations).toFixed(1)}
                         </strong>
@@ -476,7 +485,7 @@ export default function AnalyticsPage() {
                     )}
                     {data.form_opens > 0 && (
                       <div className="text-sm text-gray-500 flex items-center justify-between">
-                        <span>Taux engagement chatbot</span>
+                        <span>{t.ana_chatbot_rate}</span>
                         <strong className="text-gray-800">
                           {data.pageviews > 0 ? Math.round(data.chatbot_conversations / data.pageviews * 100) : 0}%
                         </strong>
@@ -492,7 +501,7 @@ export default function AnalyticsPage() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <Card>
                   <div className="flex items-center justify-between mb-4">
-                    <CardTitle>Sections les plus consultées</CardTitle>
+                    <CardTitle>{t.ana_sections_title}</CardTitle>
                     {Object.keys(data.sections_viewed).length > 0 && (
                       <span className="text-xs text-gray-400">
                         {Object.keys(data.sections_viewed).length} section{Object.keys(data.sections_viewed).length > 1 ? "s" : ""}
@@ -500,7 +509,7 @@ export default function AnalyticsPage() {
                     )}
                   </div>
                   {Object.keys(data.sections_viewed).length === 0
-                    ? <Empty text="Aucune section trackée." />
+                    ? <Empty text={t.ana_no_sections} />
                     : (() => {
                         const sorted = Object.entries(data.sections_viewed).sort(([, a], [, b]) => b - a);
                         const total  = sorted.reduce((s, [, n]) => s + n, 0);
@@ -528,7 +537,7 @@ export default function AnalyticsPage() {
                                           {SECTION_LABELS[sec] ?? sec}
                                         </span>
                                         <span className="text-xs text-gray-400 ml-2 shrink-0">
-                                          {viewP}% des vues
+                                          {viewP}% {t.ana_pct_views}
                                         </span>
                                       </div>
                                       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -547,7 +556,7 @@ export default function AnalyticsPage() {
                             {/* Résumé bas de card */}
                             <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
                               <span className="text-xs text-gray-400">
-                                Section la + visitée
+                                {t.ana_top_section}
                               </span>
                               <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
                                 <span
@@ -556,7 +565,7 @@ export default function AnalyticsPage() {
                                 />
                                 {SECTION_LABELS[topSec[0]] ?? topSec[0]}
                                 <span className="text-gray-400 font-normal ml-1">
-                                  ({data.pageviews > 0 ? Math.round(topSec[1] / data.pageviews * 100) : 0}% des vues)
+                                  ({data.pageviews > 0 ? Math.round(topSec[1] / data.pageviews * 100) : 0}% {t.ana_pct_views})
                                 </span>
                               </span>
                             </div>
@@ -567,9 +576,9 @@ export default function AnalyticsPage() {
                 </Card>
 
                 <Card>
-                  <CardTitle>Clics & interactions</CardTitle>
+                  <CardTitle>{t.ana_cta_title}</CardTitle>
                   {Object.keys(data.cta_clicks).length === 0
-                    ? <Empty text="Aucun clic enregistré." />
+                    ? <Empty text={t.ana_no_clicks} />
                     : <div className="space-y-3">
                         {Object.entries(data.cta_clicks)
                           .sort(([, a], [, b]) => b - a)
@@ -613,7 +622,7 @@ export default function AnalyticsPage() {
           <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
           </svg>
-          Chargement…
+          {t.dash_loading}
         </div>
       )}
     </div>

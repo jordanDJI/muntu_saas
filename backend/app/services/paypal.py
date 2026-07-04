@@ -37,6 +37,8 @@ def create_order(
     currency: str,
     description: str,
     sandbox: bool = False,
+    return_url: str = "https://klientys.co",
+    cancel_url: str = "https://klientys.co",
 ) -> dict:
     """
     Crée un order PayPal et retourne {"order_id": str, "approve_url": str}.
@@ -57,8 +59,8 @@ def create_order(
         "application_context": {
             "brand_name": "Klientys",
             "user_action": "PAY_NOW",
-            "return_url": "https://klientys.co",  # surchargé côté frontend via JS SDK
-            "cancel_url": "https://klientys.co",
+            "return_url": return_url,
+            "cancel_url": cancel_url,
         },
     }
     r = requests.post(

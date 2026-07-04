@@ -8,7 +8,9 @@ from calendar import monthrange
 from datetime import datetime, timedelta, timezone, time as dtime, date
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+from app.core.config import settings
 from app.core.supabase import get_supabase_admin
 from app.middleware.rate_limit import check_rate
 from app.models.calendar import PublicBookIn
@@ -768,3 +770,115 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
     _email_client_booking_received(tenant, body.first_name, body.last_name, body.email, appt)
 
     return {"type": "appointment", "id": appt["id"], "deposit_status": "paid", "deposit_amount": payment["amount"]}
+
+
+# ── PayPal return (Telegram flow) ─────────────────────────────────────────────
+
+def _notify_tenant_deposit_paid(sb, tenant_id: str, appointment_id: str, deposit_amount: float) -> None:
+    """Notifie le tenant via Telegram/WhatsApp qu'un acompte a été reçu pour un RDV Telegram."""
+    appt_res = sb.table("appointment").select("scheduled_at, contact_id").eq("id", appointment_id).single().execute()
+    appt = appt_res.data or {}
+    contact_res = sb.table("contact").select("first_name, last_name").eq("id", appt.get("contact_id")).single().execute()
+    contact = contact_res.data or {}
+    first_name = contact.get("first_name", "")
+    full_name = f"{first_name} {contact.get('last_name', '')}".strip() or "Client"
+    try:
+        dt = datetime.fromisoformat((appt.get("scheduled_at") or "").replace("Z", "+00:00"))
+        date_str = dt.strftime("%A %d/%m/%Y à %H:%M")
+    except Exception:
+        date_str = appt.get("scheduled_at", "?")
+
+    cfg_res = (
+        sb.table("agent_config")
+        .select("telegram_bot_token, telegram_notify_chat_id, whatsapp_number")
+        .eq("tenant_id", tenant_id)
+        .eq("agent_type", "assistant_tenant")
+        .eq("status", "active")
+        .execute()
+    )
+    if not cfg_res.data:
+        return
+    cfg = cfg_res.data[0]
+    msg = (
+        f"Acompte PayPal reçu ✓\n"
+        f"Client : {full_name}\n"
+        f"Date : {date_str}\n"
+        f"Acompte : {deposit_amount:.2f} €\n\n"
+        f"RDV en attente de confirmation.\n"
+        f"Dites 'confirme {first_name}' pour valider."
+    )
+    if cfg.get("telegram_bot_token") and cfg.get("telegram_notify_chat_id"):
+        from app.services.telegram import send_message
+        send_message(cfg["telegram_bot_token"], cfg["telegram_notify_chat_id"], msg)
+    if cfg.get("whatsapp_number"):
+        from app.services.whatsapp import send_text
+        send_text(cfg["whatsapp_number"], msg)
+
+
+@router.get("/{tenant_slug}/paypal-return")
+async def paypal_return_redirect(tenant_slug: str, token: str, appointment_id: str, request: Request):
+    """
+    Appelé par PayPal après approbation du paiement (redirect depuis le navigateur du client).
+    Capture le paiement, met à jour le RDV Telegram (pending_payment → pending), notifie le tenant,
+    puis redirige vers la page de résultat frontend.
+    """
+    frontend_url = settings.frontend_url_prod or settings.frontend_url
+    success_url = f"{frontend_url}/paypal-return?status=success&slug={tenant_slug}"
+    error_url = f"{frontend_url}/paypal-return?status=error&slug={tenant_slug}"
+
+    sb = get_supabase_admin()
+    try:
+        tenant, _ = _get_tenant_and_calendar(sb, tenant_slug)
+
+        # Vérifier que l'appointment existe, appartient au tenant et attend le paiement
+        cal_res = sb.table("calendar").select("id").eq("tenant_id", tenant["id"]).execute()
+        cal_ids = [c["id"] for c in (cal_res.data or [])]
+        appt_res = (
+            sb.table("appointment")
+            .select("id, status, calendar_id")
+            .eq("id", appointment_id)
+            .in_("calendar_id", cal_ids)
+            .single()
+            .execute()
+        )
+        appt = appt_res.data
+        if not appt or appt.get("status") != "pending_payment":
+            logger.warning("PayPal return: appt %s invalide ou déjà traité", appointment_id)
+            return RedirectResponse(url=error_url)
+
+        # Récupérer credentials PayPal du tenant
+        site_res = sb.table("site").select("site_style, paypal_client_secret").eq("tenant_id", tenant["id"]).execute()
+        site = (site_res.data or [{}])[0]
+        style = site.get("site_style") or {}
+        deposit_cfg = style.get("deposit") or {}
+        client_id = deposit_cfg.get("paypal_client_id", "")
+        client_secret = site.get("paypal_client_secret", "")
+        sandbox = bool(deposit_cfg.get("sandbox", False))
+
+        if not client_id or not client_secret:
+            logger.error("PayPal return: credentials manquants pour tenant %s", tenant["id"])
+            return RedirectResponse(url=error_url)
+
+        # Capturer le paiement
+        from app.services.paypal import capture_order
+        payment = capture_order(client_id, client_secret, token, sandbox=sandbox)
+
+        # Mettre à jour le RDV
+        sb.table("appointment").update({
+            "status": "pending",
+            "deposit_status": "paid",
+            "deposit_amount": payment["amount"],
+            "deposit_paypal_order_id": token,
+        }).eq("id", appointment_id).execute()
+
+        # Notifier le tenant
+        try:
+            _notify_tenant_deposit_paid(sb, tenant["id"], appointment_id, payment["amount"])
+        except Exception as exc:
+            logger.warning("Notification dépôt PayPal échouée : %s", exc)
+
+        return RedirectResponse(url=success_url)
+
+    except Exception as exc:
+        logger.error("PayPal return failed (tenant=%s, appt=%s): %s", tenant_slug, appointment_id, exc)
+        return RedirectResponse(url=error_url)

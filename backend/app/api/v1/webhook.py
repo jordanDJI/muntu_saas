@@ -413,13 +413,40 @@ async def _handle_telegram_booking_flow(
             contact_res = sb.table("contact").select("first_name, last_name").eq("id", contact_id).single().execute()
             contact_info = contact_res.data or {}
 
+            # Vérifier si un acompte PayPal est configuré pour ce tenant
+            deposit_cfg = None
+            tenant_slug_val = ""
             try:
+                site_res = (
+                    sb.table("site")
+                    .select("site_style, paypal_client_secret")
+                    .eq("tenant_id", tenant_id)
+                    .limit(1)
+                    .execute()
+                )
+                site_data = (site_res.data or [{}])[0]
+                style = site_data.get("site_style") or {}
+                _dep = style.get("deposit") or {}
+                if (
+                    _dep.get("enabled")
+                    and _dep.get("paypal_client_id")
+                    and site_data.get("paypal_client_secret")
+                ):
+                    deposit_cfg = {**_dep, "paypal_client_secret": site_data["paypal_client_secret"]}
+
+                tenant_res = sb.table("tenant").select("slug").eq("id", tenant_id).single().execute()
+                tenant_slug_val = (tenant_res.data or {}).get("slug", "")
+            except Exception as exc:
+                logger.warning("Impossible de lire la config deposit pour tenant %s : %s", tenant_id, exc)
+
+            try:
+                appt_status = "pending_payment" if deposit_cfg else "pending"
                 appt = sb.table("appointment").insert({
                     "calendar_id": cal_ids[0],
                     "contact_id": contact_id,
                     "scheduled_at": chosen_slot["start"],
                     "end_at": chosen_slot["end"],
-                    "status": "pending",
+                    "status": appt_status,
                     "type": "b2c_appointment",
                     "audience_type": "b2c",
                 }).execute().data[0]
@@ -438,44 +465,51 @@ async def _handle_telegram_booking_flow(
 
                 dt = datetime.fromisoformat(chosen_slot["start"].replace("Z", "+00:00"))
 
-                # Notifier le tenant via le canal existant (email / WhatsApp / Telegram)
-                from app.api.v1.booking import _notify_tenant_pending
-                _notify_tenant_pending(
-                    sb, tenant_id,
-                    contact_info.get("first_name", ""),
-                    contact_info.get("last_name", ""),
-                    chosen_slot["start"],
-                )
-
-                # Passer le relais à Agent 3 — notif Telegram au professionnel
-                try:
-                    a3_res = (
-                        sb.table("agent_config")
-                        .select("telegram_notify_chat_id, status")
-                        .eq("tenant_id", tenant_id)
-                        .eq("agent_type", "assistant_tenant")
-                        .eq("status", "active")
-                        .execute()
-                    )
-                    notify_chat_id = (a3_res.data or [{}])[0].get("telegram_notify_chat_id")
-                    if notify_chat_id:
-                        full_name = (
-                            f"{contact_info.get('first_name', '')} {contact_info.get('last_name', '')}".strip()
-                            or "Client"
+                if deposit_cfg:
+                    # Flux avec acompte : créer l'order PayPal et envoyer le lien de paiement
+                    try:
+                        from app.services.paypal import create_order as _paypal_create_order
+                        amount = float(deposit_cfg.get("amount", 0))
+                        currency = deposit_cfg.get("currency", "EUR")
+                        sandbox = bool(deposit_cfg.get("sandbox", False))
+                        return_url = (
+                            f"{settings.app_url}/api/v1/booking/{tenant_slug_val}/paypal-return"
+                            f"?appointment_id={appt['id']}"
                         )
-                        send_message(bot_token, notify_chat_id,
-                            f"Nouvelle demande de RDV (Telegram)\n"
-                            f"Client : {full_name}\n"
-                            f"Date : {_DAYS_FR_LONG[dt.weekday()].capitalize()} {dt.strftime('%d/%m à %H:%M')}\n"
-                            f"Statut : en attente de confirmation\n"
-                            f"Dites 'confirme {contact_info.get('first_name', full_name)}' pour valider.")
-                except Exception as exc:
-                    logger.warning("Notification Agent 3 après RDV échouée : %s", exc)
+                        cancel_url = f"{settings.frontend_url_prod or settings.frontend_url}/paypal-return?status=cancelled"
+                        paypal_result = _paypal_create_order(
+                            client_id=deposit_cfg["paypal_client_id"],
+                            client_secret=deposit_cfg["paypal_client_secret"],
+                            amount=amount,
+                            currency=currency,
+                            description=f"Acompte RDV {dt.strftime('%d/%m/%Y')}",
+                            sandbox=sandbox,
+                            return_url=return_url,
+                            cancel_url=cancel_url,
+                        )
+                        approve_url = paypal_result.get("approve_url", "")
+                        send_message(bot_token, chat_id,
+                            f"Un acompte de {amount:.0f} {currency} est requis pour finaliser votre réservation.\n\n"
+                            f"📅 {_DAYS_FR_LONG[dt.weekday()].capitalize()} {dt.strftime('%d/%m à %H:%M')}\n\n"
+                            f"Cliquez sur ce lien pour payer :\n{approve_url}\n\n"
+                            f"Votre rendez-vous sera confirmé dès réception du paiement.")
+                    except Exception as exc:
+                        logger.error("Création order PayPal Telegram échouée : %s", exc)
+                        # Fallback : traiter comme sans dépôt
+                        sb.table("appointment").update({"status": "pending"}).eq("id", appt["id"]).execute()
+                        _do_notify_pending(sb, tenant_id, bot_token, contact_info, chosen_slot, dt)
+                        send_message(bot_token, chat_id,
+                            f"Votre demande de rendez-vous est enregistrée pour le "
+                            f"{_DAYS_FR_LONG[dt.weekday()].capitalize()} {dt.strftime('%d/%m à %H:%M')}.\n"
+                            f"Vous recevrez une confirmation dès validation par le professionnel.")
+                else:
+                    # Flux sans acompte : notification immédiate au tenant
+                    _do_notify_pending(sb, tenant_id, bot_token, contact_info, chosen_slot, dt)
+                    send_message(bot_token, chat_id,
+                        f"Votre demande de rendez-vous est enregistrée pour le "
+                        f"{_DAYS_FR_LONG[dt.weekday()].capitalize()} {dt.strftime('%d/%m à %H:%M')}.\n"
+                        f"Vous recevrez une confirmation dès validation par le professionnel.")
 
-                send_message(bot_token, chat_id,
-                    f"Votre demande de rendez-vous est enregistrée pour le "
-                    f"{_DAYS_FR_LONG[dt.weekday()].capitalize()} {dt.strftime('%d/%m à %H:%M')}.\n"
-                    f"Vous recevrez une confirmation dès validation par le professionnel.")
             except Exception as exc:
                 logger.error("Booking via Telegram failed: %s", exc)
                 send_message(bot_token, chat_id,
@@ -487,6 +521,40 @@ async def _handle_telegram_booking_flow(
         return True
 
     return False
+
+
+def _do_notify_pending(sb, tenant_id: str, bot_token: str, contact_info: dict, chosen_slot: dict, dt: datetime) -> None:
+    """Notifie le tenant (WhatsApp/Telegram Agent 3) qu'un nouveau RDV est en attente."""
+    from app.api.v1.booking import _notify_tenant_pending
+    _notify_tenant_pending(
+        sb, tenant_id,
+        contact_info.get("first_name", ""),
+        contact_info.get("last_name", ""),
+        chosen_slot["start"],
+    )
+    try:
+        a3_res = (
+            sb.table("agent_config")
+            .select("telegram_notify_chat_id, status")
+            .eq("tenant_id", tenant_id)
+            .eq("agent_type", "assistant_tenant")
+            .eq("status", "active")
+            .execute()
+        )
+        notify_chat_id = (a3_res.data or [{}])[0].get("telegram_notify_chat_id")
+        if notify_chat_id:
+            full_name = (
+                f"{contact_info.get('first_name', '')} {contact_info.get('last_name', '')}".strip()
+                or "Client"
+            )
+            send_message(bot_token, notify_chat_id,
+                f"Nouvelle demande de RDV (Telegram)\n"
+                f"Client : {full_name}\n"
+                f"Date : {_DAYS_FR_LONG[dt.weekday()].capitalize()} {dt.strftime('%d/%m à %H:%M')}\n"
+                f"Statut : en attente de confirmation\n"
+                f"Dites 'confirme {contact_info.get('first_name', full_name)}' pour valider.")
+    except Exception as exc:
+        logger.warning("Notification Agent 3 après RDV échouée : %s", exc)
 
 
 def _generate_booking_summary_sync(history: list[dict], model: str) -> str:

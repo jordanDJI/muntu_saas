@@ -164,6 +164,16 @@ _PROMPT_I18N: dict[str, dict] = {
         "client_label": "Client",
         "agent_label": "Agent",
         "synth_header": "## Dernière synthèse opérationnelle",
+        "sub_header": "## Abonnement",
+        "plan_label": "Plan",
+        "services_header": "## Services proposés",
+        "contacts_header": "## Base clients",
+        "contacts_total": "Total",
+        "contacts_new_30d": "nouveaux ce mois",
+        "analytics_header": "## Activité du site (7 derniers jours)",
+        "pageviews_label": "Visites",
+        "sessions_label": "Sessions uniques",
+        "form_submits_label": "Formulaires soumis",
     },
     "en": {
         "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
@@ -189,6 +199,16 @@ _PROMPT_I18N: dict[str, dict] = {
         "client_label": "Client",
         "agent_label": "Agent",
         "synth_header": "## Latest operational summary",
+        "sub_header": "## Subscription",
+        "plan_label": "Plan",
+        "services_header": "## Services offered",
+        "contacts_header": "## Client base",
+        "contacts_total": "Total",
+        "contacts_new_30d": "new this month",
+        "analytics_header": "## Site activity (last 7 days)",
+        "pageviews_label": "Page views",
+        "sessions_label": "Unique sessions",
+        "form_submits_label": "Form submissions",
     },
     "nl": {
         "days": ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"],
@@ -214,6 +234,16 @@ _PROMPT_I18N: dict[str, dict] = {
         "client_label": "Klant",
         "agent_label": "Agent",
         "synth_header": "## Laatste operationeel overzicht",
+        "sub_header": "## Abonnement",
+        "plan_label": "Plan",
+        "services_header": "## Aangeboden diensten",
+        "contacts_header": "## Klantenbestand",
+        "contacts_total": "Totaal",
+        "contacts_new_30d": "nieuw deze maand",
+        "analytics_header": "## Siteactiviteit (laatste 7 dagen)",
+        "pageviews_label": "Paginaweergaven",
+        "sessions_label": "Unieke sessies",
+        "form_submits_label": "Ingediende formulieren",
     },
     "de": {
         "days": ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"],
@@ -239,6 +269,16 @@ _PROMPT_I18N: dict[str, dict] = {
         "client_label": "Kunde",
         "agent_label": "Agent",
         "synth_header": "## Letzte operative Zusammenfassung",
+        "sub_header": "## Abonnement",
+        "plan_label": "Plan",
+        "services_header": "## Angebotene Dienstleistungen",
+        "contacts_header": "## Kundenstamm",
+        "contacts_total": "Gesamt",
+        "contacts_new_30d": "neu diesen Monat",
+        "analytics_header": "## Website-Aktivität (letzte 7 Tage)",
+        "pageviews_label": "Seitenaufrufe",
+        "sessions_label": "Eindeutige Sitzungen",
+        "form_submits_label": "Formularabsendungen",
     },
 }
 
@@ -251,12 +291,14 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     # Langue configurée sur le site du tenant
     site_res = (
         sb.table("site")
-        .select("default_language")
+        .select("id, default_language")
         .eq("tenant_id", tenant_id)
         .limit(1)
         .execute()
     )
-    lang = (site_res.data or [{}])[0].get("default_language") or "fr"
+    site_data = (site_res.data or [{}])[0]
+    lang = site_data.get("default_language") or "fr"
+    site_id = site_data.get("id")
     tr = _PROMPT_I18N.get(lang, _PROMPT_I18N["fr"])
 
     now = datetime.now(timezone.utc) + timedelta(hours=2)  # Europe/Brussels (CEST UTC+2)
@@ -377,5 +419,90 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
 
     if synth:
         lines.append(f"\n{tr['synth_header']}\n{synth[0]['content'][:600]}")
+
+    # Abonnement / plan
+    sub_res = (
+        sb.table("subscription")
+        .select("status, plan_id")
+        .eq("tenant_id", tenant_id)
+        .limit(1)
+        .execute()
+    )
+    if sub_res.data:
+        sub = sub_res.data[0]
+        lines.append(f"\n{tr['sub_header']}")
+        lines.append(f"- {tr['plan_label']} : {sub.get('plan_id', '?')} | {tr['status_label']} : {sub.get('status', '?')}")
+
+    # Services proposés (depuis le site)
+    if site_id:
+        offers = (
+            sb.table("service_offer")
+            .select("name, duration_min, price")
+            .eq("site_id", site_id)
+            .limit(10)
+            .execute()
+        ).data or []
+        if offers:
+            lines.append(f"\n{tr['services_header']}")
+            for o in offers:
+                price_str = f" — {o['price']} €" if o.get("price") else ""
+                dur_str = f" ({o['duration_min']} min)" if o.get("duration_min") else ""
+                lines.append(f"- {o['name']}{dur_str}{price_str}")
+
+    # Stats contacts
+    thirty_days_ago = (now - timedelta(days=30)).isoformat()
+    total_c_res = (
+        sb.table("contact")
+        .select("id", count="exact")
+        .eq("tenant_id", tenant_id)
+        .execute()
+    )
+    new_c_res = (
+        sb.table("contact")
+        .select("id", count="exact")
+        .eq("tenant_id", tenant_id)
+        .gte("created_at", thirty_days_ago)
+        .execute()
+    )
+    total_c = total_c_res.count or 0
+    new_c = new_c_res.count or 0
+    lines.append(f"\n{tr['contacts_header']}")
+    lines.append(f"- {tr['contacts_total']} : {total_c} ({tr['contacts_new_30d']} : +{new_c})")
+
+    # Analytics site (7 derniers jours) — dégrade si la table n'existe pas
+    seven_days_ago = (now - timedelta(days=7)).isoformat()
+    try:
+        pv_res = (
+            sb.table("site_event")
+            .select("id", count="exact")
+            .eq("tenant_id", tenant_id)
+            .eq("event_type", "pageview")
+            .gte("created_at", seven_days_ago)
+            .execute()
+        )
+        sess_res = (
+            sb.table("site_event")
+            .select("session_id")
+            .eq("tenant_id", tenant_id)
+            .gte("created_at", seven_days_ago)
+            .execute()
+        )
+        fs_res = (
+            sb.table("site_event")
+            .select("id", count="exact")
+            .eq("tenant_id", tenant_id)
+            .eq("event_type", "form_submit")
+            .gte("created_at", seven_days_ago)
+            .execute()
+        )
+        pageviews = pv_res.count or 0
+        unique_sessions = len({s["session_id"] for s in (sess_res.data or []) if s.get("session_id")})
+        form_submits = fs_res.count or 0
+        lines.append(f"\n{tr['analytics_header']}")
+        lines.append(f"- {tr['pageviews_label']} : {pageviews}")
+        lines.append(f"- {tr['sessions_label']} : {unique_sessions}")
+        lines.append(f"- {tr['form_submits_label']} : {form_submits}")
+    except Exception:
+        pass
 
     return "\n".join(lines)
