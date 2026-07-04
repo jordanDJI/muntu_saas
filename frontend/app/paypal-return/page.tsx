@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function PaypalReturnPage() {
+function PaypalReturnContent() {
   const params = useSearchParams();
   const status = params.get("status");
   const slug = params.get("slug");
@@ -106,5 +106,13 @@ export default function PaypalReturnPage() {
         Klientys — paiement sécurisé via PayPal
       </p>
     </div>
+  );
+}
+
+export default function PaypalReturnPage() {
+  return (
+    <Suspense>
+      <PaypalReturnContent />
+    </Suspense>
   );
 }
