@@ -42,7 +42,8 @@ def _click_proxy_url(token: str, original_url: str) -> str:
     return f"{cfg.app_url}/api/v1/campaigns/track/click?t={token}&url={quote(original_url, safe='')}"
 
 def _unsubscribe_url(unsubscribe_token: str) -> str:
-    return f"{cfg.frontend_url}/unsubscribe?t={unsubscribe_token}"
+    base = cfg.frontend_url_prod or cfg.frontend_url
+    return f"{base}/unsubscribe?t={unsubscribe_token}"
 
 def _get_segment_contacts(sb, tenant_id: str, segment: str, tag_id: Optional[str]) -> list[dict]:
     """Retourne les contacts (avec email, non opt-out) correspondant au segment."""

@@ -1742,6 +1742,88 @@ async def resend_payment(payment_id: str, admin=Depends(get_current_admin)):
     return {"ok": True, "sent_to": target_email}
 
 
+# ─── Campagnes email (vue admin) ─────────────────────────────────────────────
+
+@router.get("/campaigns")
+async def admin_list_campaigns(
+    admin=Depends(viewer_or_above),
+    tenant_id: Optional[str] = None,
+    days: int = 30,
+    status: Optional[str] = None,
+    page: int = 1,
+    per_page: int = 50,
+):
+    """Liste toutes les campagnes email avec métriques, tous tenants confondus."""
+    sb = get_supabase_admin()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+    try:
+        query = (
+            sb.table("email_campaign")
+            .select("id, tenant_id, name, subject, segment, status, sent_count, failed_count, open_count, click_count, unsubscribed_count, sent_at, created_at")
+            .gte("sent_at", cutoff)
+            .order("sent_at", desc=True)
+        )
+        if tenant_id:
+            query = query.eq("tenant_id", tenant_id)
+        if status:
+            query = query.eq("status", status)
+        rows = query.limit(per_page).offset((page - 1) * per_page).execute().data or []
+    except Exception:
+        query = (
+            sb.table("email_campaign")
+            .select("id, tenant_id, name, subject, segment, status, sent_count, failed_count, sent_at, created_at")
+            .gte("sent_at", cutoff)
+            .order("sent_at", desc=True)
+        )
+        if tenant_id:
+            query = query.eq("tenant_id", tenant_id)
+        if status:
+            query = query.eq("status", status)
+        rows = query.limit(per_page).offset((page - 1) * per_page).execute().data or []
+
+    tenant_ids = list({r["tenant_id"] for r in rows if r.get("tenant_id")})
+    tenant_info: dict[str, dict] = {}
+    if tenant_ids:
+        tenants = (
+            sb.table("tenant").select("id, name, slug")
+            .in_("id", tenant_ids).execute().data or []
+        )
+        tenant_info = {t["id"]: {"name": t["name"], "slug": t.get("slug", "")} for t in tenants}
+
+    result = []
+    total_sent = total_open = total_click = total_unsub = 0
+
+    for r in rows:
+        sent    = r.get("sent_count") or 0
+        open_c  = r.get("open_count") or 0
+        click_c = r.get("click_count") or 0
+        unsub   = r.get("unsubscribed_count") or 0
+        t_info  = tenant_info.get(r["tenant_id"]) or {}
+        result.append({
+            **r,
+            "tenant_name": t_info.get("name", ""),
+            "tenant_slug": t_info.get("slug", ""),
+            "open_rate":   round(open_c / sent * 100) if sent else 0,
+            "click_rate":  round(click_c / sent * 100) if sent else 0,
+        })
+        total_sent  += sent
+        total_open  += open_c
+        total_click += click_c
+        total_unsub += unsub
+
+    return {
+        "campaigns": result,
+        "stats": {
+            "total":              len(rows),
+            "total_sent":         total_sent,
+            "avg_open_rate":      round(total_open / total_sent * 100) if total_sent else 0,
+            "avg_click_rate":     round(total_click / total_sent * 100) if total_sent else 0,
+            "total_unsubscribed": total_unsub,
+        },
+    }
+
+
 # ─── Content Management (blog + témoignages) ─────────────────────────────────
 
 class BlogPostIn(BaseModel):
