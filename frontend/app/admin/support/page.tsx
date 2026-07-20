@@ -40,26 +40,36 @@ const TICKET_STATUS_STYLES: Record<string, { label: string; bg: string; color: s
 };
 
 function TicketsTab({ initialTicketId }: { initialTicketId: string | null }) {
-  const [tickets,  setTickets]  = useState<any[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [filter,   setFilter]   = useState("all");
-  const [selected, setSelected] = useState<any | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [tickets,    setTickets]    = useState<any[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [filter,     setFilter]     = useState("all");
+  const [selected,   setSelected]   = useState<any | null>(null);
+  const [messages,   setMessages]   = useState<any[]>([]);
   const [msgLoading, setMsgLoading] = useState(false);
-  const [reply,    setReply]    = useState("");
-  const [replying, setReplying] = useState(false);
-  const [toast,    setToast]    = useState("");
-  const [toastOk,  setToastOk]  = useState(true);
+  const [reply,      setReply]      = useState("");
+  const [replying,   setReplying]   = useState(false);
+  const [toast,      setToast]      = useState("");
+  const [toastOk,    setToastOk]    = useState(true);
+  const [newTenantMsg, setNewTenantMsg] = useState(false);
+
+  const filterRef  = useRef(filter);
+  const selectedRef = useRef(selected);
+  filterRef.current  = filter;
+  selectedRef.current = selected;
 
   const showToast = (msg: string, ok = true) => {
     setToast(msg); setToastOk(ok); setTimeout(() => setToast(""), 3500);
   };
 
+  const fetchTickets = async (status?: string) => {
+    const qs = (status && status !== "all") ? `?status=${status}` : "";
+    return adminFetch<any[]>(`/api/v1/admin/support/tickets${qs}`);
+  };
+
   const loadTickets = async (status?: string) => {
     setLoading(true);
     try {
-      const qs = (status && status !== "all") ? `?status=${status}` : "";
-      const data = await adminFetch<any[]>(`/api/v1/admin/support/tickets${qs}`);
+      const data = await fetchTickets(status);
       setTickets(data);
       if (initialTicketId) {
         const t = data.find(x => x.id === initialTicketId);
@@ -69,15 +79,49 @@ function TicketsTab({ initialTicketId }: { initialTicketId: string | null }) {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { loadTickets(); }, []);
+  // Poll ticket list every 20s — silently merge to preserve selection
+  useEffect(() => {
+    loadTickets();
+    const iv = setInterval(async () => {
+      try {
+        const data = await fetchTickets(filterRef.current !== "all" ? filterRef.current : undefined);
+        setTickets(data);
+      } catch {}
+    }, 20_000);
+    return () => clearInterval(iv);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openTicket = async (ticket: any) => {
-    setSelected(ticket); setMsgLoading(true);
+    setSelected(ticket); setMsgLoading(true); setNewTenantMsg(false);
     try {
       const full = await adminFetch<any>(`/api/v1/admin/support/tickets/${ticket.id}`);
       setMessages(full.messages || []);
     } catch {} finally { setMsgLoading(false); }
   };
+
+  // Poll messages every 10s when a ticket is open
+  useEffect(() => {
+    if (!selected?.id) return;
+    const id = selected.id;
+    const iv = setInterval(async () => {
+      try {
+        const full = await adminFetch<any>(`/api/v1/admin/support/tickets/${id}`);
+        const next: any[] = full.messages || [];
+        setMessages(prev => {
+          const lastSender = next[next.length - 1]?.sender;
+          if (next.length > prev.length && lastSender === "tenant") setNewTenantMsg(true);
+          return next;
+        });
+        // Update ticket status in list if it changed
+        if (full.status) {
+          setTickets(prev => prev.map(t => t.id === id ? { ...t, status: full.status } : t));
+          setSelected((s: any) => s?.id === id ? { ...s, status: full.status } : s);
+        }
+      } catch {}
+    }, 10_000);
+    return () => clearInterval(iv);
+  }, [selected?.id]);
 
   const sendReply = async () => {
     if (!reply.trim() || !selected) return;
@@ -93,6 +137,7 @@ function TicketsTab({ initialTicketId }: { initialTicketId: string | null }) {
       showToast("Réponse envoyée ✓");
       setTickets(prev => prev.map(t => t.id === selected.id
         ? { ...t, status: "in_progress", updated_at: new Date().toISOString() } : t));
+      setSelected((s: any) => s ? { ...s, status: "in_progress" } : null);
     } catch (e: any) { showToast(e.message, false); }
     finally { setReplying(false); }
   };
@@ -157,15 +202,21 @@ function TicketsTab({ initialTicketId }: { initialTicketId: string | null }) {
           <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
             {displayed.map(ticket => {
               const st = TICKET_STATUS_STYLES[ticket.status] || TICKET_STATUS_STYLES.open;
+              const needsAttention = ticket.status === "open";
               return (
                 <button key={ticket.id} onClick={() => openTicket(ticket)}
                   className="w-full text-left px-4 py-3.5 transition-colors"
                   style={{
-                    background: selected?.id === ticket.id ? "rgba(13,75,88,0.2)" : "transparent",
+                    background: selected?.id === ticket.id
+                      ? "rgba(13,75,88,0.2)"
+                      : needsAttention ? "rgba(42,143,165,0.06)" : "transparent",
                     borderBottom: `1px solid ${K.border}`,
+                    borderLeft: needsAttention ? `3px solid ${K.tealXL}` : "3px solid transparent",
                   }}>
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="text-sm font-medium truncate" style={{ color: K.text }}>{ticket.subject}</p>
+                    <p className="text-sm font-medium truncate" style={{ color: needsAttention ? K.text : K.text, fontWeight: needsAttention ? 600 : 400 }}>
+                      {needsAttention && <span className="mr-1.5">🔔</span>}{ticket.subject}
+                    </p>
                     <span className="text-xs font-semibold rounded px-2 py-0.5 shrink-0"
                       style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}` }}>
                       {st.label}
@@ -208,6 +259,16 @@ function TicketsTab({ initialTicketId }: { initialTicketId: string | null }) {
               </select>
             </div>
           </div>
+
+          {/* Flash nouveau message tenant */}
+          {newTenantMsg && (
+            <div className="flex items-center gap-2 mx-4 mt-3 px-3 py-2 rounded-lg animate-pulse"
+              style={{ background: "rgba(42,143,165,0.12)", border: "1px solid rgba(42,143,165,0.3)" }}>
+              <span>💬</span>
+              <span className="text-xs font-semibold" style={{ color: K.tealXL }}>Nouveau message du tenant</span>
+              <button className="ml-auto text-xs" style={{ color: K.muted }} onClick={() => setNewTenantMsg(false)}>✕</button>
+            </div>
+          )}
 
           {/* Messages */}
           <div className="flex-1 p-4 space-y-3 overflow-y-auto" style={{ maxHeight: "50vh" }}>

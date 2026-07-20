@@ -2944,17 +2944,53 @@ function SectionSupport({ onTicketRead }: { onTicketRead?: () => void }) {
   const [sent, setSent] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [replying, setReplying] = useState(false);
+  const [newReply, setNewReply] = useState(false); // flash quand un msg admin arrive
 
+  // Charge la liste + badge reset
   useEffect(() => {
     api.listSupportTickets().then((data: any[]) => {
       setTickets(data);
-      // On considère que le fait d'ouvrir la section "vu" tous les tickets
       onTicketRead?.();
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
+  // Poll la liste toutes les 20s pour mettre à jour les statuts (badge parent)
+  useEffect(() => {
+    const iv = setInterval(() =>
+      api.listSupportTickets()
+        .then((data: any[]) => setTickets(data))
+        .catch(() => {}),
+      20_000,
+    );
+    return () => clearInterval(iv);
+  }, []);
+
+  // Poll les messages du ticket ouvert toutes les 10s
+  useEffect(() => {
+    if (!selected) return;
+    const iv = setInterval(async () => {
+      try {
+        const full = await api.getSupportTicket(selected.id);
+        const next = full.messages || [];
+        setMessages(prev => {
+          if (next.length > prev.length) setNewReply(true); // flash
+          return next;
+        });
+      } catch {}
+    }, 10_000);
+    return () => clearInterval(iv);
+  }, [selected?.id]);
+
+  // Reset du flash après 3s
+  useEffect(() => {
+    if (!newReply) return;
+    const t = setTimeout(() => setNewReply(false), 3000);
+    return () => clearTimeout(t);
+  }, [newReply]);
+
   async function openTicket(ticket: any) {
     setSelected(ticket);
+    setNewReply(false);
     setMsgLoading(true);
     try {
       const full = await api.getSupportTicket(ticket.id);
@@ -3018,6 +3054,13 @@ function SectionSupport({ onTicketRead }: { onTicketRead?: () => void }) {
               {STATUS_LABELS[selected.status] || selected.status}
             </span>
           </div>
+
+          {/* Flash "nouvelle réponse" quand un message arrive pendant que le ticket est ouvert */}
+          {newReply && (
+            <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold animate-pulse">
+              <span>💬</span> Nouvelle réponse de Klientys
+            </div>
+          )}
 
           {msgLoading ? (
             <div className="text-center py-8 text-gray-400 text-sm">…</div>
@@ -3124,22 +3167,28 @@ function SectionSupport({ onTicketRead }: { onTicketRead?: () => void }) {
               <p className="text-sm text-gray-400 text-center py-8">{t.supp_no_tickets}</p>
             ) : (
               <div className="divide-y divide-gray-100">
-                {tickets.map(ticket => (
-                  <button
-                    key={ticket.id}
-                    onClick={() => openTicket(ticket)}
-                    className="w-full text-left flex items-start gap-3 py-3.5 px-1 hover:bg-gray-50 rounded-lg transition-colors group"
-                  >
-                    <div className="w-2 h-2 rounded-full mt-2 shrink-0 bg-primary-400 group-hover:bg-primary-600 transition-colors" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{ticket.subject}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{fmtDate(ticket.updated_at)}</p>
-                    </div>
-                    <span className={`text-xs font-semibold border rounded-full px-2.5 py-0.5 shrink-0 ${STATUS_COLORS[ticket.status] || ""}`}>
-                      {STATUS_LABELS[ticket.status] || ticket.status}
-                    </span>
-                  </button>
-                ))}
+                {tickets.map(ticket => {
+                  const hasAdminReply = ticket.status === "in_progress";
+                  return (
+                    <button
+                      key={ticket.id}
+                      onClick={() => openTicket(ticket)}
+                      className={`w-full text-left flex items-start gap-3 py-3.5 px-1 rounded-lg transition-colors group ${hasAdminReply ? "bg-amber-50 hover:bg-amber-100" : "hover:bg-gray-50"}`}
+                    >
+                      <div className={`w-2 h-2 rounded-full mt-2 shrink-0 transition-colors ${hasAdminReply ? "bg-amber-500 animate-pulse" : "bg-primary-400 group-hover:bg-primary-600"}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm truncate ${hasAdminReply ? "font-bold text-amber-900" : "font-medium text-gray-900"}`}>{ticket.subject}</p>
+                        {hasAdminReply && (
+                          <p className="text-xs font-semibold text-amber-600 mt-0.5">💬 Klientys a répondu</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-0.5">{fmtDate(ticket.updated_at)}</p>
+                      </div>
+                      <span className={`text-xs font-semibold border rounded-full px-2.5 py-0.5 shrink-0 ${STATUS_COLORS[ticket.status] || ""}`}>
+                        {STATUS_LABELS[ticket.status] || ticket.status}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </Card>
@@ -3182,10 +3231,16 @@ export default function SettingsPage() {
     api.getMyRole().then(({ role }) => setMyRole(role)).catch(() => {});
     const s = new URLSearchParams(window.location.search).get("section");
     if (s && s in SECTION_MAP) setActive(s as Section);
-    // Charge le nombre de tickets ouverts pour le badge "Support"
-    api.listSupportTickets()
-      .then((tickets: any[]) => setOpenTickets(tickets.filter(t => t.status === "open").length))
-      .catch(() => {});
+
+    // Badge = tickets "in_progress" (= admin a répondu, tenant doit lire)
+    // Rafraîchi toutes les 30s même sans ouvrir la section Support
+    const refreshBadge = () =>
+      api.listSupportTickets()
+        .then((tickets: any[]) => setOpenTickets(tickets.filter((t: any) => t.status === "in_progress").length))
+        .catch(() => {});
+    refreshBadge();
+    const iv = setInterval(refreshBadge, 30_000);
+    return () => clearInterval(iv);
   }, []);
 
   const isMember = myRole === "member";
@@ -3246,7 +3301,7 @@ export default function SettingsPage() {
                 <span className="text-base leading-none">{item.icon}</span>
                 <span className="flex-1">{item.label}</span>
                 {item.key === "support" && openTickets > 0 && (
-                  <span className="ml-auto flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+                  <span className="ml-auto flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-amber-500 text-white text-[10px] font-bold px-1 leading-none" title="Réponse de Klientys en attente">
                     {openTickets > 9 ? "9+" : openTickets}
                   </span>
                 )}

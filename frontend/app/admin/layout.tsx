@@ -96,6 +96,7 @@ const NAV_ALL = [
     ),
   },
   {
+    id: "support",
     href: "/admin/support",
     label: "Support",
     minLevel: "super_admin" as SupportLevel,
@@ -161,6 +162,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [logoPending,    setLogoPending]    = useState<number | null>(null);
   const [designPending,  setDesignPending]  = useState<number | null>(null);
   const [pastDueCount,   setPastDueCount]   = useState<number | null>(null);
+  const [supportCount,   setSupportCount]   = useState<number | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -197,6 +199,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           setPastDueCount(d.past_due_count ?? 0);
         }
       } catch { /* non bloquant */ }
+
+      // Badge support — tickets "open" (tenant en attente de réponse admin)
+      // Rafraîchi toutes les 30s
+      const refreshSupport = async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const res = await fetch(`${API}/api/v1/admin/support/tickets?status=open`, {
+            headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+          });
+          if (res.ok) {
+            const d = await res.json();
+            setSupportCount(Array.isArray(d) ? d.length : 0);
+          }
+        } catch { /* non bloquant */ }
+      };
+      refreshSupport();
+      const iv = setInterval(refreshSupport, 30_000);
+      return () => clearInterval(iv);
     });
   }, [router]);
 
@@ -242,7 +262,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               itemId === "relances"        && inactiveCount  ? inactiveCount  :
               itemId === "logo-requests"   && logoPending    ? logoPending    :
               itemId === "design-requests" && designPending  ? designPending  :
-              itemId === "billing"         && pastDueCount   ? pastDueCount   : null;
+              itemId === "billing"         && pastDueCount   ? pastDueCount   :
+              itemId === "support"         && supportCount   ? supportCount   : null;
             return (
               <Link
                 key={item.href}
