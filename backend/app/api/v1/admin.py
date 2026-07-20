@@ -2046,7 +2046,7 @@ async def admin_get_support_ticket(ticket_id: str, admin=Depends(get_current_adm
         sb.table("support_message")
         .select("id, sender, body, created_at")
         .eq("ticket_id", ticket_id)
-        .order("created_at", asc=True)
+        .order("created_at", desc=False)
         .execute()
     ).data or []
     return {**ticket, "messages": messages}

@@ -119,7 +119,7 @@ def get_ticket(ticket_id: str, tenant_id: str = Depends(get_current_tenant)):
         sb.table("support_message")
         .select("id, sender, body, created_at")
         .eq("ticket_id", ticket_id)
-        .order("created_at", asc=True)
+        .order("created_at", desc=False)
         .execute()
     ).data or []
 
