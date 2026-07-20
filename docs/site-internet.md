@@ -1,7 +1,7 @@
 # Périmètre Site Internet — Guide complet
 
-**Version :** 1.1  
-**Date :** Juin 2026  
+**Version :** 1.2  
+**Date :** Juillet 2026  
 **Périmètre :** Création, personnalisation, publication et intégration de sites vitrine dans le SaaS
 
 ---
@@ -47,7 +47,7 @@ Le wizard guide le professionnel étape par étape. Il ne peut pas avancer si la
 | 1 | Votre image & photos | Logo (a / n'a pas / texte — ou lancer la **création de logo IA**), palette couleur (6 choix), police (moderne / classique / manuscrit), option photos (stock / propres) + URLs vidéo par section (plan Business uniquement) | `site_style.logo_option`, `site_style.primary_color`, `site_style.font_style`, `site_style.photos_option`, `site_style.photo_urls`, `site_style.video_urls` |
 | 2 | Votre contenu | Pages à inclure (Accueil, Présentation, Services, Contact) | `site_style.pages_enabled[]` |
 | 3 | Identité | Titre de l'activité, accroche (tagline), description | `site.title`, `site.tagline`, `site.description` |
-| 4 | Contact & Réseaux | Téléphone, email, adresse, Facebook / Instagram / LinkedIn | `site.phone`, `site.email_contact`, `site.address`, `site_style.social_links` |
+| 4 | Contact & Réseaux | Téléphone, email, adresse, Facebook / Instagram / LinkedIn / TikTok / X | `site.phone`, `site.email_contact`, `site.address`, `site_style.social_links` |
 | 5 | Zones d'intervention | Liste des villes/régions couvertes (champ multi-valeur) | `service_area` table |
 | 6 | Prestations | Nom, description, durée (min), prix (€) | `service_offer` table |
 | 7 | Atouts | Jusqu'à 6 éléments : icône emoji, titre, description | `site_style.values_list[]` |
@@ -364,7 +364,9 @@ La colonne `site_style` (type `JSONB`) centralise tous les paramètres visuels e
   "social_links": {
     "facebook": "https://facebook.com/muntu-cura",
     "instagram": "",
-    "linkedin": ""
+    "linkedin": "",
+    "tiktok": "",
+    "twitter": ""
   },
   "values_list": [
     { "icon": "🏥", "title": "Soins certifiés", "description": "Agréée INAMI depuis 2015" },

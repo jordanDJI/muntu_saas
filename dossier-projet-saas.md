@@ -1,9 +1,9 @@
 # Dossier Projet — Klientys gestion de présence digitale pour indépendants et structures locales
 
-**Version :** 2.7 — Mise à jour Juin 2026
-**Date :** Juin 2026
+**Version :** 2.8 — Mise à jour Juillet 2026
+**Date :** Juillet 2026
 **Auteur :** Jordan (porteur du projet)
-**Statut :** En développement actif — MVP déployé, V1 livré, V2 avancé (agents IA + équipe)
+**Statut :** En développement actif — MVP déployé, V1 livré, V2 livré (agents IA + équipe + multilingue)
 
 ---
 
@@ -87,10 +87,10 @@ L'indépendant configure son site via un **wizard guidé en 9 étapes** accessib
 
 | Étape                  | Contenu                                                                                                                                                                                                                                                                                                                             |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Votre image & photos | Logo (a / n'a pas / texte simple), palette de couleurs (16 choix), style de police (7 styles : moderne, classique, manuscrit, arrondi, gras, humaniste, tech), option photos (stock / propres). Si "propres photos" : champs URL pour 4 zones (héro, à propos, services, contact) avec guide visuel intégré (popover wireframe) |
+| 1. Votre image & photos | Logo (a / n'a pas / texte simple), palette de couleurs (16 choix), style de police (7 styles : moderne, classique, manuscrit, arrondi, gras, humaniste, tech), option photos (stock / propres). Si "propres photos" : champs URL pour 4 zones (héro, à propos, services, contact) avec guide visuel intégré (popover wireframe). **Galerie de photos** dédiée avec choix de mode d'affichage (défilement horizontal / grille verticale). |
 | 2. Votre contenu        | Pages à inclure (Accueil, Présentation, Services, Contact)                                                                                                                                                                                                                                                                        |
 | 3. Identité            | Nom de l'activité, accroche (tagline), description                                                                                                                                                                                                                                                                                 |
-| 4. Contact & Réseaux   | Téléphone, email, adresse, liens Facebook/Instagram/LinkedIn                                                                                                                                                                                                                                                                      |
+| 4. Contact & Réseaux   | Téléphone, email, adresse, liens Facebook / Instagram / LinkedIn / **TikTok / X** (tous optionnels)                                                                                                                                                                                                                               |
 | 5. Zones d'intervention | Liste des villes/régions couvertes                                                                                                                                                                                                                                                                                                 |
 | 6. Prestations          | Nom, description, durée en minutes (facultatif), prix en € (facultatif), URL image (facultatif)                                                                                                                                                                                                                                   |
 | 7. Nos atouts           | Jusqu'à 6 atouts avec icône emoji, titre et description                                                                                                                                                                                                                                                                           |
@@ -360,6 +360,7 @@ Lancer le minimum qui génère de la valeur réelle pour un premier utilisateur.
 | **Configuration agents enrichie**         | Dashboard       | ✅ Livré — token bot Telegram, webhook setup, activation chat personnel, fréquence synthèse, masquage champs selon rôle  |
 | **CRM complet**                            | —              | ✅ Livré (Juin 2026) — contacts, tags, notes timeline, relances multi-canal, campagnes email/Telegram, pièces jointes (Pro/Business) |
 | **Auth providers OAuth**                   | —              | ✅ Livré (Juin 2026) — LinkedIn OIDC actif ; Facebook intégré (masqué, validation Meta en attente) |
+| **Interface multilingue dashboard**        | —              | ✅ Livré (Juillet 2026) — toutes les pages, modales et composants du dashboard traduits en **4 langues** (fr / en / de / nl) via système i18n centralisé (`lib/i18n.ts` + `LanguageContext`) |
 | WhatsApp Business API                           | Agents 2 & 3    | ⏳ Bloqué — approbation Meta en attente                                                                                     |
 | Journaux d'activité complets                   | —              | ⏳ Planifié — UI prête (section Paramètres), table `activity_log` à créer                                             |
 | Notifications temps réel (push)                | —              | ⏳ Planifié — UI prête (section Paramètres), backend à implémenter                                                      |
@@ -1090,7 +1091,7 @@ SITE(id PK, tenant_id FK->TENANT.id, template_id FK->TEMPLATE.id, domain, title,
 -- site_style : { logo_option, primary_color, font_style, pages_enabled[], photos_option }
 -- coverage_zones : ["Bruxelles", "Hal", "Tubize", ...]
 -- values_list : [{ icon, title, description }, ...]
--- social_links : { facebook, instagram, linkedin }
+-- social_links : { facebook, instagram, linkedin, tiktok, twitter }
 -- published_snapshot : capture immuable de site + offres + témoignages au moment de la publication (la page publique lit ce snapshot, pas les tables live)
 
 TESTIMONIAL(id PK, site_id FK->SITE.id, author_name, author_role, content, rating SMALLINT, created_at)
@@ -2072,4 +2073,4 @@ Next.js gère le site public, le back-office ET les API routes dans un seul dép
 
 ---
 
-*Document maintenu par Jordan — toute modification doit être versionnée. Dernière mise à jour : avril 2026.*
+*Document maintenu par Jordan — toute modification doit être versionnée. Dernière mise à jour : juillet 2026.*
