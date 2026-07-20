@@ -2108,7 +2108,7 @@ async def admin_reply_ticket(
         push_url,
     )
 
-    _log(admin, "support_reply", target_tenant_id=ticket["tenant_id"], payload={"ticket_id": ticket_id})
+    _log(admin, "support_reply", tenant_id=ticket["tenant_id"], payload={"ticket_id": ticket_id})
     return {"success": True}
 
 
