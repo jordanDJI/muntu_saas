@@ -2930,7 +2930,7 @@ function SectionAnnuaire() {
 
 // ── Section Support ───────────────────────────────────────────────────────────
 
-function SectionSupport() {
+function SectionSupport({ onTicketRead }: { onTicketRead?: () => void }) {
   const { t } = useLanguage();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2946,7 +2946,11 @@ function SectionSupport() {
   const [replying, setReplying] = useState(false);
 
   useEffect(() => {
-    api.listSupportTickets().then(setTickets).catch(() => {}).finally(() => setLoading(false));
+    api.listSupportTickets().then((data: any[]) => {
+      setTickets(data);
+      // On considère que le fait d'ouvrir la section "vu" tous les tickets
+      onTicketRead?.();
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   async function openTicket(ticket: any) {
@@ -3147,7 +3151,7 @@ function SectionSupport() {
 
 // ── Page principale ───────────────────────────────────────────────────────────
 
-const SECTION_MAP: Record<Exclude<Section, "domaine">, React.FC> = {
+const SECTION_MAP: Record<Exclude<Section, "domaine" | "support">, React.FC> = {
   profil:        SectionProfil,
   securite:      SectionSecurite,
   site:          SectionSite,
@@ -3161,7 +3165,6 @@ const SECTION_MAP: Record<Exclude<Section, "domaine">, React.FC> = {
   integrations:  SectionIntegrations,
   export:        SectionExport,
   activite:      SectionActivite,
-  support:       SectionSupport,
 };
 
 // Sections réservées aux owner/admin (jamais visibles pour les "member")
@@ -3173,11 +3176,16 @@ export default function SettingsPage() {
   const NAV = getNav(t);
   const [active, setActive] = useState<Section>("profil");
   const [myRole, setMyRole] = useState<string>("owner");
+  const [openTickets, setOpenTickets] = useState(0);
 
   useEffect(() => {
     api.getMyRole().then(({ role }) => setMyRole(role)).catch(() => {});
     const s = new URLSearchParams(window.location.search).get("section");
     if (s && s in SECTION_MAP) setActive(s as Section);
+    // Charge le nombre de tickets ouverts pour le badge "Support"
+    api.listSupportTickets()
+      .then((tickets: any[]) => setOpenTickets(tickets.filter(t => t.status === "open").length))
+      .catch(() => {});
   }, []);
 
   const isMember = myRole === "member";
@@ -3214,7 +3222,7 @@ export default function SettingsPage() {
         >
           {visibleNAV.map(item => (
             <option key={item.key} value={item.key}>
-              {item.icon}  {item.label}
+              {item.icon}  {item.label}{item.key === "support" && openTickets > 0 ? ` (${openTickets})` : ""}
             </option>
           ))}
         </select>
@@ -3236,7 +3244,12 @@ export default function SettingsPage() {
                 }`}
               >
                 <span className="text-base leading-none">{item.icon}</span>
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.key === "support" && openTickets > 0 && (
+                  <span className="ml-auto flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+                    {openTickets > 9 ? "9+" : openTickets}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -3246,7 +3259,9 @@ export default function SettingsPage() {
         <main className="flex-1 py-6 px-4 sm:px-6 min-w-0 space-y-4">
           {active === "domaine"
             ? <SectionDomaine onNavigate={setActive} />
-            : (() => { const S = SECTION_MAP[active]; return <S />; })()
+            : active === "support"
+            ? <SectionSupport onTicketRead={() => setOpenTickets(0)} />
+            : (() => { const S = SECTION_MAP[active as Exclude<Section, "domaine" | "support">]; return <S />; })()
           }
         </main>
       </div>

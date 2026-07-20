@@ -6,7 +6,7 @@ import stripe as stripe_lib
 logger = logging.getLogger(__name__)
 
 import httpx
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 import secrets
@@ -2056,6 +2056,7 @@ async def admin_get_support_ticket(ticket_id: str, admin=Depends(get_current_adm
 async def admin_reply_ticket(
     ticket_id: str,
     data: AdminSupportReply,
+    background_tasks: BackgroundTasks,
     admin=Depends(get_current_admin),
 ):
     """Réponse de l'équipe Klientys à un ticket tenant."""
@@ -2063,9 +2064,10 @@ async def admin_reply_ticket(
         raise HTTPException(400, "Message vide")
 
     sb = get_supabase_admin()
-    ticket = sb.table("support_ticket").select("id, subject, tenant_id, status").eq("id", ticket_id).single().execute().data
-    if not ticket:
+    rows = sb.table("support_ticket").select("id, subject, tenant_id, status").eq("id", ticket_id).limit(1).execute().data or []
+    if not rows:
         raise HTTPException(404, "Ticket introuvable")
+    ticket = rows[0]
 
     sb.table("support_message").insert({
         "ticket_id": ticket_id,
@@ -2076,37 +2078,34 @@ async def admin_reply_ticket(
 
     sb.table("support_ticket").update({
         "status":     "in_progress",
-        "updated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", ticket_id).execute()
 
-    # Email + push vers le tenant
-    import asyncio
     from app.services.email import send_support_reply_to_tenant
     from app.services import push as push_svc
 
-    tenant_row = sb.table("tenant").select("name, slug").eq("id", ticket["tenant_id"]).single().execute().data or {}
+    tenant_rows = sb.table("tenant").select("name, slug").eq("id", ticket["tenant_id"]).limit(1).execute().data or []
+    tenant_row = tenant_rows[0] if tenant_rows else {}
     site_res = sb.table("site").select("email_contact").eq("tenant_id", ticket["tenant_id"]).limit(1).execute().data or []
     tenant_email = (site_res[0].get("email_contact") if site_res else None) or ""
 
     if tenant_email:
-        asyncio.create_task(
-            send_support_reply_to_tenant(
-                tenant_email=tenant_email,
-                tenant_name=tenant_row.get("name", ""),
-                ticket_subject=ticket["subject"],
-                reply_body=data.body.strip(),
-                ticket_id=ticket_id,
-            )
+        background_tasks.add_task(
+            send_support_reply_to_tenant,
+            tenant_email=tenant_email,
+            tenant_name=tenant_row.get("name", ""),
+            ticket_subject=ticket["subject"],
+            reply_body=data.body.strip(),
+            ticket_id=ticket_id,
         )
 
-    frontend = __import__("app.core.config", fromlist=["settings"]).settings
-    asyncio.create_task(
-        push_svc.send_push_to_tenant(
-            sb, ticket["tenant_id"],
-            title="Réponse de Klientys 💬",
-            body=f"L'équipe Klientys a répondu à votre ticket : {ticket['subject'][:60]}",
-            url=f"{frontend.frontend_url_prod or frontend.frontend_url}/dashboard/settings?section=support",
-        )
+    push_url = f"{settings.frontend_url_prod or settings.frontend_url}/dashboard/settings?section=support"
+    background_tasks.add_task(
+        push_svc.send_push_to_tenant,
+        sb, ticket["tenant_id"],
+        "Réponse de Klientys 💬",
+        f"L'équipe Klientys a répondu à votre ticket : {ticket['subject'][:60]}",
+        push_url,
     )
 
     _log(admin, "support_reply", target_tenant_id=ticket["tenant_id"], payload={"ticket_id": ticket_id})

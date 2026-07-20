@@ -6,10 +6,9 @@ Endpoints :
   GET    /support/tickets/{id}      Détail + messages
   POST   /support/tickets/{id}/reply   Répondre à un ticket (tenant)
 """
-import asyncio
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.config import settings as cfg
@@ -38,6 +37,7 @@ class MessageCreate(BaseModel):
 @router.post("/tickets", status_code=201)
 async def create_ticket(
     data: TicketCreate,
+    background_tasks: BackgroundTasks,
     tenant_id: str = Depends(get_current_tenant),
 ):
     if not data.subject.strip():
@@ -72,19 +72,16 @@ async def create_ticket(
         .execute()
     )
 
-    tenant_row = (
-        sb.table("tenant").select("name, slug").eq("id", tenant_id).single().execute()
-    ).data or {}
-    tenant_name = tenant_row.get("name", "Tenant")
+    tenant_rows = sb.table("tenant").select("name, slug").eq("id", tenant_id).limit(1).execute().data or []
+    tenant_name = tenant_rows[0].get("name", "Tenant") if tenant_rows else "Tenant"
 
-    asyncio.create_task(
-        send_support_email_to_admin(
-            ticket_id=ticket["id"],
-            tenant_name=tenant_name,
-            tenant_id=tenant_id,
-            subject=data.subject.strip(),
-            body=data.body.strip(),
-        )
+    background_tasks.add_task(
+        send_support_email_to_admin,
+        ticket_id=ticket["id"],
+        tenant_name=tenant_name,
+        tenant_id=tenant_id,
+        subject=data.subject.strip(),
+        body=data.body.strip(),
     )
 
     return ticket
@@ -133,22 +130,24 @@ def get_ticket(ticket_id: str, tenant_id: str = Depends(get_current_tenant)):
 async def reply_ticket(
     ticket_id: str,
     data: MessageCreate,
+    background_tasks: BackgroundTasks,
     tenant_id: str = Depends(get_current_tenant),
 ):
     if not data.body.strip():
         raise HTTPException(400, "Le message est vide")
 
     sb = get_supabase_admin()
-    ticket = (
+    rows = (
         sb.table("support_ticket")
         .select("id, subject, status, tenant_id")
         .eq("id", ticket_id)
         .eq("tenant_id", tenant_id)
-        .single()
+        .limit(1)
         .execute()
-    ).data
-    if not ticket:
+    ).data or []
+    if not rows:
         raise HTTPException(404, "Ticket introuvable")
+    ticket = rows[0]
     if ticket["status"] in ("resolved", "closed"):
         raise HTTPException(400, "Ce ticket est fermé")
 
@@ -169,18 +168,16 @@ async def reply_ticket(
         .execute()
     )
 
-    tenant_row = (
-        sb.table("tenant").select("name").eq("id", tenant_id).single().execute()
-    ).data or {}
+    tenant_rows = sb.table("tenant").select("name").eq("id", tenant_id).limit(1).execute().data or []
+    tenant_name = tenant_rows[0].get("name", "Tenant") if tenant_rows else "Tenant"
 
-    asyncio.create_task(
-        send_support_email_to_admin(
-            ticket_id=ticket_id,
-            tenant_name=tenant_row.get("name", "Tenant"),
-            tenant_id=tenant_id,
-            subject=f"Re: {ticket['subject']}",
-            body=data.body.strip(),
-        )
+    background_tasks.add_task(
+        send_support_email_to_admin,
+        ticket_id=ticket_id,
+        tenant_name=tenant_name,
+        tenant_id=tenant_id,
+        subject=f"Re: {ticket['subject']}",
+        body=data.body.strip(),
     )
 
     return {"success": True}
