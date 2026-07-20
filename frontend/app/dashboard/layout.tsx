@@ -420,6 +420,85 @@ function MobileTourMenu({ onStart, pathname }: { onStart: () => void; pathname: 
   );
 }
 
+// ── Bannière push — premier login ─────────────────────────────────────────────
+
+const API_URL_PUSH = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function _b64ToBuffer(b64: string): ArrayBuffer {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  const buf = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+  return buf.buffer;
+}
+
+function PushPermissionBanner() {
+  const [show, setShow] = useState(false);
+  const [state, setState] = useState<"idle" | "loading" | "done">("idle");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    if (Notification.permission !== "default") return;          // déjà demandé
+    if (localStorage.getItem("klientys_push_asked")) return;    // déjà vu
+    const t = setTimeout(() => setShow(true), 4000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const dismiss = () => {
+    localStorage.setItem("klientys_push_asked", "1");
+    setShow(false);
+  };
+
+  const enable = async () => {
+    setState("loading");
+    localStorage.setItem("klientys_push_asked", "1");
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      const perm = await Notification.requestPermission();
+      if (perm === "granted") {
+        const r = await fetch(`${API_URL_PUSH}/api/v1/push/vapid-public-key`);
+        if (r.ok) {
+          const { public_key } = await r.json();
+          const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: _b64ToBuffer(public_key),
+          });
+          // Utilise api.subscribePush qui ajoute les headers auth + X-Tenant-Id
+          await api.subscribePush(sub.toJSON());
+        }
+      }
+    } catch { /* silencieux — pas critique */ }
+    setState("done");
+    setShow(false);
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
+      <div className="bg-gray-900 text-white rounded-2xl shadow-2xl px-4 py-3.5 flex items-center gap-3 border border-white/10">
+        <div className="w-9 h-9 rounded-xl bg-primary-700 flex items-center justify-center shrink-0">
+          <svg className="w-4.5 h-4.5 text-white w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold leading-tight">Activez les notifications</p>
+          <p className="text-xs text-white/60 mt-0.5">Soyez alerté des nouveaux RDV en temps réel</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={enable} disabled={state === "loading"}
+            className="bg-primary-500 hover:bg-primary-400 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+            {state === "loading" ? "…" : "Activer"}
+          </button>
+          <button onClick={dismiss} className="text-white/40 hover:text-white/70 text-lg leading-none transition-colors">×</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ContactLimitBanner() {
   const { features, status, loading } = useSubscription();
   const { t } = useLanguage();
@@ -830,6 +909,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Ancre invisible fixée au centre du viewport — cible pour la card de bienvenue */}
       <div id="onboarding-center" style={{ position: "fixed", top: "38%", left: "50%", width: 0, height: 0, pointerEvents: "none" }} />
       <TourStarter />
+      <PushPermissionBanner />
       {/* Navbar fixe */}
       <nav className="fixed top-0 inset-x-0 z-50 h-14" style={{ background: "var(--bg-nav)", borderBottom: "1px solid rgba(170,189,216,.1)" }}>
         <div className="h-full px-3 md:px-4 flex items-center gap-2">
