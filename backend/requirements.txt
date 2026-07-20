@@ -20,3 +20,4 @@ google-auth==2.37.0
 weasyprint>=62.0
 xhtml2pdf>=0.2.11
 lxml>=5.0.0
+pywebpush>=2.0.0

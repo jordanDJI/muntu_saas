@@ -557,4 +557,35 @@ export const api = {
     const a = document.createElement("a"); a.href = url; a.download = `${number}.ubl.xml`; a.click();
     URL.revokeObjectURL(url);
   },
+
+  // ── Support interne ────────────────────────────────────────────────────────
+  createSupportTicket: (body: { subject: string; body: string; priority?: string }) =>
+    apiFetch<any>("/api/v1/support/tickets", { method: "POST", body: JSON.stringify(body) }),
+  listSupportTickets: () => apiFetch<any[]>("/api/v1/support/tickets"),
+  getSupportTicket: (id: string) => apiFetch<any>(`/api/v1/support/tickets/${id}`),
+  replySupportTicket: (id: string, body: string) =>
+    apiFetch<any>(`/api/v1/support/tickets/${id}/reply`, { method: "POST", body: JSON.stringify({ body }) }),
+
+  // ── Web Push ───────────────────────────────────────────────────────────────
+  getVapidPublicKey: () => apiFetch<{ public_key: string }>("/api/v1/push/vapid-public-key"),
+  subscribePush: (subscription: object) =>
+    apiFetch<any>("/api/v1/push/subscribe", { method: "POST", body: JSON.stringify({ subscription }) }),
+  unsubscribePush: () => apiFetch<any>("/api/v1/push/subscribe", { method: "DELETE" }),
+  subscribeContactPush: (contact_id: string, tenant_id: string, subscription: object) =>
+    fetch(`${API_URL}/api/v1/push/subscribe/contact`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contact_id, tenant_id, subscription }),
+    }),
+
+  // ── Admin support ──────────────────────────────────────────────────────────
+  adminListSupportTickets: (status?: string) => {
+    const qs = status ? `?status=${status}` : "";
+    return apiFetch<any[]>(`/api/v1/admin/support/tickets${qs}`);
+  },
+  adminGetSupportTicket: (id: string) => apiFetch<any>(`/api/v1/admin/support/tickets/${id}`),
+  adminReplySupportTicket: (id: string, body: string) =>
+    apiFetch<any>(`/api/v1/admin/support/tickets/${id}/reply`, { method: "POST", body: JSON.stringify({ body }) }),
+  adminUpdateSupportTicket: (id: string, status: string) =>
+    apiFetch<any>(`/api/v1/admin/support/tickets/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
 };

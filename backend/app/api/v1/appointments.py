@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from uuid import UUID
@@ -6,6 +7,7 @@ from app.core.supabase import get_supabase_admin as get_supabase
 from app.core.config import settings
 from app.models.appointment import AppointmentCreateIn, AppointmentUpdateIn, AppointmentOut
 from app.services.email import send_appointment_confirmation, send_appointment_cancellation, get_tenant_brand
+from app.services import push as push_svc
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -174,6 +176,16 @@ async def confirm_appointment(
             logo_option=brand["logo_option"],
         )
 
+    # Push au client : RDV confirmé
+    if contact and appt.get("contact_id"):
+        _safe_push(
+            push_svc.send_push_to_contact(supabase, appt["contact_id"],
+                title="Rendez-vous confirmé ✓",
+                body=f"Votre RDV avec {tenant.get('name', '')} est confirmé.",
+                url=f"{settings.frontend_url}/{tenant.get('slug', '')}",
+            )
+        )
+
     return appt
 
 
@@ -217,7 +229,26 @@ async def cancel_appointment(
                 logo_option=brand["logo_option"],
             )
 
+        # Push au client : annulation
+        if appt.get("contact_id"):
+            tenant_row = tenant if tenant else {}
+            _safe_push(
+                push_svc.send_push_to_contact(supabase, appt["contact_id"],
+                    title="Rendez-vous annulé",
+                    body=f"Votre RDV avec {tenant_row.get('name', '')} a été annulé.",
+                    url=f"{settings.frontend_url}/{tenant_row.get('slug', '')}",
+                )
+            )
+
     return appt
+
+
+def _safe_push(coro) -> None:
+    """Lance une coroutine push en fire-and-forget (swallow exceptions)."""
+    try:
+        asyncio.create_task(coro)
+    except Exception:
+        pass
 
 
 def _get_tenant_appointment(supabase, appointment_id: UUID, tenant_id: str) -> dict:

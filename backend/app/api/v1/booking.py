@@ -516,6 +516,22 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
     # Accusé de réception au client
     _email_client_booking_received(tenant, body.first_name, body.last_name, body.email, appt)
 
+    # Push au tenant : nouveau RDV
+    import asyncio
+    from app.services import push as push_svc
+    client_name = f"{body.first_name or ''} {body.last_name or ''}".strip() or "Client"
+    try:
+        asyncio.create_task(
+            push_svc.send_push_to_tenant(
+                sb, tenant["id"],
+                title="Nouveau rendez-vous 📅",
+                body=f"{client_name} vient de réserver un créneau.",
+                url=f"{settings.frontend_url_prod or settings.frontend_url}/dashboard/appointments",
+            )
+        )
+    except Exception:
+        pass
+
     return {"type": "appointment", "id": appt["id"]}
 
 

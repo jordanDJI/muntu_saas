@@ -14,7 +14,7 @@ import villes from "../../../data/villes.json";
 type Section =
   | "profil" | "securite" | "site" | "metriques"
   | "abonnement" | "notifications" | "preferences"
-  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire" | "facturation";
+  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire" | "facturation" | "support";
 
 function getNav(t: any) {
   return [
@@ -30,12 +30,22 @@ function getNav(t: any) {
     { key: "membres",       label: t.sett_nav_membres,       icon: "👥" },
     { key: "facturation",   label: t.sett_nav_facturation,   icon: "🧾" },
     { key: "integrations",  label: t.sett_nav_integrations,  icon: "🔗" },
+    { key: "support",       label: t.sett_nav_support,       icon: "💬" },
     { key: "export",        label: t.sett_nav_export,        icon: "📤" },
     { key: "activite",      label: t.sett_nav_activite,      icon: "📋" },
   ] as const;
 }
 
-// ── Helpers UI ────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr.buffer;
+}
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`bg-white rounded-xl border p-6 space-y-4 ${className}`}>{children}</div>;
@@ -2848,6 +2858,281 @@ function SectionAnnuaire() {
   );
 }
 
+// ── Section Support ───────────────────────────────────────────────────────────
+
+function SectionSupport() {
+  const { t } = useLanguage();
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<any | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [msgLoading, setMsgLoading] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [replyBody, setReplyBody] = useState("");
+  const [replying, setReplying] = useState(false);
+  const [pushState, setPushState] = useState<"idle" | "loading" | "enabled" | "denied">("idle");
+  const [swReg, setSwReg] = useState<ServiceWorkerRegistration | null>(null);
+
+  useEffect(() => {
+    api.listSupportTickets().then(setTickets).catch(() => {}).finally(() => setLoading(false));
+    initPush();
+  }, []);
+
+  async function initPush() {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      setSwReg(reg);
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) setPushState("enabled");
+      else if (Notification.permission === "denied") setPushState("denied");
+    } catch {}
+  }
+
+  async function enablePush() {
+    if (!swReg) return;
+    setPushState("loading");
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { setPushState("denied"); return; }
+      const { public_key } = await api.getVapidPublicKey();
+      const sub = await swReg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(public_key),
+      });
+      await api.subscribePush(sub.toJSON());
+      setPushState("enabled");
+    } catch { setPushState("idle"); }
+  }
+
+  async function openTicket(ticket: any) {
+    setSelected(ticket);
+    setMsgLoading(true);
+    try {
+      const full = await api.getSupportTicket(ticket.id);
+      setMessages(full.messages || []);
+    } catch {} finally { setMsgLoading(false); }
+  }
+
+  async function handleSubmit() {
+    if (!subject.trim() || !body.trim()) return;
+    setSubmitting(true);
+    try {
+      const ticket = await api.createSupportTicket({ subject: subject.trim(), body: body.trim() });
+      setSent(true);
+      setSubject(""); setBody("");
+      setTickets(prev => [ticket, ...prev]);
+      setTimeout(() => { setShowNew(false); setSent(false); }, 2500);
+    } catch {} finally { setSubmitting(false); }
+  }
+
+  async function handleReply() {
+    if (!replyBody.trim() || !selected) return;
+    setReplying(true);
+    try {
+      await api.replySupportTicket(selected.id, replyBody.trim());
+      const full = await api.getSupportTicket(selected.id);
+      setMessages(full.messages || []);
+      setReplyBody("");
+      setTickets(prev => prev.map(t => t.id === selected.id ? { ...t, status: "open", updated_at: new Date().toISOString() } : t));
+    } catch {} finally { setReplying(false); }
+  }
+
+  const STATUS_COLORS: Record<string, string> = {
+    open: "bg-blue-50 text-blue-700 border-blue-200",
+    in_progress: "bg-amber-50 text-amber-700 border-amber-200",
+    resolved: "bg-green-50 text-green-700 border-green-200",
+    closed: "bg-gray-100 text-gray-500 border-gray-200",
+  };
+  const STATUS_LABELS: Record<string, any> = {
+    open: t.supp_status_open, in_progress: t.supp_status_in_progress,
+    resolved: t.supp_status_resolved, closed: t.supp_status_closed,
+  };
+
+  const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <>
+      <div className="mb-4">
+        <h2 className="text-xl font-bold text-gray-900">{t.supp_title}</h2>
+        <p className="text-sm text-gray-500 mt-1">{t.supp_subtitle}</p>
+      </div>
+
+      {/* Push notifications */}
+      <Card className="mb-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-900 text-sm">{t.supp_push_title}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{t.supp_push_desc}</p>
+          </div>
+          {pushState === "denied" ? (
+            <span className="text-xs text-red-600 text-right max-w-[160px] leading-tight">{t.supp_push_denied}</span>
+          ) : pushState === "enabled" ? (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-3 py-1">✓ {t.supp_push_enabled}</span>
+          ) : (
+            <button
+              onClick={enablePush}
+              disabled={pushState === "loading"}
+              className="shrink-0 rounded-lg bg-primary-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-primary-700 disabled:opacity-50 transition-colors"
+            >
+              {pushState === "loading" ? "…" : t.supp_push_enable}
+            </button>
+          )}
+        </div>
+      </Card>
+
+      {/* View: ticket detail */}
+      {selected ? (
+        <Card>
+          <button onClick={() => setSelected(null)} className="text-xs text-primary-600 hover:text-primary-800 mb-4 font-medium">
+            {t.supp_back}
+          </button>
+          <div className="flex items-start justify-between gap-2 mb-4">
+            <h3 className="font-semibold text-gray-900">{selected.subject}</h3>
+            <span className={`text-xs font-semibold border rounded-full px-2.5 py-0.5 shrink-0 ${STATUS_COLORS[selected.status] || ""}`}>
+              {STATUS_LABELS[selected.status] || selected.status}
+            </span>
+          </div>
+
+          {msgLoading ? (
+            <div className="text-center py-8 text-gray-400 text-sm">…</div>
+          ) : (
+            <div className="space-y-3 mb-4 max-h-96 overflow-y-auto">
+              {messages.map(msg => (
+                <div key={msg.id} className={`flex gap-2 ${msg.sender === "admin" ? "" : "flex-row-reverse"}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${msg.sender === "admin" ? "bg-primary-100 text-primary-700" : "bg-gray-100 text-gray-600"}`}>
+                    {msg.sender === "admin" ? "K" : "V"}
+                  </div>
+                  <div className={`max-w-[75%] rounded-2xl px-3.5 py-2.5 ${msg.sender === "admin" ? "bg-primary-50 border border-primary-100 text-gray-800" : "bg-gray-100 text-gray-800"}`}>
+                    <p className="text-xs font-semibold mb-1 text-gray-500">
+                      {msg.sender === "admin" ? t.supp_from_admin : t.supp_from_you}
+                    </p>
+                    <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
+                    <p className="text-xs text-gray-400 mt-1">{fmtDate(msg.created_at)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!["resolved", "closed"].includes(selected.status) && (
+            <div className="border-t pt-4">
+              <textarea
+                value={replyBody}
+                onChange={e => setReplyBody(e.target.value)}
+                placeholder={t.supp_reply_ph}
+                rows={3}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 resize-none"
+              />
+              <button
+                onClick={handleReply}
+                disabled={replying || !replyBody.trim()}
+                className="mt-2 rounded-lg bg-primary-600 text-white text-sm font-semibold px-4 py-2 hover:bg-primary-700 disabled:opacity-40 transition-colors"
+              >
+                {replying ? "…" : t.supp_reply_send}
+              </button>
+            </div>
+          )}
+        </Card>
+      ) : (
+        <>
+          {/* New ticket form */}
+          {showNew ? (
+            <Card className="mb-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900">{t.supp_new_ticket}</h3>
+                <button onClick={() => { setShowNew(false); setSent(false); }} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+              {sent ? (
+                <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                  {t.supp_ticket_sent}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">{t.supp_ticket_subject}</label>
+                    <input
+                      value={subject} onChange={e => setSubject(e.target.value)}
+                      placeholder={t.supp_ticket_subject_ph}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">{t.supp_ticket_body}</label>
+                    <textarea
+                      value={body} onChange={e => setBody(e.target.value)}
+                      placeholder={t.supp_ticket_body_ph}
+                      rows={5}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 resize-none"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSubmit}
+                    disabled={submitting || !subject.trim() || !body.trim()}
+                    className="w-full rounded-xl bg-primary-600 text-white py-2.5 text-sm font-semibold hover:bg-primary-700 disabled:opacity-40 transition-colors"
+                  >
+                    {submitting ? t.supp_ticket_submitting : t.supp_ticket_submit}
+                  </button>
+                </div>
+              )}
+            </Card>
+          ) : (
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={() => setShowNew(true)}
+                className="flex items-center gap-2 rounded-xl bg-primary-600 text-white px-4 py-2 text-sm font-semibold hover:bg-primary-700 transition-colors shadow-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg>
+                {t.supp_new_ticket}
+              </button>
+            </div>
+          )}
+
+          {/* Ticket list */}
+          <Card>
+            {loading ? (
+              <div className="text-center py-8 text-gray-400 text-sm">…</div>
+            ) : tickets.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">{t.supp_no_tickets}</p>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {tickets.map(ticket => (
+                  <button
+                    key={ticket.id}
+                    onClick={() => openTicket(ticket)}
+                    className="w-full text-left flex items-start gap-3 py-3.5 px-1 hover:bg-gray-50 rounded-lg transition-colors group"
+                  >
+                    <div className="w-2 h-2 rounded-full mt-2 shrink-0 bg-primary-400 group-hover:bg-primary-600 transition-colors" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{ticket.subject}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{fmtDate(ticket.updated_at)}</p>
+                    </div>
+                    <span className={`text-xs font-semibold border rounded-full px-2.5 py-0.5 shrink-0 ${STATUS_COLORS[ticket.status] || ""}`}>
+                      {STATUS_LABELS[ticket.status] || ticket.status}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
+        </>
+      )}
+    </>
+  );
+}
+
 // ── Page principale ───────────────────────────────────────────────────────────
 
 const SECTION_MAP: Record<Exclude<Section, "domaine">, React.FC> = {
@@ -2864,6 +3149,7 @@ const SECTION_MAP: Record<Exclude<Section, "domaine">, React.FC> = {
   integrations:  SectionIntegrations,
   export:        SectionExport,
   activite:      SectionActivite,
+  support:       SectionSupport,
 };
 
 // Sections réservées aux owner/admin (jamais visibles pour les "member")

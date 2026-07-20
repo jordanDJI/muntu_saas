@@ -1902,3 +1902,116 @@ def send_monthly_report(
             "content":  list(pdf_bytes),
         }],
     })
+
+
+def send_admin_campaign_to_tenant(
+    email: str,
+    tenant_name: str,
+    subject: str,
+    body: str,
+    dashboard_url: str,
+) -> None:
+    """Email de campagne Klientys → propriétaire de tenant (envoi groupé depuis le panel admin)."""
+    body_html = body.replace("\n", "<br>")
+    resend.Emails.send({
+        "from": f"Klientys <{settings.email_from}>",
+        "to":   [email],
+        "subject": subject,
+        "html": f"""
+        <div style="font-family:Inter,Arial,sans-serif;background:#f4f6f8;padding:40px 20px">
+          <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.06)">
+            <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:32px 40px">
+              <h1 style="color:#fff;font-size:20px;margin:0;font-weight:700">Klientys</h1>
+              <p style="color:rgba(255,255,255,0.7);margin:6px 0 0;font-size:13px">Message de l'équipe Klientys</p>
+            </div>
+            <div style="padding:32px 40px">
+              <div style="color:#4a5568;font-size:15px;line-height:1.7;margin:0 0 28px">{body_html}</div>
+              <a href="{dashboard_url}" style="{_BTN}">Accéder à mon espace →</a>
+              <hr style="border:none;border-top:1px solid #e8ecf0;margin:28px 0 16px">
+              <p style="color:#9ca3af;font-size:12px;line-height:1.6;margin:0">
+                Vous recevez cet email car vous avez un compte sur Klientys.<br>
+                Pour toute question :
+                <a href="mailto:support@klientys.co" style="color:#1A6E82">support@klientys.co</a>
+              </p>
+            </div>
+          </div>
+        </div>
+        """,
+    })
+
+
+# ── Support interne ───────────────────────────────────────────────────────────
+
+async def send_support_email_to_admin(
+    ticket_id: str,
+    tenant_name: str,
+    tenant_id: str,
+    subject: str,
+    body: str,
+) -> None:
+    """Email admin Klientys (Jordan) — nouveau ticket ou réponse tenant."""
+    admin_email = "djamalnazer@gmail.com"
+    dashboard_url = f"{settings.frontend_url_prod or settings.frontend_url}/admin/support?ticket={ticket_id}"
+    body_html = body.replace("\n", "<br>")
+    try:
+        resend.Emails.send({
+            "from":    f"Klientys Support <{settings.email_from}>",
+            "to":      [admin_email],
+            "subject": f"[Support] {tenant_name} — {subject}",
+            "html": f"""
+            <div style="font-family:Inter,Arial,sans-serif;background:#07222F;padding:40px 20px">
+              <div style="max-width:560px;margin:0 auto;background:#0D1B25;border-radius:12px;overflow:hidden">
+                <div style="background:linear-gradient(135deg,#0D4B58,#1A6E82);padding:24px 32px">
+                  <h2 style="color:#fff;margin:0;font-size:18px">Nouveau message support</h2>
+                  <p style="color:rgba(255,255,255,0.7);margin:4px 0 0;font-size:13px">{tenant_name}</p>
+                </div>
+                <div style="padding:28px 32px">
+                  <p style="color:#DDAA40;font-size:13px;font-weight:600;margin:0 0 8px">Sujet : {subject}</p>
+                  <div style="color:#CBD5E0;font-size:14px;line-height:1.7;background:#071824;padding:16px;border-radius:8px;margin:0 0 24px">{body_html}</div>
+                  <a href="{dashboard_url}" style="background:#DDAA40;color:#07222F;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block">Voir le ticket →</a>
+                </div>
+              </div>
+            </div>
+            """,
+        })
+    except Exception:
+        pass
+
+
+async def send_support_reply_to_tenant(
+    tenant_email: str,
+    tenant_name: str,
+    ticket_subject: str,
+    reply_body: str,
+    ticket_id: str,
+) -> None:
+    """Email tenant — réponse de l'équipe Klientys."""
+    dashboard_url = f"{settings.frontend_url_prod or settings.frontend_url}/dashboard/settings?section=support"
+    body_html = reply_body.replace("\n", "<br>")
+    try:
+        resend.Emails.send({
+            "from":    f"Équipe Klientys <{settings.email_from}>",
+            "to":      [tenant_email],
+            "subject": f"Re : {ticket_subject}",
+            "html": f"""
+            <div style="font-family:Inter,Arial,sans-serif;background:#f4f6f8;padding:40px 20px">
+              <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.06)">
+                <div style="background:linear-gradient(135deg,#07222F 0%,#0D4B58 100%);padding:32px 40px">
+                  <h1 style="color:#fff;font-size:20px;margin:0;font-weight:700">Klientys Support</h1>
+                  <p style="color:rgba(255,255,255,0.7);margin:6px 0 0;font-size:13px">Notre équipe vous a répondu</p>
+                </div>
+                <div style="padding:32px 40px">
+                  <p style="color:#374151;font-size:15px;margin:0 0 16px">Bonjour {tenant_name},</p>
+                  <div style="color:#4a5568;font-size:15px;line-height:1.7;margin:0 0 24px">{body_html}</div>
+                  <a href="{dashboard_url}" style="{_BTN}">Voir la conversation →</a>
+                  <hr style="border:none;border-top:1px solid #e8ecf0;margin:28px 0 16px">
+                  <p style="color:#9ca3af;font-size:12px;margin:0">
+                    Équipe Klientys — <a href="mailto:support@klientys.co" style="color:#1A6E82">support@klientys.co</a>
+                  </p>
+                </div>
+              </div>
+            </div>
+            """,
+        })
+    except Exception:
+        pass

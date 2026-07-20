@@ -1824,6 +1824,66 @@ async def admin_list_campaigns(
     }
 
 
+class AdminCampaignSendIn(BaseModel):
+    subject:    str
+    body:       str
+    tenant_ids: list[str]
+
+
+@router.post("/campaigns/send")
+async def admin_send_campaign(body: AdminCampaignSendIn, admin=Depends(get_current_admin)):
+    """Envoie un email de campagne Klientys aux propriétaires des tenants sélectionnés."""
+    if not body.subject.strip() or not body.body.strip():
+        raise HTTPException(400, "Objet et corps requis")
+    if not body.tenant_ids:
+        raise HTTPException(400, "Aucun tenant sélectionné")
+
+    sb   = get_supabase_admin()
+    base = settings.frontend_url_prod or settings.frontend_url
+    dashboard_url = f"{base}/dashboard"
+
+    sent = 0; failed = 0; errors: list[str] = []
+
+    for tenant_id in body.tenant_ids:
+        try:
+            tenant_row = sb.table("tenant").select("name, slug").eq("id", tenant_id).single().execute().data
+            if not tenant_row:
+                failed += 1; errors.append(f"tenant {tenant_id[:8]}: introuvable"); continue
+
+            owner_m = sb.table("membership").select("user_id").eq("tenant_id", tenant_id).eq("role", "owner").limit(1).execute().data
+            if not owner_m:
+                failed += 1; errors.append(f"{tenant_row['name']}: owner introuvable"); continue
+
+            user_res = sb.auth.admin.get_user_by_id(owner_m[0]["user_id"])
+            email    = user_res.user.email if (user_res and user_res.user) else None
+            if not email:
+                failed += 1; errors.append(f"{tenant_row['name']}: email introuvable"); continue
+
+            tenant_name = tenant_row["name"]
+            personalized = (
+                body.body
+                .replace("{prenom}",       tenant_name)
+                .replace("{nom_business}", tenant_name)
+                .replace("{tenant_name}",  tenant_name)
+            )
+            email_svc.send_admin_campaign_to_tenant(
+                email=email,
+                tenant_name=tenant_name,
+                subject=body.subject,
+                body=personalized,
+                dashboard_url=dashboard_url,
+            )
+            sent += 1
+        except Exception as exc:
+            failed += 1; errors.append(str(exc)[:120])
+
+    _log(admin, "admin_campaign_send", payload={
+        "subject": body.subject, "tenant_ids": body.tenant_ids,
+        "sent": sent, "failed": failed,
+    })
+    return {"sent": sent, "failed": failed, "errors": errors[:10]}
+
+
 # ─── Content Management (blog + témoignages) ─────────────────────────────────
 
 class BlogPostIn(BaseModel):
@@ -1939,3 +1999,140 @@ async def admin_delete_testimonial(testi_id: str, admin=Depends(get_current_admi
     get_supabase_admin().table("landing_testimonial").delete().eq("id", testi_id).execute()
     _log(admin, "delete_testimonial", payload={"id": testi_id})
     return {"ok": True}
+
+
+# ── Support interne (admin) ───────────────────────────────────────────────────
+
+class AdminSupportReply(BaseModel):
+    body: str
+
+
+class AdminTicketUpdate(BaseModel):
+    status: str  # open | in_progress | resolved | closed
+
+
+@router.get("/support/tickets")
+async def admin_list_support_tickets(
+    status: Optional[str] = None,
+    admin=Depends(get_current_admin),
+):
+    """Liste tous les tickets de support de tous les tenants."""
+    sb = get_supabase_admin()
+    query = (
+        sb.table("support_ticket")
+        .select("id, tenant_id, subject, status, priority, created_at, updated_at, tenant(name, slug)")
+        .order("updated_at", desc=True)
+        .limit(200)
+    )
+    if status:
+        query = query.eq("status", status)
+    tickets = query.execute().data or []
+    return tickets
+
+
+@router.get("/support/tickets/{ticket_id}")
+async def admin_get_support_ticket(ticket_id: str, admin=Depends(get_current_admin)):
+    sb = get_supabase_admin()
+    ticket = (
+        sb.table("support_ticket")
+        .select("*, tenant(name, slug)")
+        .eq("id", ticket_id)
+        .single()
+        .execute()
+    ).data
+    if not ticket:
+        raise HTTPException(404, "Ticket introuvable")
+    messages = (
+        sb.table("support_message")
+        .select("id, sender, body, created_at")
+        .eq("ticket_id", ticket_id)
+        .order("created_at", asc=True)
+        .execute()
+    ).data or []
+    return {**ticket, "messages": messages}
+
+
+@router.post("/support/tickets/{ticket_id}/reply", status_code=201)
+async def admin_reply_ticket(
+    ticket_id: str,
+    data: AdminSupportReply,
+    admin=Depends(get_current_admin),
+):
+    """Réponse de l'équipe Klientys à un ticket tenant."""
+    if not data.body.strip():
+        raise HTTPException(400, "Message vide")
+
+    sb = get_supabase_admin()
+    ticket = sb.table("support_ticket").select("id, subject, tenant_id, status").eq("id", ticket_id).single().execute().data
+    if not ticket:
+        raise HTTPException(404, "Ticket introuvable")
+
+    sb.table("support_message").insert({
+        "ticket_id": ticket_id,
+        "tenant_id": ticket["tenant_id"],
+        "sender":    "admin",
+        "body":      data.body.strip(),
+    }).execute()
+
+    sb.table("support_ticket").update({
+        "status":     "in_progress",
+        "updated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+    }).eq("id", ticket_id).execute()
+
+    # Email + push vers le tenant
+    import asyncio
+    from app.services.email import send_support_reply_to_tenant
+    from app.services import push as push_svc
+
+    tenant_row = sb.table("tenant").select("name, slug").eq("id", ticket["tenant_id"]).single().execute().data or {}
+    site_res = sb.table("site").select("email_contact").eq("tenant_id", ticket["tenant_id"]).limit(1).execute().data or []
+    tenant_email = (site_res[0].get("email_contact") if site_res else None) or ""
+
+    if tenant_email:
+        asyncio.create_task(
+            send_support_reply_to_tenant(
+                tenant_email=tenant_email,
+                tenant_name=tenant_row.get("name", ""),
+                ticket_subject=ticket["subject"],
+                reply_body=data.body.strip(),
+                ticket_id=ticket_id,
+            )
+        )
+
+    frontend = __import__("app.core.config", fromlist=["settings"]).settings
+    asyncio.create_task(
+        push_svc.send_push_to_tenant(
+            sb, ticket["tenant_id"],
+            title="Réponse de Klientys 💬",
+            body=f"L'équipe Klientys a répondu à votre ticket : {ticket['subject'][:60]}",
+            url=f"{frontend.frontend_url_prod or frontend.frontend_url}/dashboard/settings?section=support",
+        )
+    )
+
+    _log(admin, "support_reply", target_tenant_id=ticket["tenant_id"], payload={"ticket_id": ticket_id})
+    return {"success": True}
+
+
+@router.patch("/support/tickets/{ticket_id}")
+async def admin_update_ticket(
+    ticket_id: str,
+    data: AdminTicketUpdate,
+    admin=Depends(get_current_admin),
+):
+    """Modifier le statut d'un ticket (open / in_progress / resolved / closed)."""
+    valid_statuses = {"open", "in_progress", "resolved", "closed"}
+    if data.status not in valid_statuses:
+        raise HTTPException(400, f"Statut invalide. Valeurs acceptées : {valid_statuses}")
+
+    sb = get_supabase_admin()
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+    update_data: dict = {"status": data.status, "updated_at": now}
+    if data.status in ("resolved", "closed"):
+        update_data["resolved_at"] = now
+
+    row = sb.table("support_ticket").update(update_data).eq("id", ticket_id).execute().data
+    if not row:
+        raise HTTPException(404, "Ticket introuvable")
+
+    _log(admin, "update_support_ticket", payload={"ticket_id": ticket_id, "status": data.status})
+    return row[0]
