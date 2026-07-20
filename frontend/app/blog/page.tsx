@@ -2,6 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ARTICLES } from "./_articles";
 
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+async function getDbArticles() {
+  try {
+    const res = await fetch(`${API}/api/v1/public/blog`, { next: { revalidate: 300 } });
+    if (!res.ok) return [];
+    return res.json() as Promise<{ slug: string; title: string; description: string; category: string; metier?: string; reading_minutes: number; published_at: string }[]>;
+  } catch {
+    return [];
+  }
+}
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
 
 export const metadata: Metadata = {
@@ -23,7 +35,17 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Acquisition clients": "var(--l-blue-l)",
 };
 
-export default function BlogIndex() {
+export default async function BlogIndex() {
+  const dbArticles = await getDbArticles();
+  const dbSlugs = new Set(dbArticles.map((a) => a.slug));
+
+  // DB prend la priorité ; les articles statiques sans équivalent DB complètent la liste
+  const staticFallback = ARTICLES.filter((a) => !dbSlugs.has(a.slug)).map((a) => ({
+    slug: a.slug, title: a.title, description: a.description,
+    category: a.category, metier: a.metier, reading_minutes: a.readingMinutes, published_at: a.publishedAt,
+  }));
+  const allArticles = [...dbArticles, ...staticFallback];
+
   return (
     <main className="min-h-screen">
 
@@ -60,7 +82,7 @@ export default function BlogIndex() {
       {/* Articles */}
       <section style={{ maxWidth: "800px", margin: "0 auto", padding: "64px 24px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          {ARTICLES.map((article) => (
+          {allArticles.map((article) => (
             <Link
               key={article.slug}
               href={`/blog/${article.slug}`}
@@ -93,7 +115,7 @@ export default function BlogIndex() {
                     </span>
                   )}
                   <span style={{ fontSize: "12px", color: "var(--l-text-3)", marginLeft: "auto" }}>
-                    {article.readingMinutes} min · {article.publishedAt}
+                    {article.reading_minutes} min · {article.published_at}
                   </span>
                 </div>
 

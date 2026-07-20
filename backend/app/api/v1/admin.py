@@ -1740,3 +1740,120 @@ async def resend_payment(payment_id: str, admin=Depends(get_current_admin)):
     _log(admin, "resend_payment", tenant_id, owner.get("tenant_name"),
          {"payment_id": payment_id, "email": target_email, "description": description})
     return {"ok": True, "sent_to": target_email}
+
+
+# ─── Content Management (blog + témoignages) ─────────────────────────────────
+
+class BlogPostIn(BaseModel):
+    slug:            str
+    title:           str
+    description:     Optional[str] = None
+    category:        Optional[str] = None
+    metier:          Optional[str] = None
+    body_html:       Optional[str] = None
+    reading_minutes: int = 5
+    status:          str = "draft"
+    published_at:    Optional[str] = None
+
+
+@router.get("/content/blog")
+async def admin_list_blog(admin=Depends(viewer_or_above)):
+    rows = (
+        get_supabase_admin().table("blog_post")
+        .select("id, slug, title, category, status, published_at, reading_minutes, updated_at")
+        .order("created_at", desc=True)
+        .execute().data or []
+    )
+    return rows
+
+
+@router.post("/content/blog")
+async def admin_create_blog(body: BlogPostIn, admin=Depends(get_current_admin)):
+    sb  = get_supabase_admin()
+    row = sb.table("blog_post").insert({
+        "slug":            body.slug,
+        "title":           body.title,
+        "description":     body.description,
+        "category":        body.category,
+        "metier":          body.metier,
+        "body_html":       body.body_html,
+        "reading_minutes": body.reading_minutes,
+        "status":          body.status,
+        "published_at":    body.published_at,
+    }).execute().data[0]
+    _log(admin, "create_blog_post", payload={"slug": body.slug, "title": body.title})
+    return row
+
+
+@router.patch("/content/blog/{post_id}")
+async def admin_update_blog(post_id: str, body: BlogPostIn, admin=Depends(get_current_admin)):
+    from datetime import datetime as _dt
+    sb = get_supabase_admin()
+    row = sb.table("blog_post").update({
+        "slug":            body.slug,
+        "title":           body.title,
+        "description":     body.description,
+        "category":        body.category,
+        "metier":          body.metier,
+        "body_html":       body.body_html,
+        "reading_minutes": body.reading_minutes,
+        "status":          body.status,
+        "published_at":    body.published_at,
+        "updated_at":      _dt.utcnow().isoformat(),
+    }).eq("id", post_id).execute().data
+    if not row:
+        raise HTTPException(404, "Article introuvable")
+    _log(admin, "update_blog_post", payload={"id": post_id, "slug": body.slug})
+    return row[0]
+
+
+@router.delete("/content/blog/{post_id}")
+async def admin_delete_blog(post_id: str, admin=Depends(get_current_admin)):
+    get_supabase_admin().table("blog_post").delete().eq("id", post_id).execute()
+    _log(admin, "delete_blog_post", payload={"id": post_id})
+    return {"ok": True}
+
+
+class TestimonialIn(BaseModel):
+    name:       str
+    role:       Optional[str] = None
+    text:       str
+    initials:   Optional[str] = None
+    bg_color:   str = "rgba(13,75,88,.4)"
+    text_color: str = "var(--l-teal-xl)"
+    sort_order: int = 0
+    active:     bool = True
+
+
+@router.get("/content/testimonials")
+async def admin_list_testimonials(admin=Depends(viewer_or_above)):
+    rows = (
+        get_supabase_admin().table("landing_testimonial")
+        .select("*")
+        .order("sort_order")
+        .execute().data or []
+    )
+    return rows
+
+
+@router.post("/content/testimonials")
+async def admin_create_testimonial(body: TestimonialIn, admin=Depends(get_current_admin)):
+    row = get_supabase_admin().table("landing_testimonial").insert(body.model_dump()).execute().data[0]
+    _log(admin, "create_testimonial", payload={"name": body.name})
+    return row
+
+
+@router.patch("/content/testimonials/{testi_id}")
+async def admin_update_testimonial(testi_id: str, body: TestimonialIn, admin=Depends(get_current_admin)):
+    row = get_supabase_admin().table("landing_testimonial").update(body.model_dump()).eq("id", testi_id).execute().data
+    if not row:
+        raise HTTPException(404, "Témoignage introuvable")
+    _log(admin, "update_testimonial", payload={"id": testi_id, "name": body.name})
+    return row[0]
+
+
+@router.delete("/content/testimonials/{testi_id}")
+async def admin_delete_testimonial(testi_id: str, admin=Depends(get_current_admin)):
+    get_supabase_admin().table("landing_testimonial").delete().eq("id", testi_id).execute()
+    _log(admin, "delete_testimonial", payload={"id": testi_id})
+    return {"ok": True}

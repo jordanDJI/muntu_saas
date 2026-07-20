@@ -18,6 +18,14 @@ const FAQ_KEYS = [
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+type Testimonial = { id: string; name: string; role?: string; text: string; initials?: string; bg_color: string; text_color: string; sort_order: number };
+
+const DEFAULT_TESTIMONIALS: Testimonial[] = [
+  { id: "1", name: "Josiane Yollande", role: "Infirmière libérale, Bruxelles",  text: "Mes patients réservent maintenant directement en ligne. Plus d'appels le soir — mon agenda est toujours plein et je me concentre sur mes soins.", initials: "JY", bg_color: "rgba(13,75,88,.4)",   text_color: "var(--l-teal-xl)", sort_order: 1 },
+  { id: "2", name: "Thierry Bales",    role: "Artisan BTP, Darmstadt – Allemagne", text: "Je suis sur chantier toute la journée. L'agent IA répond à mes clients pendant que je travaille. Mon taux de no-show a chuté de 40% grâce aux rappels automatiques.", initials: "TB", bg_color: "rgba(170,189,216,.15)", text_color: "var(--l-blue)", sort_order: 2 },
+  { id: "3", name: "Samy Glo",         role: "Esthéticienne, Paris",            text: "Je n'y connaissais rien en informatique. Le wizard est tellement bien guidé que même moi j'ai réussi ! Mon agenda est plein depuis le premier mois.", initials: "SG", bg_color: "rgba(221,170,64,.15)", text_color: "var(--l-gold)", sort_order: 3 },
+];
+
 export default function LandingPage() {
   const router = useRouter();
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
@@ -25,6 +33,7 @@ export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [tenantCount, setTenantCount] = useState<number | null>(null);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(DEFAULT_TESTIMONIALS);
   const { t } = useLanguage();
 
   // Supabase redirige les erreurs OTP vers le Site URL (klientys.co/#error=...)
@@ -51,6 +60,13 @@ export default function LandingPage() {
     fetch(`${API_URL}/api/v1/public/stats`)
       .then((r) => r.json())
       .then((d) => setTenantCount(d.tenant_count ?? null))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/public/testimonials`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (Array.isArray(d) && d.length > 0) setTestimonials(d); })
       .catch(() => {});
   }, []);
 
@@ -380,43 +396,21 @@ export default function LandingPage() {
           <div className="l-section-tag" data-r=""><div className="l-tag">✦ {t.lp_testi_tag}</div></div>
           <h2 className="l-section-h2" data-r="" data-d="1">{t.lp_testi_h2a}<span className="l-gradient-text">{t.lp_testi_h2b}</span></h2>
           <div className="l-testi-grid" style={{ marginTop: "48px" }}>
-
-            <div className="l-testi-card" data-r="" data-d="1">
-              <div className="l-testi-stars">★★★★★</div>
-              <p className="l-testi-text">&quot;Mes patients réservent maintenant directement en ligne. Plus d&apos;appels le soir — mon agenda est toujours plein et je me concentre sur mes soins.&quot;</p>
-              <div className="l-testi-author">
-                <div className="l-testi-avatar" style={{ background: "rgba(13,75,88,.4)", color: "var(--l-teal-xl)" }}>JY</div>
-                <div>
-                  <div className="l-testi-name">Josiane Yollande</div>
-                  <div className="l-testi-role">Infirmière libérale, Bruxelles</div>
+            {testimonials.map((testi, i) => (
+              <div key={testi.id} className="l-testi-card" data-r="" data-d={String(i + 1)}>
+                <div className="l-testi-stars">★★★★★</div>
+                <p className="l-testi-text">&quot;{testi.text}&quot;</p>
+                <div className="l-testi-author">
+                  <div className="l-testi-avatar" style={{ background: testi.bg_color, color: testi.text_color }}>
+                    {testi.initials ?? testi.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="l-testi-name">{testi.name}</div>
+                    <div className="l-testi-role">{testi.role}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-
-            <div className="l-testi-card" data-r="" data-d="2">
-              <div className="l-testi-stars">★★★★★</div>
-              <p className="l-testi-text">&quot;Je suis sur chantier toute la journée. L&apos;agent IA répond à mes clients pendant que je travaille. Mon taux de no-show a chuté de 40% grâce aux rappels automatiques.&quot;</p>
-              <div className="l-testi-author">
-                <div className="l-testi-avatar" style={{ background: "rgba(170,189,216,.15)", color: "var(--l-blue)" }}>TB</div>
-                <div>
-                  <div className="l-testi-name">Thierry Bales</div>
-                  <div className="l-testi-role">Artisan BTP, Darmstadt – Allemagne</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="l-testi-card" data-r="" data-d="3">
-              <div className="l-testi-stars">★★★★★</div>
-              <p className="l-testi-text">&quot;Je n&apos;y connaissais rien en informatique. Le wizard est tellement bien guidé que même moi j&apos;ai réussi ! Mon agenda est plein depuis le premier mois.&quot;</p>
-              <div className="l-testi-author">
-                <div className="l-testi-avatar" style={{ background: "rgba(221,170,64,.15)", color: "var(--l-gold)" }}>SG</div>
-                <div>
-                  <div className="l-testi-name">Samy Glo</div>
-                  <div className="l-testi-role">Esthéticienne, Paris</div>
-                </div>
-              </div>
-            </div>
-
+            ))}
           </div>
         </div>
       </section>
