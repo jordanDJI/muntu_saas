@@ -25,6 +25,484 @@ function AgentIcon({ type }: { type: AgentType }) {
   return <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" d="M9.75 3.104A9 9 0 0112 3c4.97 0 9 4.03 9 9s-4.03 9-9 9-9-4.03-9-9c0-1.04.177-2.04.5-2.97"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/></svg>;
 }
 
+// ── Agent 2 — panneau de configuration enrichi (4 onglets) ───────────────────
+
+type FaqPair = { q: string; a: string };
+type QuoteVar = { name: string; label: string; type: "text" | "number" | "select" };
+type A2Tab = "identity" | "knowledge" | "quote" | "behavior" | "docs";
+
+function Agent2Panel({
+  cfg,
+  onUpdate,
+  saving,
+  saveOk,
+}: {
+  cfg: any;
+  onUpdate: (type: string, field: string, value: any) => Promise<void>;
+  saving: string | null;
+  saveOk: string | null;
+}) {
+  const { t } = useLanguage();
+  const [tab, setTab] = useState<A2Tab>("identity");
+
+  // Identité
+  const [personaName, setPersonaName] = useState(cfg.persona_name ?? "");
+  const [personaTone, setPersonaTone] = useState(cfg.persona_tone ?? "friendly");
+
+  // Connaissance métier
+  const [knowledge, setKnowledge] = useState(cfg.knowledge_base ?? "");
+  const [faqPairs, setFaqPairs] = useState<FaqPair[]>(cfg.faq_pairs ?? []);
+
+  // Devis
+  const [quoteEnabled, setQuoteEnabled] = useState<boolean>(cfg.quote_enabled ?? false);
+  const [quoteVars, setQuoteVars] = useState<QuoteVar[]>(cfg.quote_variables ?? []);
+
+  // Comportement
+  const [escalation, setEscalation] = useState((cfg.escalation_triggers ?? []).join(", "));
+  const [urgent, setUrgent] = useState((cfg.urgent_keywords ?? []).join(", "));
+  const [memoryEnabled, setMemoryEnabled] = useState<boolean>(cfg.memory_enabled ?? true);
+  const [photoEnabled, setPhotoEnabled] = useState<boolean>(cfg.photo_diagnosis_enabled ?? false);
+  const [diagEnabled, setDiagEnabled] = useState<boolean>(cfg.diagnostic_mode_enabled ?? false);
+  const [followupEnabled, setFollowupEnabled] = useState<boolean>(cfg.followup_enabled ?? false);
+  const [followupDelay, setFollowupDelay] = useState<number>(cfg.followup_delay_hours ?? 24);
+  const [followupMsg, setFollowupMsg] = useState<string>(cfg.followup_message ?? "");
+
+  // Documents RAG
+  const [docs, setDocs] = useState<{ filename: string; chunk_count: number }[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
+
+  const loadDocs = async () => {
+    setDocsLoading(true);
+    try {
+      const res = await api.ragDocuments();
+      setDocs(res ?? []);
+    } catch {
+      // silent
+    } finally {
+      setDocsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "docs") loadDocs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  const save = async (field: string, value: any) => { await onUpdate("support_client", field, value); };
+
+  const TABS: { key: A2Tab; label: string; icon: string }[] = [
+    { key: "identity",  label: t.agt_a2_tab_identity,  icon: "👤" },
+    { key: "knowledge", label: t.agt_a2_tab_knowledge,  icon: "🧠" },
+    { key: "quote",     label: t.agt_a2_tab_quote,      icon: "💶" },
+    { key: "behavior",  label: t.agt_a2_tab_behavior,   icon: "⚡" },
+    { key: "docs",      label: t.agt_a2_tab_docs,       icon: "📄" },
+  ];
+
+  const tabBtn = (k: A2Tab, label: string, icon: string) => (
+    <button
+      key={k}
+      onClick={() => setTab(k)}
+      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors ${
+        tab === k ? "bg-primary-600 text-white" : "text-gray-500 hover:bg-gray-100"
+      }`}
+    >
+      <span>{icon}</span>{label}
+    </button>
+  );
+
+  const tones = [
+    { v: "friendly",  label: t.agt_a2_tone_friendly,  desc: t.agt_a2_tone_friendly_desc },
+    { v: "formal",    label: t.agt_a2_tone_formal,     desc: t.agt_a2_tone_formal_desc },
+    { v: "technical", label: t.agt_a2_tone_technical,  desc: t.agt_a2_tone_technical_desc },
+  ] as { v: string; label: string; desc: string }[];
+
+  return (
+    <div className="space-y-4">
+      {/* Canal info */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700 space-y-1">
+        <p className="font-medium text-blue-800">{t.agt_a2_channel_title}</p>
+        <p>{t.agt_a2_channel_desc}</p>
+        <p className="text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 mt-1">{t.agt_a2_whatsapp_pending}</p>
+      </div>
+
+      {/* Onglets */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="flex gap-1 p-2 border-b border-gray-100 bg-gray-50 flex-wrap">
+          {TABS.map(({ key, label, icon }) => tabBtn(key, label, icon))}
+        </div>
+
+        <div className="p-4 sm:p-5 space-y-4">
+
+          {/* ── Identité ─────────────────────────────────────────── */}
+          {tab === "identity" && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">{t.agt_a2_persona_name_label}</label>
+                <input
+                  type="text"
+                  value={personaName}
+                  onChange={(e) => setPersonaName(e.target.value)}
+                  onBlur={() => save("persona_name", personaName)}
+                  placeholder={t.agt_a2_persona_name_ph}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                />
+                <p className="text-xs text-gray-400 mt-1">{t.agt_a2_persona_name_hint}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">{t.agt_a2_tone_label}</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {tones.map(({ v, label, desc }) => (
+                    <button
+                      key={v}
+                      onClick={() => { setPersonaTone(v); save("persona_tone", v); }}
+                      className={`text-left p-3 rounded-lg border text-xs transition-colors ${
+                        personaTone === v
+                          ? "border-primary-500 bg-primary-50 text-primary-700"
+                          : "border-gray-200 hover:border-gray-300 text-gray-600"
+                      }`}
+                    >
+                      <p className="font-medium">{label}</p>
+                      <p className="text-gray-400 mt-0.5">{desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {saveOk === "support_client" && <p className="text-xs text-green-600">✓ Sauvegardé</p>}
+            </div>
+          )}
+
+          {/* ── Connaissance métier ───────────────────────────────── */}
+          {tab === "knowledge" && (
+            <div className="space-y-5">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">
+                  {t.agt_a2_knowledge_label}
+                </label>
+                <p className="text-xs text-gray-400 mb-2">{t.agt_a2_knowledge_desc}</p>
+                <textarea
+                  rows={8}
+                  value={knowledge}
+                  onChange={(e) => setKnowledge(e.target.value)}
+                  onBlur={() => save("knowledge_base", knowledge)}
+                  placeholder={t.agt_a2_knowledge_ph}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700">{t.agt_a2_faq_label}</label>
+                  <button
+                    onClick={() => setFaqPairs((p) => [...p, { q: "", a: "" }])}
+                    className="text-xs text-primary-600 hover:underline font-medium"
+                  >
+                    {t.agt_a2_add}
+                  </button>
+                </div>
+                {faqPairs.length === 0 && (
+                  <p className="text-xs text-gray-400">{t.agt_a2_faq_empty}</p>
+                )}
+                <div className="space-y-3">
+                  {faqPairs.map((pair, i) => (
+                    <div key={i} className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-2">
+                      <input
+                        type="text"
+                        value={pair.q}
+                        onChange={(e) => {
+                          const next = [...faqPairs];
+                          next[i] = { ...next[i], q: e.target.value };
+                          setFaqPairs(next);
+                        }}
+                        onBlur={() => save("faq_pairs", faqPairs)}
+                        placeholder={t.agt_a2_faq_q_ph}
+                        className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-primary-400"
+                      />
+                      <textarea
+                        rows={2}
+                        value={pair.a}
+                        onChange={(e) => {
+                          const next = [...faqPairs];
+                          next[i] = { ...next[i], a: e.target.value };
+                          setFaqPairs(next);
+                        }}
+                        onBlur={() => save("faq_pairs", faqPairs)}
+                        placeholder={t.agt_a2_faq_a_ph}
+                        className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs bg-white resize-none focus:outline-none focus:ring-1 focus:ring-primary-400"
+                      />
+                      <button
+                        onClick={() => { const next = faqPairs.filter((_, j) => j !== i); setFaqPairs(next); save("faq_pairs", next); }}
+                        className="text-xs text-red-400 hover:text-red-600"
+                      >
+                        {t.agt_a2_delete}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {saveOk === "support_client" && <p className="text-xs text-green-600">✓ Sauvegardé</p>}
+            </div>
+          )}
+
+          {/* ── Devis indicatif ───────────────────────────────────── */}
+          {tab === "quote" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">{t.agt_a2_quote_label}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.agt_a2_quote_desc}</p>
+                </div>
+                <button
+                  onClick={() => { const next = !quoteEnabled; setQuoteEnabled(next); save("quote_enabled", next); }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${quoteEnabled ? "bg-green-500" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${quoteEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+
+              {quoteEnabled && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-gray-700">{t.agt_a2_quote_vars_label}</label>
+                    <button
+                      onClick={() => setQuoteVars((v) => [...v, { name: "", label: "", type: "text" }])}
+                      className="text-xs text-primary-600 hover:underline font-medium"
+                    >
+                      {t.agt_a2_add}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mb-3">{t.agt_a2_quote_vars_desc}</p>
+                  {quoteVars.length === 0 && (
+                    <p className="text-xs text-gray-400">{t.agt_a2_quote_vars_empty}</p>
+                  )}
+                  <div className="space-y-2">
+                    {quoteVars.map((v, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          value={v.label}
+                          onChange={(e) => { const next = [...quoteVars]; next[i] = { ...next[i], label: e.target.value, name: e.target.value.toLowerCase().replace(/\s+/g, "_") }; setQuoteVars(next); }}
+                          onBlur={() => save("quote_variables", quoteVars)}
+                          placeholder={t.agt_a2_quote_var_ph}
+                          className="flex-1 border border-gray-200 rounded px-2 py-1.5 text-xs bg-gray-50 focus:outline-none focus:ring-1 focus:ring-primary-400"
+                        />
+                        <select
+                          value={v.type}
+                          onChange={(e) => { const next = [...quoteVars]; next[i] = { ...next[i], type: e.target.value as "text" | "number" | "select" }; setQuoteVars(next); save("quote_variables", next); }}
+                          className="border border-gray-200 rounded px-2 py-1.5 text-xs bg-gray-50 focus:outline-none"
+                        >
+                          <option value="text">{t.agt_a2_type_text}</option>
+                          <option value="number">{t.agt_a2_type_number}</option>
+                        </select>
+                        <button onClick={() => { const next = quoteVars.filter((_, j) => j !== i); setQuoteVars(next); save("quote_variables", next); }} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {saveOk === "support_client" && <p className="text-xs text-green-600">✓ Sauvegardé</p>}
+            </div>
+          )}
+
+          {/* ── Comportement ──────────────────────────────────────── */}
+          {tab === "behavior" && (
+            <div className="space-y-5">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">{t.agt_a2_escalation_label}</label>
+                <p className="text-xs text-gray-400 mb-1.5">{t.agt_a2_escalation_desc}</p>
+                <input
+                  type="text"
+                  value={escalation}
+                  onChange={(e) => setEscalation(e.target.value)}
+                  onBlur={() => save("escalation_triggers", escalation.split(",").map((s) => s.trim()).filter(Boolean))}
+                  placeholder={t.agt_a2_escalation_ph}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">{t.agt_a2_urgent_label}</label>
+                <p className="text-xs text-gray-400 mb-1.5">{t.agt_a2_urgent_desc}</p>
+                <input
+                  type="text"
+                  value={urgent}
+                  onChange={(e) => setUrgent(e.target.value)}
+                  onBlur={() => save("urgent_keywords", urgent.split(",").map((s) => s.trim()).filter(Boolean))}
+                  placeholder={t.agt_a2_urgent_ph}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">{t.agt_a2_memory_label}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.agt_a2_memory_desc}</p>
+                </div>
+                <button
+                  onClick={() => { const next = !memoryEnabled; setMemoryEnabled(next); save("memory_enabled", next); }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${memoryEnabled ? "bg-green-500" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${memoryEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+
+              {/* Photo pré-diagnostic */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">{t.agt_a2_photo_label}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.agt_a2_photo_desc}</p>
+                </div>
+                <button
+                  onClick={() => { const next = !photoEnabled; setPhotoEnabled(next); save("photo_diagnosis_enabled", next); }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${photoEnabled ? "bg-green-500" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${photoEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+
+              {/* Note #brief */}
+              <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-xs text-indigo-700">
+                💡 {t.agt_a2_brief_hint}
+              </div>
+
+              {/* Mode diagnostic guidé */}
+              <div className="flex items-center justify-between pt-1">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">{t.agt_a2_diag_label}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.agt_a2_diag_desc}</p>
+                </div>
+                <button
+                  onClick={() => { const next = !diagEnabled; setDiagEnabled(next); save("diagnostic_mode_enabled", next); }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${diagEnabled ? "bg-green-500" : "bg-gray-300"}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${diagEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+
+              {/* Suivi post-RDV */}
+              <div className="border-t border-gray-100 pt-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">{t.agt_a2_followup_label}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{t.agt_a2_followup_desc}</p>
+                  </div>
+                  <button
+                    onClick={() => { const next = !followupEnabled; setFollowupEnabled(next); save("followup_enabled", next); }}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${followupEnabled ? "bg-green-500" : "bg-gray-300"}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${followupEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                  </button>
+                </div>
+                {followupEnabled && (
+                  <div className="space-y-3 pl-1">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">{t.agt_a2_followup_delay}</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={168}
+                        value={followupDelay}
+                        onChange={(e) => setFollowupDelay(Number(e.target.value))}
+                        onBlur={() => save("followup_delay_hours", followupDelay)}
+                        className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">{t.agt_a2_followup_msg_label}</label>
+                      <textarea
+                        rows={3}
+                        value={followupMsg}
+                        onChange={(e) => setFollowupMsg(e.target.value)}
+                        onBlur={() => save("followup_message", followupMsg)}
+                        placeholder={t.agt_a2_followup_msg_ph}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {saveOk === "support_client" && <p className="text-xs text-green-600">✓ Sauvegardé</p>}
+            </div>
+          )}
+
+          {/* ── Documents RAG ──────────────────────────────────────── */}
+          {tab === "docs" && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm font-medium text-gray-700">{t.agt_a2_docs_label}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{t.agt_a2_docs_desc}</p>
+              </div>
+
+              {/* Upload */}
+              <label className={`flex items-center gap-2 cursor-pointer w-fit ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.md"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploading(true);
+                    try {
+                      await api.ragUpload(file);
+                      await loadDocs();
+                    } catch {
+                      // silent
+                    } finally {
+                      setUploading(false);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+                <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-700 transition-colors">
+                  📄 {uploading ? t.agt_a2_docs_uploading : t.agt_a2_docs_upload}
+                </span>
+              </label>
+
+              {/* Liste des documents */}
+              {docsLoading ? (
+                <div className="text-xs text-gray-400">Chargement…</div>
+              ) : docs.length === 0 ? (
+                <p className="text-xs text-gray-400 bg-gray-50 rounded-lg p-3 border border-gray-100">{t.agt_a2_docs_empty}</p>
+              ) : (
+                <ul className="space-y-2">
+                  {docs.map((doc) => (
+                    <li key={doc.filename} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                      <div>
+                        <p className="text-sm text-gray-700 font-medium truncate max-w-[220px]">{doc.filename}</p>
+                        <p className="text-xs text-gray-400">{doc.chunk_count} {t.agt_a2_docs_chunks}</p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          setDeletingDoc(doc.filename);
+                          try {
+                            await api.ragDeleteDocument(doc.filename);
+                            await loadDocs();
+                          } catch {
+                            // silent
+                          } finally {
+                            setDeletingDoc(null);
+                          }
+                        }}
+                        disabled={deletingDoc === doc.filename}
+                        className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 ml-2 shrink-0"
+                      >
+                        {deletingDoc === doc.filename ? "…" : t.agt_a2_docs_delete}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AgentsPage() {
   const { hasFeature } = useSubscription();
   const { t } = useLanguage();
@@ -191,16 +669,8 @@ export default function AgentsPage() {
           {saveOk === type && <p className="text-xs text-green-600">{t.agt_saved}</p>}
         </div>
 
-        {/* Agent 2 — info canal */}
-        {type === "support_client" && (
-          <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 sm:px-5 py-4 space-y-2">
-            <p className="text-sm font-medium text-blue-800">{t.agt_telegram_channel}</p>
-            <p className="text-xs text-blue-700">Le bot est configuré dans l'Agent 3. Générez des liens d'invitation par contact depuis la page <strong>Demandes</strong>.</p>
-            <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-2">
-              <p className="text-xs text-amber-700"><strong>WhatsApp</strong> — en attente d'approbation Meta Business API.</p>
-            </div>
-          </div>
-        )}
+        {/* Agent 2 — panneau de configuration enrichi */}
+        {type === "support_client" && <Agent2Panel cfg={cfg} onUpdate={handleUpdate} saving={saving} saveOk={saveOk} />}
 
         {/* Agent 3 — Telegram + synthèse */}
         {type === "assistant_tenant" && (

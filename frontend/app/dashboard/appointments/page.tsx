@@ -682,6 +682,8 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
   const router = useRouter();
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [invoiceErr, setInvoiceErr] = useState("");
+  const [sendingFollowup, setSendingFollowup] = useState(false);
+  const [followupMsg, setFollowupMsg] = useState<string | null>(null);
 
   const STATUS_LABELS_APPT: Record<string, string> = {
     pending:   t.apt_status_pending,
@@ -818,6 +820,24 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
                   {generatingInvoice ? "Génération…" : t.apt_action_invoice}
                 </button>
                 {invoiceErr && <p className="text-xs text-red-500">{invoiceErr}</p>}
+                <button
+                  onClick={async () => {
+                    setSendingFollowup(true); setFollowupMsg(null);
+                    try {
+                      await api.sendFollowup(appt.id);
+                      setFollowupMsg("✓ Message de suivi envoyé");
+                    } catch {
+                      setFollowupMsg("Échec de l'envoi du suivi");
+                    } finally {
+                      setSendingFollowup(false);
+                    }
+                  }}
+                  disabled={sendingFollowup}
+                  className="w-full inline-flex items-center justify-center gap-2 border border-indigo-300 text-indigo-600 py-2 rounded-lg text-sm font-medium hover:bg-indigo-50 disabled:opacity-60"
+                >
+                  {sendingFollowup ? "Envoi…" : "Envoyer suivi client"}
+                </button>
+                {followupMsg && <p className="text-xs text-center text-gray-500">{followupMsg}</p>}
                 <button onClick={() => onCancel(appt.id)}
                   className="w-full border border-red-300 text-red-500 py-2 rounded-lg text-sm font-medium hover:bg-red-50">
                   Annuler ce {vocab.appointment.toLowerCase()}

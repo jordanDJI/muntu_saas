@@ -208,22 +208,59 @@ export default function CampaignsPage() {
             : (
               <div className="space-y-2">
                 {campaigns.map(c => (
-                  <div key={c.id} className="flex items-center gap-3 p-3.5 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
-                    <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                      </svg>
+                  <div key={c.id} className="p-3.5 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors space-y-2.5">
+                    {/* Ligne principale */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-gray-900 truncate">{c.name}</p>
+                        <p className="text-xs text-gray-400 truncate">{c.subject}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className={`inline-block text-xs font-semibold rounded-full px-2 py-0.5 ${
+                          c.status === "partial"
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : "bg-green-50 text-green-700 border border-green-200"
+                        }`}>
+                          {c.status === "partial" ? "Partiel" : t.campaigns_sent_badge}
+                        </span>
+                        <p className="text-xs text-gray-400 mt-0.5">{formatDate(c.sent_at)}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm text-gray-900 truncate">{c.name}</p>
-                      <p className="text-xs text-gray-400 truncate">{c.subject}</p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <span className="inline-block text-xs font-semibold bg-green-50 text-green-700 border border-green-200 rounded-full px-2 py-0.5">
-                        {t.campaigns_sent_badge}
+
+                    {/* Métriques de tracking */}
+                    <div className="flex items-center gap-4 pl-11 flex-wrap">
+                      <span className="flex items-center gap-1 text-xs text-gray-500">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                        </svg>
+                        <span className="font-semibold text-gray-700">{c.sent_count}</span> {t.campaigns_recipients}
                       </span>
-                      <p className="text-xs text-gray-400 mt-0.5">{c.sent_count} {t.campaigns_recipients}</p>
-                      <p className="text-xs text-gray-400">{formatDate(c.sent_at)}</p>
+                      <span className="flex items-center gap-1 text-xs text-gray-500">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
+                        <span className="font-semibold text-gray-700">{c.open_rate ?? 0}%</span> ouvertures
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-gray-500">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/>
+                        </svg>
+                        <span className="font-semibold text-gray-700">{c.click_rate ?? 0}%</span> clics
+                      </span>
+                      {(c.unsubscribed_count ?? 0) > 0 && (
+                        <span className="flex items-center gap-1 text-xs text-amber-600">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                          </svg>
+                          <span className="font-semibold">{c.unsubscribed_count}</span> désabonnement{c.unsubscribed_count > 1 ? "s" : ""}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}

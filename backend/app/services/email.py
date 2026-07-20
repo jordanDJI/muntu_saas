@@ -1696,6 +1696,18 @@ def send_stripe_receipt(
     })
 
 
+def _auto_link(text: str, click_base_url: str, token: str) -> str:
+    """Transforme les URLs brutes du texte en liens HTML trackés."""
+    import re
+    from urllib.parse import quote as _q
+    URL_RE = re.compile(r'(https?://[^\s<>"\']+)')
+    def _replace(m: re.Match) -> str:
+        original = m.group(1)
+        tracked = f"{click_base_url}?t={token}&url={_q(original, safe='')}"
+        return f'<a href="{tracked}" style="color:#0D4B58;text-decoration:underline">{original}</a>'
+    return URL_RE.sub(_replace, text)
+
+
 async def send_campaign_email(
     to_email: str,
     to_name: str,
@@ -1706,27 +1718,53 @@ async def send_campaign_email(
     primary_color: str = "",
     logo_url: str = "",
     logo_option: str = "text_only",
+    tracking_pixel_url: str = "",
+    click_base_url: str = "",
+    tracking_token: str = "",
+    unsubscribe_url: str = "",
 ) -> None:
-    """Envoie un email de campagne à un contact."""
+    """Envoie un email de campagne à un contact avec pixel, liens trackés et désabonnement."""
+    # Auto-linking + click tracking sur les URLs du corps
+    processed_body = body
+    if click_base_url and tracking_token:
+        processed_body = _auto_link(processed_body, click_base_url, tracking_token)
+
     body_html = "".join(
         f"<p style='color:#374151;line-height:1.7;margin:0 0 14px'>{line}</p>"
         if line.strip() else "<br>"
-        for line in body.split("\n")
+        for line in processed_body.split("\n")
     )
     reply_block = (
         f'<p style="color:#9ca3af;font-size:12px;margin:8px 0 0">'
         f'<a href="{reply_url}" style="color:#6b7280;text-decoration:underline">'
         f'Pour répondre à ce message, cliquez ici →</a></p>'
     ) if reply_url else ""
+
+    # Footer désabonnement (obligatoire RGPD/CAN-SPAM)
+    unsub_block = (
+        f'<p style="color:#9ca3af;font-size:11px;margin:16px 0 0;text-align:center">'
+        f'Vous recevez cet email car vous êtes client de {sender_name}. '
+        f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">Se désabonner</a></p>'
+    ) if unsubscribe_url else ""
+
+    # Pixel de tracking (invisible, 1×1 px)
+    pixel_block = (
+        f'<img src="{tracking_pixel_url}" width="1" height="1" '
+        f'style="display:block;width:1px;height:1px;border:0;margin:0;padding:0" alt="" />'
+    ) if tracking_pixel_url else ""
+
     html = _tenant_email_wrapper(sender_name, f"""
       {body_html}
       {reply_block}
+      {unsub_block}
+      {pixel_block}
     """, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option)
     resend.Emails.send({
         "from": f"{sender_name} <{settings.email_from}>",
         "to":   [to_email],
         "subject": subject,
         "html": html,
+        **({"headers": {"List-Unsubscribe": f"<{unsubscribe_url}>"}} if unsubscribe_url else {}),
     })
 
 

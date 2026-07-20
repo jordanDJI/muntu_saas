@@ -336,6 +336,172 @@ async def list_ocr_summaries(contact_id: str, tenant_id: str = Depends(get_curre
     return res.data or []
 
 
+# ── RAG — base documentaire Agent 2 ──────────────────────────────────────────
+
+@router.post("/rag/upload")
+async def upload_rag_document(
+    file: UploadFile = File(...),
+    tenant_id: str = Depends(get_current_tenant),
+):
+    """Upload, découpe et indexe un document dans la base RAG de l'Agent 2."""
+    from app.services.embeddings import generate_embedding, chunk_text
+
+    sb = get_supabase_admin()
+
+    file_bytes = await file.read()
+    content_type = file.content_type or "application/octet-stream"
+    filename = (file.filename or "document").strip()
+
+    try:
+        full_text = extract_summary(file_bytes, content_type)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Impossible d'extraire le texte : {exc}")
+
+    if not full_text.strip():
+        raise HTTPException(status_code=400, detail="Le document ne contient pas de texte extractible.")
+
+    # Supprimer les chunks existants pour ce fichier (ré-indexation)
+    sb.table("agent_document").delete().eq("tenant_id", tenant_id).eq("filename", filename).execute()
+
+    chunks = chunk_text(full_text)
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Aucun contenu exploitable dans le document.")
+
+    rows = []
+    for chunk in chunks:
+        try:
+            embedding = generate_embedding(chunk)
+        except Exception as exc:
+            logger.warning("Embedding échoué pour un chunk de '%s': %s", filename, exc)
+            embedding = None
+        rows.append({
+            "tenant_id": tenant_id,
+            "agent_type": "support_client",
+            "filename": filename,
+            "content": chunk,
+            "embedding": embedding,
+            "metadata": {"total_chunks": len(chunks)},
+        })
+
+    sb.table("agent_document").insert(rows).execute()
+
+    return {"filename": filename, "chunks": len(rows), "status": "indexed"}
+
+
+@router.get("/rag/documents")
+async def list_rag_documents(tenant_id: str = Depends(get_current_tenant)):
+    """Liste les documents indexés (dédupliqués par nom de fichier)."""
+    sb = get_supabase_admin()
+    res = (
+        sb.table("agent_document")
+        .select("filename, created_at")
+        .eq("tenant_id", tenant_id)
+        .eq("agent_type", "support_client")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    seen: dict[str, dict] = {}
+    for row in (res.data or []):
+        fn = row["filename"]
+        if fn not in seen:
+            seen[fn] = {"filename": fn, "chunks": 0, "created_at": row["created_at"]}
+        seen[fn]["chunks"] += 1
+    return list(seen.values())
+
+
+@router.delete("/rag/documents")
+async def delete_rag_document(filename: str, tenant_id: str = Depends(get_current_tenant)):
+    """Supprime tous les chunks d'un document par nom de fichier."""
+    sb = get_supabase_admin()
+    sb.table("agent_document").delete().eq("tenant_id", tenant_id).eq("filename", filename).execute()
+    return {"deleted": True}
+
+
+# ── Follow-up post-intervention ───────────────────────────────────────────────
+
+@router.post("/followup/{appt_id}")
+async def send_appointment_followup(appt_id: str, tenant_id: str = Depends(get_current_tenant)):
+    """Envoie le message de suivi post-RDV au client via son canal de messagerie."""
+    sb = get_supabase_admin()
+
+    # Config follow-up
+    cfg_res = (
+        sb.table("agent_config")
+        .select("followup_enabled, followup_message, telegram_bot_token, status")
+        .eq("tenant_id", tenant_id)
+        .eq("agent_type", "support_client")
+        .execute()
+    )
+    cfg = (cfg_res.data or [{}])[0]
+    if not cfg.get("followup_enabled"):
+        raise HTTPException(status_code=400, detail="Le suivi automatique n'est pas activé.")
+
+    message_tpl = (
+        cfg.get("followup_message")
+        or "Bonjour {prenom}, comment s'est passée votre intervention ? N'hésitez pas si vous avez des questions."
+    )
+
+    # RDV — vérification appartenance tenant
+    cal_res = sb.table("calendar").select("id").eq("tenant_id", tenant_id).execute()
+    cal_ids = [c["id"] for c in (cal_res.data or [])]
+    if not cal_ids:
+        raise HTTPException(status_code=404, detail="Calendrier introuvable")
+
+    appt_res = (
+        sb.table("appointment")
+        .select("contact_id, status")
+        .eq("id", appt_id)
+        .in_("calendar_id", cal_ids)
+        .single()
+        .execute()
+    )
+    if not appt_res.data:
+        raise HTTPException(status_code=404, detail="RDV introuvable")
+
+    contact_id = appt_res.data.get("contact_id")
+    if not contact_id:
+        raise HTTPException(status_code=400, detail="Ce RDV n'a pas de contact associé.")
+
+    contact_res = (
+        sb.table("contact")
+        .select("first_name, telegram_chat_id, phone")
+        .eq("id", contact_id)
+        .single()
+        .execute()
+    )
+    contact = contact_res.data or {}
+    first_name = contact.get("first_name") or ""
+    personalized = message_tpl.replace("{prenom}", first_name).replace("{nom}", first_name)
+
+    sent_via = None
+
+    tg_chat_id = contact.get("telegram_chat_id")
+    bot_token = cfg.get("telegram_bot_token", "")
+    if tg_chat_id and bot_token and cfg.get("status") == "active":
+        try:
+            from app.services.telegram import send_message
+            send_message(bot_token, tg_chat_id, personalized)
+            sent_via = "telegram"
+        except Exception as exc:
+            logger.warning("Suivi Telegram échoué pour appt %s: %s", appt_id, exc)
+
+    if not sent_via and contact.get("phone"):
+        try:
+            from app.services.whatsapp import send_text
+            send_text(contact["phone"], personalized)
+            sent_via = "whatsapp"
+        except Exception as exc:
+            logger.warning("Suivi WhatsApp échoué pour appt %s: %s", appt_id, exc)
+
+    if not sent_via:
+        raise HTTPException(
+            status_code=400,
+            detail="Le client n'a pas de canal de messagerie configuré (Telegram ou WhatsApp requis)."
+        )
+
+    return {"sent": True, "channel": sent_via}
+
+
 # ── agent_synthesis ───────────────────────────────────────────────────────────
 
 @router.get("/synthesis", response_model=list[AgentSynthesisOut])

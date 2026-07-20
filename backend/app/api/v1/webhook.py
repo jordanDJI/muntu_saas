@@ -148,7 +148,13 @@ async def _process_telegram_message(msg: dict, bot_token: str) -> None:
     # 1. Identifier le tenant via le token du bot
     cfg_res = (
         sb.table("agent_config")
-        .select("tenant_id, model, system_prompt, status")
+        .select(
+            "tenant_id, model, system_prompt, status, "
+            "persona_name, persona_tone, knowledge_base, faq_pairs, "
+            "quote_enabled, quote_variables, escalation_triggers, urgent_keywords, "
+            "memory_enabled, photo_diagnosis_enabled, "
+            "followup_enabled, followup_delay_hours, followup_message, diagnostic_mode_enabled"
+        )
         .eq("agent_type", "support_client")
         .eq("telegram_bot_token", bot_token)
         .eq("status", "active")
@@ -193,6 +199,12 @@ async def _process_telegram_message(msg: dict, bot_token: str) -> None:
     # 4. Agent 2 — client
     contact = _upsert_telegram_contact(sb, tenant_id, chat_id, from_user)
     contact_id = contact["id"]
+
+    # Wave 2 — pré-diagnostic photo via Gemini Vision
+    if "photo" in msg and config.get("photo_diagnosis_enabled"):
+        await _handle_photo_diagnosis(sb, msg, bot_token, chat_id, tenant_id, contact_id, config)
+        return
+
     conv = _active_telegram_conversation(sb, tenant_id, contact_id)
     conv_id = conv["id"]
 
@@ -215,7 +227,7 @@ async def _process_telegram_message(msg: dict, bot_token: str) -> None:
         return
 
     # 6. Réponse LLM normale (questions hors booking)
-    system_prompt = _build_system_prompt(sb, tenant_id, config)
+    system_prompt = _build_system_prompt(sb, tenant_id, config, contact=contact, user_query=user_text)
     if ocr_ctx:
         system_prompt += f"\n\nDocument reçu — résumé extrait :\n{ocr_ctx}"
     reply = await asyncio.to_thread(
@@ -226,6 +238,20 @@ async def _process_telegram_message(msg: dict, bot_token: str) -> None:
     )
     _save_message(sb, conv_id, "assistant", reply)
     send_message(bot_token, chat_id, reply)
+
+    # Mise à jour mémoire contact tous les 10 messages (fire-and-forget)
+    if config.get("memory_enabled", True):
+        try:
+            msg_count = (
+                sb.table("message").select("id", count="exact")
+                .eq("conversation_id", conv_id).execute().count or 0
+            )
+            if msg_count > 0 and msg_count % 10 == 0:
+                asyncio.ensure_future(
+                    _update_contact_memory_async(sb, contact_id, conv_id, config.get("model", "gemini-2.5-flash"))
+                )
+        except Exception:
+            pass
 
 
 # ── Flux de réservation interactif (Agent 2 Telegram) ────────────────────────
@@ -804,6 +830,11 @@ async def _process_agent3_telegram(
 
     if "text" in msg:
         user_text = msg["text"]  # Agent 3 = tenant de confiance, pas de filtre injection
+        # Wave 2 — commande #brief
+        if user_text.strip().lower() in ("#brief", "/brief"):
+            briefing = await _generate_agent2_briefing(sb, tenant_id)
+            send_message(bot_token, chat_id, briefing)
+            return
     elif "photo" in msg or "document" in msg:
         from app.services.telegram import download_file
         caption = msg.get("caption", "")
@@ -1088,7 +1119,7 @@ from app.services.lead import ensure_lead as _ensure_lead
 def _upsert_telegram_contact(sb, tenant_id: str, chat_id: int, from_user: dict) -> dict:
     res = (
         sb.table("contact")
-        .select("id")
+        .select("id, agent_memory")
         .eq("tenant_id", tenant_id)
         .eq("telegram_chat_id", chat_id)
         .is_("deleted_at", "null")
@@ -1215,7 +1246,13 @@ async def _process_message(msg: dict, waba_number: str, contacts_meta: list) -> 
 
     cfg_res = (
         sb.table("agent_config")
-        .select("tenant_id, model, system_prompt, status")
+        .select(
+            "tenant_id, model, system_prompt, status, "
+            "persona_name, persona_tone, knowledge_base, faq_pairs, "
+            "quote_enabled, quote_variables, escalation_triggers, urgent_keywords, "
+            "memory_enabled, photo_diagnosis_enabled, "
+            "followup_enabled, followup_delay_hours, followup_message, diagnostic_mode_enabled"
+        )
         .eq("agent_type", "support_client")
         .eq("whatsapp_number", waba_number)
         .eq("status", "active")
@@ -1253,7 +1290,7 @@ async def _process_message(msg: dict, waba_number: str, contacts_meta: list) -> 
         reply = await _booking_redirect_reply(sb, tenant_id)
     else:
         history = _load_history(sb, conv_id, limit=20)
-        system_prompt = _build_system_prompt(sb, tenant_id, config)
+        system_prompt = _build_system_prompt(sb, tenant_id, config, contact=contact, user_query=user_text)
         if ocr_ctx:
             system_prompt += f"\n\nDocument reçu du client — résumé extrait :\n{ocr_ctx}"
         reply = await asyncio.to_thread(
@@ -1266,13 +1303,27 @@ async def _process_message(msg: dict, waba_number: str, contacts_meta: list) -> 
     _save_message(sb, conv_id, "assistant", reply)
     send_text(wa_id, reply)
 
+    # Mise à jour mémoire contact tous les 10 messages (fire-and-forget)
+    if config.get("memory_enabled", True):
+        try:
+            msg_count = (
+                sb.table("message").select("id", count="exact")
+                .eq("conversation_id", conv_id).execute().count or 0
+            )
+            if msg_count > 0 and msg_count % 10 == 0:
+                asyncio.ensure_future(
+                    _update_contact_memory_async(sb, contact_id, conv_id, config.get("model", "gemini-2.5-flash"))
+                )
+        except Exception:
+            pass
+
 
 # ── Helpers base de données ───────────────────────────────────────────────────
 
 def _upsert_contact(sb, tenant_id: str, wa_id: str, contacts_meta: list) -> dict:
     res = (
         sb.table("contact")
-        .select("id, first_name, last_name")
+        .select("id, first_name, last_name, agent_memory")
         .eq("tenant_id", tenant_id)
         .eq("phone", wa_id)
         .is_("deleted_at", "null")
@@ -1348,7 +1399,29 @@ def _save_message(
     }).execute()
 
 
-def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
+def _rag_retrieve(sb, tenant_id: str, query: str, k: int = 3) -> list[dict]:
+    """Recherche par similarité cosinus dans la base documentaire (pgvector)."""
+    try:
+        from app.services.embeddings import generate_query_embedding
+        query_embedding = generate_query_embedding(query)
+        res = sb.rpc("match_agent_documents", {
+            "query_embedding": query_embedding,
+            "match_tenant_id": tenant_id,
+            "match_agent_type": "support_client",
+            "match_count": k,
+            "min_similarity": 0.4,
+        }).execute()
+        return res.data or []
+    except Exception as exc:
+        logger.warning("RAG retrieval échoué pour tenant %s: %s", tenant_id, exc)
+        return []
+
+
+def _build_system_prompt(
+    sb, tenant_id: str, config: dict,
+    contact: dict | None = None,
+    user_query: str = "",
+) -> str:
     now = datetime.now(timezone.utc) + timedelta(hours=2)  # Europe/Brussels (CEST UTC+2)
     date_ctx = (
         f"\n\nDate et heure actuelles : {_DAYS_FR_LONG[now.weekday()].capitalize()} "
@@ -1356,9 +1429,17 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
         "Utilise toujours cette date comme référence absolue."
     )
 
-    # Prompt personnalisé saisi manuellement → priorité absolue
+    # Mémoire contact — injectée en tête de contexte si disponible
+    memory_block = ""
+    if contact and config.get("memory_enabled", True) and contact.get("agent_memory"):
+        memory_block = (
+            f"\nMÉMOIRE CLIENT (échanges précédents) :\n{contact['agent_memory']}\n"
+            "Utilise ces informations pour personnaliser ta réponse sans demander ce que tu sais déjà.\n"
+        )
+
+    # Prompt personnalisé saisi manuellement → priorité absolue (mémoire injectée en dessus)
     if config.get("system_prompt"):
-        return config["system_prompt"] + date_ctx
+        return memory_block + config["system_prompt"] + date_ctx
 
     # ── Récupération des données ──────────────────────────────────────────────
 
@@ -1375,7 +1456,6 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     # ── Langue du tenant ─────────────────────────────────────────────────────
     display_name = site.get("title") or tenant_name
     lang = site.get("default_language") or "fr"
-    # English names for the LLM instruction (universally understood)
     _LANG_NAMES = {"fr": "French", "en": "English", "nl": "Dutch", "de": "German"}
     lang_name = _LANG_NAMES.get(lang, "French")
 
@@ -1399,16 +1479,38 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
 
     lines: list[str] = []
 
-    # Identité
-    intro = f"Tu es l'assistant de {display_name}"
-    if site.get("tagline"):
-        intro += f" — {site['tagline']}"
-    intro += f". Tu réponds aux clients par messagerie (WhatsApp ou Telegram) au nom de ce professionnel."
+    # ── Identité & persona ────────────────────────────────────────────────────
+    persona_name = (config.get("persona_name") or "").strip()
+    persona_tone = config.get("persona_tone") or "friendly"
+    _TONE_DESC = {
+        "friendly":  "chaleureux(se) et accessible",
+        "formal":    "professionnel(le) et formel(le)",
+        "technical": "technique et précis(e)",
+    }
+    tone_desc = _TONE_DESC.get(persona_tone, "chaleureux(se) et professionnel(le)")
+
+    if persona_name:
+        intro = (
+            f"Tu es {persona_name}, assistant(e) de {display_name}"
+            + (f" — {site['tagline']}" if site.get("tagline") else "")
+            + f". Tu réponds aux clients par messagerie au nom de ce professionnel."
+            f" Ton ton est {tone_desc}."
+        )
+    else:
+        intro = (
+            f"Tu es l'assistant(e) de {display_name}"
+            + (f" — {site['tagline']}" if site.get("tagline") else "")
+            + f". Tu réponds aux clients par messagerie (WhatsApp ou Telegram) au nom de ce professionnel."
+        )
     if site.get("description"):
         intro += f"\n\nDescription de l'activité :\n{site['description']}"
     lines.append(intro)
 
-    # Prestations / services
+    # ── Mémoire contact ───────────────────────────────────────────────────────
+    if memory_block:
+        lines.append(memory_block)
+
+    # ── Prestations / services ────────────────────────────────────────────────
     site_id = site.get("id")
     if site_id:
         offers = (
@@ -1431,7 +1533,7 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
                     line += f"\n  {o['description'][:200]}"
                 lines.append(line)
 
-    # Atouts / valeurs différenciantes
+    # ── Atouts / valeurs différenciantes ──────────────────────────────────────
     values = site.get("values_list") or []
     if values:
         lines.append("\nPOINTS FORTS ET VALEURS :")
@@ -1443,12 +1545,12 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
                 val_line += f" : {v['description']}"
             lines.append(val_line)
 
-    # Zones d'intervention
+    # ── Zones d'intervention ──────────────────────────────────────────────────
     zones = site.get("coverage_zones") or []
     if zones:
         lines.append(f"\nZONES D'INTERVENTION : {', '.join(zones)}")
 
-    # Coordonnées
+    # ── Coordonnées ───────────────────────────────────────────────────────────
     social = site.get("social_links") or {}
     contact_lines: list[str] = []
     if site.get("phone"):
@@ -1465,10 +1567,89 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     if contact_lines:
         lines.append("\nCOORDONNÉES :\n" + "\n".join(f"- {c}" for c in contact_lines))
 
-    # Règles de comportement — 100 % génériques, aucune référence sectorielle
+    # ── Base de connaissance métier ───────────────────────────────────────────
+    knowledge = (config.get("knowledge_base") or "").strip()
+    if knowledge:
+        lines.append(f"\nCONNAISSANCE MÉTIER (informations fournies par le professionnel) :\n{knowledge}")
+
+    # ── FAQ personnalisée ─────────────────────────────────────────────────────
+    faq = config.get("faq_pairs") or []
+    valid_faq = [p for p in faq if p.get("q") and p.get("a")]
+    if valid_faq:
+        lines.append("\nFOIRE AUX QUESTIONS (réponses officielles du professionnel) :")
+        for pair in valid_faq:
+            lines.append(f"Q : {pair['q']}\nR : {pair['a']}")
+
+    # ── Flux devis conversationnel (Wave 2) ──────────────────────────────────
+    if config.get("quote_enabled"):
+        vars_ = config.get("quote_variables") or []
+        if vars_:
+            steps = "\n".join(
+                f"   {i+1}. {v.get('label') or v.get('name', '')} ({v.get('type', 'texte')})"
+                for i, v in enumerate(vars_)
+            )
+            lines.append(
+                f"\nFLUX DEVIS CONVERSATIONNEL :\n"
+                f"Quand un client demande un prix, une estimation ou un devis :\n"
+                f"1. Collecte ces informations UNE PAR UNE — attends la réponse avant de passer à la suivante :\n"
+                f"{steps}\n"
+                f"2. Une fois TOUTES les informations obtenues, fournis l'estimation :\n"
+                f"   Format : 'Estimation indicative : [fourchette] €'\n"
+                f"   Puis : 'Ce tarif est non contractuel et peut varier après évaluation sur place. "
+                f"Souhaitez-vous prendre rendez-vous pour un devis précis ?'\n"
+                f"3. Si le client accepte → guide-le vers la réservation d'un créneau."
+            )
+        else:
+            lines.append(
+                "\nFLUX DEVIS CONVERSATIONNEL :\n"
+                "Quand un client demande un prix ou un devis, fournis une fourchette réaliste "
+                "basée sur les services listés ci-dessus. "
+                "Précise : 'Ce tarif est indicatif et peut varier après évaluation sur place.' "
+                "Propose ensuite un rendez-vous pour confirmer."
+            )
+
+    # ── Mots-clés d'escalade et d'urgence ────────────────────────────────────
+    triggers = [t.strip() for t in (config.get("escalation_triggers") or []) if t.strip()]
+    urgent = [u.strip() for u in (config.get("urgent_keywords") or []) if u.strip()]
+    escalade_rules: list[str] = []
+    if triggers:
+        escalade_rules.append(
+            f"- Si le client mentionne : {', '.join(triggers)} → "
+            "dis-lui que le professionnel va le recontacter très rapidement et termine poliment la conversation."
+        )
+    if urgent:
+        escalade_rules.append(
+            f"- Si le client signale une urgence ({', '.join(urgent)}) → "
+            "réponds immédiatement avec le numéro d'urgence du professionnel si disponible, "
+            "et indique qu'il doit appeler directement. Ne tarde pas."
+        )
+    if escalade_rules:
+        lines.append("\nRÈGLES D'ESCALADE :\n" + "\n".join(escalade_rules))
+
+    # ── Mode diagnostic guidé (Wave 3) ───────────────────────────────────────
+    if config.get("diagnostic_mode_enabled"):
+        lines.append(
+            "\nMODE DIAGNOSTIC GUIDÉ :\n"
+            "Pour toute demande de dépannage, diagnostic ou résolution de problème, suis cette approche :\n"
+            "1. Identifie d'abord la nature générale du problème (1 question)\n"
+            "2. Pose ensuite des questions de précision UNE PAR UNE pour affiner (localisation, symptômes, durée, contexte)\n"
+            "3. Une fois le problème cerné, propose une explication et une recommandation claire\n"
+            "4. Si une intervention est nécessaire, propose un rendez-vous.\n"
+            "Ne propose jamais de solution avant d'avoir posé au moins 2 questions de qualification."
+        )
+
+    # ── RAG — documents pertinents (Wave 3) ──────────────────────────────────
+    if user_query:
+        rag_chunks = _rag_retrieve(sb, tenant_id, user_query)
+        if rag_chunks:
+            lines.append("\nDOCUMENTS DE RÉFÉRENCE (base documentaire du professionnel) :")
+            for chunk in rag_chunks:
+                lines.append(f"---\n{chunk['content']}")
+
+    # ── Règles de comportement ────────────────────────────────────────────────
     lines.append(
         f"\nRÈGLES DE COMPORTEMENT :\n"
-        f"- ALWAYS reply in {lang_name}, with a warm and professional tone\n"
+        f"- ALWAYS reply in {lang_name}, with a {tone_desc} tone\n"
         "- Utilise uniquement du texte brut — aucun markdown, aucun astérisque, aucun #\n"
         "- Base-toi uniquement sur les informations fournies ci-dessus ; "
         "ne suppose rien qui ne soit pas écrit ici\n"
@@ -1478,6 +1659,153 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
     )
 
     return "\n".join(lines) + date_ctx
+
+
+async def _handle_photo_diagnosis(
+    sb, msg: dict, bot_token: str, chat_id: int,
+    tenant_id: str, contact_id: str, config: dict
+) -> None:
+    """Télécharge la photo Telegram, appelle Gemini Vision et renvoie le pré-diagnostic."""
+    from app.services.telegram import send_message, download_file
+    file_id = msg["photo"][-1]["file_id"]
+    try:
+        photo_bytes, _ = await asyncio.to_thread(download_file, bot_token, file_id)
+    except Exception as exc:
+        logger.error("Téléchargement photo Telegram échoué: %s", exc)
+        send_message(bot_token, chat_id, "Photo reçue, impossible de la traiter pour le moment.")
+        return
+
+    diagnosis = await _generate_photo_diagnosis(sb, photo_bytes, config, tenant_id)
+
+    conv = _active_telegram_conversation(sb, tenant_id, contact_id)
+    caption = (msg.get("caption") or "").strip()
+    _save_message(sb, conv["id"], "user", f"[Photo]{f' {caption}' if caption else ''}", {"telegram_chat_id": chat_id})
+    _save_message(sb, conv["id"], "assistant", diagnosis)
+
+    send_message(bot_token, chat_id, diagnosis)
+
+
+async def _generate_photo_diagnosis(sb, photo_bytes: bytes, config: dict, tenant_id: str) -> str:
+    """Analyse une photo via Gemini Vision et retourne un pré-diagnostic métier."""
+    try:
+        import base64
+        import google.generativeai as genai
+
+        tenant_res = sb.table("tenant").select("name").eq("id", tenant_id).single().execute()
+        tenant_name = (tenant_res.data or {}).get("name", "ce professionnel")
+
+        persona_name = (config.get("persona_name") or "").strip()
+        who = f"{persona_name}, assistant de {tenant_name}" if persona_name else f"l'assistant de {tenant_name}"
+        knowledge = (config.get("knowledge_base") or "")[:600]
+        expertise = f"\nDomaine d'expertise du professionnel :\n{knowledge}" if knowledge else ""
+
+        prompt = (
+            f"Tu es {who}.{expertise}\n\n"
+            "Un client t'envoie une photo de son problème. Analyse cette image et fournis :\n"
+            "1. Ce que tu observes (description du problème visible)\n"
+            "2. Gravité estimée : Faible / Modérée / Urgente\n"
+            "3. Actions recommandées ou précautions immédiates\n"
+            "4. Si une intervention professionnelle est recommandée, propose de prendre rendez-vous.\n\n"
+            "Texte brut uniquement, sans markdown, sans astérisques. Sois concis et professionnel."
+        )
+
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        image_part = {"mime_type": "image/jpeg", "data": base64.b64encode(photo_bytes).decode()}
+
+        resp = await asyncio.to_thread(model.generate_content, [prompt, image_part])
+        return resp.text
+    except Exception as exc:
+        logger.warning("Gemini Vision photo_diagnosis échec: %s", exc)
+        return (
+            "Merci pour la photo. Pour vous aider au mieux, "
+            "pouvez-vous décrire le problème par écrit ?"
+        )
+
+
+async def _generate_agent2_briefing(sb, tenant_id: str) -> str:
+    """Génère un résumé des conversations Agent 2 actives dans les dernières 24h."""
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        convs = (
+            sb.table("conversation")
+            .select("id, contact_id, started_at")
+            .eq("tenant_id", tenant_id)
+            .eq("agent_type", "support_client")
+            .gte("started_at", cutoff)
+            .is_("deleted_at", "null")
+            .order("started_at", desc=True)
+            .limit(10)
+            .execute()
+        ).data or []
+
+        if not convs:
+            return "Aucune conversation Agent 2 dans les dernières 24h."
+
+        lines = [f"Briefing Agent 2 — {len(convs)} conv. active(s) (24h) :"]
+        for conv in convs:
+            cid = conv.get("contact_id")
+            if not cid:
+                continue
+            contact_res = (
+                sb.table("contact")
+                .select("first_name, last_name, phone, agent_memory")
+                .eq("id", cid)
+                .single()
+                .execute()
+            )
+            c = contact_res.data or {}
+            name = f"{c.get('first_name', '')} {c.get('last_name', '')}".strip() or c.get("phone", "Inconnu")
+
+            msgs = (
+                sb.table("message")
+                .select("content")
+                .eq("conversation_id", conv["id"])
+                .eq("sender_type", "user")
+                .order("sent_at", desc=True)
+                .limit(1)
+                .execute()
+            ).data or []
+
+            last_preview = ""
+            if msgs:
+                preview = msgs[0]["content"][:60].replace("\n", " ")
+                last_preview = f': "{preview}..."'
+
+            memory = c.get("agent_memory")
+            mem_line = f"\n  Contexte: {memory[:80]}" if memory else ""
+            lines.append(f"• {name}{last_preview}{mem_line}")
+
+        return "\n".join(lines)
+    except Exception as exc:
+        logger.warning("Erreur génération briefing Agent 2: %s", exc)
+        return "Impossible de générer le briefing pour le moment."
+
+
+async def _update_contact_memory_async(
+    sb, contact_id: str, conv_id: str, model: str
+) -> None:
+    """Génère un résumé des échanges récents et le sauvegarde dans contact.agent_memory."""
+    try:
+        history = _load_history(sb, conv_id, limit=30)
+        if len(history) < 4:
+            return
+        prompt = (
+            "Résume en 5 points maximum les informations importantes sur ce client "
+            "d'après cette conversation : besoins exprimés, projets mentionnés, "
+            "contraintes ou préférences, informations personnelles utiles, historique des échanges. "
+            "Sois factuel, concis, sans fioritures. Format : tirets courts."
+        )
+        summary = await asyncio.to_thread(
+            chat_completion,
+            messages=history + [{"role": "user", "content": prompt}],
+            model=model,
+            system_prompt="Tu résumes des conversations clients pour alimenter la mémoire d'un assistant IA.",
+        )
+        if summary:
+            sb.table("contact").update({"agent_memory": summary}).eq("id", contact_id).execute()
+    except Exception as exc:
+        logger.warning("Mise à jour mémoire contact %s échouée : %s", contact_id, exc)
 
 
 async def _booking_redirect_reply(sb, tenant_id: str) -> str:

@@ -133,6 +133,30 @@ export const api = {
     apiFetch<any>("/api/v1/agents/links", { method: "POST", body: JSON.stringify(body) }),
   getAgentLinks: () => apiFetch<any[]>("/api/v1/agents/links"),
 
+  // Agents IA — RAG (base documentaire, Wave 3)
+  ragDocuments: () => apiFetch<{ filename: string; chunk_count: number }[]>("/api/v1/agents/rag/documents"),
+  ragUpload: async (file: File): Promise<void> => {
+    const headers = await getAuthHeaders();
+    const form = new FormData();
+    form.append("file", file);
+    let res: Response;
+    try {
+      res = await fetch(`${API_URL}/api/v1/agents/rag/upload`, { method: "POST", headers, body: form });
+    } catch {
+      throw new Error("Impossible d'envoyer le fichier. Vérifiez votre connexion et réessayez.");
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail ?? `HTTP ${res.status}`);
+    }
+  },
+  ragDeleteDocument: (filename: string) =>
+    apiFetch<void>(`/api/v1/agents/rag/documents?filename=${encodeURIComponent(filename)}`, { method: "DELETE" }),
+
+  // Agents IA — suivi post-RDV (Wave 3)
+  sendFollowup: (apptId: string) =>
+    apiFetch<{ sent: boolean; channel: string }>(`/api/v1/agents/followup/${apptId}`, { method: "POST" }),
+
   // Upload photo site
   uploadSitePhoto: async (file: File, section: string): Promise<{ url: string }> => {
     const headers = await getAuthHeaders();
