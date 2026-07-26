@@ -26,6 +26,7 @@ class TicketCreate(BaseModel):
     subject: str
     body: str
     priority: str = "normal"
+    ticket_type: str = "general"  # "general" | "design_request"
 
 
 class MessageCreate(BaseModel):
@@ -51,12 +52,13 @@ async def create_ticket(
     ticket = (
         sb.table("support_ticket")
         .insert({
-            "tenant_id": tenant_id,
-            "subject":   data.subject.strip(),
-            "status":    "open",
-            "priority":  data.priority,
-            "created_at": now,
-            "updated_at": now,
+            "tenant_id":   tenant_id,
+            "subject":     data.subject.strip(),
+            "status":      "open",
+            "priority":    data.priority,
+            "ticket_type": data.ticket_type if data.ticket_type in ("general", "design_request") else "general",
+            "created_at":  now,
+            "updated_at":  now,
         })
         .execute()
     ).data[0]
@@ -181,3 +183,32 @@ async def reply_ticket(
     )
 
     return {"success": True}
+
+
+# ── Notifications in-app (tenant) ─────────────────────────────────────────────
+
+@router.get("/notifications")
+def list_notifications(tenant_id: str = Depends(get_current_tenant)):
+    """Retourne les notifications non lues du tenant, les plus récentes en premier."""
+    sb = get_supabase_admin()
+    rows = (
+        sb.table("tenant_notification")
+        .select("id, type, title, body, data, created_at")
+        .eq("tenant_id", tenant_id)
+        .is_("read_at", "null")
+        .order("created_at", desc=True)
+        .limit(20)
+        .execute()
+    ).data or []
+    return rows
+
+
+@router.post("/notifications/{notification_id}/read", status_code=200)
+def mark_notification_read(notification_id: str, tenant_id: str = Depends(get_current_tenant)):
+    """Marque une notification comme lue."""
+    from datetime import datetime, timezone
+    sb = get_supabase_admin()
+    sb.table("tenant_notification").update({
+        "read_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", notification_id).eq("tenant_id", tenant_id).execute()
+    return {"ok": True}

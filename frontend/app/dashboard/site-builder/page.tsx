@@ -62,6 +62,8 @@ type PhotoHighlight = "hero" | "about" | "services" | "contact";
 import { ATOUT_ICONS, AtoutIconSVG } from "../../../lib/atout-icons";
 import { getSectorVocab } from "../../../lib/sectorVocabulary";
 import { getSectorTemplate } from "../../../lib/sectorTemplates";
+import dynamic from "next/dynamic";
+const DesignRequestModal = dynamic(() => import("../../../components/DesignRequestModal"), { ssr: false });
 
 function SiteWireframe({ highlight }: { highlight: PhotoHighlight }) {
   const ring = "ring-2 ring-primary-500";
@@ -263,6 +265,7 @@ export default function SiteBuilderPage() {
   const [metaPixelId, setMetaPixelId] = useState("");
   const [gtmId, setGtmId] = useState("");
   const [customCss, setCustomCss] = useState("");
+  const [showDesignModal, setShowDesignModal] = useState(false);
 
   // Step 1 — Photos par section (conditionnel si has_photos)
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
@@ -1999,7 +2002,27 @@ export default function SiteBuilderPage() {
               {saving ? t.sb_saving : t.sb_publish}
             </button>
           </div>
+
+          {/* Bandeau aide design */}
+          <div className="rounded-xl p-4 flex items-center gap-4"
+            style={{ background: "linear-gradient(135deg, rgba(13,75,88,0.08) 0%, rgba(26,110,130,0.06) 100%)", border: "1px solid rgba(13,75,88,0.18)" }}>
+            <div className="text-2xl shrink-0">🎨</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-800">{t.sb_design_banner_title}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{t.sb_design_banner_body}</p>
+            </div>
+            <button
+              onClick={() => setShowDesignModal(true)}
+              className="shrink-0 px-4 py-2 rounded-xl text-sm font-medium text-white whitespace-nowrap"
+              style={{ background: "#0D4B58" }}>
+              {t.sb_design_banner_btn}
+            </button>
+          </div>
         </div>
+      )}
+
+      {showDesignModal && (
+        <DesignRequestModal onClose={() => setShowDesignModal(false)} />
       )}
 
       {/* ── Navigation ─────────────────────────────────────────────────────── */}

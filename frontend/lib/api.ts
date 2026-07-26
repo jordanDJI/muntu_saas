@@ -559,12 +559,15 @@ export const api = {
   },
 
   // ── Support interne ────────────────────────────────────────────────────────
-  createSupportTicket: (body: { subject: string; body: string; priority?: string }) =>
+  createSupportTicket: (body: { subject: string; body: string; priority?: string; ticket_type?: string }) =>
     apiFetch<any>("/api/v1/support/tickets", { method: "POST", body: JSON.stringify(body) }),
   listSupportTickets: () => apiFetch<any[]>("/api/v1/support/tickets"),
   getSupportTicket: (id: string) => apiFetch<any>(`/api/v1/support/tickets/${id}`),
   replySupportTicket: (id: string, body: string) =>
     apiFetch<any>(`/api/v1/support/tickets/${id}/reply`, { method: "POST", body: JSON.stringify({ body }) }),
+  listNotifications: () => apiFetch<any[]>("/api/v1/support/notifications"),
+  markNotificationRead: (id: string) =>
+    apiFetch<any>(`/api/v1/support/notifications/${id}/read`, { method: "POST" }),
 
   // ── Web Push ───────────────────────────────────────────────────────────────
   getVapidPublicKey: () => apiFetch<{ public_key: string }>("/api/v1/push/vapid-public-key"),

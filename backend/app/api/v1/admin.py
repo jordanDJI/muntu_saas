@@ -647,16 +647,98 @@ async def delete_flag(key: str, admin=Depends(get_current_admin)):
 class OverrideIn(BaseModel):
     feature_key: str
     enabled:     bool
-    value_int:   Optional[int] = None  # pour les features numériques (max_contacts, etc.)
+    value_int:   Optional[int] = None
     note:        Optional[str] = None
+    expires_at:  Optional[str] = None  # ISO datetime, None = permanent
+    notify:      bool = False          # envoyer email + notification in-app
 
 @router.post("/tenants/{tenant_id}/overrides")
-async def set_override(tenant_id: str, body: OverrideIn, admin=Depends(get_current_admin)):
-    get_supabase_admin().table("tenant_feature_override").upsert(
-        {"tenant_id": tenant_id, **body.model_dump()},
-        on_conflict="tenant_id,feature_key",
-    ).execute()
+async def set_override(
+    tenant_id: str,
+    body: OverrideIn,
+    background_tasks: BackgroundTasks,
+    admin=Depends(get_current_admin),
+):
+    sb = get_supabase_admin()
+    row = {
+        "tenant_id":   tenant_id,
+        "feature_key": body.feature_key,
+        "enabled":     body.enabled,
+        "value_int":   body.value_int,
+        "note":        body.note,
+        "expires_at":  body.expires_at,
+    }
+    sb.table("tenant_feature_override").upsert(row, on_conflict="tenant_id,feature_key").execute()
     _log(admin, "set_override", tenant_id, payload=body.model_dump())
+
+    if body.notify:
+        # Récupérer email + nom du propriétaire
+        owner_rows = (
+            sb.table("membership")
+            .select("user_id")
+            .eq("tenant_id", tenant_id)
+            .eq("role", "owner")
+            .limit(1)
+            .execute()
+            .data or []
+        )
+        tenant_rows = sb.table("tenant").select("name").eq("id", tenant_id).limit(1).execute().data or []
+        tenant_name = tenant_rows[0]["name"] if tenant_rows else "Tenant"
+
+        feature_label = email_svc._FEATURE_LABELS.get(body.feature_key, body.feature_key)
+        notif_title = f"{'Fonctionnalité activée' if body.enabled else 'Modification'} : {feature_label}"
+        notif_body  = (
+            f"La fonctionnalité « {feature_label} » a été "
+            f"{'activée' if body.enabled else 'désactivée'} sur votre espace."
+        )
+        if body.expires_at:
+            from datetime import datetime
+            try:
+                dt = datetime.fromisoformat(body.expires_at.replace("Z", "+00:00"))
+                notif_body += f" Valable jusqu'au {dt.strftime('%d/%m/%Y')}."
+            except Exception:
+                pass
+        else:
+            notif_body += " Durée permanente."
+
+        # Notification in-app
+        sb.table("tenant_notification").insert({
+            "tenant_id": tenant_id,
+            "type":      "feature_override",
+            "title":     notif_title,
+            "body":      notif_body,
+            "data": {
+                "feature_key": body.feature_key,
+                "enabled":     body.enabled,
+                "expires_at":  body.expires_at,
+                "value_int":   body.value_int,
+            },
+        }).execute()
+
+        # Email au propriétaire en arrière-plan
+        if owner_rows:
+            from supabase import create_client
+            from app.core.config import settings as cfg
+            try:
+                auth_client = create_client(cfg.supabase_url, cfg.supabase_service_role_key)
+                owner_user = auth_client.auth.admin.get_user_by_id(owner_rows[0]["user_id"])
+                owner_email = owner_user.user.email if owner_user and owner_user.user else None
+            except Exception:
+                owner_email = None
+
+            if owner_email:
+                dashboard_url = f"{cfg.frontend_url}/dashboard"
+                background_tasks.add_task(
+                    email_svc.send_feature_override_email,
+                    tenant_email=owner_email,
+                    tenant_name=tenant_name,
+                    feature_key=body.feature_key,
+                    enabled=body.enabled,
+                    expires_at=body.expires_at,
+                    dashboard_url=dashboard_url,
+                    value_int=body.value_int,
+                )
+
     return {"ok": True}
 
 @router.delete("/tenants/{tenant_id}/overrides/{feature_key}")

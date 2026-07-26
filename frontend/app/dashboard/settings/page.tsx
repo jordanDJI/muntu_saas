@@ -8,6 +8,8 @@ import { useSubscription } from "../../../contexts/SubscriptionContext";
 import DemandPotentialCard from "../analytics/DemandPotentialCard";
 import metiers from "../../../data/metiers.json";
 import villes from "../../../data/villes.json";
+import dynamic from "next/dynamic";
+const DesignRequestModal = dynamic(() => import("../../../components/DesignRequestModal"), { ssr: false });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -2938,6 +2940,7 @@ function SectionSupport({ onTicketRead }: { onTicketRead?: () => void }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [msgLoading, setMsgLoading] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [showDesignModal, setShowDesignModal] = useState(false);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -3148,7 +3151,14 @@ function SectionSupport({ onTicketRead }: { onTicketRead?: () => void }) {
               )}
             </Card>
           ) : (
-            <div className="flex justify-end mb-4">
+            <div className="flex items-center justify-between mb-4 gap-3">
+              <button
+                onClick={() => setShowDesignModal(true)}
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium border transition-colors"
+                style={{ background: "rgba(13,75,88,0.06)", borderColor: "rgba(13,75,88,0.2)", color: "#0D4B58" }}
+              >
+                🎨 {t.supp_design_request_btn}
+              </button>
               <button
                 onClick={() => setShowNew(true)}
                 className="flex items-center gap-2 rounded-xl bg-primary-600 text-white px-4 py-2 text-sm font-semibold hover:bg-primary-700 transition-colors shadow-sm"
@@ -3193,6 +3203,16 @@ function SectionSupport({ onTicketRead }: { onTicketRead?: () => void }) {
             )}
           </Card>
         </>
+      )}
+
+      {showDesignModal && (
+        <DesignRequestModal
+          onClose={() => setShowDesignModal(false)}
+          onSuccess={() => {
+            setShowDesignModal(false);
+            api.listSupportTickets().then((data: any[]) => setTickets(data)).catch(() => {});
+          }}
+        />
       )}
     </>
   );

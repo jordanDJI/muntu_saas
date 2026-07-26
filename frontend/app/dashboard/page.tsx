@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const [loading, setLoading]         = useState(true);
   const [actioning, setActioning]     = useState<string | null>(null);
   const [kpis, setKpis]               = useState<string[] | null>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   const NAV_ITEMS = NAV_ITEM_DEFS.map(d => ({
     ...d,
@@ -87,6 +88,10 @@ export default function DashboardPage() {
           const sites = await api.getSites() as any[];
           if (sites?.[0]?.status === "published") setSitePublished(true);
         } catch { /* statut reste false */ }
+        try {
+          const notifs = await api.listNotifications();
+          if (Array.isArray(notifs)) setNotifications(notifs.filter((n: any) => !n.read_at));
+        } catch { /* notifications non critiques */ }
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     };
@@ -150,6 +155,11 @@ export default function DashboardPage() {
   const perfColCount = [showKpi("leads_30d"), showKpi("rdv_30d"), showKpi("conv_rate")].reduce((n, v) => n + (v ? 1 : 0), 0);
   const perfGridClass = perfColCount === 3 ? "grid-cols-3" : perfColCount === 2 ? "grid-cols-2" : "grid-cols-1";
 
+  const dismissNotification = async (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    try { await api.markNotificationRead(id); } catch { /* silencieux */ }
+  };
+
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString("fr-BE", { day: "numeric", month: "short" });
   const fmtTime = (iso: string) =>
@@ -157,6 +167,29 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+
+      {/* Notifications in-app (feature overrides, etc.) */}
+      {notifications.map((notif) => (
+        <div key={notif.id} className="rounded-xl px-4 py-3 flex items-start gap-3"
+          style={{ background: "linear-gradient(135deg, rgba(13,75,88,0.12) 0%, rgba(26,110,130,0.08) 100%)", border: "1px solid rgba(13,75,88,0.35)" }}>
+          <span className="text-lg shrink-0 mt-0.5">✨</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-800">{notif.title}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{notif.body}</p>
+            {notif.data?.settings_url && (
+              <a href={notif.data.settings_url}
+                className="text-xs font-medium mt-1 inline-block"
+                style={{ color: "#0D4B58" }}>
+                {t.notif_see_settings} →
+              </a>
+            )}
+          </div>
+          <button onClick={() => dismissNotification(notif.id)}
+            className="text-gray-400 hover:text-gray-600 shrink-0 text-base leading-none mt-0.5">
+            ×
+          </button>
+        </div>
+      ))}
 
       {/* Header */}
       <div>

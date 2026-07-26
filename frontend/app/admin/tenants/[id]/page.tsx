@@ -74,7 +74,7 @@ export default function TenantDetailPage() {
   const router   = useRouter();
   const [userLevel, setUserLevel] = useState<"viewer"|"support"|"super_admin"|null>(null);
   const [data,   setData]   = useState<any>(null);
-  const [tab,    setTab]    = useState<"actions"|"overrides"|"log">("actions");
+  const [tab,    setTab]    = useState<"actions"|"overrides"|"log"|"design">("actions");
   const [toast,  setToast]  = useState("");
   const [toastOk,setToastOk]= useState(true);
   const [error,  setError]  = useState("");
@@ -91,6 +91,8 @@ export default function TenantDetailPage() {
   const [overrideOn,       setOverrideOn]       = useState(true);
   const [overrideValueInt, setOverrideValueInt] = useState<number>(100);
   const [overrideNote,     setOverrideNote]     = useState("");
+  const [overrideDuration, setOverrideDuration] = useState("permanent"); // "7d"|"1m"|"3m"|"6m"|"permanent"
+  const [overrideNotify,   setOverrideNotify]   = useState(true);
   const [newOwnerEmail,  setNewOwnerEmail]  = useState("");
 
   const load = useCallback(async () => {
@@ -176,23 +178,35 @@ export default function TenantDetailPage() {
 
   const isNumericFeature = (key: string) => key in NUMERIC_FEATURES;
 
+  const durationToExpiresAt = (dur: string): string | null => {
+    if (dur === "permanent") return null;
+    const now = new Date();
+    if (dur === "7d")  now.setDate(now.getDate() + 7);
+    if (dur === "1m")  now.setMonth(now.getMonth() + 1);
+    if (dur === "3m")  now.setMonth(now.getMonth() + 3);
+    if (dur === "6m")  now.setMonth(now.getMonth() + 6);
+    return now.toISOString();
+  };
+
   const setOverride = async () => {
     setBusy(true);
     try {
       const body: Record<string, unknown> = {
         feature_key: overrideKey,
-        enabled: overrideOn,
-        note: overrideNote || null,
+        enabled:     overrideOn,
+        note:        overrideNote || null,
+        expires_at:  durationToExpiresAt(overrideDuration),
+        notify:      overrideNotify,
       };
       if (isNumericFeature(overrideKey)) {
         body.value_int = overrideValueInt;
-        body.enabled = true;
+        body.enabled   = true;
       }
       await adminFetch(`/api/v1/admin/tenants/${id}/overrides`, {
         method: "POST",
         body: JSON.stringify(body),
       });
-      showToast("Override enregistré ✓", true);
+      showToast(overrideNotify ? "Override enregistré + tenant notifié ✓" : "Override enregistré ✓", true);
       await load();
     } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
     finally { setBusy(false); }
@@ -516,14 +530,14 @@ export default function TenantDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 p-1 rounded-lg w-fit" style={{ background: "rgba(170,189,216,0.04)" }}>
-        {(["actions","overrides","log"] as const).map((t) => (
+        {(["actions","overrides","log","design"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className="px-3 py-1.5 text-xs rounded-md transition-colors capitalize"
             style={tab === t
               ? { background: "rgba(13,75,88,0.35)", color: "#7DD8E8" }
               : { color: K.muted }
             }>
-            {t === "log" ? "Log" : t === "overrides" ? "Feature overrides" : "Actions"}
+            {t === "log" ? "Log" : t === "overrides" ? "Feature overrides" : t === "design" ? "🎨 Design" : "Actions"}
           </button>
         ))}
       </div>
@@ -570,6 +584,18 @@ export default function TenantDetailPage() {
                 </select>
               )}
             </div>
+            <div>
+              <label className="text-xs block mb-1" style={{ color: K.muted }}>Durée</label>
+              <select value={overrideDuration} onChange={e => setOverrideDuration(e.target.value)}
+                className="rounded px-2 py-1 text-xs focus:outline-none"
+                style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.2)`, color: K.text }}>
+                <option value="7d">7 jours</option>
+                <option value="1m">1 mois</option>
+                <option value="3m">3 mois</option>
+                <option value="6m">6 mois</option>
+                <option value="permanent">Permanent</option>
+              </select>
+            </div>
             <div className="flex-1 min-w-32">
               <label className="text-xs block mb-1" style={{ color: K.muted }}>Note (optionnel)</label>
               <input value={overrideNote} onChange={(e) => setOverrideNote(e.target.value)}
@@ -577,8 +603,13 @@ export default function TenantDetailPage() {
                 className="w-full rounded px-2 py-1 text-xs focus:outline-none"
                 style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.2)`, color: K.text }} />
             </div>
+            <div className="flex items-center gap-1.5 self-end pb-1.5">
+              <input type="checkbox" id="ov-notify" checked={overrideNotify} onChange={e => setOverrideNotify(e.target.checked)}
+                className="w-3.5 h-3.5 accent-teal-600" />
+              <label htmlFor="ov-notify" className="text-xs cursor-pointer" style={{ color: K.muted }}>Notifier</label>
+            </div>
             <button onClick={setOverride} disabled={busy}
-              className="px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
+              className="px-3 py-1.5 rounded-lg text-xs disabled:opacity-50 self-end"
               style={{ background: K.teal, color: "#fff" }}>
               Appliquer
             </button>
@@ -592,12 +623,16 @@ export default function TenantDetailPage() {
                 <tr style={{ color: K.muted, borderBottom: `1px solid ${K.border}` }}>
                   <th className="text-left py-2">Feature</th>
                   <th className="text-left py-2">Valeur</th>
+                  <th className="text-left py-2">Expiration</th>
                   <th className="text-left py-2">Note</th>
                   <th className="py-2" />
                 </tr>
               </thead>
               <tbody>
-                {overrides.map((o: any) => (
+                {overrides.map((o: any) => {
+                  const exp = o.expires_at ? new Date(o.expires_at) : null;
+                  const expired = exp && exp < new Date();
+                  return (
                   <tr key={o.id} style={{ borderBottom: "1px solid rgba(170,189,216,0.04)" }}>
                     <td className="py-2 font-mono" style={{ color: K.tealXL }}>{o.feature_key}</td>
                     <td className="py-2">
@@ -615,6 +650,16 @@ export default function TenantDetailPage() {
                         </span>
                       )}
                     </td>
+                    <td className="py-2 font-mono text-xs">
+                      {exp ? (
+                        <span style={{ color: expired ? K.danger : "#DDAA40" }}>
+                          {exp.toLocaleDateString("fr-FR")}
+                          {expired && " ⚠"}
+                        </span>
+                      ) : (
+                        <span style={{ color: "rgba(170,189,216,0.4)" }}>Permanent</span>
+                      )}
+                    </td>
                     <td className="py-2" style={{ color: K.muted }}>{o.note ?? "—"}</td>
                     <td className="py-2 text-right">
                       <button onClick={() => removeOverride(o.feature_key)}
@@ -626,7 +671,8 @@ export default function TenantDetailPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -657,6 +703,10 @@ export default function TenantDetailPage() {
 
       {tab === "actions" && (
         <p className="text-sm" style={{ color: "rgba(170,189,216,0.3)" }}>Les actions rapides sont dans le panneau de droite.</p>
+      )}
+
+      {tab === "design" && (
+        <DesignTab tenantId={id} tenantName={tenant.name} tenantSlug={tenant.slug} onImpersonate={impersonate} />
       )}
     </div>
   );
@@ -694,6 +744,221 @@ function ActionBlock({ title, accent, children }: { title: string; accent: strin
     <div className="rounded-xl p-4" style={{ background: K_card, border: `1px solid ${borderAlpha}` }}>
       <h4 className="text-xs font-medium mb-3" style={{ color: K_muted }}>{title}</h4>
       {children}
+    </div>
+  );
+}
+
+// ── DesignTab ──────────────────────────────────────────────────────────────────
+
+type DesignMethod = {
+  id: string;
+  title: string;
+  tagline: string;
+  difficulty: "Facile" | "Intermédiaire" | "Avancé";
+  time: string;
+  icon: string;
+  steps: { label: string; detail: string; warning?: string; action?: "impersonate" | "link"; actionLabel?: string; actionHref?: string }[];
+};
+
+const DESIGN_METHODS: DesignMethod[] = [
+  {
+    id: "palette",
+    title: "Changer la palette & la police",
+    tagline: "Couleur principale et style typographique — impact visuel immédiat.",
+    difficulty: "Facile",
+    time: "2 min",
+    icon: "🎨",
+    steps: [
+      { label: "Ouvrir le site-builder en tant que tenant", detail: "Génère un lien d'impersonation et ouvre-le en navigation privée (Ctrl+Shift+N).", action: "impersonate", actionLabel: "Générer le lien →" },
+      { label: "Aller à l'étape 1 — Logo & style", detail: "Dans le wizard, clique sur l'étape 1. Tu y trouveras le sélecteur de couleur principale (indigo, teal, rose…) et le style de police (moderne, classique, élégant)." },
+      { label: "Choisir la nouvelle palette", detail: "Sélectionne la couleur et la police souhaitées. L'aperçu se met à jour en temps réel à droite." },
+      { label: "Enregistrer & publier", detail: "Clique 'Enregistrer' en bas du wizard, puis 'Publier le site' pour que les changements soient visibles publiquement.", warning: "Ne pas confondre 'Enregistrer' (brouillon) et 'Publier' (visible par tous)." },
+    ],
+  },
+  {
+    id: "logo-photos",
+    title: "Mettre à jour le logo & les photos",
+    tagline: "Remplacer le logo texte par une image ou changer les visuels.",
+    difficulty: "Facile",
+    time: "5 min",
+    icon: "🖼️",
+    steps: [
+      { label: "Ouvrir le site-builder", detail: "Impersonate le tenant et ouvre le dashboard → Site-builder.", action: "impersonate", actionLabel: "Générer le lien →" },
+      { label: "Étape 1 — Logo", detail: "Sélectionner 'Logo image' (au lieu de 'Texte seul'), coller l'URL de l'image ou uploader depuis Supabase Storage. Format recommandé : PNG transparent, 200×60 px minimum." },
+      { label: "Étape 2 — Photos", detail: "Choisir 'J'ai mes propres photos' et coller les URLs des visuels par section (hero, à-propos, prestations). Les photos doivent être hébergées (Cloudinary, Supabase Storage, Unsplash).", warning: "Si les photos sont sur le téléphone du client, demande-lui de les uploader sur Google Drive ou WeTransfer d'abord." },
+      { label: "Enregistrer & publier", detail: "Sauvegarder le brouillon puis publier." },
+    ],
+  },
+  {
+    id: "content",
+    title: "Refonte complète du contenu",
+    tagline: "Réécrire titres, taglines, descriptions, prestations, atouts et témoignages.",
+    difficulty: "Intermédiaire",
+    time: "20–40 min",
+    icon: "✍️",
+    steps: [
+      { label: "Récupérer les infos du client", detail: "Avant d'ouvrir le site-builder : liste des prestations (nom, durée, prix), zone d'intervention, téléphone/email, 3 atouts différenciants, 1–2 témoignages clients réels." },
+      { label: "Ouvrir le site-builder (impersonate)", detail: "Navigation privée obligatoire.", action: "impersonate", actionLabel: "Générer le lien →" },
+      { label: "Étape 3 — Titre & tagline", detail: "Titre court et percutant (ex. 'Cabinet de kinésithérapie à Lyon'). Tagline = promesse client en 1 phrase (ex. 'Retrouvez mobilité et bien-être en douceur')." },
+      { label: "Étape 4 — Contact & adresse", detail: "Vérifier téléphone, email, adresse complète. Bien renseigner les champs séparés (rue, CP, ville, pays) pour l'affichage sur la carte." },
+      { label: "Étape 5 — Prestations", detail: "Ajouter chaque prestation avec nom, description courte, durée et prix. Limiter à 6 prestations maximum pour l'affichage optimal.", warning: "Les prestations sans nom ne sont pas sauvegardées — vérifier qu'aucun champ nom n'est vide." },
+      { label: "Étape 6 — Atouts & étape 7 — Témoignages", detail: "Atouts : choisir une icône SVG + titre court + description. Témoignages : nom complet + texte (pas de note en étoile — non supporté)." },
+      { label: "Enregistrer & publier", detail: "Vérifier l'aperçu sur mobile avant de publier (bouton 📱 dans le header du site-builder)." },
+    ],
+  },
+  {
+    id: "css",
+    title: "CSS custom (animations, mise en page avancée)",
+    tagline: "Injecter du CSS pour personnaliser au-delà des options du wizard.",
+    difficulty: "Intermédiaire",
+    time: "Variable",
+    icon: "💅",
+    steps: [
+      { label: "Identifier ce que le tenant veut", detail: "Exemples courants : animation d'entrée sur le hero, changement de police d'un seul élément, mise en page d'une section, couleur d'un bouton spécifique." },
+      { label: "Inspecter le site public pour trouver les sélecteurs", detail: "Ouvre le site public du tenant dans les DevTools (F12 → Inspecteur). Les classes Tailwind sont générées — préfère cibler les balises sémantiques ou ajouter des data-attributes.", action: "link", actionLabel: "Voir le site public →", actionHref: "/{slug}" },
+      { label: "Ouvrir le site-builder → Étape 9 (CSS custom)", detail: "Étape 9 du wizard = champ CSS libre. Le CSS est injecté dans une balise <style> dans le <head> du site public. Scope global — attention aux collisions.", warning: "Pas de <style> ni de <script> dans ce champ — uniquement des règles CSS pures. Éviter !important autant que possible." },
+      { label: "Exemples d'animations courants", detail: "Fade-in hero : `.hero-section { animation: fadeIn 0.8s ease-out; } @keyframes fadeIn { from { opacity:0; transform:translateY(20px) } to { opacity:1; transform:none } }`. Hover bouton : `.btn-primary:hover { transform: scale(1.03); transition: transform 0.2s ease; }`" },
+      { label: "Tester & publier", detail: "Aperçu dans le site-builder, puis tester sur mobile. Publier." },
+    ],
+  },
+  {
+    id: "managed",
+    title: "Page sur mesure (service managé)",
+    tagline: "Une page hors-template : galerie, tarifs, portfolio, programme… Facturation séparée.",
+    difficulty: "Avancé",
+    time: "1–3h selon complexité",
+    icon: "🛠️",
+    steps: [
+      { label: "Qualifier la demande", detail: "Demander au client : contenu exact (textes, images, structure), page existante à prendre en référence, délai souhaité. Confirmer que c'est hors-abonnement (prestation ponctuelle)." },
+      { label: "Choisir la méthode d'intégration", detail: "Option A — CSS custom étendu : si la page peut être simulée par du CSS sur une section existante (ex. galerie dans la section prestations). Option B — HTML dans la description : coller du HTML formaté dans le champ 'description' du site (rendu basique). Option C — Page externe embeddée : créer la page sur Notion/Tally/Carrd et l'intégrer via iframe dans le CSS custom (`body::after { content:''; }` + overlay).", warning: "Option C est un contournement — la page ne sera pas indexée par Google sous le domaine du tenant." },
+      { label: "Ouvrir le site en impersonate", detail: "Toujours en navigation privée.", action: "impersonate", actionLabel: "Générer le lien →" },
+      { label: "Appliquer les modifications", detail: "Selon l'option choisie : modifier les champs dans le wizard (A/B) ou ajouter l'iframe via CSS custom (C). Documenter ce qui a été fait dans le log admin (action manuelle)." },
+      { label: "Valider avec le client", detail: "Envoyer le lien de preview (`/{slug}?preview=true`) au client pour validation avant de publier.", action: "link", actionLabel: "Ouvrir la preview →", actionHref: "/{slug}?preview=true" },
+      { label: "Publier & facturer", detail: "Publier le site. Envoyer la facture pour la prestation hors-abonnement (indiquer le détail dans la note de la facture)." },
+    ],
+  },
+];
+
+const DIFF_STYLE: Record<string, { bg: string; color: string; border: string }> = {
+  "Facile":         { bg: "rgba(74,202,122,0.1)",   color: "#4ACA7A", border: "rgba(74,202,122,0.25)"  },
+  "Intermédiaire":  { bg: "rgba(221,170,64,0.1)",   color: "#DDAA40", border: "rgba(221,170,64,0.25)"  },
+  "Avancé":         { bg: "rgba(224,96,96,0.1)",    color: "#E06060", border: "rgba(224,96,96,0.25)"   },
+};
+
+function DesignTab({ tenantId, tenantName, tenantSlug, onImpersonate }: {
+  tenantId: string; tenantName: string; tenantSlug: string; onImpersonate: () => void;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const method = DESIGN_METHODS.find(m => m.id === selected) ?? null;
+
+  const resolveHref = (href: string) => href.replace("{slug}", tenantSlug);
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: method ? "280px 1fr" : "1fr", gap: 16 }}>
+      {/* Liste des méthodes */}
+      <div className="space-y-2">
+        <p className="text-xs mb-3" style={{ color: K_muted }}>
+          Choisissez une méthode de refonte pour afficher le tutoriel pas-à-pas.
+        </p>
+        {DESIGN_METHODS.map(m => {
+          const diff = DIFF_STYLE[m.difficulty];
+          const active = selected === m.id;
+          return (
+            <button key={m.id} onClick={() => setSelected(active ? null : m.id)}
+              className="w-full text-left rounded-xl p-3.5 transition-all"
+              style={{
+                background: active ? "rgba(13,75,88,0.25)" : K_card,
+                border: `1px solid ${active ? "rgba(42,143,165,0.4)" : K_border}`,
+              }}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span style={{ fontSize: 16 }}>{m.icon}</span>
+                <span className="text-sm font-medium" style={{ color: K_text }}>{m.title}</span>
+              </div>
+              <p className="text-xs mb-2 leading-relaxed" style={{ color: K_muted }}>{m.tagline}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold rounded px-2 py-0.5"
+                  style={{ background: diff.bg, color: diff.color, border: `1px solid ${diff.border}` }}>
+                  {m.difficulty}
+                </span>
+                <span className="text-xs" style={{ color: "rgba(170,189,216,0.4)" }}>⏱ {m.time}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tutoriel */}
+      {method && (
+        <div className="rounded-xl overflow-hidden" style={{ background: K_card, border: `1px solid ${K_border}` }}>
+          {/* Header */}
+          <div className="px-5 py-4" style={{ borderBottom: `1px solid ${K_border}` }}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span style={{ fontSize: 20 }}>{method.icon}</span>
+                <div>
+                  <h3 className="text-sm font-semibold" style={{ color: K_text }}>{method.title}</h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs font-semibold rounded px-1.5 py-0.5"
+                      style={{ background: DIFF_STYLE[method.difficulty].bg, color: DIFF_STYLE[method.difficulty].color, border: `1px solid ${DIFF_STYLE[method.difficulty].border}` }}>
+                      {method.difficulty}
+                    </span>
+                    <span className="text-xs" style={{ color: "rgba(170,189,216,0.4)" }}>⏱ {method.time} — pour {tenantName}</span>
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setSelected(null)} className="text-lg leading-none shrink-0" style={{ color: K_muted }}>×</button>
+            </div>
+          </div>
+
+          {/* Étapes */}
+          <div className="p-5 space-y-0">
+            {method.steps.map((step, i) => (
+              <div key={i} className="flex gap-4">
+                {/* Ligne verticale + numéro */}
+                <div className="flex flex-col items-center shrink-0" style={{ width: 28 }}>
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{ background: "rgba(13,75,88,0.4)", color: "#2A8FA5", border: "1px solid rgba(42,143,165,0.3)" }}>
+                    {i + 1}
+                  </div>
+                  {i < method.steps.length - 1 && (
+                    <div className="flex-1 w-px mt-1" style={{ background: "rgba(42,143,165,0.15)", minHeight: 24 }} />
+                  )}
+                </div>
+
+                {/* Contenu */}
+                <div className="pb-5 flex-1 min-w-0">
+                  <p className="text-sm font-semibold mb-1.5" style={{ color: K_text }}>{step.label}</p>
+                  <p className="text-xs leading-relaxed mb-2" style={{ color: K_muted, whiteSpace: "pre-wrap" }}>{step.detail}</p>
+
+                  {step.warning && (
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg mb-2"
+                      style={{ background: "rgba(221,170,64,0.08)", border: "1px solid rgba(221,170,64,0.2)" }}>
+                      <span className="text-xs shrink-0">⚠️</span>
+                      <p className="text-xs leading-relaxed" style={{ color: "#DDAA40" }}>{step.warning}</p>
+                    </div>
+                  )}
+
+                  {step.action === "impersonate" && (
+                    <button onClick={onImpersonate}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                      style={{ background: "rgba(13,75,88,0.35)", color: "#2A8FA5", border: "1px solid rgba(42,143,165,0.35)" }}>
+                      🔑 {step.actionLabel}
+                    </button>
+                  )}
+
+                  {step.action === "link" && step.actionHref && (
+                    <a href={resolveHref(step.actionHref)} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                      style={{ background: "rgba(13,75,88,0.2)", color: "#2A8FA5", border: "1px solid rgba(42,143,165,0.25)", textDecoration: "none" }}>
+                      🔗 {step.actionLabel}
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

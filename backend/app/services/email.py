@@ -414,6 +414,113 @@ def send_impersonation_notice(tenant_email: str, tenant_name: str, admin_email: 
     })
 
 
+_FEATURE_LABELS: dict[str, str] = {
+    "analytics":         "Analytics",
+    "analytics_roi":     "Potentiel de demande locale",
+    "agent_vitrine":     "Chatbot vitrine",
+    "agent_support":     "Agent support client",
+    "agent_assistant":   "Assistant IA",
+    "booking":           "Prise de rendez-vous en ligne",
+    "crm":               "CRM & contacts",
+    "campaigns":         "Campagnes email",
+    "custom_domain":     "Domaine personnalisé",
+    "embed_widget":      "Widget embarquable",
+    "custom_css":        "CSS personnalisé",
+    "multi_page_site":   "Site multi-pages",
+    "multi_tenant":      "Multi-espaces",
+    "max_contacts":      "Limite de contacts",
+    "max_team_members":  "Limite de membres d'équipe",
+    "max_tenants":       "Limite d'espaces",
+    "gallery_photos_limit": "Limite photos galerie",
+}
+
+
+def send_feature_override_email(
+    tenant_email: str,
+    tenant_name: str,
+    feature_key: str,
+    enabled: bool,
+    expires_at: str | None,
+    dashboard_url: str,
+    value_int: int | None = None,
+) -> None:
+    """Email envoyé au tenant quand un admin active/désactive une feature via override."""
+    feature_label = _FEATURE_LABELS.get(feature_key, feature_key)
+    status_color  = "#4ACA7A" if enabled else "#E06060"
+    status_text   = "Activée ✓" if enabled else "Désactivée"
+
+    if expires_at:
+        try:
+            from datetime import datetime, timezone
+            dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            expires_label = dt.strftime("%d/%m/%Y")
+        except Exception:
+            expires_label = expires_at
+        expires_row = f"""
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(170,189,216,.06)">
+          <span style="color:#8BA5B5;font-size:13px">Valable jusqu'au</span>
+          <span style="color:#EEF2F5;font-size:13px;font-weight:600">{expires_label}</span>
+        </div>"""
+    else:
+        expires_row = """
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(170,189,216,.06)">
+          <span style="color:#8BA5B5;font-size:13px">Durée</span>
+          <span style="color:#DDAA40;font-size:13px;font-weight:600">Permanente</span>
+        </div>"""
+
+    value_row = ""
+    if value_int is not None:
+        val_display = "Illimité" if value_int == -1 else str(value_int)
+        value_row = f"""
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(170,189,216,.06)">
+          <span style="color:#8BA5B5;font-size:13px">Valeur</span>
+          <span style="color:#EEF2F5;font-size:13px;font-weight:600">{val_display}</span>
+        </div>"""
+
+    header = f"""
+    <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:28px 36px">
+      <p style="color:#DDAA40;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:0 0 6px">Votre espace Klientys</p>
+      <h1 style="color:#fff;font-size:20px;font-weight:800;margin:0;letter-spacing:-.02em">
+        {"Une fonctionnalité a été activée ✨" if enabled else "Modification de votre espace"}
+      </h1>
+    </div>"""
+
+    body = f"""
+      <p style="color:#EEF2F5;font-size:14px;line-height:1.65;margin:0 0 20px">
+        Bonjour <strong>{tenant_name}</strong>,<br>
+        Notre équipe a {"activé" if enabled else "modifié"} une fonctionnalité sur votre espace Klientys.
+      </p>
+      <div style="background:rgba(13,75,88,.35);border:1px solid rgba(26,110,130,.4);border-radius:10px;padding:16px 20px;margin-bottom:24px">
+        <p style="color:#8BA5B5;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px">Détail de la modification</p>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(170,189,216,.06)">
+          <span style="color:#8BA5B5;font-size:13px">Fonctionnalité</span>
+          <span style="color:#DDAA40;font-size:13px;font-weight:600">{feature_label}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(170,189,216,.06)">
+          <span style="color:#8BA5B5;font-size:13px">Statut</span>
+          <span style="color:{status_color};font-size:13px;font-weight:600">{status_text}</span>
+        </div>
+        {value_row}
+        {expires_row}
+      </div>
+      <p style="color:#8BA5B5;font-size:13px;line-height:1.6;margin:0 0 24px">
+        Vous pouvez dès maintenant accéder à cette fonctionnalité depuis votre tableau de bord.
+        Des questions ? Contactez-nous via votre espace support.
+      </p>
+      <div style="text-align:center">
+        <a href="{dashboard_url}" style="{_BTN}">Accéder à mon espace →</a>
+      </div>"""
+
+    footer = '<p style="color:#5C7A8A;font-size:12px;margin:0">Vous recevez cet email car vous êtes abonné à Klientys. Des questions ? <a href="mailto:support@klientys.co" style="color:#2A8FA5;text-decoration:none">support@klientys.co</a></p>'
+
+    resend.Emails.send({
+        "from":    f"Klientys <{settings.email_from}>",
+        "to":      [tenant_email],
+        "subject": f"{'Fonctionnalité activée' if enabled else 'Modification'} : {feature_label}",
+        "html":    _klientys_email_wrapper(header, body, footer),
+    })
+
+
 def send_booking_request_received(
     contact_email: str,
     contact_name: str,
