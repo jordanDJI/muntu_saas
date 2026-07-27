@@ -1369,6 +1369,18 @@ async def update_design_request(
     if not res.data:
         raise HTTPException(404, "Demande introuvable")
     _log(admin, "design_request_update", payload={"request_id": request_id, **patch})
+
+    # Sync statut vers le ticket support lié
+    if body.status is not None:
+        _DESIGN_TO_TICKET = {"pending": "open", "in_progress": "in_progress", "done": "resolved"}
+        ticket_status = _DESIGN_TO_TICKET.get(body.status)
+        ticket_id = res.data[0].get("support_ticket_id")
+        if ticket_status and ticket_id:
+            sb.table("support_ticket").update({
+                "status": ticket_status,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", ticket_id).execute()
+
     return res.data[0]
 
 
@@ -1966,6 +1978,295 @@ async def admin_send_campaign(body: AdminCampaignSendIn, admin=Depends(get_curre
     return {"sent": sent, "failed": failed, "errors": errors[:10]}
 
 
+# ─── Analytics landing (GA4 Data API) ────────────────────────────────────────
+
+def _ga4_client():
+    """Client GA4 Data API authentifié via le service account."""
+    try:
+        from google.analytics.data_v1beta import BetaAnalyticsDataClient
+        from google.oauth2 import service_account as _sa
+    except ImportError:
+        raise HTTPException(503, "google-analytics-data non installé — pip install google-analytics-data")
+
+    sa_json = settings.google_service_account_json
+    if not sa_json or '"type"' not in sa_json:
+        raise HTTPException(503, "GOOGLE_SERVICE_ACCOUNT_JSON non configuré")
+
+    import json as _json
+    creds = _sa.Credentials.from_service_account_info(
+        _json.loads(sa_json),
+        scopes=["https://www.googleapis.com/auth/analytics.readonly"],
+    )
+    from google.analytics.data_v1beta import BetaAnalyticsDataClient
+    return BetaAnalyticsDataClient(credentials=creds)
+
+
+@router.get("/analytics/landing-config")
+async def get_landing_analytics_config(admin=Depends(viewer_or_above)):
+    row = get_supabase_admin().table("system_config").select("value").eq("key", "klientys_ga4_property_id").limit(1).execute().data
+    return {"property_id": row[0]["value"] if row else None}
+
+
+class LandingAnalyticsConfigIn(BaseModel):
+    property_id: str
+
+@router.patch("/analytics/landing-config")
+async def set_landing_analytics_config(body: LandingAnalyticsConfigIn, admin=Depends(get_current_admin)):
+    pid = body.property_id.strip()
+    if not pid:
+        raise HTTPException(400, "Property ID requis")
+    if not pid.startswith("properties/"):
+        pid = f"properties/{pid}"
+    now = datetime.now(timezone.utc).isoformat()
+    get_supabase_admin().table("system_config").upsert({"key": "klientys_ga4_property_id", "value": pid, "updated_at": now}).execute()
+    _log(admin, "set_ga4_property_id", payload={"property_id": pid})
+    return {"ok": True, "property_id": pid}
+
+
+@router.get("/analytics/landing")
+async def get_landing_analytics(admin=Depends(viewer_or_above), days: int = 30):
+    """Métriques GA4 de klientys.co via le service account Google."""
+    from google.analytics.data_v1beta.types import (
+        DateRange, Dimension, Metric, RunReportRequest, OrderBy,
+        FilterExpression, Filter,
+    )
+
+    sb  = get_supabase_admin()
+    row = sb.table("system_config").select("value").eq("key", "klientys_ga4_property_id").limit(1).execute().data
+    property_id = row[0]["value"] if row else None
+    if not property_id:
+        raise HTTPException(400, "Property ID GA4 non configuré")
+
+    try:
+        from google.analytics.data_v1beta.types import (
+            BatchRunReportsRequest,
+            DateRange, Dimension, Metric, RunReportRequest, OrderBy,
+            FilterExpression, Filter,
+        )
+        client = _ga4_client()
+        dr = DateRange(start_date=f"{days}daysAgo", end_date="today")
+
+        def _path_filter(prefix: str) -> FilterExpression:
+            return FilterExpression(filter=Filter(
+                field_name="pagePath",
+                string_filter=Filter.StringFilter(
+                    match_type=Filter.StringFilter.MatchType.BEGINS_WITH, value=prefix
+                )
+            ))
+
+        # Batch 1 : KPIs, daily sessions, sources, devices, new_vs_returning
+        b1 = client.batch_run_reports(BatchRunReportsRequest(
+            property=property_id,
+            requests=[
+                RunReportRequest(date_ranges=[dr], metrics=[
+                    Metric(name="sessions"), Metric(name="totalUsers"), Metric(name="newUsers"),
+                    Metric(name="screenPageViews"), Metric(name="bounceRate"),
+                    Metric(name="averageSessionDuration"), Metric(name="engagedSessions"),
+                ]),
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="date")], metrics=[Metric(name="sessions")],
+                    order_bys=[OrderBy(dimension=OrderBy.DimensionOrderBy(dimension_name="date"))]),
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="sessionDefaultChannelGroup")],
+                    metrics=[Metric(name="sessions")],
+                    order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)], limit=8),
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="deviceCategory")],
+                    metrics=[Metric(name="sessions")]),
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="newVsReturning")],
+                    metrics=[Metric(name="sessions"), Metric(name="totalUsers")]),
+            ]
+        ))
+
+        # Batch 2 : top pages, countries, cities, entry pages, events
+        b2 = client.batch_run_reports(BatchRunReportsRequest(
+            property=property_id,
+            requests=[
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="pagePath")],
+                    metrics=[Metric(name="sessions"), Metric(name="screenPageViews"), Metric(name="userEngagementDuration")],
+                    order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)], limit=15),
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="country")], metrics=[Metric(name="sessions")],
+                    order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)], limit=10),
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="city")], metrics=[Metric(name="sessions")],
+                    order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)], limit=10),
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="landingPage")], metrics=[Metric(name="sessions")],
+                    order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)], limit=10),
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="eventName")], metrics=[Metric(name="eventCount")],
+                    order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="eventCount"), desc=True)], limit=15),
+            ]
+        ))
+
+        # Batch 3 : UTM campaigns, blog pages, annuaire pages
+        b3 = client.batch_run_reports(BatchRunReportsRequest(
+            property=property_id,
+            requests=[
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="sessionSource"), Dimension(name="sessionMedium")],
+                    metrics=[Metric(name="sessions")],
+                    order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="sessions"), desc=True)], limit=10),
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="pagePath"), Dimension(name="pageTitle")],
+                    metrics=[Metric(name="screenPageViews"), Metric(name="userEngagementDuration")],
+                    dimension_filter=_path_filter("/blog"),
+                    order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="screenPageViews"), desc=True)], limit=10),
+                RunReportRequest(date_ranges=[dr],
+                    dimensions=[Dimension(name="pagePath")],
+                    metrics=[Metric(name="screenPageViews")],
+                    dimension_filter=_path_filter("/annuaire"),
+                    order_bys=[OrderBy(metric=OrderBy.MetricOrderBy(metric_name="screenPageViews"), desc=True)], limit=10),
+            ]
+        ))
+
+        # ── Parse batch 1 ─────────────────────────────────────────────────────
+        r_kpi, r_daily, r_sources, r_devices, r_nvr = b1.reports
+
+        mv = r_kpi.rows[0].metric_values if r_kpi.rows else []
+        def _v(i): return mv[i].value if i < len(mv) else "0"
+
+        devices = {"mobile": 0, "desktop": 0, "tablet": 0}
+        for row in r_devices.rows:
+            cat = row.dimension_values[0].value.lower()
+            if cat in devices:
+                devices[cat] = int(row.metric_values[0].value)
+
+        nvr = {"new": 0, "returning": 0}
+        for row in r_nvr.rows:
+            kind = row.dimension_values[0].value
+            val  = int(row.metric_values[0].value)
+            if kind == "new":
+                nvr["new"] = val
+            else:
+                nvr["returning"] = val
+
+        # ── Parse batch 2 ─────────────────────────────────────────────────────
+        r_pages, r_countries, r_cities, r_entry, r_events = b2.reports
+
+        top_pages = []
+        for row in r_pages.rows:
+            pv  = int(row.metric_values[1].value)
+            dur = float(row.metric_values[2].value)
+            top_pages.append({
+                "page":      row.dimension_values[0].value,
+                "sessions":  int(row.metric_values[0].value),
+                "pageviews": pv,
+                "avg_time":  round(dur / pv) if pv > 0 else 0,
+            })
+
+        # ── Parse batch 3 ─────────────────────────────────────────────────────
+        r_utm, r_blog, r_ann = b3.reports
+
+        blog_pvs = sum(int(r.metric_values[0].value) for r in r_blog.rows)
+        blog_pages = []
+        for row in r_blog.rows:
+            pv  = int(row.metric_values[0].value)
+            dur = float(row.metric_values[1].value)
+            blog_pages.append({
+                "page":      row.dimension_values[0].value,
+                "title":     row.dimension_values[1].value,
+                "pageviews": pv,
+                "avg_time":  round(dur / pv) if pv > 0 else 0,
+            })
+
+        ann_pvs = sum(int(r.metric_values[0].value) for r in r_ann.rows)
+
+        return {
+            "kpis": {
+                "sessions":             int(_v(0)),
+                "users":                int(_v(1)),
+                "new_users":            int(_v(2)),
+                "pageviews":            int(_v(3)),
+                "bounce_rate":          round(float(_v(4)) * 100, 1),
+                "avg_session_duration": round(float(_v(5))),
+                "engaged_sessions":     int(_v(6)),
+            },
+            "sessions_by_day": [
+                {"date": r.dimension_values[0].value, "sessions": int(r.metric_values[0].value)}
+                for r in r_daily.rows
+            ],
+            "traffic_sources": [
+                {"source": r.dimension_values[0].value, "sessions": int(r.metric_values[0].value)}
+                for r in r_sources.rows
+            ],
+            "devices":          devices,
+            "new_vs_returning": nvr,
+            "top_pages":        top_pages,
+            "countries": [
+                {"country": r.dimension_values[0].value, "sessions": int(r.metric_values[0].value)}
+                for r in r_countries.rows
+            ],
+            "cities": [
+                {"city": r.dimension_values[0].value, "sessions": int(r.metric_values[0].value)}
+                for r in r_cities.rows
+            ],
+            "entry_pages": [
+                {"page": r.dimension_values[0].value, "sessions": int(r.metric_values[0].value)}
+                for r in r_entry.rows
+            ],
+            "events": [
+                {"event": r.dimension_values[0].value, "count": int(r.metric_values[0].value)}
+                for r in r_events.rows
+            ],
+            "campaigns": [
+                {
+                    "source":   r.dimension_values[0].value,
+                    "medium":   r.dimension_values[1].value,
+                    "sessions": int(r.metric_values[0].value),
+                }
+                for r in r_utm.rows
+            ],
+            "blog": {
+                "total_pageviews": blog_pvs,
+                "pages":           blog_pages,
+            },
+            "annuaire": {
+                "total_pageviews": ann_pvs,
+                "pages": [
+                    {"page": r.dimension_values[0].value, "pageviews": int(r.metric_values[0].value)}
+                    for r in r_ann.rows
+                ],
+            },
+            "period": days,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("GA4 API error: %s", exc, exc_info=True)
+        raise HTTPException(502, f"Erreur GA4 API : {str(exc)[:500]}")
+
+
+@router.get("/analytics/realtime")
+async def get_analytics_realtime(admin=Depends(viewer_or_above)):
+    """Utilisateurs actifs en temps réel sur klientys.co."""
+    sb  = get_supabase_admin()
+    row = sb.table("system_config").select("value").eq("key", "klientys_ga4_property_id").limit(1).execute().data
+    property_id = row[0]["value"] if row else None
+    if not property_id:
+        return {"active_users": 0, "active_pages": []}
+    try:
+        from google.analytics.data_v1beta.types import RunRealtimeReportRequest, Dimension, Metric
+        client = _ga4_client()
+        resp = client.run_realtime_report(RunRealtimeReportRequest(
+            property=property_id,
+            dimensions=[Dimension(name="unifiedScreenName")],
+            metrics=[Metric(name="activeUsers")],
+        ))
+        total = sum(int(r.metric_values[0].value) for r in resp.rows) if resp.rows else 0
+        pages = [
+            {"page": r.dimension_values[0].value, "users": int(r.metric_values[0].value)}
+            for r in resp.rows
+        ]
+        return {"active_users": total, "active_pages": pages[:10]}
+    except Exception as exc:
+        logger.warning("GA4 realtime error: %s", exc)
+        return {"active_users": 0, "active_pages": []}
+
+
 # ─── Content Management (blog + témoignages) ─────────────────────────────────
 
 class BlogPostIn(BaseModel):
@@ -2216,4 +2517,15 @@ async def admin_update_ticket(
         raise HTTPException(404, "Ticket introuvable")
 
     _log(admin, "update_support_ticket", payload={"ticket_id": ticket_id, "status": data.status})
+
+    # Sync statut vers la design_request liée (si ticket_type = design_request)
+    if row[0].get("ticket_type") == "design_request":
+        _TICKET_TO_DESIGN = {"open": "pending", "in_progress": "in_progress", "resolved": "done", "closed": "done"}
+        design_status = _TICKET_TO_DESIGN.get(data.status)
+        if design_status:
+            sb.table("design_request").update({
+                "status": design_status,
+                "updated_at": now,
+            }).eq("support_ticket_id", ticket_id).execute()
+
     return row[0]

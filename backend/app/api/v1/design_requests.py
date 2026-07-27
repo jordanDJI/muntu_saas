@@ -13,6 +13,7 @@ class DesignRequestIn(BaseModel):
     message: str
     is_additional: bool = False
     site_id: str | None = None
+    support_ticket_id: str | None = None
 
 
 @router.post("/")
@@ -39,13 +40,14 @@ async def create_design_request(
         site_name = site.data[0].get("title") or "" if site.data else ""
 
     row = sb.table("design_request").insert({
-        "tenant_id":     tenant_id,
-        "tenant_name":   tenant_name,
-        "site_id":       site_id,
-        "site_name":     site_name,
-        "is_additional": body.is_additional,
-        "message":       body.message,
-        "status":        "pending",
+        "tenant_id":        tenant_id,
+        "tenant_name":      tenant_name,
+        "site_id":          site_id,
+        "site_name":        site_name,
+        "is_additional":    body.is_additional,
+        "message":          body.message,
+        "status":           "pending",
+        "support_ticket_id": body.support_ticket_id,
     }).execute()
 
     try:

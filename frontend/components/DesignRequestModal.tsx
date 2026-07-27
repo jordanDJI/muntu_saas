@@ -34,21 +34,28 @@ export default function DesignRequestModal({ onClose, onSuccess }: { onClose: ()
     setError(""); setSending(true);
 
     const aspectLabels = aspects.map(a => ASPECTS.find(x => x.key === a)?.label ?? a).join(", ");
-    const body = [
+    const message = [
       `Aspects : ${aspectLabels}`,
       ``,
       `Description : ${description.trim()}`,
-      examples.trim()   ? `\nRéférences : ${examples.trim()}`                               : "",
-      hasPhotos         ? `\nPhotos disponibles : ${hasPhotos === "yes" ? "Oui" : "Non"}`   : "",
-      deadline.trim()   ? `\nDélai : ${deadline.trim()}`                                     : "",
+      examples.trim()   ? `Références : ${examples.trim()}`                               : "",
+      hasPhotos         ? `Photos disponibles : ${hasPhotos === "yes" ? "Oui" : "Non"}`   : "",
+      deadline.trim()   ? `Délai : ${deadline.trim()}`                                     : "",
     ].filter(Boolean).join("\n");
 
     try {
-      await api.createSupportTicket({
+      // Créer le ticket support en premier pour récupérer son ID
+      const ticket = await api.createSupportTicket({
         subject:     `[Design] ${aspectLabels}`,
-        body,
+        body:        message,
         priority:    "normal",
         ticket_type: "design_request",
+      });
+      // Créer la design_request liée au ticket
+      await api.createDesignRequest({
+        message,
+        is_additional:    false,
+        support_ticket_id: ticket?.id,
       });
       setSent(true);
       onSuccess?.();

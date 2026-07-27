@@ -17,6 +17,7 @@ Pillow==11.2.1
 pytrends==4.9.2
 ovh==1.0.0
 google-auth==2.37.0
+google-analytics-data==0.18.14
 weasyprint>=62.0
 xhtml2pdf>=0.2.11
 lxml>=5.0.0
