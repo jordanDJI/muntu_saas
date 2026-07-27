@@ -73,7 +73,7 @@ export const api = {
     apiFetch(`/api/v1/sites/${siteId}/testimonials`, { method: "PUT", body: JSON.stringify(testimonials) }),
 
   // Design requests
-  createDesignRequest: (body: { message: string; is_additional: boolean; site_id?: string }) =>
+  createDesignRequest: (body: { message: string; is_additional: boolean; site_id?: string; support_ticket_id?: string }) =>
     apiFetch("/api/v1/design-requests/", { method: "POST", body: JSON.stringify(body) }),
   getMyDesignRequests: () => apiFetch<any[]>("/api/v1/design-requests/mine"),
   adminGetDesignRequests: (status?: string) =>
