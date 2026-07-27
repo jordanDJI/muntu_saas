@@ -169,7 +169,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
       </div>
 
       {/* 1 — Chatbot */}
-      <WidgetCard number={1} title={t.emb_chatbot_title} subtitle={t.emb_chatbot_desc}>
+      <div id="embed-chatbot"><WidgetCard number={1} title={t.emb_chatbot_title} subtitle={t.emb_chatbot_desc}>
         {loading ? (
           <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">{t.dash_loading}</div>
         ) : (
@@ -183,10 +183,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </details>
           </div>
         )}
-      </WidgetCard>
+      </WidgetCard></div>
 
       {/* 2 — Booking */}
-      <WidgetCard number={2} title={t.emb_booking_title} subtitle={t.emb_booking_desc}>
+      <div id="embed-booking"><WidgetCard number={2} title={t.emb_booking_title} subtitle={t.emb_booking_desc}>
         {loading ? (
           <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">{t.dash_loading}</div>
         ) : (
@@ -198,7 +198,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </div>
           </div>
         )}
-      </WidgetCard>
+      </WidgetCard></div>
 
       {/* 3 — Contact */}
       <WidgetCard number={3} title={t.emb_contact_title} subtitle={t.emb_contact_desc}>

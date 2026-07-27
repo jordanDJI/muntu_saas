@@ -115,6 +115,36 @@ async def get_listing_by_slug(slug: str):
 
 # ── Endpoints authentifiés ─────────────────────────────────────────────────────
 
+@router.get("/promoted-metiers")
+async def list_promoted_metiers():
+    """Métiers custom promus par l'admin — utilisés dans le hub /annuaire."""
+    sb = get_supabase()
+    row = sb.table("system_config").select("value").eq("key", "custom_metiers").limit(1).execute().data
+    return row[0]["value"] if row else []
+
+
+@router.get("/metiers")
+async def list_metiers():
+    """Retourne les métiers custom distincts déjà utilisés dans l'annuaire (metier_label non nul)."""
+    sb = get_supabase()
+    rows = (
+        sb.table("directory_listing")
+        .select("metier_slug, metier_label")
+        .eq("is_listed", True)
+        .not_.is_("metier_label", "null")
+        .execute()
+    ).data or []
+
+    seen: dict[str, str] = {}
+    for r in rows:
+        slug  = r.get("metier_slug", "").strip()
+        label = (r.get("metier_label") or "").strip()
+        if slug and label and slug not in seen:
+            seen[slug] = label
+
+    return [{"slug": s, "label": l} for s, l in sorted(seen.items(), key=lambda x: x[1])]
+
+
 @router.get("/my-listing")
 async def get_my_listing(tenant_id: str = Depends(get_current_tenant)):
     sb = get_supabase()

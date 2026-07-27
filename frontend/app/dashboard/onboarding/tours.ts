@@ -103,7 +103,7 @@ const dashboardSteps: Step[] = [
     title: "Rendez-vous à confirmer",
     content:
       "Quand un client réserve depuis votre site, le rendez-vous arrive \"en attente\". Cliquez sur le bouton vert ✓ pour accepter, ou sur ✕ pour refuser. Votre client reçoit automatiquement un email de confirmation ou d'annulation.",
-    selector: "#dash-upcoming-appts",
+    selector: "#dash-pending",
     side: "bottom",
     pointerPadding: 8,
     pointerRadius: 10,
@@ -164,7 +164,65 @@ const leadsSteps: Step[] = [
   },
 ];
 
-// ── Tour 4 : Agenda (Rendez-vous) ─────────────────────────────────────────────
+// ── Tour 4 : Contacts (CRM) ───────────────────────────────────────────────────
+const contactsSteps: Step[] = [
+  {
+    icon: "👥",
+    title: "Votre carnet d'adresses",
+    content:
+      "Ici se trouve la liste de tous vos clients et prospects. Importez vos contacts existants depuis un fichier Excel/CSV, ou exportez-les à tout moment. Utilisez les tags colorés pour les organiser par catégorie (VIP, prospect, inactif…).",
+    selector: "#contacts-header",
+    side: "bottom",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+  {
+    icon: "🔍",
+    title: "Rechercher et filtrer",
+    content:
+      "Tapez un nom pour trouver un contact en un instant. Filtrez par tag ou affichez uniquement les clients inactifs (ceux qui n'ont pas eu de contact récent) pour les relancer.",
+    selector: "#contacts-search",
+    side: "bottom",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+  {
+    icon: "📄",
+    title: "La fiche client",
+    content:
+      "Cliquez sur un contact pour ouvrir sa fiche complète : historique de toutes ses demandes, ses rendez-vous passés et à venir, vos notes privées, et les rappels planifiés. Tout est centralisé en un seul endroit.",
+    selector: "#contacts-list",
+    side: "top",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+];
+
+// ── Tour 5 : Rappels ──────────────────────────────────────────────────────────
+const remindersSteps: Step[] = [
+  {
+    icon: "🔔",
+    title: "Vos rappels à traiter",
+    content:
+      "Les rappels sont des tâches liées à vos clients : relance d'un prospect, suivi après un rendez-vous, paiement en attente... Filtrez par statut pour voir ce qui est urgent, ce qui est fait, ou les paiements à encaisser.",
+    selector: "#reminders-filters",
+    side: "bottom",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+  {
+    icon: "📨",
+    title: "Envoyer et archiver",
+    content:
+      "Pour chaque rappel, cliquez sur \"Envoyer\" pour contacter directement le client par email ou SMS. Une fois traité, cochez-le pour l'archiver. Les rappels en retard apparaissent en rouge en haut de la liste.",
+    selector: "#reminders-list",
+    side: "top",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+];
+
+// ── Tour 6 : Agenda (Rendez-vous) ─────────────────────────────────────────────
 const appointmentsSteps: Step[] = [
   {
     icon: "📅",
@@ -216,9 +274,19 @@ const appointmentsSteps: Step[] = [
     pointerPadding: 8,
     pointerRadius: 8,
   },
+  {
+    icon: "📋",
+    title: "Formulaire de réservation",
+    content:
+      "Ce bouton vous permet de personnaliser le formulaire que vos clients remplissent quand ils réservent. Ajoutez vos propres questions (motif de la visite, informations médicales…) et configurez éventuellement un acompte PayPal pour sécuriser les créneaux.",
+    selector: "#appts-form-btn",
+    side: "bottom",
+    pointerPadding: 8,
+    pointerRadius: 8,
+  },
 ];
 
-// ── Tour 5 : Site-builder ────────────────────────────────────────────────────
+// ── Tour 7 : Site-builder ────────────────────────────────────────────────────
 const siteBuilderSteps: Step[] = [
   {
     icon: "🌐",
@@ -252,7 +320,7 @@ const siteBuilderSteps: Step[] = [
   },
 ];
 
-// ── Tour 6 : Statistiques ─────────────────────────────────────────────────────
+// ── Tour 8 : Statistiques ─────────────────────────────────────────────────────
 const analyticsSteps: Step[] = [
   {
     icon: "📊",
@@ -278,7 +346,7 @@ const analyticsSteps: Step[] = [
     icon: "🌍",
     title: "Demande locale (Google Trends)",
     content:
-      "Cette section vous montre si les habitants de votre région recherchent vos services sur Google. Un score élevé signifie qu'il y a beaucoup de clients potentiels près de chez vous — c'est le bon moment pour vous faire connaître !",
+      "Cette section montre si les habitants de votre région recherchent vos services sur Google. Un score élevé signifie qu'il y a beaucoup de clients potentiels près de chez vous. Cliquez sur ✏️ Affiner pour choisir vous-même les mots-clés envoyés à Google — utile pour coller exactement à votre spécialité.",
     selector: "#analytics-demand",
     side: "top",
     pointerPadding: 8,
@@ -286,7 +354,7 @@ const analyticsSteps: Step[] = [
   },
 ];
 
-// ── Tour 7 : Agents IA ────────────────────────────────────────────────────────
+// ── Tour 9 : Agents IA ────────────────────────────────────────────────────────
 const agentsSteps: Step[] = [
   {
     icon: "🤖",
@@ -310,7 +378,113 @@ const agentsSteps: Step[] = [
   },
 ];
 
-// ── Tour 8 : Paramètres ───────────────────────────────────────────────────────
+// ── Tour 10 : Factures ────────────────────────────────────────────────────────
+const invoicesSteps: Step[] = [
+  {
+    icon: "➕",
+    title: "Créer une facture",
+    content:
+      "Cliquez ici pour créer une nouvelle facture. Renseignez le client, ajoutez vos lignes de prestation (description, quantité, prix unitaire, TVA), puis envoyez-la directement par email. Klientys génère automatiquement le PDF et le fichier UBL (format européen).",
+    selector: "#invoices-new-btn",
+    side: "bottom",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+  {
+    icon: "🗂️",
+    title: "Filtrer par statut",
+    content:
+      "Basculez entre Brouillon, Envoyée, Payée, En retard et Annulée pour retrouver rapidement vos factures. Les factures en retard apparaissent en rouge — pensez à relancer vos clients !",
+    selector: "#invoices-tabs",
+    side: "bottom",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+  {
+    icon: "📄",
+    title: "Gérer vos factures",
+    content:
+      "Chaque ligne du tableau vous permet de télécharger le PDF, de marquer la facture comme payée, de l'envoyer par email, ou de l'annuler. Cliquez sur le numéro de facture pour l'ouvrir et la modifier.",
+    selector: "#invoices-table",
+    side: "top",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+];
+
+// ── Tour 11 : Campagnes email ─────────────────────────────────────────────────
+const campaignsSteps: Step[] = [
+  {
+    icon: "✉️",
+    title: "Envoyer un email groupé",
+    content:
+      "Composez ici un message à envoyer à un groupe de clients en une seule fois. Choisissez votre segment (tous les clients, les inactifs depuis 3 mois, ou ceux qui ont un tag précis), rédigez votre objet et votre message, puis envoyez.",
+    selector: "#campaigns-form",
+    side: "bottom",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+  {
+    icon: "📜",
+    title: "Historique des campagnes",
+    content:
+      "Retrouvez ici toutes vos campagnes passées avec la date d'envoi et le nombre de destinataires. Utile pour éviter d'envoyer deux fois le même message au même groupe.",
+    selector: "#campaigns-history",
+    side: "top",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+];
+
+// ── Tour 12 : Widgets embed ───────────────────────────────────────────────────
+const embedSteps: Step[] = [
+  {
+    icon: "💬",
+    title: "Chatbot sur votre site actuel",
+    content:
+      "Si vous avez déjà un site web (WordPress, Wix, Squarespace…), vous pouvez y ajouter votre chatbot Klientys. Copiez ce code et collez-le dans le HTML de votre site — votre chatbot apparaîtra automatiquement sur toutes vos pages.",
+    selector: "#embed-chatbot",
+    side: "bottom",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+  {
+    icon: "📅",
+    title: "Widget de réservation intégrable",
+    content:
+      "De la même façon, intégrez votre calendrier de réservation directement dans votre site existant. Vos clients peuvent prendre rendez-vous sans quitter votre site, et les RDV arrivent directement dans votre agenda Klientys.",
+    selector: "#embed-booking",
+    side: "top",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+];
+
+// ── Tour 13 : Espace secrétaire ───────────────────────────────────────────────
+const secretarySteps: Step[] = [
+  {
+    icon: "🗓️",
+    title: "Agenda multi-espaces",
+    content:
+      "L'espace secrétaire affiche les rendez-vous de tous les espaces professionnels auxquels vous êtes rattaché en une seule vue consolidée. Chaque espace a sa propre couleur. Basculez entre Jour, Semaine et Mois selon vos besoins.",
+    selector: "#secretary-view-toggle",
+    side: "bottom",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+  {
+    icon: "✅",
+    title: "Gérer les rendez-vous",
+    content:
+      "Cliquez sur un rendez-vous pour ouvrir sa fiche : vous pouvez ajouter une note, confirmer ou annuler le RDV directement depuis cet écran, sans avoir à basculer d'un espace à l'autre.",
+    selector: "#secretary-list",
+    side: "top",
+    pointerPadding: 8,
+    pointerRadius: 10,
+  },
+];
+
+// ── Tour 14 : Paramètres ──────────────────────────────────────────────────────
 const settingsSteps: Step[] = [
   {
     icon: "⚙️",
@@ -343,6 +517,16 @@ const settingsSteps: Step[] = [
     pointerRadius: 8,
   },
   {
+    icon: "📋",
+    title: "L'annuaire Klientys",
+    content:
+      "Dans \"Annuaire\", inscrivez-vous gratuitement dans le répertoire public Klientys. Renseignez votre métier, votre zone d'intervention et vos coordonnées — les clients de votre région pourront vous trouver sans même passer par votre site.",
+    selector: "#settings-annuaire-btn",
+    side: "right",
+    pointerPadding: 8,
+    pointerRadius: 8,
+  },
+  {
     icon: "🔔",
     title: "Vos notifications",
     content:
@@ -356,7 +540,7 @@ const settingsSteps: Step[] = [
     icon: "👥",
     title: "Votre équipe",
     content:
-      "Dans \"Équipe\", vous pouvez inviter des collaborateurs (secrétaire, associé...) à accéder à votre espace Klientys. Chaque membre peut avoir un rôle différent.",
+      "Dans \"Équipe\", vous pouvez inviter des collaborateurs (secrétaire, associé...) à accéder à votre espace Klientys. Chaque membre peut avoir un rôle différent et des accès limités aux sections qui le concernent.",
     selector: "#settings-membres-btn",
     side: "right",
     pointerPadding: 8,
@@ -368,32 +552,50 @@ const settingsSteps: Step[] = [
 
 export const ALL_TOURS: TourDef[] = [
   { tour: "welcome",      steps: welcomeSteps      },
-  { tour: "dashboard",   steps: dashboardSteps    },
-  { tour: "leads",       steps: leadsSteps        },
-  { tour: "appointments",steps: appointmentsSteps  },
-  { tour: "site-builder",steps: siteBuilderSteps  },
-  { tour: "analytics",   steps: analyticsSteps    },
-  { tour: "agents",      steps: agentsSteps       },
-  { tour: "settings",    steps: settingsSteps     },
+  { tour: "dashboard",    steps: dashboardSteps    },
+  { tour: "leads",        steps: leadsSteps        },
+  { tour: "contacts",     steps: contactsSteps     },
+  { tour: "reminders",    steps: remindersSteps    },
+  { tour: "appointments", steps: appointmentsSteps },
+  { tour: "site-builder", steps: siteBuilderSteps  },
+  { tour: "analytics",    steps: analyticsSteps    },
+  { tour: "agents",       steps: agentsSteps       },
+  { tour: "invoices",     steps: invoicesSteps     },
+  { tour: "campaigns",    steps: campaignsSteps    },
+  { tour: "embed",        steps: embedSteps        },
+  { tour: "secretary",    steps: secretarySteps    },
+  { tour: "settings",     steps: settingsSteps     },
 ];
 
 export const TOUR_MENU = [
-  { tour: "welcome",       label: "🗺️  Visite guidée générale"          },
-  { tour: "dashboard",     label: "📊  Tableau de bord"                  },
-  { tour: "leads",         label: "📨  Demandes clients"                  },
-  { tour: "appointments",  label: "📅  Agenda & rendez-vous"             },
-  { tour: "site-builder",  label: "🌐  Créer mon site web"               },
-  { tour: "analytics",     label: "📈  Statistiques"                     },
-  { tour: "agents",        label: "🤖  Assistants virtuels"              },
-  { tour: "settings",      label: "⚙️  Paramètres"                       },
+  { tour: "welcome",      label: "🗺️  Visite guidée générale"   },
+  { tour: "dashboard",    label: "📊  Tableau de bord"          },
+  { tour: "leads",        label: "📨  Demandes clients"         },
+  { tour: "contacts",     label: "👥  Contacts & CRM"           },
+  { tour: "reminders",    label: "🔔  Rappels"                  },
+  { tour: "appointments", label: "📅  Agenda & rendez-vous"     },
+  { tour: "site-builder", label: "🌐  Créer mon site web"       },
+  { tour: "analytics",    label: "📈  Statistiques"             },
+  { tour: "agents",       label: "🤖  Assistants virtuels"      },
+  { tour: "invoices",     label: "📄  Factures"                 },
+  { tour: "campaigns",    label: "✉️  Campagnes email"          },
+  { tour: "embed",        label: "🔗  Widgets intégrables"      },
+  { tour: "secretary",    label: "🗓️  Espace secrétaire"        },
+  { tour: "settings",     label: "⚙️  Paramètres"              },
 ];
 
 export const PAGE_TOUR: Record<string, string> = {
-  "/dashboard":                  "dashboard",
-  "/dashboard/leads":            "leads",
-  "/dashboard/appointments":     "appointments",
-  "/dashboard/site-builder":     "site-builder",
-  "/dashboard/analytics":        "analytics",
-  "/dashboard/agents":           "agents",
-  "/dashboard/settings":         "settings",
+  "/dashboard":                   "dashboard",
+  "/dashboard/leads":             "leads",
+  "/dashboard/contacts":          "contacts",
+  "/dashboard/reminders":         "reminders",
+  "/dashboard/appointments":      "appointments",
+  "/dashboard/site-builder":      "site-builder",
+  "/dashboard/analytics":         "analytics",
+  "/dashboard/agents":            "agents",
+  "/dashboard/invoices":          "invoices",
+  "/dashboard/campaigns":         "campaigns",
+  "/dashboard/embed":             "embed",
+  "/dashboard/secretary":         "secretary",
+  "/dashboard/settings":          "settings",
 };

@@ -169,6 +169,7 @@ export default function DashboardPage() {
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
       {/* Notifications in-app (feature overrides, etc.) */}
+      <div id="dash-notifications" className={notifications.length > 0 ? "space-y-2" : ""}>
       {notifications.map((notif) => (
         <div key={notif.id} className="rounded-xl px-4 py-3 flex items-start gap-3"
           style={{ background: "linear-gradient(135deg, rgba(13,75,88,0.12) 0%, rgba(26,110,130,0.08) 100%)", border: "1px solid rgba(13,75,88,0.35)" }}>
@@ -190,6 +191,7 @@ export default function DashboardPage() {
           </button>
         </div>
       ))}
+      </div>
 
       {/* Header */}
       <div>

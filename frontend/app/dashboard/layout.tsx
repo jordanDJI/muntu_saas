@@ -18,16 +18,25 @@ const TOUR_PAGE: Record<string, string> = {
   welcome:        "",
   dashboard:      "/dashboard",
   leads:          "/dashboard/leads",
+  contacts:       "/dashboard/contacts",
+  reminders:      "/dashboard/reminders",
   appointments:   "/dashboard/appointments",
   "site-builder": "/dashboard/site-builder",
   analytics:      "/dashboard/analytics",
   agents:         "/dashboard/agents",
+  invoices:       "/dashboard/invoices",
+  campaigns:      "/dashboard/campaigns",
+  embed:          "/dashboard/embed",
+  secretary:      "/dashboard/secretary",
   settings:       "/dashboard/settings",
 };
 
 // Feature d'abonnement requise pour afficher le tour dans le menu
 const TOUR_REQUIRED_FEATURE: Partial<Record<string, FeatureKey>> = {
   analytics: "analytics",
+  campaigns:  "campaigns",
+  embed:      "embed_widget",
+  secretary:  "multi_tenant",
 };
 
 const NAV_HREFS = [

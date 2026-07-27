@@ -1394,7 +1394,7 @@ export default function AppointmentsPage() {
           className="text-xs sm:text-sm px-2.5 py-1.5 border border-red-300 text-red-500 rounded-lg hover:bg-red-50 shrink-0">
           🚫 <span className="hidden sm:inline">{t.apt_toolbar_block}</span>
         </button>
-        <button onClick={()=>setShowForm(true)} disabled={!formSiteId}
+        <button id="appts-form-btn" onClick={()=>setShowForm(true)} disabled={!formSiteId}
           className="text-xs sm:text-sm px-2.5 py-1.5 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 shrink-0 disabled:opacity-40">
           📋 <span className="hidden sm:inline">{t.apt_toolbar_form}</span>
         </button>

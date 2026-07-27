@@ -120,17 +120,21 @@ async def get_demand_data(
     zones: list[str],
     period: str,
     offer_names: list[str],
+    custom_keywords: list[str] | None = None,
 ) -> dict:
-    # Build keyword list: offer names first, then sector defaults
+    # Build keyword list: custom overrides > offer names > sector defaults
     kws: list[str] = []
-    for name in offer_names[:2]:
-        if name:
-            kws.append(name)
-    _kw_map = get_sector_keywords()
-    for kw in _kw_map.get(sector, _kw_map.get("other", [])):
-        if kw not in kws:
-            kws.append(kw)
-    kws = kws[:5]
+    if custom_keywords:
+        kws = [k.strip() for k in custom_keywords if k.strip()][:10]
+    else:
+        for name in offer_names[:2]:
+            if name:
+                kws.append(name)
+        _kw_map = get_sector_keywords()
+        for kw in _kw_map.get(sector, _kw_map.get("other", [])):
+            if kw not in kws:
+                kws.append(kw)
+        kws = kws[:5]
 
     geo = country if country else "BE"
     timeframe = TIMEFRAMES.get(period, TIMEFRAMES["month"])

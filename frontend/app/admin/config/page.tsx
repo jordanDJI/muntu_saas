@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { supabase } from "../../../lib/api";
+import { supabase, api } from "../../../lib/api";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -61,22 +61,32 @@ export default function ConfigPage() {
   const [newSectorKws,  setNewSectorKws]  = useState("");
   const [showNewSector, setShowNewSector] = useState(false);
 
+  // Métiers custom annuaire
+  const [pendingMetiers,  setPendingMetiers]  = useState<any[]>([]);
+  const [promotedMetiers, setPromotedMetiers] = useState<any[]>([]);
+  const [promoteTarget,   setPromoteTarget]   = useState<{ slug: string; label: string } | null>(null);
+  const [promLabelPlural, setPromLabelPlural] = useState("");
+  const [promFamille,     setPromFamille]     = useState("services");
+
   const showToast = (msg: string, ok = true) => {
     setToast(msg); setToastOk(ok); setTimeout(() => setToast(""), 3000);
   };
 
   const load = async () => {
     try {
-      const [cfg, fl, secList] = await Promise.all([
+      const [cfg, fl, secList, metierData] = await Promise.all([
         adminFetch<Record<string, any>>("/api/v1/admin/system-config"),
         adminFetch<any[]>("/api/v1/admin/feature-flags"),
         adminFetch<any[]>("/api/v1/admin/sectors"),
+        api.adminGetPendingMetiers().catch(() => ({ pending: [], promoted: [] })),
       ]);
       setConfig(cfg);
       setFlags(fl);
       const secMap: Record<string, string[]> = {};
       secList.forEach((s: any) => { secMap[s.key] = s.keywords; });
       setSectors({ ...DEFAULT_SECTORS, ...secMap });
+      setPendingMetiers(metierData.pending ?? []);
+      setPromotedMetiers(metierData.promoted ?? []);
     } catch (e: any) { setLoadErr(e.message); }
   };
 
@@ -173,6 +183,34 @@ export default function ConfigPage() {
       });
       showToast(`Secteur "${key}" mis à jour ✓`);
       setEditingSector(null);
+      await load();
+    } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
+    finally { setBusy(false); }
+  };
+
+  const promoteMetier = async () => {
+    if (!promoteTarget || !promLabelPlural.trim()) return;
+    setBusy(true);
+    try {
+      await api.adminPromoteMetier({
+        slug:         promoteTarget.slug,
+        label:        promoteTarget.label,
+        label_plural: promLabelPlural.trim(),
+        famille:      promFamille,
+      });
+      showToast(`"${promoteTarget.label}" promu dans l'annuaire ✓`);
+      setPromoteTarget(null); setPromLabelPlural(""); setPromFamille("services");
+      await load();
+    } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
+    finally { setBusy(false); }
+  };
+
+  const demoteMetier = async (slug: string, label: string) => {
+    if (!confirm(`Retirer "${label}" de l'annuaire public ?`)) return;
+    setBusy(true);
+    try {
+      await api.adminDemoteMetier(slug);
+      showToast(`"${label}" retiré ✓`);
       await load();
     } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
     finally { setBusy(false); }
@@ -401,6 +439,121 @@ export default function ConfigPage() {
               )}
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ── Métiers custom annuaire ── */}
+      <section className="mb-8">
+        <h2 className="text-sm font-medium mb-3 flex items-center gap-2" style={{ color: K.muted }}>
+          Métiers custom — Annuaire
+          {pendingMetiers.length > 0 && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+              style={{ background: "rgba(221,170,64,0.2)", color: K.gold }}>
+              {pendingMetiers.length} en attente
+            </span>
+          )}
+        </h2>
+
+        {/* Pendants */}
+        {pendingMetiers.length > 0 && (
+          <div className="rounded-xl p-4 mb-4" style={{ background: K.card, border: `1px solid rgba(221,170,64,0.15)` }}>
+            <p className="text-xs mb-3" style={{ color: K.muted }}>
+              Métiers ajoutés par des tenants — à valider pour apparaître dans le hub /annuaire
+            </p>
+            <div className="space-y-2">
+              {pendingMetiers.map((m: any) => (
+                <div key={m.slug} className="flex items-center justify-between gap-3 py-1.5">
+                  <div>
+                    <span className="text-sm font-medium" style={{ color: K.text }}>{m.label}</span>
+                    <span className="text-xs ml-2 font-mono" style={{ color: K.muted }}>/{m.slug}</span>
+                  </div>
+                  <button
+                    onClick={() => { setPromoteTarget(m); setPromLabelPlural(m.label + "s"); }}
+                    disabled={busy}
+                    className="text-xs px-3 py-1 rounded-lg disabled:opacity-50"
+                    style={{ background: "rgba(221,170,64,0.15)", color: K.gold, border: `1px solid rgba(221,170,64,0.3)` }}>
+                    Promouvoir →
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Modal promote */}
+        {promoteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.6)" }}
+            onClick={e => { if (e.target === e.currentTarget) setPromoteTarget(null); }}>
+            <div className="rounded-2xl p-6 w-full max-w-sm" style={{ background: "#0D1B25", border: `1px solid ${K.border}` }}>
+              <h3 className="text-sm font-semibold mb-4" style={{ color: K.text }}>
+                Promouvoir « {promoteTarget.label} »
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs block mb-1" style={{ color: K.muted }}>Libellé au pluriel *</label>
+                  <input value={promLabelPlural} onChange={e => setPromLabelPlural(e.target.value)}
+                    placeholder="Ex: Ergothérapeutes"
+                    className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                    style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.15)`, color: K.text }} />
+                </div>
+                <div>
+                  <label className="text-xs block mb-1" style={{ color: K.muted }}>Famille</label>
+                  <select value={promFamille} onChange={e => setPromFamille(e.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                    style={{ background: K.card2, border: `1px solid rgba(170,189,216,0.15)`, color: K.text }}>
+                    <option value="sante">🩺 Santé & bien-être</option>
+                    <option value="artisan">🔧 Artisanat & BTP</option>
+                    <option value="services">💼 Services & conseil</option>
+                    <option value="autre">📦 Autre</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-5">
+                <button onClick={() => setPromoteTarget(null)}
+                  className="flex-1 py-2 rounded-lg text-xs"
+                  style={{ background: "rgba(170,189,216,0.08)", color: K.muted, border: `1px solid ${K.border}` }}>
+                  Annuler
+                </button>
+                <button onClick={promoteMetier} disabled={busy || !promLabelPlural.trim()}
+                  className="flex-1 py-2 rounded-lg text-xs font-semibold disabled:opacity-50"
+                  style={{ background: K.teal, color: "#fff" }}>
+                  Valider
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Promus */}
+        <div className="rounded-xl p-4" style={{ background: K.card, border: `1px solid ${K.border}` }}>
+          <p className="text-xs mb-3" style={{ color: K.muted }}>
+            Métiers validés — visibles dans le hub /annuaire
+          </p>
+          {promotedMetiers.length === 0 ? (
+            <p className="text-xs" style={{ color: "rgba(170,189,216,0.25)" }}>Aucun métier custom promu.</p>
+          ) : (
+            <div className="space-y-2">
+              {promotedMetiers.map((m: any) => (
+                <div key={m.slug} className="flex items-center justify-between gap-3 py-1">
+                  <div>
+                    <span className="text-sm font-medium" style={{ color: K.text }}>{m.label}</span>
+                    <span className="text-xs ml-2" style={{ color: K.muted }}>{m.label_plural}</span>
+                    <span className="text-xs ml-2 px-1.5 py-0.5 rounded"
+                      style={{ background: "rgba(13,75,88,0.2)", color: K.tealXL, fontSize: "10px" }}>
+                      {m.famille}
+                    </span>
+                  </div>
+                  <button onClick={() => demoteMetier(m.slug, m.label)} disabled={busy}
+                    className="text-xs transition-colors disabled:opacity-50"
+                    style={{ color: "rgba(224,96,96,0.4)" }}
+                    onMouseEnter={e => (e.currentTarget.style.color = K.danger)}
+                    onMouseLeave={e => (e.currentTarget.style.color = "rgba(224,96,96,0.4)")}>
+                    Retirer
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </div>

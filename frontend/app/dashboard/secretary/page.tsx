@@ -153,7 +153,7 @@ export default function SecretaryPage() {
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <h1 className="text-xl font-bold" style={{ color: "var(--text-main, #0f172a)" }}>{t.sec_title}</h1>
-          <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: "rgba(13,75,88,.2)" }}>
+          <div id="secretary-view-toggle" className="flex rounded-lg overflow-hidden border" style={{ borderColor: "rgba(13,75,88,.2)" }}>
             {(["day", "week", "month"] as View[]).map((v) => (
               <button
                 key={v}
@@ -188,6 +188,7 @@ export default function SecretaryPage() {
         </div>
 
         {/* Content */}
+        <div id="secretary-list">
         {loading ? (
           <div className="flex justify-center py-16">
             <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "#0D9488", borderTopColor: "transparent" }} />
@@ -254,6 +255,7 @@ export default function SecretaryPage() {
             })}
           </div>
         )}
+        </div>
       </div>
 
       {/* Modal */}

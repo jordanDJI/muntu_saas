@@ -2642,6 +2642,7 @@ function SectionAnnuaire() {
   const [isListed, setIsListed]           = useState(false);
   const [metierSlug, setMetierSlug]       = useState("");
   const [customMetierLabel, setCustomMetierLabel] = useState("");
+  const [communityMetiers, setCommunityMetiers] = useState<{ slug: string; label: string }[]>([]);
   const [displayName, setDisplayName]     = useState("");
   const [tagline, setTagline]             = useState("");
   const [zones, setZones]                 = useState<string[]>([]);
@@ -2652,27 +2653,33 @@ function SectionAnnuaire() {
   const zoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    api.getDirectoryListing()
-      .then(data => {
-        if (data) {
-          setListing(data);
-          setIsListed(data.is_listed ?? false);
-          const knownMetier = metiers.find(m => m.slug === data.metier_slug);
-          if (knownMetier) {
-            setMetierSlug(data.metier_slug ?? "");
-          } else if (data.metier_slug) {
-            setMetierSlug("autre");
-            setCustomMetierLabel(data.metier_label ?? data.metier_slug);
-          }
-          setDisplayName(data.display_name ?? "");
-          setTagline(data.tagline ?? "");
-          setZones((data.zones ?? []).map((z: string) => titleCaseZone(z.trim())));
-          setPrimaryZone(titleCaseZone((data.primary_zone ?? "").trim()));
-          setAcceptsBooking(data.accepts_booking ?? true);
+    Promise.all([
+      api.getDirectoryListing().catch(() => null),
+      api.getDirectoryMetiers().catch(() => [] as { slug: string; label: string }[]),
+    ]).then(([data, community]) => {
+      const communityList = (community ?? []).filter(
+        (c: { slug: string }) => !metiers.some((m: { slug: string }) => m.slug === c.slug)
+      );
+      setCommunityMetiers(communityList);
+
+      if (data) {
+        setListing(data);
+        setIsListed(data.is_listed ?? false);
+        const isStandard  = metiers.some((m: { slug: string }) => m.slug === data.metier_slug);
+        const isCommunity = communityList.some((c: { slug: string }) => c.slug === data.metier_slug);
+        if (isStandard || isCommunity) {
+          setMetierSlug(data.metier_slug ?? "");
+        } else if (data.metier_slug) {
+          setMetierSlug("autre");
+          setCustomMetierLabel(data.metier_label ?? data.metier_slug);
         }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+        setDisplayName(data.display_name ?? "");
+        setTagline(data.tagline ?? "");
+        setZones((data.zones ?? []).map((z: string) => titleCaseZone(z.trim())));
+        setPrimaryZone(titleCaseZone((data.primary_zone ?? "").trim()));
+        setAcceptsBooking(data.accepts_booking ?? true);
+      }
+    }).finally(() => setLoading(false));
   }, []);
 
   const addZone = (val?: string) => {
@@ -2701,7 +2708,8 @@ function SectionAnnuaire() {
     try {
       if (isListed) {
         const finalSlug = metierSlug === "autre" ? slugify(customMetierLabel) : metierSlug;
-        const finalLabel = metierSlug === "autre" ? customMetierLabel.trim() : null;
+        const communityLabel = communityMetiers.find(c => c.slug === metierSlug)?.label ?? null;
+        const finalLabel = metierSlug === "autre" ? customMetierLabel.trim() : communityLabel;
         await api.directoryOptIn({
           metier_slug: finalSlug,
           metier_label: finalLabel,
@@ -2767,10 +2775,19 @@ function SectionAnnuaire() {
                 className="border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
               >
                 <option value="">Choisir votre métier</option>
-                {metiers.map(m => (
-                  <option key={m.slug} value={m.slug}>{m.label}</option>
-                ))}
-                <option value="autre">Autre (précisez)</option>
+                <optgroup label="Métiers standards">
+                  {metiers.map((m: { slug: string; label: string }) => (
+                    <option key={m.slug} value={m.slug}>{m.label}</option>
+                  ))}
+                </optgroup>
+                {communityMetiers.length > 0 && (
+                  <optgroup label="Ajoutés par la communauté">
+                    {communityMetiers.map(c => (
+                      <option key={c.slug} value={c.slug}>{c.label}</option>
+                    ))}
+                  </optgroup>
+                )}
+                <option value="autre">Autre (précisez)…</option>
               </select>
               {metierSlug === "autre" && (
                 <input

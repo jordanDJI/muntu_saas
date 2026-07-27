@@ -2528,4 +2528,82 @@ async def admin_update_ticket(
                 "updated_at": now,
             }).eq("support_ticket_id", ticket_id).execute()
 
+
+# ─── Annuaire — métiers custom ────────────────────────────────────────────────
+
+def _get_promoted_metiers(sb) -> list[dict]:
+    row = sb.table("system_config").select("value").eq("key", "custom_metiers").limit(1).execute().data
+    return row[0]["value"] if row else []
+
+
+class MetierPromoteIn(BaseModel):
+    slug:        str
+    label:       str
+    label_plural: str
+    famille:     str  # sante | artisan | services | autre
+
+
+@router.get("/directory/pending-metiers")
+async def pending_metiers(admin=Depends(get_current_admin)):
+    """Métiers custom utilisés en BDD mais pas encore promus dans system_config."""
+    sb = get_supabase_admin()
+    promoted_slugs = {m["slug"] for m in _get_promoted_metiers(sb)}
+
+    rows = (
+        sb.table("directory_listing")
+        .select("metier_slug, metier_label")
+        .eq("is_listed", True)
+        .not_.is_("metier_label", "null")
+        .execute()
+    ).data or []
+
+    seen: dict[str, str] = {}
+    for r in rows:
+        s = (r.get("metier_slug") or "").strip()
+        l = (r.get("metier_label") or "").strip()
+        if s and l and s not in seen:
+            seen[s] = l
+
+    pending = [
+        {"slug": s, "label": l}
+        for s, l in sorted(seen.items(), key=lambda x: x[1])
+        if s not in promoted_slugs
+    ]
+    promoted = _get_promoted_metiers(sb)
+    return {"pending": pending, "promoted": promoted}
+
+
+@router.post("/directory/metiers")
+async def promote_metier(body: MetierPromoteIn, admin=Depends(get_current_admin)):
+    """Promouvoir un métier custom vers l'annuaire public."""
+    sb  = get_supabase_admin()
+    now = datetime.now(timezone.utc).isoformat()
+    current = _get_promoted_metiers(sb)
+    if any(m["slug"] == body.slug for m in current):
+        raise HTTPException(400, "Ce métier est déjà promu")
+    current.append({
+        "slug":         body.slug,
+        "label":        body.label,
+        "label_plural": body.label_plural,
+        "famille":      body.famille,
+    })
+    sb.table("system_config").upsert(
+        {"key": "custom_metiers", "value": current, "updated_at": now}
+    ).execute()
+    _log(admin, "promote_metier", payload={"slug": body.slug, "label": body.label})
+    return {"ok": True}
+
+
+@router.delete("/directory/metiers/{slug}")
+async def demote_metier(slug: str, admin=Depends(get_current_admin)):
+    """Retirer un métier de la liste promue."""
+    sb  = get_supabase_admin()
+    now = datetime.now(timezone.utc).isoformat()
+    current = [m for m in _get_promoted_metiers(sb) if m["slug"] != slug]
+    sb.table("system_config").upsert(
+        {"key": "custom_metiers", "value": current, "updated_at": now}
+    ).execute()
+    _log(admin, "demote_metier", payload={"slug": slug})
+    return {"ok": True}
+
     return row[0]

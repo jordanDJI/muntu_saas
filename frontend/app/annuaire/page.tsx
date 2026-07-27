@@ -59,7 +59,22 @@ const VILLES_PAR_PAYS = [
   { slug: "munich",    label: "Munich",    flag: "🇩🇪" },
 ];
 
-export default function AnnuaireHub() {
+const FAMILLES_EXTRA: Record<string, { label: string; emoji: string; desc: string }> = {
+  autre: { label: "Autres métiers", emoji: "📦", desc: "Professionnels ajoutés par la communauté Klientys." },
+};
+
+export default async function AnnuaireHub() {
+  // Métiers promus par l'admin depuis le panel config
+  let promotedMetiers: any[] = [];
+  try {
+    const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    const res = await fetch(`${API}/api/v1/directory/promoted-metiers`, { cache: "no-store" });
+    if (res.ok) promotedMetiers = await res.json();
+  } catch { /* non bloquant */ }
+
+  const standardSlugs = new Set(metiers.map((m: any) => m.slug));
+  const extraMetiers  = promotedMetiers.filter((m: any) => !standardSlugs.has(m.slug));
+
   const grouped = metiers.reduce<Record<string, typeof metiers>>((acc, m) => {
     (acc[m.famille] ??= []).push(m);
     return acc;
@@ -151,6 +166,34 @@ export default function AnnuaireHub() {
           </div>
         </section>
       ))}
+
+      {/* Métiers promus par la communauté */}
+      {extraMetiers.length > 0 && (
+        <section className="max-w-5xl mx-auto px-6 pb-12">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <span>📦</span>
+              <span>Autres métiers</span>
+            </h2>
+            <p className="text-gray-500 text-sm mt-1">Professionnels ajoutés par la communauté Klientys.</p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {extraMetiers.map((m: any) => (
+              <div key={m.slug} className="border border-gray-100 rounded-xl p-4 bg-white">
+                <p className="font-semibold text-gray-800 mb-3">{m.label}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {VILLES_PAR_PAYS.map((v) => (
+                    <Link key={v.slug} href={`/annuaire/${m.slug}/${v.slug}`}
+                      className="text-xs bg-primary-50 text-primary-600 px-2 py-1 rounded-full hover:bg-primary-100 transition-colors">
+                      {v.flag} {v.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* CTA pro */}
       <section className="bg-primary-50 border-t border-primary-100 py-14 px-6 text-center">

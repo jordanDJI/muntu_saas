@@ -307,6 +307,11 @@ export const api = {
   // Analytics
   getAnalyticsSummary: (days = 30) => apiFetch<any>(`/api/v1/analytics/summary?days=${days}`),
   getRoiPotential: (period = "month") => apiFetch<any>(`/api/v1/analytics/roi-potential?period=${period}`),
+  getTrendKeywords: () => apiFetch<{ custom: string[]; defaults: string[]; active: string[] }>("/api/v1/analytics/trend-keywords"),
+  updateTrendKeywords: (keywords: string[]) =>
+    apiFetch<{ ok: boolean; active: string[] }>("/api/v1/analytics/trend-keywords", {
+      method: "PATCH", body: JSON.stringify({ keywords }),
+    }),
   downloadAnalyticsReport: async (days = 30): Promise<void> => {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_URL}/api/v1/analytics/report.pdf?days=${days}`, { headers });
@@ -360,8 +365,14 @@ export const api = {
 
   // Annuaire public
   getDirectoryListing: () => apiFetch<any>("/api/v1/directory/my-listing"),
+  getDirectoryMetiers: () => apiFetch<{ slug: string; label: string }[]>("/api/v1/directory/metiers"),
+  getPromotedMetiers: () => apiFetch<any[]>("/api/v1/directory/promoted-metiers"),
   directoryOptIn: (body: object) => apiFetch("/api/v1/directory/opt-in", { method: "POST", body: JSON.stringify(body) }),
   directoryOptOut: () => apiFetch("/api/v1/directory/opt-out", { method: "DELETE" }),
+  adminGetPendingMetiers: () => apiFetch<{ pending: any[]; promoted: any[] }>("/api/v1/admin/directory/pending-metiers"),
+  adminPromoteMetier: (body: { slug: string; label: string; label_plural: string; famille: string }) =>
+    apiFetch("/api/v1/admin/directory/metiers", { method: "POST", body: JSON.stringify(body) }),
+  adminDemoteMetier: (slug: string) => apiFetch(`/api/v1/admin/directory/metiers/${slug}`, { method: "DELETE" }),
 
   // CRM — Contacts enrichis
   getContacts: (params?: { q?: string; tag_id?: string; inactive_only?: boolean; limit?: number; offset?: number }) => {

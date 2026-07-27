@@ -409,13 +409,14 @@ async def get_roi_potential(
     # ── Tenant info ───────────────────────────────────────────────────────────
     tenant_row = (
         sb.table("tenant")
-        .select("sector, country")
+        .select("sector, country, trend_keywords")
         .eq("id", tenant_id)
         .single()
         .execute()
     ).data or {}
-    sector  = tenant_row.get("sector", "other") or "other"
-    country = tenant_row.get("country", "BE") or "BE"
+    sector          = tenant_row.get("sector", "other") or "other"
+    country         = tenant_row.get("country", "BE") or "BE"
+    custom_keywords = tenant_row.get("trend_keywords") or None
 
     # ── Site + zones + offers ─────────────────────────────────────────────────
     zones: list[str] = []
@@ -436,7 +437,7 @@ async def get_roi_potential(
 
     # ── Fetch from pytrends ───────────────────────────────────────────────────
     from app.services.trends import get_demand_data
-    data = await get_demand_data(sector, country, zones, period, offer_names)
+    data = await get_demand_data(sector, country, zones, period, offer_names, custom_keywords)
     data["period"] = period
 
     # ── Store cache ───────────────────────────────────────────────────────────
@@ -450,6 +451,57 @@ async def get_roi_potential(
         pass
 
     return {**data, "cached_at": now_iso}
+
+
+# ── Mots-clés Google Trends personnalisés ────────────────────────────────────
+
+class TrendKeywordsIn(BaseModel):
+    keywords: list[str]  # [] = réinitialiser aux défauts
+
+
+@router.get("/trend-keywords")
+async def get_trend_keywords(tenant_id: str = Depends(get_current_tenant)):
+    """Retourne les mots-clés actifs (custom ou défauts secteur)."""
+    sb = get_supabase()
+    tenant_row = (
+        sb.table("tenant")
+        .select("sector, trend_keywords")
+        .eq("id", tenant_id)
+        .single()
+        .execute()
+    ).data or {}
+
+    custom = tenant_row.get("trend_keywords") or []
+    sector = tenant_row.get("sector", "other") or "other"
+
+    from app.services.trends import get_sector_keywords
+    defaults = get_sector_keywords().get(sector, [])
+
+    return {
+        "custom":   custom,
+        "defaults": defaults,
+        "active":   custom if custom else defaults,
+    }
+
+
+@router.patch("/trend-keywords")
+async def update_trend_keywords(
+    body: TrendKeywordsIn,
+    tenant_id: str = Depends(get_current_tenant),
+):
+    """Sauvegarde les mots-clés custom et invalide le cache ROI."""
+    sb  = get_supabase()
+    now = datetime.now(timezone.utc).isoformat()
+
+    keywords = [k.strip() for k in body.keywords if k.strip()][:10]
+    sb.table("tenant").update({
+        "trend_keywords": keywords or None,
+    }).eq("id", tenant_id).execute()
+
+    # Invalider le cache ROI pour forcer un recalcul avec les nouveaux mots-clés
+    sb.table("tenant_roi_cache").delete().eq("tenant_id", tenant_id).execute()
+
+    return {"ok": True, "active": keywords}
 
 
 # ── Google Analytics (GA4) — backend OAuth flow ──────────────────────────────

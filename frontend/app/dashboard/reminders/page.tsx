@@ -107,7 +107,7 @@ export default function RemindersPage() {
       </div>
 
       {/* Filtres */}
-      <div className="flex gap-2 flex-wrap">
+      <div id="reminders-filters" className="flex gap-2 flex-wrap">
         {FILTERS.map(f => (
           <button key={f.key} onClick={() => setFilter(f.key)}
             className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
@@ -127,6 +127,7 @@ export default function RemindersPage() {
         ))}
       </div>
 
+      <div id="reminders-list">
       {loading ? (
         <div className="text-center py-16 text-gray-400">{t.dash_loading}</div>
       ) : reminders.length === 0 ? (
@@ -170,6 +171,7 @@ export default function RemindersPage() {
           />
         </div>
       )}
+      </div>
 
     {modalReminderId && (
       <SendReminderModal
