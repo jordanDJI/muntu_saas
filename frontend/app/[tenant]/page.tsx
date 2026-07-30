@@ -11,6 +11,7 @@ import { getSectorVocab } from "../../lib/sectorVocabulary";
 import CookieBanner from "../../components/CookieBanner";
 import TrackingScripts from "../../components/TrackingScripts";
 import GallerySection from "../../components/GallerySection";
+import ServiceSection from "./service-section";
 
 // Palettes de couleurs applicables via CSS inline (évite les problèmes de purge Tailwind)
 const COLOR_HEX: Record<string, { hero: string; accent: string; light: string }> = {
@@ -58,38 +59,6 @@ function getVideoEmbed(url: string): { type: "youtube" | "vimeo" | "direct"; emb
   return null;
 }
 
-function OfferCard({ offer, colors }: { offer: any; colors: { accent: string; light: string; hero: string } }) {
-  return (
-    <div className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all hover:-translate-y-1 border border-gray-100/80">
-      {offer.image_url ? (
-        <Image src={offer.image_url} alt={offer.name} width={400} height={160} className="w-full h-40 object-cover" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" />
-      ) : (
-        <div className="h-2 w-full" style={{ backgroundColor: colors.accent }} />
-      )}
-      <div className="p-5">
-        <h3 className="font-semibold text-gray-900 text-lg leading-snug">{offer.name}</h3>
-        {offer.description && (
-          <p className="text-gray-500 mt-2 text-sm leading-relaxed">{offer.description}</p>
-        )}
-        {((offer.duration_min ?? offer.duration_minutes) || (offer.price_eur ?? offer.price_from)) && (
-          <div className="flex gap-2 mt-4 flex-wrap">
-            {(offer.duration_min ?? offer.duration_minutes) && (
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-white" style={{ backgroundColor: colors.accent }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                {offer.duration_min ?? offer.duration_minutes} min
-              </span>
-            )}
-            {(offer.price_eur ?? offer.price_from) && (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: colors.light, color: colors.hero }}>
-                {offer.price_eur ?? offer.price_from} €
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 async function getSiteData(slug: string, preview = false) {
   try {
@@ -441,32 +410,14 @@ export default async function TenantSitePage({
                 {sector === "restaurant" ? "Notre carte" : sector === "commerce" ? "Nos produits" : "Nos services"}
               </h2>
             </div>
-            {offers.length > 0 ? (
-              useCategories ? (
-                /* Affichage par catégories (restaurant / commerce) */
-                <div className="space-y-10">
-                  {Object.entries(offersByCategory).map(([cat, catOffers]) => (
-                    <div key={cat}>
-                      <h3 className="text-xl font-bold mb-5 pb-2 border-b" style={{ color: colors.hero, borderColor: colors.light }}>{cat}</h3>
-                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                        {catOffers.map((offer: any) => (
-                          <OfferCard key={offer.id} offer={offer} colors={colors} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                /* Affichage classique en grille */
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {offers.map((offer: any) => (
-                    <OfferCard key={offer.id} offer={offer} colors={colors} />
-                  ))}
-                </div>
-              )
-            ) : isPreview ? (
-              <p className="text-center text-gray-400 italic text-sm">Prestations non configurées — complétez l'étape 5 du site-builder.</p>
-            ) : null}
+            <ServiceSection
+              offers={offers}
+              colors={colors}
+              useCategories={useCategories}
+              offersByCategory={offersByCategory}
+              isPreview={isPreview}
+              bookingHref="#rdv"
+            />
           </div>
         </section>
       )}

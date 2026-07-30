@@ -17,6 +17,7 @@ ESSENTIEL_FEATURES: dict = {
     "attachments_max": 0,
     "attachment_file_max_mb": 0,
     "gallery_photos_limit": 8,
+    "service_photos_limit": 3,
 }
 
 BUSINESS_FEATURES: dict = {
@@ -39,6 +40,7 @@ BUSINESS_FEATURES: dict = {
     "attachments_max": 10,
     "attachment_file_max_mb": 45,
     "gallery_photos_limit": 24,
+    "service_photos_limit": 9,
 }
 
 
@@ -61,6 +63,7 @@ PRO_FEATURES: dict = {
     "attachments_max": 5,
     "attachment_file_max_mb": 45,
     "gallery_photos_limit": 16,
+    "service_photos_limit": 9,
 }
 
 PLAN_FEATURES: dict = {

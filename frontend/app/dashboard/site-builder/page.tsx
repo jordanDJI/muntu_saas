@@ -133,11 +133,11 @@ const STEP_KEYS = [
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Offer = { name: string; description: string; duration_min: string; price_eur: string; image_url: string; service_type: string; category: string };
+type Offer = { name: string; description: string; duration_min: string; price_eur: string; photos: string[]; service_type: string; category: string };
 type Value = { icon: string; title: string; description: string };
 type Testimonial = { author_name: string; author_role: string; content: string; rating: number };
 
-const EMPTY_OFFER = (): Offer => ({ name: "", description: "", duration_min: "", price_eur: "", image_url: "", service_type: "service", category: "" });
+const EMPTY_OFFER = (): Offer => ({ name: "", description: "", duration_min: "", price_eur: "", photos: [], service_type: "service", category: "" });
 const EMPTY_VALUE = (): Value => ({ icon: "star", title: "", description: "" });
 const EMPTY_TESTIMONIAL = (): Testimonial => ({ author_name: "", author_role: "", content: "", rating: 5 });
 
@@ -396,7 +396,7 @@ export default function SiteBuilderPage() {
               description: o.description ?? "",
               duration_min: o.duration_min?.toString() ?? "",
               price_eur: o.price_eur?.toString() ?? "",
-              image_url: o.image_url ?? "",
+              photos: o.photos ?? (o.image_url ? [o.image_url] : []),
               service_type: o.service_type ?? "service",
               category: o.category ?? "",
             }))
@@ -416,7 +416,7 @@ export default function SiteBuilderPage() {
           description: svc.description,
           duration_min: svc.duration_min?.toString() ?? "",
           price_eur: svc.price !== null ? svc.price?.toString() ?? "" : "",
-          image_url: "",
+          photos: [],
           service_type: "service",
           category: "",
         })));
@@ -490,7 +490,8 @@ export default function SiteBuilderPage() {
               description: o.description || undefined,
               duration_min: o.duration_min ? parseInt(o.duration_min) : undefined,
               price_eur: o.price_eur ? parseFloat(o.price_eur) : undefined,
-              image_url: o.image_url || undefined,
+              photos: o.photos.filter(Boolean),
+              image_url: o.photos[0] || undefined,
               service_type: o.service_type || "service",
               category: o.category || undefined,
             })));
@@ -540,7 +541,7 @@ export default function SiteBuilderPage() {
         errors.offers = t.sb_err_offers_req;
       }
       offers.forEach((o, i) => {
-        if ((o.description || o.duration_min || o.price_eur || o.image_url) && !o.name.trim()) {
+        if ((o.description || o.duration_min || o.price_eur || o.photos.length > 0) && !o.name.trim()) {
           errors[`offer_${i}_name`] = t.sb_err_offer_name;
         }
       });
@@ -1740,33 +1741,65 @@ export default function SiteBuilderPage() {
                     className="inp" placeholder="50" />
                 </div>
               </div>
+              {/* Photos multiples */}
               <div>
-                <label className="lbl">{t.sb_offer_image_lbl} <span className="text-gray-400 font-normal">{t.sb_optional}</span></label>
-                <div className="flex items-center gap-2 mb-2">
-                  <button
-                    type="button"
-                    onClick={() => triggerUpload((file) => uploadPhoto(file, "offer", (url) => listUpdate(setOffers, i, { image_url: url })))}
-                    disabled={!!uploading}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-50 border border-primary-200 text-xs font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-50 transition-colors"
-                  >
-                    {uploading === `offer_${i}` ? (
-                      <><div className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />{t.sb_uploading}</>
-                    ) : (
-                      <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>{t.sb_offer_choose}</>
-                    )}
-                  </button>
-                  <input value={o.image_url} onChange={(e) => listUpdate(setOffers, i, { image_url: e.target.value })}
-                    className="inp flex-1" placeholder={t.sb_or_url} />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="lbl mb-0">{t.sb_offer_photos_lbl} <span className="text-gray-400 font-normal">{t.sb_optional}</span></label>
+                  <span className="text-xs text-gray-400">{o.photos.length}/{features.service_photos_limit ?? 3}</span>
                 </div>
-                {(() => {
-                  const warn = isUnsupportedPhotoUrl(o.image_url);
-                  return o.image_url ? (
-                    warn
-                      ? <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">{warn}</p>
-                      : <img src={o.image_url} alt="aperçu" className="h-20 w-full object-cover rounded-lg border border-gray-200"
-                          onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                  ) : null;
-                })()}
+                {/* Grille des photos existantes */}
+                {o.photos.length > 0 && (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 mb-1.5">
+                      {o.photos.map((url, pi) => (
+                        <div key={pi} className="relative group">
+                          <img src={url} alt={`photo ${pi + 1}`} className={`h-20 w-full object-cover rounded-lg border-2 ${pi === 0 ? "border-primary-400" : "border-gray-200"}`}
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                          <button
+                            type="button"
+                            onClick={() => listUpdate(setOffers, i, { photos: o.photos.filter((_, idx) => idx !== pi) })}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            title={t.sb_remove}
+                          >×</button>
+                          {pi === 0 && (
+                            <span className="absolute bottom-1 left-1 text-[10px] bg-primary-600 text-white px-1.5 py-0.5 rounded font-medium">{t.sb_offer_photo_main}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-primary-600 flex items-center gap-1 mb-2">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm1 14H11v-6h2v6zm0-8H11V6h2v2z"/></svg>
+                      {t.sb_offer_photo_main_hint}
+                    </p>
+                  </>
+                )}
+                {/* Ajouter une photo */}
+                {o.photos.length < (features.service_photos_limit ?? 3) && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => triggerUpload((file) => uploadPhoto(file, "offer", (url) => listUpdate(setOffers, i, { photos: [...o.photos, url] })))}
+                      disabled={!!uploading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-50 border border-primary-200 text-xs font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-50 transition-colors"
+                    >
+                      {uploading === "offer" ? (
+                        <><div className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />{t.sb_uploading}</>
+                      ) : (
+                        <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>{t.sb_offer_photo_add}</>
+                      )}
+                    </button>
+                    <input
+                      className="inp flex-1"
+                      placeholder={t.sb_or_url}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const val = (e.currentTarget as HTMLInputElement).value.trim();
+                          if (val) { listUpdate(setOffers, i, { photos: [...o.photos, val] }); e.currentTarget.value = ""; }
+                        }
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           ))}

@@ -89,6 +89,11 @@ async def unpublish_site(site_id: UUID, tenant_id: str = Depends(get_current_ten
 # ── Service offers ────────────────────────────────────────────────────────────
 
 def _offer_from_db(row: dict) -> dict:
+    raw_photos = row.get("photos") or []
+    image_url = row.get("image_url")
+    # Compat : si photos vide mais image_url présent, exposer image_url comme première photo
+    if not raw_photos and image_url:
+        raw_photos = [image_url]
     return {
         "id": row.get("id"),
         "site_id": row.get("site_id"),
@@ -96,6 +101,8 @@ def _offer_from_db(row: dict) -> dict:
         "description": row.get("description"),
         "duration_min": row.get("duration_min"),
         "price_eur": row.get("price_eur"),
+        "image_url": image_url,
+        "photos": raw_photos,
         "service_type": row.get("service_type", "service"),
         "category": row.get("category"),
         "created_at": row.get("created_at"),
@@ -109,8 +116,16 @@ def _offer_to_db(site_id: str, offer: ServiceOfferIn) -> dict:
         row["duration_min"] = offer.duration_min
     if offer.price_eur is not None:
         row["price_eur"] = offer.price_eur
-    if offer.image_url is not None:
+    photos: list[str] = offer.photos or []
+    # Synchronise image_url avec la première photo pour rétrocompatibilité
+    if photos:
+        row["photos"] = photos
+        row["image_url"] = photos[0]
+    elif offer.image_url is not None:
         row["image_url"] = offer.image_url
+        row["photos"] = [offer.image_url]
+    else:
+        row["photos"] = []
     row["service_type"] = offer.service_type or "service"
     if offer.category is not None:
         row["category"] = offer.category
