@@ -6,7 +6,7 @@ import stripe as stripe_lib
 logger = logging.getLogger(__name__)
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 import secrets
@@ -2290,6 +2290,52 @@ async def admin_list_blog(admin=Depends(viewer_or_above)):
         .execute().data or []
     )
     return rows
+
+
+class BlogProposeIn(BaseModel):
+    slug:            str
+    title:           str
+    description:     Optional[str] = None
+    category:        Optional[str] = None
+    metier:          Optional[str] = None
+    body_html:       Optional[str] = None
+    reading_minutes: int = 5
+
+
+@router.post("/content/blog/propose")
+async def propose_blog_post(body: BlogProposeIn, x_content_agent_secret: str = Header(default="")):
+    """
+    Endpoint dédié à un agent de contenu automatisé (cron externe, ex. proposition
+    d'articles 2x/semaine). Auth par secret partagé — volontairement PAS un JWT admin,
+    pour que ce credential n'ouvre rien d'autre que ceci. Force toujours status="draft" :
+    même si le secret fuite, rien ne peut être publié sans validation humaine dans /admin/content.
+    """
+    if not settings.content_agent_secret or x_content_agent_secret != settings.content_agent_secret:
+        raise HTTPException(403, "Non autorisé")
+
+    sb = get_supabase_admin()
+
+    # Évite les collisions avec la contrainte UNIQUE sur slug
+    slug = body.slug
+    existing = sb.table("blog_post").select("slug").like("slug", f"{slug}%").execute().data or []
+    taken = {r["slug"] for r in existing}
+    if slug in taken:
+        slug = f"{slug}-{secrets.token_hex(2)}"
+
+    row = sb.table("blog_post").insert({
+        "slug":            slug,
+        "title":           body.title,
+        "description":     body.description,
+        "category":        body.category,
+        "metier":          body.metier,
+        "body_html":       body.body_html,
+        "reading_minutes": body.reading_minutes,
+        "status":          "draft",   # forcé — ne peut jamais être publié par ce endpoint
+        "published_at":    None,
+    }).execute().data[0]
+
+    logger.info("content-agent: proposition d'article créée (slug=%s)", slug)
+    return row
 
 
 @router.post("/content/blog")

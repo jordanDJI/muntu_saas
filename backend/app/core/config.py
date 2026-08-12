@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     agent_link_expiry_days: int = 90     # durée de validité des liens client converti
     agent_ocr_max_size_mb: int = 10      # taille max des fichiers envoyés pour OCR
 
+    # Agent de contenu — proposition automatique d'articles de blog (cron externe)
+    # Auth par secret partagé (pas un JWT admin) — l'endpoint force toujours status="draft"
+    content_agent_secret: str = ""
+
     # Agents IA — 360dialog WhatsApp
     dialog360_api_key: str = ""          # clé API 360dialog (D360-API-KEY)
     dialog360_webhook_secret: str = ""   # secret HMAC pour vérifier les webhooks
