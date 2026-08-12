@@ -2292,6 +2292,29 @@ async def admin_list_blog(admin=Depends(viewer_or_above)):
     return rows
 
 
+def _check_content_agent_secret(secret: str):
+    if not settings.content_agent_secret or secret != settings.content_agent_secret:
+        raise HTTPException(403, "Non autorisé")
+
+
+@router.get("/content/blog/agent-list")
+async def agent_list_blog(x_content_agent_secret: str = Header(default="")):
+    """
+    Lecture seule, même auth scopée (secret partagé) que /propose. Permet à l'agent
+    de contenu automatisé de savoir quels sujets (draft + published) sont déjà
+    traités d'un run à l'autre, sans avoir besoin de persister d'état ailleurs
+    (ex. commit git) — les runs planifiés démarrent d'un environnement propre à chaque fois.
+    """
+    _check_content_agent_secret(x_content_agent_secret)
+    rows = (
+        get_supabase_admin().table("blog_post")
+        .select("slug, title, category, metier, status, created_at")
+        .order("created_at", desc=True)
+        .execute().data or []
+    )
+    return rows
+
+
 class BlogProposeIn(BaseModel):
     slug:            str
     title:           str
@@ -2310,8 +2333,7 @@ async def propose_blog_post(body: BlogProposeIn, x_content_agent_secret: str = H
     pour que ce credential n'ouvre rien d'autre que ceci. Force toujours status="draft" :
     même si le secret fuite, rien ne peut être publié sans validation humaine dans /admin/content.
     """
-    if not settings.content_agent_secret or x_content_agent_secret != settings.content_agent_secret:
-        raise HTTPException(403, "Non autorisé")
+    _check_content_agent_secret(x_content_agent_secret)
 
     sb = get_supabase_admin()
 
