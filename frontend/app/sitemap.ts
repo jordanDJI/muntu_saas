@@ -32,10 +32,21 @@ async function getListedDirectorySlugs(): Promise<{ metier: string; ville: strin
   }
 }
 
+async function getDbBlogPosts(): Promise<{ slug: string; published_at: string }[]> {
+  try {
+    const res = await fetch(`${API_URL}/api/v1/public/blog`, { next: { revalidate: 3600 } });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [publishedSlugs, directorySlugs] = await Promise.all([
+  const [publishedSlugs, directorySlugs, dbBlogPosts] = await Promise.all([
     getPublishedSlugs(),
     getListedDirectorySlugs(),
+    getDbBlogPosts(),
   ]);
 
   const now = new Date();
@@ -48,13 +59,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${APP_URL}/blog`,                  lastModified: now, changeFrequency: "weekly",  priority: 0.8 },
   ];
 
-  // Articles de blog
-  const blogPages: MetadataRoute.Sitemap = ARTICLES.map((a) => ({
-    url: `${APP_URL}/blog/${a.slug}`,
-    lastModified: new Date(a.publishedAt),
-    changeFrequency: "monthly" as const,
-    priority: 0.75,
-  }));
+  // Articles de blog — DB (source de vérité, inclut ceux créés via /admin/content ou
+  // l'agent de contenu automatisé) + fallback statique pour les slugs qui n'y seraient pas
+  const dbBlogSlugs = new Set(dbBlogPosts.map((a) => a.slug));
+  const blogPages: MetadataRoute.Sitemap = [
+    ...dbBlogPosts.map((a) => ({
+      url: `${APP_URL}/blog/${a.slug}`,
+      lastModified: new Date(a.published_at),
+      changeFrequency: "monthly" as const,
+      priority: 0.75,
+    })),
+    ...ARTICLES.filter((a) => !dbBlogSlugs.has(a.slug)).map((a) => ({
+      url: `${APP_URL}/blog/${a.slug}`,
+      lastModified: new Date(a.publishedAt),
+      changeFrequency: "monthly" as const,
+      priority: 0.75,
+    })),
+  ];
 
   // Sites publiés des tenants
   const tenantPages: MetadataRoute.Sitemap = publishedSlugs.map((slug) => ({

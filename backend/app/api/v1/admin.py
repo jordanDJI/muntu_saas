@@ -16,6 +16,7 @@ from app.core.supabase import get_supabase_admin
 from app.middleware.admin import get_current_admin, viewer_or_above, support_or_above
 from app.middleware.rate_limit import check_rate_by_key
 from app.services import email as email_svc
+from app.services.google_indexing import notify_url_updated, notify_url_deleted
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -2308,7 +2309,7 @@ async def agent_list_blog(x_content_agent_secret: str = Header(default="")):
     _check_content_agent_secret(x_content_agent_secret)
     rows = (
         get_supabase_admin().table("blog_post")
-        .select("slug, title, category, metier, status, created_at")
+        .select("slug, title, description, category, metier, status, reading_minutes, body_html, created_at")
         .order("created_at", desc=True)
         .execute().data or []
     )
@@ -2375,6 +2376,8 @@ async def admin_create_blog(body: BlogPostIn, admin=Depends(get_current_admin)):
         "published_at":    body.published_at,
     }).execute().data[0]
     _log(admin, "create_blog_post", payload={"slug": body.slug, "title": body.title})
+    if body.status == "published":
+        await notify_url_updated(f"{settings.frontend_url}/blog/{body.slug}")
     return row
 
 
@@ -2397,13 +2400,20 @@ async def admin_update_blog(post_id: str, body: BlogPostIn, admin=Depends(get_cu
     if not row:
         raise HTTPException(404, "Article introuvable")
     _log(admin, "update_blog_post", payload={"id": post_id, "slug": body.slug})
+    if body.status == "published":
+        await notify_url_updated(f"{settings.frontend_url}/blog/{body.slug}")
     return row[0]
 
 
 @router.delete("/content/blog/{post_id}")
 async def admin_delete_blog(post_id: str, admin=Depends(get_current_admin)):
-    get_supabase_admin().table("blog_post").delete().eq("id", post_id).execute()
+    sb = get_supabase_admin()
+    existing = sb.table("blog_post").select("slug, status").eq("id", post_id).maybe_single().execute()
+    existing_row = existing.data if existing else None
+    sb.table("blog_post").delete().eq("id", post_id).execute()
     _log(admin, "delete_blog_post", payload={"id": post_id})
+    if existing_row and existing_row.get("status") == "published":
+        await notify_url_deleted(f"{settings.frontend_url}/blog/{existing_row['slug']}")
     return {"ok": True}
 
 
