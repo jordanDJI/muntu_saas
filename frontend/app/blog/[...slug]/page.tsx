@@ -53,8 +53,9 @@ async function getTranslations(slug: string, lang: Lang): Promise<Record<string,
   }
 }
 
-export async function generateMetadata({ params }: { params: { slug: string[] } }): Promise<Metadata> {
-  const parsed = parseSlugParts(params.slug ?? []);
+export async function generateMetadata({ params }: { params: Promise<{ slug: string[] }> }): Promise<Metadata> {
+  const { slug: slugParts } = await params;
+  const parsed = parseSlugParts(slugParts ?? []);
   if (!parsed) return { title: "Article introuvable | Klientys" };
   const { lang, slug } = parsed;
 
@@ -89,8 +90,9 @@ export async function generateMetadata({ params }: { params: { slug: string[] } 
   };
 }
 
-export default async function DynamicArticle({ params }: { params: { slug: string[] } }) {
-  const parsed = parseSlugParts(params.slug ?? []);
+export default async function DynamicArticle({ params }: { params: Promise<{ slug: string[] }> }) {
+  const { slug: slugParts } = await params;
+  const parsed = parseSlugParts(slugParts ?? []);
   if (!parsed) notFound();
   const { lang, slug } = parsed;
 
