@@ -33,6 +33,20 @@ function pathFor(lang: string, slug: string) {
   return lang === "fr" ? `/blog/${slug}` : `/blog/${lang}/${slug}`;
 }
 
+const LANG_LABELS: Record<string, string> = { fr: "🇫🇷 FR", en: "🇬🇧 EN", de: "🇩🇪 DE", nl: "🇳🇱 NL" };
+const LANG_ORDER = ["fr", "en", "de", "nl"];
+
+function buildLanguageOptions(translations: Record<string, string>, currentLang: Lang) {
+  return LANG_ORDER
+    .filter((l) => translations[l])
+    .map((l) => ({
+      code: l,
+      label: LANG_LABELS[l] ?? l.toUpperCase(),
+      href: pathFor(l, translations[l]),
+      active: l === currentLang,
+    }));
+}
+
 async function getPost(slug: string, lang: Lang) {
   try {
     const res = await fetch(`${API}/api/v1/public/blog/${slug}?lang=${lang}`, { next: { revalidate: 3600 } });
@@ -99,6 +113,8 @@ export default async function DynamicArticle({ params }: { params: Promise<{ slu
   const post = await getPost(slug, lang);
   if (!post) notFound();
 
+  const translations = await getTranslations(slug, lang);
+  const languageOptions = buildLanguageOptions(translations, lang);
   const canonicalPath = pathFor(lang, post.slug);
 
   const jsonLd = [
@@ -134,6 +150,7 @@ export default async function DynamicArticle({ params }: { params: Promise<{ slu
         title={post.title}
         description={post.description ?? ""}
         relatedLinks={[{ href: "/blog", label: "← Retour au blog" }]}
+        languages={languageOptions}
       >
         {post.body_html ? (
           <div dangerouslySetInnerHTML={{ __html: post.body_html }} />

@@ -1,5 +1,12 @@
 import Link from "next/link";
 
+interface LanguageOption {
+  code: string;
+  label: string;
+  href: string;
+  active: boolean;
+}
+
 interface Props {
   breadcrumbLabel: string;
   category: string;
@@ -12,6 +19,7 @@ interface Props {
   ctaTitle?: string;
   ctaDesc?: string;
   relatedLinks: { href: string; label: string }[];
+  languages?: LanguageOption[];
 }
 
 export default function ArticleLayout({
@@ -26,6 +34,7 @@ export default function ArticleLayout({
   ctaTitle = "Essayez Klientys gratuitement",
   ctaDesc = "14 jours d'essai complet. Aucune carte bancaire. Votre site en ligne en 15 minutes.",
   relatedLinks,
+  languages,
 }: Props) {
   return (
     <main className="min-h-screen">
@@ -62,6 +71,31 @@ export default function ArticleLayout({
             {readingMinutes} min de lecture · {publishedAt}
           </span>
         </div>
+
+        {/* Sélecteur de langue — visible uniquement si l'article existe dans plusieurs langues */}
+        {languages && languages.length > 1 && (
+          <div style={{ display: "flex", gap: "6px", marginBottom: "20px", flexWrap: "wrap" }}>
+            {languages.map((l) =>
+              l.active ? (
+                <span key={l.code} style={{
+                  fontSize: "11px", fontWeight: 600, padding: "4px 10px", borderRadius: "100px",
+                  background: "rgba(221,170,64,.15)", color: "var(--l-gold)", border: "1px solid rgba(221,170,64,.3)",
+                }}>
+                  {l.label}
+                </span>
+              ) : (
+                <Link key={l.code} href={l.href} style={{
+                  fontSize: "11px", fontWeight: 600, padding: "4px 10px", borderRadius: "100px",
+                  background: "rgba(255,255,255,.05)", color: "var(--l-text-3)", border: "1px solid var(--l-border)",
+                  textDecoration: "none",
+                }}>
+                  {l.label}
+                </Link>
+              )
+            )}
+          </div>
+        )}
+
         <h1 style={{
           fontFamily: "var(--font-bricolage),'Bricolage Grotesque',sans-serif",
           fontSize: "clamp(26px, 4vw, 38px)",
