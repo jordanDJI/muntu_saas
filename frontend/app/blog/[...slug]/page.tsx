@@ -70,7 +70,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   const ogImage = `${APP_URL}/api/og?title=${encodeURIComponent(post.title)}&color=indigo`;
   return {
-    title: `${post.title} | Klientys`,
+    title: post.title, // le layout racine applique déjà le template "%s | Klientys"
     description: post.description,
     alternates: {
       canonical: `${APP_URL}${pathFor(lang, post.slug)}`,
