@@ -32,14 +32,18 @@ async function getListedDirectorySlugs(): Promise<{ metier: string; ville: strin
   }
 }
 
-async function getDbBlogPosts(): Promise<{ slug: string; published_at: string }[]> {
+async function getDbBlogPosts(): Promise<{ slug: string; lang: string; published_at: string }[]> {
   try {
-    const res = await fetch(`${API_URL}/api/v1/public/blog`, { next: { revalidate: 3600 } });
+    const res = await fetch(`${API_URL}/api/v1/public/blog-all-langs`, { next: { revalidate: 3600 } });
     if (!res.ok) return [];
     return res.json();
   } catch {
     return [];
   }
+}
+
+function blogPathFor(lang: string, slug: string) {
+  return lang === "fr" ? `/blog/${slug}` : `/blog/${lang}/${slug}`;
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -59,17 +63,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${APP_URL}/blog`,                  lastModified: now, changeFrequency: "weekly",  priority: 0.8 },
   ];
 
-  // Articles de blog — DB (source de vérité, inclut ceux créés via /admin/content ou
-  // l'agent de contenu automatisé) + fallback statique pour les slugs qui n'y seraient pas
-  const dbBlogSlugs = new Set(dbBlogPosts.map((a) => a.slug));
+  // Articles de blog — DB (source de vérité, toutes langues confondues, inclut ceux
+  // créés via /admin/content, l'agent de contenu automatisé ou le bouton "Traduire")
+  // + fallback statique (fr) pour les slugs qui n'y seraient pas
+  const dbBlogKeys = new Set(dbBlogPosts.map((a) => `${a.lang}/${a.slug}`));
   const blogPages: MetadataRoute.Sitemap = [
     ...dbBlogPosts.map((a) => ({
-      url: `${APP_URL}/blog/${a.slug}`,
+      url: `${APP_URL}${blogPathFor(a.lang, a.slug)}`,
       lastModified: new Date(a.published_at),
       changeFrequency: "monthly" as const,
-      priority: 0.75,
+      priority: a.lang === "fr" ? 0.75 : 0.65,
     })),
-    ...ARTICLES.filter((a) => !dbBlogSlugs.has(a.slug)).map((a) => ({
+    ...ARTICLES.filter((a) => !dbBlogKeys.has(`fr/${a.slug}`)).map((a) => ({
       url: `${APP_URL}/blog/${a.slug}`,
       lastModified: new Date(a.publishedAt),
       changeFrequency: "monthly" as const,

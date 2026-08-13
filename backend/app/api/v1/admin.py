@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, Dict, Optional
 from datetime import datetime, timedelta, timezone
@@ -17,6 +18,7 @@ from app.middleware.admin import get_current_admin, viewer_or_above, support_or_
 from app.middleware.rate_limit import check_rate_by_key
 from app.services import email as email_svc
 from app.services.google_indexing import notify_url_updated, notify_url_deleted
+from app.services.revalidate import revalidate_frontend_path
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -2270,6 +2272,14 @@ async def get_analytics_realtime(admin=Depends(viewer_or_above)):
 
 # ─── Content Management (blog + témoignages) ─────────────────────────────────
 
+_BLOG_LANGS = ("fr", "en", "de", "nl")
+
+
+def _blog_path(lang: str, slug: str) -> str:
+    """fr = /blog/{slug} (défaut, pas de préfixe) ; en/de/nl = /blog/{lang}/{slug}."""
+    return f"/blog/{slug}" if lang == "fr" else f"/blog/{lang}/{slug}"
+
+
 class BlogPostIn(BaseModel):
     slug:            str
     title:           str
@@ -2280,6 +2290,7 @@ class BlogPostIn(BaseModel):
     reading_minutes: int = 5
     status:          str = "draft"
     published_at:    Optional[str] = None
+    lang:            str = "fr"
 
 
 @router.get("/content/blog")
@@ -2290,7 +2301,8 @@ async def admin_list_blog(admin=Depends(viewer_or_above)):
     # contenu réel en base sur un simple "Mettre à jour" sans modification.
     rows = (
         get_supabase_admin().table("blog_post")
-        .select("id, slug, title, description, category, metier, status, published_at, reading_minutes, body_html, updated_at")
+        .select("id, slug, title, description, category, metier, status, published_at, "
+                "reading_minutes, body_html, lang, translation_group_id, translated_from, updated_at")
         .order("created_at", desc=True)
         .execute().data or []
     )
@@ -2313,7 +2325,7 @@ async def agent_list_blog(x_content_agent_secret: str = Header(default="")):
     _check_content_agent_secret(x_content_agent_secret)
     rows = (
         get_supabase_admin().table("blog_post")
-        .select("slug, title, description, category, metier, status, reading_minutes, body_html, created_at")
+        .select("slug, title, description, category, metier, status, reading_minutes, body_html, lang, created_at")
         .order("created_at", desc=True)
         .execute().data or []
     )
@@ -2335,16 +2347,17 @@ async def propose_blog_post(body: BlogProposeIn, x_content_agent_secret: str = H
     """
     Endpoint dédié à un agent de contenu automatisé (cron externe, ex. proposition
     d'articles 2x/semaine). Auth par secret partagé — volontairement PAS un JWT admin,
-    pour que ce credential n'ouvre rien d'autre que ceci. Force toujours status="draft" :
+    pour que ce credential n'ouvre rien d'autre que ceci. Force toujours status="draft"
+    et lang="fr" (les traductions se font via /translate, après validation humaine du FR) :
     même si le secret fuite, rien ne peut être publié sans validation humaine dans /admin/content.
     """
     _check_content_agent_secret(x_content_agent_secret)
 
     sb = get_supabase_admin()
 
-    # Évite les collisions avec la contrainte UNIQUE sur slug
+    # Évite les collisions avec la contrainte UNIQUE sur (slug, lang)
     slug = body.slug
-    existing = sb.table("blog_post").select("slug").like("slug", f"{slug}%").execute().data or []
+    existing = sb.table("blog_post").select("slug").eq("lang", "fr").like("slug", f"{slug}%").execute().data or []
     taken = {r["slug"] for r in existing}
     if slug in taken:
         slug = f"{slug}-{secrets.token_hex(2)}"
@@ -2359,6 +2372,7 @@ async def propose_blog_post(body: BlogProposeIn, x_content_agent_secret: str = H
         "reading_minutes": body.reading_minutes,
         "status":          "draft",   # forcé — ne peut jamais être publié par ce endpoint
         "published_at":    None,
+        "lang":            "fr",      # forcé — l'agent ne produit que le français
     }).execute().data[0]
 
     logger.info("content-agent: proposition d'article créée (slug=%s)", slug)
@@ -2367,6 +2381,7 @@ async def propose_blog_post(body: BlogProposeIn, x_content_agent_secret: str = H
 
 @router.post("/content/blog")
 async def admin_create_blog(body: BlogPostIn, admin=Depends(get_current_admin)):
+    lang = body.lang if body.lang in _BLOG_LANGS else "fr"
     sb  = get_supabase_admin()
     row = sb.table("blog_post").insert({
         "slug":            body.slug,
@@ -2378,16 +2393,21 @@ async def admin_create_blog(body: BlogPostIn, admin=Depends(get_current_admin)):
         "reading_minutes": body.reading_minutes,
         "status":          body.status,
         "published_at":    body.published_at,
+        "lang":            lang,
     }).execute().data[0]
-    _log(admin, "create_blog_post", payload={"slug": body.slug, "title": body.title})
+    _log(admin, "create_blog_post", payload={"slug": body.slug, "title": body.title, "lang": lang})
+    path = _blog_path(lang, body.slug)
+    await revalidate_frontend_path(path)
+    await revalidate_frontend_path("/blog")
     if body.status == "published":
-        await notify_url_updated(f"{settings.frontend_url}/blog/{body.slug}")
+        await notify_url_updated(f"{settings.frontend_url}{path}")
     return row
 
 
 @router.patch("/content/blog/{post_id}")
 async def admin_update_blog(post_id: str, body: BlogPostIn, admin=Depends(get_current_admin)):
     from datetime import datetime as _dt
+    lang = body.lang if body.lang in _BLOG_LANGS else "fr"
     sb = get_supabase_admin()
     row = sb.table("blog_post").update({
         "slug":            body.slug,
@@ -2399,26 +2419,143 @@ async def admin_update_blog(post_id: str, body: BlogPostIn, admin=Depends(get_cu
         "reading_minutes": body.reading_minutes,
         "status":          body.status,
         "published_at":    body.published_at,
+        "lang":            lang,
         "updated_at":      _dt.utcnow().isoformat(),
     }).eq("id", post_id).execute().data
     if not row:
         raise HTTPException(404, "Article introuvable")
-    _log(admin, "update_blog_post", payload={"id": post_id, "slug": body.slug})
+    _log(admin, "update_blog_post", payload={"id": post_id, "slug": body.slug, "lang": lang})
+    path = _blog_path(lang, body.slug)
+    await revalidate_frontend_path(path)
+    await revalidate_frontend_path("/blog")
     if body.status == "published":
-        await notify_url_updated(f"{settings.frontend_url}/blog/{body.slug}")
+        await notify_url_updated(f"{settings.frontend_url}{path}")
     return row[0]
 
 
 @router.delete("/content/blog/{post_id}")
 async def admin_delete_blog(post_id: str, admin=Depends(get_current_admin)):
     sb = get_supabase_admin()
-    existing = sb.table("blog_post").select("slug, status").eq("id", post_id).maybe_single().execute()
+    existing = sb.table("blog_post").select("slug, status, lang").eq("id", post_id).maybe_single().execute()
     existing_row = existing.data if existing else None
     sb.table("blog_post").delete().eq("id", post_id).execute()
     _log(admin, "delete_blog_post", payload={"id": post_id})
-    if existing_row and existing_row.get("status") == "published":
-        await notify_url_deleted(f"{settings.frontend_url}/blog/{existing_row['slug']}")
+    if existing_row:
+        path = _blog_path(existing_row.get("lang", "fr"), existing_row["slug"])
+        await revalidate_frontend_path(path)
+        await revalidate_frontend_path("/blog")
+        if existing_row.get("status") == "published":
+            await notify_url_deleted(f"{settings.frontend_url}{path}")
     return {"ok": True}
+
+
+class TranslateIn(BaseModel):
+    target_langs: Optional[list[str]] = None  # défaut : toutes les langues manquantes (en/de/nl)
+
+
+def _translate_article(source: dict, lang: str) -> dict:
+    """Appel Gemini synchrone — à exécuter via asyncio.to_thread depuis un handler async."""
+    import json as _json
+    from app.services import llm
+
+    lang_names = {"en": "English", "de": "Deutsch (allemand)", "nl": "Nederlands (néerlandais)"}
+    lang_name = lang_names.get(lang, lang)
+    system = (
+        f"Tu es un traducteur professionnel spécialisé SEO, pour un site d'un SaaS pour indépendants "
+        f"et TPE (santé, artisanat, coaching). Traduis le contenu JSON fourni du français vers le "
+        f"{lang_name}, en conservant EXACTEMENT la structure HTML (balises h2/h3/p/strong/em/ul/li/a href) "
+        f"et en adaptant les tournures pour un lectorat natif — pas de traduction mot à mot. Les liens "
+        f"<a href=\"...\"> doivent garder EXACTEMENT la même URL, ne traduis jamais une URL. "
+        f"Réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, avec les clés : "
+        f"slug (minuscules, ASCII, tirets, adapté à la langue cible — PAS une translittération du "
+        f"slug français), title, description, body_html."
+    )
+    payload = {
+        "title": source.get("title"),
+        "description": source.get("description"),
+        "body_html": source.get("body_html"),
+    }
+    raw = llm.chat_completion(
+        messages=[{"role": "user", "content": _json.dumps(payload, ensure_ascii=False)}],
+        model="gemini-2.5-flash",
+        system_prompt=system,
+    )
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:]
+    return _json.loads(cleaned.strip())
+
+
+@router.post("/content/blog/{post_id}/translate")
+async def translate_blog_post(post_id: str, body: TranslateIn, admin=Depends(get_current_admin)):
+    """
+    Traduit un article FR existant vers une ou plusieurs langues (en/de/nl par défaut)
+    via Gemini. Crée une nouvelle ligne blog_post par langue, toujours en status="draft"
+    (chaque traduction est relue et publiée indépendamment dans /admin/content — la
+    qualité d'une traduction automatique mérite une validation humaine avant mise en ligne).
+    """
+    import uuid as _uuid
+
+    sb = get_supabase_admin()
+    source = sb.table("blog_post").select("*").eq("id", post_id).maybe_single().execute().data
+    if not source:
+        raise HTTPException(404, "Article introuvable")
+    if source.get("lang", "fr") != "fr":
+        raise HTTPException(400, "Seuls les articles en français peuvent être traduits depuis cet endpoint")
+    if not source.get("body_html"):
+        raise HTTPException(400, "L'article source n'a pas de contenu à traduire")
+
+    targets = [l for l in (body.target_langs or ["en", "de", "nl"]) if l in ("en", "de", "nl")]
+    if not targets:
+        raise HTTPException(400, "Langues cibles invalides")
+
+    group_id = source.get("translation_group_id")
+    if not group_id:
+        group_id = str(_uuid.uuid4())
+        sb.table("blog_post").update({"translation_group_id": group_id}).eq("id", post_id).execute()
+
+    created = []
+    skipped = []
+    for lang in targets:
+        already = (
+            sb.table("blog_post").select("id")
+            .eq("translation_group_id", group_id).eq("lang", lang)
+            .execute().data
+        )
+        if already:
+            skipped.append(lang)
+            continue
+        try:
+            translated = await asyncio.to_thread(_translate_article, source, lang)
+        except Exception as exc:
+            logger.error("Échec traduction (%s) pour post %s: %s", lang, post_id, exc)
+            continue
+
+        slug = translated.get("slug") or source["slug"]
+        dup = sb.table("blog_post").select("id").eq("slug", slug).eq("lang", lang).execute().data
+        if dup:
+            slug = f"{slug}-{secrets.token_hex(2)}"
+
+        row = sb.table("blog_post").insert({
+            "slug":                 slug,
+            "title":                translated.get("title", source["title"]),
+            "description":          translated.get("description", source.get("description")),
+            "category":             source.get("category"),
+            "metier":               source.get("metier"),
+            "body_html":            translated.get("body_html"),
+            "reading_minutes":      source.get("reading_minutes", 5),
+            "status":               "draft",
+            "lang":                 lang,
+            "translation_group_id": group_id,
+            "translated_from":      post_id,
+        }).execute().data[0]
+        created.append(row)
+        await revalidate_frontend_path(_blog_path(lang, slug))
+
+    _log(admin, "translate_blog_post", payload={"source_id": post_id, "created": [l for l in targets if l not in skipped]})
+    return {"created": created, "skipped": skipped}
 
 
 class TestimonialIn(BaseModel):

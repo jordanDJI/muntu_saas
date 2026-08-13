@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Auth par secret partagé (pas un JWT admin) — l'endpoint force toujours status="draft"
     content_agent_secret: str = ""
 
+    # Revalidation à la demande du cache Next.js frontend (même valeur des deux côtés)
+    revalidate_secret: str = ""
+
     # Agents IA — 360dialog WhatsApp
     dialog360_api_key: str = ""          # clé API 360dialog (D360-API-KEY)
     dialog360_webhook_secret: str = ""   # secret HMAC pour vérifier les webhooks

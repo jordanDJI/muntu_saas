@@ -30,7 +30,10 @@ type BlogPost = {
   id: string; slug: string; title: string; description?: string;
   category?: string; metier?: string; body_html?: string;
   reading_minutes: number; status: string; published_at?: string; updated_at?: string;
+  lang?: string; translation_group_id?: string; translated_from?: string;
 };
+
+const LANG_LABELS: Record<string, string> = { fr: "🇫🇷 FR", en: "🇬🇧 EN", de: "🇩🇪 DE", nl: "🇳🇱 NL" };
 
 type Testimonial = {
   id: string; name: string; role?: string; text: string;
@@ -115,6 +118,7 @@ export default function ContentPage() {
         body_html: editPost.body_html || null, reading_minutes: editPost.reading_minutes || 5,
         status: editPost.status || "draft",
         published_at: editPost.published_at || null,
+        lang: editPost.lang || "fr",
       }) });
       showToast(editPost.id ? "Article mis à jour ✓" : "Article créé ✓");
       setEditPost(null);
@@ -130,6 +134,22 @@ export default function ContentPage() {
       await adminFetch(`/api/v1/admin/content/blog/${id}`, { method: "DELETE" });
       showToast("Article supprimé"); await loadPosts();
     } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
+    finally { setBusy(false); }
+  };
+
+  const translatePost = async (id: string) => {
+    setBusy(true);
+    try {
+      const res = await adminFetch<{ created: BlogPost[]; skipped: string[] }>(
+        `/api/v1/admin/content/blog/${id}/translate`, { method: "POST", body: JSON.stringify({}) }
+      );
+      if (res.created.length > 0) {
+        showToast(`Traduit en ${res.created.map((p) => p.lang?.toUpperCase()).join(", ")} ✓ (brouillons à valider)`);
+      } else {
+        showToast("Déjà traduit dans toutes les langues disponibles");
+      }
+      await loadPosts();
+    } catch (e: any) { showToast(`Erreur de traduction : ${e.message}`, false); }
     finally { setBusy(false); }
   };
 
@@ -221,7 +241,10 @@ export default function ContentPage() {
                       return (
                         <tr key={p.id} style={{ borderBottom: `1px solid rgba(170,189,216,0.04)` }}>
                           <td className="px-4 py-3">
-                            <p className="text-xs font-medium" style={{ color: K.text }}>{p.title}</p>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px]" title={p.lang ?? "fr"}>{LANG_LABELS[p.lang ?? "fr"] ?? p.lang}</span>
+                              <p className="text-xs font-medium" style={{ color: K.text }}>{p.title}</p>
+                            </div>
                             <p className="text-[10px] font-mono mt-0.5" style={{ color: "rgba(170,189,216,0.3)" }}>{p.slug}</p>
                           </td>
                           <td className="px-4 py-3 text-xs hidden sm:table-cell" style={{ color: K.muted }}>{p.category ?? "—"}</td>
@@ -232,6 +255,12 @@ export default function ContentPage() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center gap-3 justify-end">
+                              {(p.lang ?? "fr") === "fr" && p.status === "published" && (
+                                <button onClick={() => translatePost(p.id)} disabled={busy}
+                                  className="text-xs" style={{ color: K.gold }} title="Génère des brouillons EN/DE/NL via Gemini">
+                                  🌐 Traduire
+                                </button>
+                              )}
                               <button onClick={() => { setEditPost({ ...p }); setPreviewHtml(false); }}
                                 className="text-xs" style={{ color: K.tealXL }}>Éditer</button>
                               <button onClick={() => deletePost(p.id)} disabled={busy}
