@@ -2284,9 +2284,13 @@ class BlogPostIn(BaseModel):
 
 @router.get("/content/blog")
 async def admin_list_blog(admin=Depends(viewer_or_above)):
+    # NB: body_html, description et metier sont inclus car ce endpoint alimente aussi
+    # le formulaire d'édition (page /admin/content) — les en exclure ferait apparaître
+    # les brouillons/articles comme vides à l'édition et risquerait d'écraser leur
+    # contenu réel en base sur un simple "Mettre à jour" sans modification.
     rows = (
         get_supabase_admin().table("blog_post")
-        .select("id, slug, title, category, status, published_at, reading_minutes, updated_at")
+        .select("id, slug, title, description, category, metier, status, published_at, reading_minutes, body_html, updated_at")
         .order("created_at", desc=True)
         .execute().data or []
     )
