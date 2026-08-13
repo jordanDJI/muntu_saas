@@ -2280,6 +2280,13 @@ def _blog_path(lang: str, slug: str) -> str:
     return f"/blog/{slug}" if lang == "fr" else f"/blog/{lang}/{slug}"
 
 
+async def _revalidate_blog_change(path: str) -> None:
+    """Revalide l'article, la liste /blog et le sitemap — appelé sur tout create/update/delete."""
+    await revalidate_frontend_path(path)
+    await revalidate_frontend_path("/blog")
+    await revalidate_frontend_path("/sitemap.xml")
+
+
 class BlogPostIn(BaseModel):
     slug:            str
     title:           str
@@ -2397,8 +2404,7 @@ async def admin_create_blog(body: BlogPostIn, admin=Depends(get_current_admin)):
     }).execute().data[0]
     _log(admin, "create_blog_post", payload={"slug": body.slug, "title": body.title, "lang": lang})
     path = _blog_path(lang, body.slug)
-    await revalidate_frontend_path(path)
-    await revalidate_frontend_path("/blog")
+    await _revalidate_blog_change(path)
     if body.status == "published":
         await notify_url_updated(f"{settings.frontend_url}{path}")
     return row
@@ -2426,8 +2432,7 @@ async def admin_update_blog(post_id: str, body: BlogPostIn, admin=Depends(get_cu
         raise HTTPException(404, "Article introuvable")
     _log(admin, "update_blog_post", payload={"id": post_id, "slug": body.slug, "lang": lang})
     path = _blog_path(lang, body.slug)
-    await revalidate_frontend_path(path)
-    await revalidate_frontend_path("/blog")
+    await _revalidate_blog_change(path)
     if body.status == "published":
         await notify_url_updated(f"{settings.frontend_url}{path}")
     return row[0]
@@ -2442,8 +2447,7 @@ async def admin_delete_blog(post_id: str, admin=Depends(get_current_admin)):
     _log(admin, "delete_blog_post", payload={"id": post_id})
     if existing_row:
         path = _blog_path(existing_row.get("lang", "fr"), existing_row["slug"])
-        await revalidate_frontend_path(path)
-        await revalidate_frontend_path("/blog")
+        await _revalidate_blog_change(path)
         if existing_row.get("status") == "published":
             await notify_url_deleted(f"{settings.frontend_url}{path}")
     return {"ok": True}
@@ -2516,22 +2520,27 @@ async def translate_blog_post(post_id: str, body: TranslateIn, admin=Depends(get
         group_id = str(_uuid.uuid4())
         sb.table("blog_post").update({"translation_group_id": group_id}).eq("id", post_id).execute()
 
+    already_rows = (
+        sb.table("blog_post").select("lang").eq("translation_group_id", group_id).execute().data or []
+    )
+    already_langs = {r["lang"] for r in already_rows}
+    skipped = [l for l in targets if l in already_langs]
+    to_translate = [l for l in targets if l not in already_langs]
+
+    # Appels Gemini en parallèle (pas séquentiel) : 3 traductions l'une après l'autre
+    # dépassent facilement le timeout HTTP du gateway — en parallèle, le temps total
+    # est borné par la traduction la plus lente, pas par leur somme.
+    results = await asyncio.gather(
+        *[asyncio.to_thread(_translate_article, source, lang) for lang in to_translate],
+        return_exceptions=True,
+    )
+
     created = []
-    skipped = []
-    for lang in targets:
-        already = (
-            sb.table("blog_post").select("id")
-            .eq("translation_group_id", group_id).eq("lang", lang)
-            .execute().data
-        )
-        if already:
-            skipped.append(lang)
+    for lang, result in zip(to_translate, results):
+        if isinstance(result, Exception):
+            logger.error("Échec traduction (%s) pour post %s: %s", lang, post_id, result)
             continue
-        try:
-            translated = await asyncio.to_thread(_translate_article, source, lang)
-        except Exception as exc:
-            logger.error("Échec traduction (%s) pour post %s: %s", lang, post_id, exc)
-            continue
+        translated = result
 
         slug = translated.get("slug") or source["slug"]
         dup = sb.table("blog_post").select("id").eq("slug", slug).eq("lang", lang).execute().data
@@ -2552,9 +2561,20 @@ async def translate_blog_post(post_id: str, body: TranslateIn, admin=Depends(get
             "translated_from":      post_id,
         }).execute().data[0]
         created.append(row)
-        await revalidate_frontend_path(_blog_path(lang, slug))
 
-    _log(admin, "translate_blog_post", payload={"source_id": post_id, "created": [l for l in targets if l not in skipped]})
+    # Revalide l'article source + toutes les traductions sœurs déjà publiées : leurs
+    # balises hreflang doivent maintenant lister cette nouvelle langue.
+    if created:
+        siblings = (
+            sb.table("blog_post").select("lang, slug")
+            .eq("translation_group_id", group_id)
+            .execute().data or []
+        )
+        for s in siblings:
+            await revalidate_frontend_path(_blog_path(s["lang"], s["slug"]))
+        await revalidate_frontend_path("/sitemap.xml")
+
+    _log(admin, "translate_blog_post", payload={"source_id": post_id, "created": [r["lang"] for r in created], "skipped": skipped})
     return {"created": created, "skipped": skipped}
 
 
