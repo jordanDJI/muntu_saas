@@ -40,7 +40,7 @@ async def get_directory_slugs():
     sb = get_supabase()
     rows = (
         sb.table("directory_listing")
-        .select("metier_slug, primary_zone, tenant!inner(slug)")
+        .select("metier_slug, primary_zone, updated_at, tenant!inner(slug)")
         .eq("is_listed", True)
         .execute()
     )
@@ -50,7 +50,12 @@ async def get_directory_slugs():
         metier = r.get("metier_slug", "")
         ville_slug = to_slug(r.get("primary_zone") or "")
         if tenant_slug and metier and ville_slug:
-            slugs.append({"metier": metier, "ville": ville_slug, "slug": tenant_slug})
+            slugs.append({
+                "metier": metier,
+                "ville": ville_slug,
+                "slug": tenant_slug,
+                "updated_at": r.get("updated_at"),
+            })
     return {"slugs": slugs}
 
 

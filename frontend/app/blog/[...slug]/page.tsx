@@ -76,10 +76,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const post = await getPost(slug, lang);
   if (!post) return { title: "Article introuvable | Klientys" };
 
+  // getTranslations() renvoie tous les frères publiés du même translation_group_id,
+  // qui inclut la ligne fr source elle-même une fois qu'une traduction existe — donc
+  // languages[lang] (auto-référence) est déjà couvert ici, pas besoin de l'ajouter à part.
   const translations = await getTranslations(slug, lang);
   const languages: Record<string, string> = {};
   for (const [l, s] of Object.entries(translations)) {
     languages[l] = `${APP_URL}${pathFor(l, s)}`;
+  }
+  // x-default pointe vers le fr (langue par défaut du site, sans préfixe d'URL) —
+  // seulement quand au moins une traduction existe, sinon inutile.
+  if (Object.keys(languages).length > 0) {
+    languages["x-default"] = languages["fr"] ?? `${APP_URL}${pathFor(lang, post.slug)}`;
   }
 
   const ogImage = `${APP_URL}/api/og?title=${encodeURIComponent(post.title)}&color=indigo`;

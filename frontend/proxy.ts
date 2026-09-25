@@ -43,6 +43,23 @@ export default async function proxy(request: NextRequest) {
 
   // Domaine principal — protection des routes auth
   const { pathname } = request.nextUrl;
+
+  // Miroir markdown des articles de blog (/blog/{slug}.md, /blog/{lang}/{slug}.md)
+  // pour les agents IA — réécriture transparente vers la route interne, l'URL
+  // publique reste en .md (voir app/api/blog-markdown/route.ts)
+  const mdMatch = pathname.match(/^\/blog\/(?:(en|de|nl)\/)?([a-z0-9-]+)\.md$/);
+  if (mdMatch) {
+    const [, lang, slug] = mdMatch;
+    // request.url reste l'URL publique d'origine côté route handler après une réécriture
+    // (le query string ajouté ici n'est pas visible via new URL(request.url) côté destination)
+    // — on passe donc lang/slug par des headers, seul canal fiable entre middleware et handler.
+    const target = new URL("/api/blog-markdown", request.url);
+    const headers = new Headers(request.headers);
+    headers.set("x-blog-lang", lang ?? "fr");
+    headers.set("x-blog-slug", slug);
+    return NextResponse.rewrite(target, { request: { headers } });
+  }
+
   const hasSession = [...request.cookies.getAll()].some(
     (c) => c.name.startsWith("sb-") && c.name.includes("-auth-token")
   );
