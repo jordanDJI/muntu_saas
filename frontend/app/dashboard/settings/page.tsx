@@ -16,7 +16,7 @@ const DesignRequestModal = dynamic(() => import("../../../components/DesignReque
 type Section =
   | "profil" | "securite" | "site" | "metriques"
   | "abonnement" | "notifications" | "preferences"
-  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire" | "facturation" | "support";
+  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire" | "facturation" | "support" | "rgpd";
 
 function getNav(t: any) {
   return [
@@ -30,6 +30,7 @@ function getNav(t: any) {
     { key: "notifications", label: t.sett_nav_notifications, icon: "🔔" },
     { key: "preferences",   label: t.sett_nav_preferences,   icon: "⚙️" },
     { key: "membres",       label: t.sett_nav_membres,       icon: "👥" },
+    { key: "rgpd",          label: t.sett_nav_rgpd,          icon: "🛡️" },
     { key: "facturation",   label: t.sett_nav_facturation,   icon: "🧾" },
     { key: "integrations",  label: t.sett_nav_integrations,  icon: "🔗" },
     { key: "support",       label: t.sett_nav_support,       icon: "💬" },
@@ -1801,6 +1802,98 @@ function GoogleAnalyticsCard() {
 
 // ── Section Intégrations ──────────────────────────────────────────────────────
 
+// ── Section RGPD ──────────────────────────────────────────────────────────────
+
+function SectionRgpd() {
+  const [retentionMonths, setRetentionMonths] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [pending, setPending] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchAll = () => {
+    Promise.all([api.getRetentionSettings(), api.getPendingDeletions()])
+      .then(([settings, pendingList]) => {
+        setRetentionMonths(settings.contact_retention_months != null ? String(settings.contact_retention_months) : "");
+        setPending(pendingList);
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchAll(); }, []);
+
+  const saveRetention = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true); setMsg("");
+    try {
+      await api.updateRetentionSettings({
+        contact_retention_months: retentionMonths.trim() ? parseInt(retentionMonths, 10) : null,
+      });
+      setMsg("Enregistré ✓");
+    } catch (err: any) { setMsg(`Erreur : ${err.message}`); }
+    finally { setSaving(false); }
+  };
+
+  const confirmDeletion = async (contactId: string) => {
+    if (!confirm("Anonymiser définitivement ce contact ? Cette action est irréversible.")) return;
+    await api.confirmContactDeletion(contactId);
+    fetchAll();
+  };
+
+  return (
+    <>
+      <SectionTitle title="RGPD" subtitle="Durée de conservation des contacts et demandes de suppression (droit à l'oubli)." />
+
+      <Card>
+        <h3 className="font-semibold text-gray-900">Durée de conservation</h3>
+        <p className="text-sm text-gray-500">
+          Les contacts inactifs depuis plus longtemps que cette durée sont automatiquement anonymisés
+          (sauf s'ils ont un rendez-vous à venir ou une facture impayée). Laissez vide pour désactiver la purge automatique.
+        </p>
+        <form onSubmit={saveRetention} className="flex items-end gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Durée (en mois)</label>
+            <input type="number" min={1} value={retentionMonths}
+              onChange={e => setRetentionMonths(e.target.value)}
+              placeholder="Aucune purge auto"
+              className="w-40 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300" />
+          </div>
+          <SaveBtn loading={saving} />
+        </form>
+        <Feedback msg={msg} />
+      </Card>
+
+      <Card>
+        <h3 className="font-semibold text-gray-900">Demandes de suppression en attente</h3>
+        {loading ? (
+          <p className="text-sm text-gray-400">Chargement…</p>
+        ) : pending.length === 0 ? (
+          <p className="text-sm text-gray-400">Aucune demande en attente.</p>
+        ) : (
+          <div className="space-y-2">
+            {pending.map((c: any) => (
+              <div key={c.id} className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="min-w-0">
+                  <a href={`/dashboard/contacts/${c.id}`} className="text-sm font-medium text-primary-700 hover:underline truncate block">
+                    {c.first_name} {c.last_name}
+                  </a>
+                  <p className="text-xs text-gray-400">
+                    Demandé le {new Date(c.deletion_requested_at).toLocaleDateString("fr-FR")}
+                  </p>
+                </div>
+                <button onClick={() => confirmDeletion(c.id)}
+                  className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1.5 flex-shrink-0 transition-colors">
+                  Confirmer
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </>
+  );
+}
+
 // ── Section Facturation ───────────────────────────────────────────────────────
 
 function SectionFacturation() {
@@ -3247,6 +3340,7 @@ const SECTION_MAP: Record<Exclude<Section, "domaine" | "support">, React.FC> = {
   notifications: SectionNotifications,
   preferences:   SectionPreferences,
   membres:       SectionMembres,
+  rgpd:          SectionRgpd,
   facturation:   SectionFacturation,
   integrations:  SectionIntegrations,
   export:        SectionExport,
@@ -3254,7 +3348,7 @@ const SECTION_MAP: Record<Exclude<Section, "domaine" | "support">, React.FC> = {
 };
 
 // Sections réservées aux owner/admin (jamais visibles pour les "member")
-const OWNER_ONLY_SECTIONS = new Set<Section>(["abonnement", "membres"]);
+const OWNER_ONLY_SECTIONS = new Set<Section>(["abonnement", "membres", "rgpd"]);
 
 export default function SettingsPage() {
   const router = useRouter();

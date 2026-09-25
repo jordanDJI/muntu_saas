@@ -1,5 +1,6 @@
 "use client";
 import { useState, use } from "react";
+import { sanitizePhoneInput } from "../../../../lib/phone";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -15,6 +16,8 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
   const isCompany = form.contact_type === "company";
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
+  const setPhone = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, phone: sanitizePhoneInput(e.target.value) }));
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -104,7 +107,7 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
 
         <label style={labelStyle}>
           <span style={{ color: "#374151", fontWeight: 500 }}>Téléphone</span>
-          <input type="tel" value={form.phone} onChange={set("phone")} style={inputStyle} />
+          <input type="tel" inputMode="tel" value={form.phone} onChange={setPhone} style={inputStyle} />
         </label>
 
         <label style={labelStyle}>

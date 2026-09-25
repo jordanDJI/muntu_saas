@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { api } from "../../../../lib/api";
+import { sanitizePhoneInput } from "../../../../lib/phone";
 import { useLanguage } from "../../../../contexts/LanguageContext";
 import { useSubscription } from "../../../../contexts/SubscriptionContext";
 
@@ -118,6 +119,54 @@ export default function ContactDetailPage() {
   const [editPhone, setEditPhone]         = useState("");
   const [savingInfo, setSavingInfo]       = useState(false);
 
+  // Fiche enrichie (identité / coordonnées / catégorisation)
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailsForm, setDetailsForm]       = useState<any>({});
+  const [savingDetails, setSavingDetails]   = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Journal des modifications
+  const [auditLog, setAuditLog]             = useState<any[]>([]);
+  const [membersByUserId, setMembersByUserId] = useState<Record<string, string>>({});
+  const [showAuditLog, setShowAuditLog]     = useState(false);
+
+  // RGPD
+  const [consentHistory, setConsentHistory] = useState<any[]>([]);
+  const [showGdpr, setShowGdpr]             = useState(false);
+  const [requestingDeletion, setRequestingDeletion] = useState(false);
+  const [confirmingDeletion, setConfirmingDeletion] = useState(false);
+
+  const fetchConsent = () => api.getContactConsent(id).then(setConsentHistory).catch(() => {});
+
+  const currentConsent = (channel: string) => {
+    const entries = consentHistory.filter((c: any) => c.channel === channel);
+    return entries.length ? entries[0].granted : null; // le plus récent (tri desc côté backend)
+  };
+
+  const toggleManualConsent = async (channel: string) => {
+    const granted = !currentConsent(channel);
+    await api.createContactConsent(id, { channel, granted });
+    fetchConsent();
+  };
+
+  const requestDeletion = async () => {
+    if (!confirm("Marquer ce contact comme en attente de suppression (droit à l'oubli) ?")) return;
+    setRequestingDeletion(true);
+    try {
+      await api.requestContactDeletion(id);
+      fetchContact();
+    } finally { setRequestingDeletion(false); }
+  };
+
+  const confirmDeletion = async () => {
+    if (!confirm("Anonymiser définitivement ce contact ? Cette action est irréversible.")) return;
+    setConfirmingDeletion(true);
+    try {
+      await api.confirmContactDeletion(id);
+      fetchContact();
+    } finally { setConfirmingDeletion(false); }
+  };
+
   const fetchContact = () =>
     api.getContact(id)
       .then(c => { setContact(c); setNotes(c.notes ?? ""); })
@@ -157,6 +206,13 @@ export default function ContactDetailPage() {
       .then((r: any) => setInvoices(Array.isArray(r) ? r : (r.invoices ?? [])))
       .catch(() => {});
     api.getTags().then(setAllTags).catch(() => {});
+    api.getContactAuditLog(id).then(setAuditLog).catch(() => {});
+    fetchConsent();
+    api.getMembers().then(r => {
+      const map: Record<string, string> = {};
+      (r.members ?? []).forEach((m: any) => { map[m.user_id] = m.email; });
+      setMembersByUserId(map);
+    }).catch(() => {});
     if (hasFeature("agent_support")) {
       api.getTelegramBotInfo().then(info => setBotUsername(info.username)).catch(() => {});
     }
@@ -215,7 +271,86 @@ export default function ContactDetailPage() {
       });
       setEditingInfo(false);
       fetchContact();
+      api.getContactAuditLog(id).then(setAuditLog).catch(() => {});
     } finally { setSavingInfo(false); }
+  };
+
+  const openEditDetails = () => {
+    const d = contact?.contact_details ?? {};
+    setDetailsForm({
+      category: contact?.category ?? "",
+      segment: contact?.segment ?? "",
+      gender: d.gender ?? "",
+      title: d.title ?? "",
+      nickname: d.nickname ?? "",
+      first_name_2: d.first_name_2 ?? "",
+      first_name_3: d.first_name_3 ?? "",
+      country_residence: d.country_residence ?? "",
+      country_origin: d.country_origin ?? "",
+      birthday_day: d.birthday?.day ?? "",
+      birthday_month: d.birthday?.month ?? "",
+      street_number: d.address?.street_number ?? "",
+      street: d.address?.street ?? "",
+      city: d.address?.city ?? "",
+      postal_code: d.address?.postal_code ?? "",
+      region: d.address?.region ?? "",
+      phone_pro: d.phone_pro ?? "",
+      phone_perso: d.phone_perso ?? "",
+      phone_preferred: d.phone_preferred ?? "",
+      email_pro: d.email_pro ?? "",
+      email_perso: d.email_perso ?? "",
+      website: d.urls?.website ?? "",
+      linkedin: d.urls?.linkedin ?? "",
+      instagram: d.urls?.instagram ?? "",
+      facebook: d.urls?.facebook ?? "",
+    });
+    setEditingDetails(true);
+  };
+
+  const saveDetails = async () => {
+    setSavingDetails(true);
+    const f = detailsForm;
+    try {
+      await api.updateContact(id, {
+        category: f.category || undefined,
+        segment: f.segment || undefined,
+        contact_details: {
+          gender: f.gender, title: f.title, nickname: f.nickname,
+          first_name_2: f.first_name_2, first_name_3: f.first_name_3,
+          country_residence: f.country_residence, country_origin: f.country_origin,
+          birthday: { day: f.birthday_day || null, month: f.birthday_month || null },
+          address: {
+            street_number: f.street_number, street: f.street,
+            city: f.city, postal_code: f.postal_code, region: f.region,
+          },
+          phone_pro: f.phone_pro, phone_perso: f.phone_perso, phone_preferred: f.phone_preferred,
+          email_pro: f.email_pro, email_perso: f.email_perso,
+          urls: { website: f.website, linkedin: f.linkedin, instagram: f.instagram, facebook: f.facebook },
+        },
+      });
+      setEditingDetails(false);
+      fetchContact();
+      api.getContactAuditLog(id).then(setAuditLog).catch(() => {});
+    } finally { setSavingDetails(false); }
+  };
+
+  const uploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setUploadingPhoto(true);
+    try {
+      await api.uploadContactPhoto(id, file);
+      fetchContact();
+    } catch (err: any) {
+      alert(err.message);
+    } finally { setUploadingPhoto(false); }
+  };
+
+  const removePhoto = async () => {
+    if (!confirm("Supprimer la photo ?")) return;
+    await api.deleteContactPhoto(id);
+    fetchContact();
   };
 
   const saveNotes = async () => {
@@ -299,9 +434,18 @@ export default function ContactDetailPage() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
         <div className="flex items-start gap-3 sm:gap-5">
           {/* Avatar */}
-          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-primary-100 text-primary-700 font-bold text-lg sm:text-2xl flex items-center justify-center flex-shrink-0">
-            {(contact.first_name?.[0] ?? contact.last_name?.[0] ?? "?").toUpperCase()}
-          </div>
+          <label className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-primary-100 text-primary-700 font-bold text-lg sm:text-2xl flex items-center justify-center flex-shrink-0 cursor-pointer group/avatar overflow-hidden"
+            title="Changer la photo">
+            {contact.photo_signed_url ? (
+              <img src={contact.photo_signed_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              (contact.first_name?.[0] ?? contact.last_name?.[0] ?? "?").toUpperCase()
+            )}
+            <span className="absolute inset-0 bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center text-white text-xs">
+              {uploadingPhoto ? "…" : "📷"}
+            </span>
+            <input type="file" accept="image/jpeg,image/png" className="hidden" onChange={uploadPhoto} disabled={uploadingPhoto} />
+          </label>
 
           {/* Name + contact info + KPIs */}
           <div className="flex-1 min-w-0">
@@ -402,7 +546,7 @@ export default function ContactDetailPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">{t.contact_phone_label}</label>
-                  <input type="tel" value={editPhone} onChange={e => setEditPhone(e.target.value)}
+                  <input type="tel" inputMode="tel" value={editPhone} onChange={e => setEditPhone(sanitizePhoneInput(e.target.value))}
                     className="w-full text-base border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-300"/>
                 </div>
                 <div className="flex gap-2 pt-1">
@@ -433,6 +577,186 @@ export default function ContactDetailPage() {
               </svg>
               {generatingTg ? t.tg_link_generating : t.tg_link_btn}
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* Fiche enrichie — identité / coordonnées / catégorisation */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Informations complémentaires</h3>
+          {!editingDetails && (
+            <button onClick={openEditDetails}
+              className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-primary-600 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+              </svg>
+              {t.contact_edit_btn}
+            </button>
+          )}
+        </div>
+
+        {!editingDetails ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-xs font-semibold text-gray-400 mb-1.5">Catégorisation</p>
+              <div className="flex flex-wrap gap-1.5">
+                {contact.category
+                  ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 capitalize">{contact.category}</span>
+                  : <span className="text-gray-400 text-xs">Non renseigné</span>}
+                {contact.segment && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{contact.segment}</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-400 mb-1.5">Identité</p>
+              <div className="text-gray-600 space-y-0.5">
+                {contact.contact_details?.title && <p>{contact.contact_details.title}</p>}
+                {contact.contact_details?.nickname && <p>« {contact.contact_details.nickname} »</p>}
+                {contact.contact_details?.gender && <p>{contact.contact_details.gender}</p>}
+                {(contact.contact_details?.birthday?.day && contact.contact_details?.birthday?.month) && (
+                  <p>🎂 {contact.contact_details.birthday.day}/{contact.contact_details.birthday.month}</p>
+                )}
+                {!contact.contact_details?.title && !contact.contact_details?.nickname && !contact.contact_details?.gender && (
+                  <span className="text-gray-400 text-xs">Non renseigné</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-400 mb-1.5">Adresse</p>
+              {contact.contact_details?.address?.city ? (
+                <p className="text-gray-600">
+                  {contact.contact_details.address.street_number} {contact.contact_details.address.street}<br/>
+                  {contact.contact_details.address.postal_code} {contact.contact_details.address.city}
+                </p>
+              ) : (
+                <span className="text-gray-400 text-xs">Non renseignée</span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">Catégorisation</p>
+              <div className="grid grid-cols-2 gap-2">
+                <select value={detailsForm.category} onChange={e => setDetailsForm({ ...detailsForm, category: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-300">
+                  <option value="">Catégorie…</option>
+                  <option value="client">Client</option>
+                  <option value="prospect">Prospect</option>
+                  <option value="partenaire">Partenaire</option>
+                  <option value="fournisseur">Fournisseur</option>
+                  <option value="autre">Autre</option>
+                </select>
+                <input value={detailsForm.segment} onChange={e => setDetailsForm({ ...detailsForm, segment: e.target.value })}
+                  placeholder="Segment (ex: secteur, taille…)"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">Identité</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <select value={detailsForm.gender} onChange={e => setDetailsForm({ ...detailsForm, gender: e.target.value })}
+                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-300">
+                  <option value="">Genre…</option>
+                  <option value="Femme">Femme</option>
+                  <option value="Homme">Homme</option>
+                  <option value="Autre">Autre</option>
+                </select>
+                <input value={detailsForm.title} onChange={e => setDetailsForm({ ...detailsForm, title: e.target.value })}
+                  placeholder="Titre (Dr, Maître…)"
+                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.nickname} onChange={e => setDetailsForm({ ...detailsForm, nickname: e.target.value })}
+                  placeholder="Surnom"
+                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.first_name_2} onChange={e => setDetailsForm({ ...detailsForm, first_name_2: e.target.value })}
+                  placeholder="2ᵉ prénom"
+                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.first_name_3} onChange={e => setDetailsForm({ ...detailsForm, first_name_3: e.target.value })}
+                  placeholder="3ᵉ prénom"
+                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <div className="flex gap-1">
+                  <input value={detailsForm.birthday_day} onChange={e => setDetailsForm({ ...detailsForm, birthday_day: e.target.value.replace(/\D/g, "") })}
+                    placeholder="Jour" maxLength={2}
+                    className="w-1/2 border border-gray-200 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                  <input value={detailsForm.birthday_month} onChange={e => setDetailsForm({ ...detailsForm, birthday_month: e.target.value.replace(/\D/g, "") })}
+                    placeholder="Mois" maxLength={2}
+                    className="w-1/2 border border-gray-200 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                </div>
+                <input value={detailsForm.country_residence} onChange={e => setDetailsForm({ ...detailsForm, country_residence: e.target.value })}
+                  placeholder="Pays de résidence"
+                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.country_origin} onChange={e => setDetailsForm({ ...detailsForm, country_origin: e.target.value })}
+                  placeholder="Pays d'origine"
+                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+              </div>
+              {contact.contact_details?.photo_path && (
+                <button onClick={removePhoto} className="mt-2 text-xs text-red-400 hover:text-red-600">Supprimer la photo</button>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">Adresse</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <input value={detailsForm.street_number} onChange={e => setDetailsForm({ ...detailsForm, street_number: e.target.value })}
+                  placeholder="N°" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.street} onChange={e => setDetailsForm({ ...detailsForm, street: e.target.value })}
+                  placeholder="Rue" className="sm:col-span-2 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.postal_code} onChange={e => setDetailsForm({ ...detailsForm, postal_code: e.target.value })}
+                  placeholder="Code postal" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.city} onChange={e => setDetailsForm({ ...detailsForm, city: e.target.value })}
+                  placeholder="Ville" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.region} onChange={e => setDetailsForm({ ...detailsForm, region: e.target.value })}
+                  placeholder="Région" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">Coordonnées complémentaires</p>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="tel" inputMode="tel" value={detailsForm.phone_pro} onChange={e => setDetailsForm({ ...detailsForm, phone_pro: sanitizePhoneInput(e.target.value) })}
+                  placeholder="Téléphone pro" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input type="tel" inputMode="tel" value={detailsForm.phone_perso} onChange={e => setDetailsForm({ ...detailsForm, phone_perso: sanitizePhoneInput(e.target.value) })}
+                  placeholder="Téléphone perso" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.email_pro} onChange={e => setDetailsForm({ ...detailsForm, email_pro: e.target.value })}
+                  placeholder="Email pro" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.email_perso} onChange={e => setDetailsForm({ ...detailsForm, email_perso: e.target.value })}
+                  placeholder="Email perso" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <select value={detailsForm.phone_preferred} onChange={e => setDetailsForm({ ...detailsForm, phone_preferred: e.target.value })}
+                  className="col-span-2 border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-300">
+                  <option value="">Téléphone préféré…</option>
+                  <option value="pro">Pro</option>
+                  <option value="perso">Perso</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">Réseaux</p>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={detailsForm.website} onChange={e => setDetailsForm({ ...detailsForm, website: e.target.value })}
+                  placeholder="Site internet" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.linkedin} onChange={e => setDetailsForm({ ...detailsForm, linkedin: e.target.value })}
+                  placeholder="LinkedIn" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.instagram} onChange={e => setDetailsForm({ ...detailsForm, instagram: e.target.value })}
+                  placeholder="Instagram" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                <input value={detailsForm.facebook} onChange={e => setDetailsForm({ ...detailsForm, facebook: e.target.value })}
+                  placeholder="Facebook" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={saveDetails} disabled={savingDetails}
+                className="bg-primary-600 text-white text-sm font-semibold rounded-lg px-5 py-2.5 hover:bg-primary-700 disabled:opacity-50 transition-colors">
+                {savingDetails ? "…" : t.contact_edit_save}
+              </button>
+              <button onClick={() => setEditingDetails(false)}
+                className="text-sm text-gray-500 hover:text-gray-700 px-4">
+                {t.contact_edit_cancel}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -939,6 +1263,111 @@ export default function ContactDetailPage() {
                 className="w-full border border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-500 hover:border-primary-400 hover:text-primary-600 transition-colors">
                 + {t.crm_reminder_add}
               </button>
+            )}
+          </div>
+
+          {/* Journal des modifications */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <button onClick={() => setShowAuditLog(v => !v)}
+              className="w-full flex items-center justify-between text-left">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Historique des modifications</h3>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${showAuditLog ? "rotate-180" : ""}`}
+                fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </button>
+            {showAuditLog && (
+              auditLog.length === 0 ? (
+                <p className="text-sm text-gray-400 mt-3">Aucune modification enregistrée</p>
+              ) : (
+                <div className="space-y-2 mt-3 max-h-64 overflow-y-auto pr-1">
+                  {auditLog.map((e: any) => {
+                    const d = new Date(e.created_at);
+                    return (
+                      <div key={e.id} className="p-2.5 rounded-lg bg-gray-50 text-xs">
+                        <p className="text-gray-700">
+                          <span className="font-medium">{membersByUserId[e.user_id] ?? "Un membre de l'équipe"}</span>
+                          {" "}— {e.detail || e.action}
+                        </p>
+                        <p className="text-gray-400 mt-0.5">
+                          {d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })} · {d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </div>
+
+          {/* RGPD */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <button onClick={() => setShowGdpr(v => !v)}
+              className="w-full flex items-center justify-between text-left">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">RGPD</h3>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${showGdpr ? "rotate-180" : ""}`}
+                fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </button>
+            {showGdpr && (
+              <div className="mt-3 space-y-4">
+                {contact.anonymized_at ? (
+                  <p className="text-sm text-gray-400">Ce contact a été anonymisé le {new Date(contact.anonymized_at).toLocaleDateString("fr-FR")}.</p>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 mb-2">Préférences de contact</p>
+                      <div className="space-y-1.5">
+                        {(["email", "telephone", "courrier", "marketing"] as const).map(channel => {
+                          const granted = currentConsent(channel);
+                          return (
+                            <label key={channel} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none capitalize">
+                              <input type="checkbox" checked={granted === true} onChange={() => toggleManualConsent(channel)}
+                                className="accent-primary-600" />
+                              {channel}
+                              {granted === null && <span className="text-xs text-gray-400">(jamais renseigné)</span>}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {consentHistory.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 mb-2">Historique des consentements</p>
+                        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                          {consentHistory.map((c: any) => (
+                            <div key={c.id} className="text-xs text-gray-500 flex justify-between bg-gray-50 rounded-lg px-2.5 py-1.5">
+                              <span className="capitalize">{c.channel} {c.granted ? "accordé" : "retiré"} ({c.source})</span>
+                              <span>{new Date(c.created_at).toLocaleDateString("fr-FR")}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-gray-100">
+                      {contact.deletion_requested_at ? (
+                        <>
+                          <p className="text-xs text-amber-600 font-medium mb-2">
+                            Suppression demandée le {new Date(contact.deletion_requested_at).toLocaleDateString("fr-FR")}
+                          </p>
+                          <button onClick={confirmDeletion} disabled={confirmingDeletion}
+                            className="w-full text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg py-2 disabled:opacity-50 transition-colors">
+                            {confirmingDeletion ? "…" : "Confirmer la suppression (anonymiser)"}
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={requestDeletion} disabled={requestingDeletion}
+                          className="w-full text-xs font-medium text-red-500 border border-red-200 hover:bg-red-50 rounded-lg py-2 disabled:opacity-50 transition-colors">
+                          {requestingDeletion ? "…" : "Demander la suppression (droit à l'oubli)"}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
 

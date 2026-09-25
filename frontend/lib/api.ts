@@ -375,13 +375,13 @@ export const api = {
   adminDemoteMetier: (slug: string) => apiFetch(`/api/v1/admin/directory/metiers/${slug}`, { method: "DELETE" }),
 
   // CRM — Contacts enrichis
-  getContacts: (params?: { q?: string; tag_id?: string; inactive_only?: boolean; limit?: number; offset?: number }) => {
+  getContacts: (params?: { q?: string; tag_id?: string; inactive_only?: boolean; category?: string; segment?: string; limit?: number; offset?: number }) => {
     const filtered = Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined && v !== null));
     const qs = Object.keys(filtered).length ? "?" + new URLSearchParams(filtered as any).toString() : "";
     return apiFetch<{ contacts: any[]; total: number; offset: number; limit: number }>(`/api/v1/contacts/${qs}`);
   },
   getContact: (id: string) => apiFetch<any>(`/api/v1/contacts/${id}`),
-  updateContact: (id: string, body: { notes?: string; first_name?: string; last_name?: string; email?: string; phone?: string }) =>
+  updateContact: (id: string, body: { notes?: string; first_name?: string; last_name?: string; email?: string; phone?: string; category?: string; segment?: string; contact_details?: Record<string, any> }) =>
     apiFetch<any>(`/api/v1/contacts/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   importContactsCsv: async (file: File): Promise<{ created: number; skipped: number; errors: string[] }> => {
     const headers = await getAuthHeaders();
@@ -425,15 +425,25 @@ export const api = {
       body: JSON.stringify(opts ?? {}),
     }),
 
-  // CRM — Export CSV (téléchargement direct)
-  exportContactsCsv: async (): Promise<void> => {
+  // CRM — Export CSV / Excel (téléchargement direct)
+  exportContactsCsv: async (format: "csv" | "xlsx" = "csv"): Promise<void> => {
     const headers = await getAuthHeaders();
-    const res = await fetch(`${API_URL}/api/v1/contacts/export`, { headers });
+    const res = await fetch(`${API_URL}/api/v1/contacts/export?format=${format}`, { headers });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "contacts.csv"; a.click();
+    a.href = url; a.download = `contacts.${format}`; a.click();
+    URL.revokeObjectURL(url);
+  },
+  downloadContactImportTemplate: async (format: "csv" | "xlsx" = "csv"): Promise<void> => {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/v1/contacts/import-template?format=${format}`, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `modele_contacts.${format}`; a.click();
     URL.revokeObjectURL(url);
   },
 
@@ -444,6 +454,24 @@ export const api = {
     apiFetch<any>(`/api/v1/contacts/${contactId}/activities`, { method: "POST", body: JSON.stringify(body) }),
   deleteActivity: (contactId: string, activityId: string) =>
     apiFetch(`/api/v1/contacts/${contactId}/activities/${activityId}`, { method: "DELETE" }),
+  getContactAuditLog: (contactId: string) =>
+    apiFetch<any[]>(`/api/v1/contacts/${contactId}/audit-log`),
+
+  // RGPD
+  getContactConsent: (contactId: string) =>
+    apiFetch<any[]>(`/api/v1/contacts/${contactId}/consent`),
+  createContactConsent: (contactId: string, body: { channel: string; granted: boolean; consent_text?: string }) =>
+    apiFetch<any>(`/api/v1/contacts/${contactId}/consent`, { method: "POST", body: JSON.stringify(body) }),
+  requestContactDeletion: (contactId: string) =>
+    apiFetch<any>(`/api/v1/contacts/${contactId}/request-deletion`, { method: "POST" }),
+  confirmContactDeletion: (contactId: string) =>
+    apiFetch<any>(`/api/v1/contacts/${contactId}/confirm-deletion`, { method: "POST" }),
+  getRetentionSettings: () =>
+    apiFetch<{ contact_retention_months: number | null }>("/api/v1/gdpr/retention-settings"),
+  updateRetentionSettings: (body: { contact_retention_months: number | null }) =>
+    apiFetch<any>("/api/v1/gdpr/retention-settings", { method: "PATCH", body: JSON.stringify(body) }),
+  getPendingDeletions: () =>
+    apiFetch<any[]>("/api/v1/gdpr/pending-deletions"),
 
   // Pièces jointes par contact
   listAttachments: (contactId: string) =>
@@ -470,6 +498,18 @@ export const api = {
   },
   deleteAttachment: (contactId: string, attachmentId: string) =>
     apiFetch(`/api/v1/contacts/${contactId}/attachments/${attachmentId}`, { method: "DELETE" }),
+
+  // Photo de profil contact
+  uploadContactPhoto: async (contactId: string, file: File): Promise<{ photo_path: string; signed_url: string }> => {
+    const headers = await getAuthHeaders();
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${API_URL}/api/v1/contacts/${contactId}/photo`, { method: "POST", headers, body: form });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail ?? `HTTP ${res.status}`); }
+    return res.json();
+  },
+  deleteContactPhoto: (contactId: string) =>
+    apiFetch(`/api/v1/contacts/${contactId}/photo`, { method: "DELETE" }),
 
   // Campagnes email
   getCampaigns: () => apiFetch<any[]>("/api/v1/campaigns/"),

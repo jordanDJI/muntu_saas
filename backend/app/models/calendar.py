@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Literal
 from uuid import UUID
 from datetime import datetime
+from app.services.phone import validate_phone_field
 
 
 class AvailabilitySlotIn(BaseModel):
@@ -56,6 +57,11 @@ class CalendarApptIn(BaseModel):
     scheduled_at: datetime
     end_at: datetime
 
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        return validate_phone_field(v)
+
 
 class PublicBookIn(BaseModel):
     first_name: str = Field(min_length=1, max_length=100)
@@ -70,6 +76,7 @@ class PublicBookIn(BaseModel):
     contact_type: Literal["individual", "company"] = "individual"
     party_size: int = Field(default=1, ge=1, le=500)  # nb de personnes (restaurant: table de 4)
     custom_answers: Optional[dict] = Field(default_factory=dict)  # { "q_id": "réponse" }
+    consent_channels: list[str] = Field(default_factory=list)  # canaux RGPD acceptés (ex: ["email", "telephone"])
 
     @field_validator("email")
     @classmethod
@@ -78,6 +85,11 @@ class PublicBookIn(BaseModel):
         if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', v):
             raise ValueError("Adresse email invalide")
         return v
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        return validate_phone_field(v)
 
     @field_validator("first_name", "last_name")
     @classmethod

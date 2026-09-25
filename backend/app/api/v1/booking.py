@@ -15,6 +15,7 @@ from app.core.supabase import get_supabase_admin
 from app.middleware.rate_limit import check_rate
 from app.models.calendar import PublicBookIn
 from app.services.lead import ensure_lead
+from app.services.retention import CONSENT_CHANNELS, record_consent, touch_contact_interaction
 
 router = APIRouter(prefix="/booking", tags=["Booking"])
 logger = logging.getLogger(__name__)
@@ -379,6 +380,10 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
         }).execute().data[0]
         contact_id = new_contact["id"]
 
+    for channel in body.consent_channels:
+        if channel in CONSENT_CHANNELS:
+            record_consent(tenant["id"], contact_id, channel, granted=True, source="public_form")
+
     # Prise de contact simple → lead
     if body.request_type == "contact":
         lead_row: dict = {
@@ -505,6 +510,7 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
         appt_row["custom_answers"] = body.custom_answers
 
     appt = sb.table("appointment").insert(appt_row).execute().data[0]
+    touch_contact_interaction(contact_id)
 
     # Notifier le tenant via Telegram/WhatsApp + email (avec le message du visiteur)
     _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name,
@@ -743,6 +749,10 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
         }).execute().data[0]
         contact_id = new_contact["id"]
 
+    for channel in body.consent_channels:
+        if channel in CONSENT_CHANNELS:
+            record_consent(tenant["id"], contact_id, channel, granted=True, source="public_form")
+
     ensure_lead(sb, tenant["id"], contact_id, "website", status="scheduled",
                 request_type="b2c_appointment", notes=body.message or None)
 
@@ -777,6 +787,7 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
         appt_row["custom_answers"] = body.custom_answers
 
     appt = sb.table("appointment").insert(appt_row).execute().data[0]
+    touch_contact_interaction(contact_id)
 
     _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name,
                            scheduled_at_store.isoformat(), message=body.message)

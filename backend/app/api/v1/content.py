@@ -43,7 +43,7 @@ async def get_blog_post(slug: str, lang: str = Query("fr")):
         .maybe_single()
         .execute()
     )
-    if not row.data:
+    if not row or not row.data:
         raise HTTPException(404, "Article introuvable")
     return row.data
 
@@ -65,7 +65,7 @@ async def get_blog_translations(slug: str, lang: str = Query("fr")):
         .maybe_single()
         .execute()
     )
-    if not source.data or not source.data.get("translation_group_id"):
+    if not source or not source.data or not source.data.get("translation_group_id"):
         return {}
     rows = (
         sb.table("blog_post")

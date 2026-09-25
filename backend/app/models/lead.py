@@ -1,7 +1,8 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
+from app.services.phone import validate_phone_field
 
 
 class LeadCreateIn(BaseModel):
@@ -15,6 +16,12 @@ class LeadCreateIn(BaseModel):
     request_type: str = "appointment"
     source: str = "site_form"
     contact_type: str = "individual"  # individual | company
+    consent_channels: list[str] = []  # canaux RGPD acceptés à la soumission du formulaire (ex: ["email", "telephone"])
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        return validate_phone_field(v)
 
 
 class LeadUpdateIn(BaseModel):

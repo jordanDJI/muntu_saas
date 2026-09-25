@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { sanitizePhoneInput } from "../../lib/phone";
 
 const _API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -227,9 +228,10 @@ function ContactFields({
       />
       <input
         type="tel"
+        inputMode="tel"
         placeholder="Téléphone"
         value={fields.phone}
-        onChange={(e) => onChange({ phone: e.target.value })}
+        onChange={(e) => onChange({ phone: sanitizePhoneInput(e.target.value) })}
         className="border rounded-lg px-3 py-2 text-sm w-full"
       />
       {mode === "appointment" && offers.length > 0 && (
@@ -317,6 +319,9 @@ export default function ContactForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [consentChannels, setConsentChannels] = useState<string[]>([]);
+  const toggleConsent = (channel: string) =>
+    setConsentChannels(prev => prev.includes(channel) ? prev.filter(c => c !== channel) : [...prev, channel]);
   const openFired = useRef(false);
 
   const trackOpen = () => {
@@ -362,6 +367,7 @@ export default function ContactForm({
     contact_type: fields.contact_type,
     party_size: partySize,
     custom_answers: customAnswers,
+    consent_channels: consentChannels,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -389,6 +395,7 @@ export default function ContactForm({
           audience_type: fields.contact_type === "company" ? "b2b" : "b2c",
           request_type: "contact",
           contact_type: fields.contact_type,
+          consent_channels: consentChannels,
         };
         const res = await fetch(`${apiUrl}/api/v1/leads/public/${tenantSlug}`, {
           method: "POST",
@@ -552,6 +559,16 @@ export default function ContactForm({
       {mode === "contact" && (
         <form onSubmit={handleSubmit} onFocus={trackOpen} data-track-form="contact" className="space-y-3">
           <ContactFields fields={fields} onChange={(f) => setFields((p) => ({ ...p, ...f }))} offers={[]} mode="contact" />
+          <div className="space-y-1.5 pt-1">
+            <p className="text-xs text-gray-500">J'accepte d'être recontacté(e) par :</p>
+            {[["email", "Email"], ["telephone", "Téléphone"]].map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                <input type="checkbox" checked={consentChannels.includes(key)} onChange={() => toggleConsent(key)}
+                  className="rounded accent-current" style={{ accentColor }} />
+                {label}
+              </label>
+            ))}
+          </div>
           {error && <p className="text-red-500 text-sm">{error}</p>}
           <button
             type="submit"
@@ -705,6 +722,17 @@ export default function ContactForm({
                   ))}
                 </div>
               )}
+
+              <div className="space-y-1.5 pt-1">
+                <p className="text-xs text-gray-500">J'accepte d'être recontacté(e) par :</p>
+                {[["email", "Email"], ["telephone", "Téléphone"]].map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                    <input type="checkbox" checked={consentChannels.includes(key)} onChange={() => toggleConsent(key)}
+                      className="rounded accent-current" style={{ accentColor }} />
+                    {label}
+                  </label>
+                ))}
+              </div>
 
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <button

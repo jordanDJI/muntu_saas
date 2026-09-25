@@ -414,6 +414,53 @@ def send_impersonation_notice(tenant_email: str, tenant_name: str, admin_email: 
     })
 
 
+def send_deletion_request_notice(sb, tenant_id: str, contact: dict) -> None:
+    """Notifie le propriétaire du tenant qu'une demande de suppression RGPD a été enregistrée pour un contact."""
+    memberships = (
+        sb.table("membership")
+        .select("role, app_user(email, first_name)")
+        .eq("tenant_id", tenant_id)
+        .execute()
+    ).data or []
+    owner = next(
+        (m["app_user"] for m in memberships if m.get("role") == "owner" and (m.get("app_user") or {}).get("email")),
+        None,
+    )
+    if not owner:
+        return
+
+    tenant_res = sb.table("tenant").select("name").eq("id", tenant_id).maybe_single().execute()
+    tenant = (tenant_res.data if tenant_res else None) or {}
+    tenant_name = tenant.get("name", "votre espace")
+    contact_name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or contact.get("email", "un contact")
+
+    header = """
+    <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:28px 32px">
+      <p style="color:rgba(255,255,255,.7);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:0 0 4px">RGPD</p>
+      <h1 style="color:#fff;font-size:20px;font-weight:800;margin:0;letter-spacing:-.02em">Demande de suppression de données</h1>
+    </div>"""
+    body = f"""
+      <p style="color:#EEF2F5;font-size:14px;line-height:1.65;margin:0 0 20px">
+        Une demande de suppression (droit à l'oubli) a été enregistrée pour le contact
+        <strong style="color:#DDAA40">{contact_name}</strong> dans <strong>{tenant_name}</strong>.
+      </p>
+      <p style="color:#8BA5B5;font-size:13px;line-height:1.6;margin:0 0 20px">
+        Rendez-vous dans les paramètres RGPD de votre tableau de bord pour confirmer la suppression
+        (anonymisation définitive) ou la traiter manuellement.
+      </p>
+      <div style="text-align:center">
+        <a href="{settings.frontend_url}/dashboard/settings?section=rgpd" style="{_BTN}">Traiter la demande →</a>
+      </div>
+    """
+    footer = '<p style="color:#5C7A8A;font-size:12px;margin:0">Klientys — Ce message est généré automatiquement.</p>'
+    resend.Emails.send({
+        "from": f"Klientys <{settings.email_from}>",
+        "to": [owner["email"]],
+        "subject": f"Demande de suppression de données — {contact_name}",
+        "html": _klientys_email_wrapper(header, body, footer),
+    })
+
+
 _FEATURE_LABELS: dict[str, str] = {
     "analytics":         "Analytics",
     "analytics_roi":     "Potentiel de demande locale",

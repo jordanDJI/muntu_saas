@@ -102,16 +102,43 @@ function ManageTagsModal({ tags, onClose, onRefresh }: { tags: any[]; onClose: (
 function ImportGuideModal({ onClose, onConfirm, onDownload }: {
   onClose: () => void;
   onConfirm: () => void;
-  onDownload: () => void;
+  onDownload: (format: "csv" | "xlsx") => void;
 }) {
   const { t } = useLanguage();
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const cols = [
-    { key: "first_name",  label: t.csv_guide_col_fn,    example: "Marie" },
-    { key: "last_name",   label: t.csv_guide_col_ln,    example: "Dupont" },
-    { key: "email",       label: t.csv_guide_col_email, example: "marie@exemple.com" },
-    { key: "phone",       label: t.csv_guide_col_phone, example: "+33 6 12 34 56 78" },
-    { key: "notes",       label: t.csv_guide_col_notes, example: "Cliente fidèle" },
+    { key: "first_name",         label: t.csv_guide_col_fn,    example: "Marie" },
+    { key: "last_name",          label: t.csv_guide_col_ln,    example: "Dupont" },
+    { key: "first_name_2",       label: "2ᵉ prénom",            example: "Anne" },
+    { key: "first_name_3",       label: "3ᵉ prénom",            example: "" },
+    { key: "gender",             label: "Genre",                 example: "Femme" },
+    { key: "title",              label: "Titre",                 example: "Dr" },
+    { key: "nickname",           label: "Surnom",                example: "" },
+    { key: "email",              label: t.csv_guide_col_email, example: "marie@exemple.com" },
+    { key: "phone",              label: t.csv_guide_col_phone, example: "+33 6 12 34 56 78" },
+    { key: "email_pro",          label: "Email professionnel",   example: "" },
+    { key: "email_perso",        label: "Email personnel",       example: "" },
+    { key: "phone_pro",          label: "Téléphone professionnel", example: "" },
+    { key: "phone_perso",        label: "Téléphone personnel",   example: "" },
+    { key: "phone_preferred",    label: "Téléphone préféré (pro/perso)", example: "" },
+    { key: "category",           label: "Catégorie (client/prospect/partenaire/fournisseur/autre)", example: "client" },
+    { key: "segment",            label: "Segment (secteur, taille…)", example: "" },
+    { key: "country_residence",  label: "Pays de résidence",     example: "BE" },
+    { key: "country_origin",     label: "Pays d'origine",        example: "" },
+    { key: "birthday_day",       label: "Jour de naissance",     example: "" },
+    { key: "birthday_month",     label: "Mois de naissance",     example: "" },
+    { key: "street_number",      label: "N° de rue",             example: "" },
+    { key: "street",             label: "Rue",                   example: "" },
+    { key: "city",               label: "Ville",                 example: "" },
+    { key: "postal_code",        label: "Code postal",           example: "" },
+    { key: "region",             label: "Région",                example: "" },
+    { key: "website",            label: "Site internet",         example: "" },
+    { key: "linkedin",           label: "LinkedIn",              example: "" },
+    { key: "instagram",          label: "Instagram",             example: "" },
+    { key: "facebook",           label: "Facebook",              example: "" },
+    { key: "notes",              label: t.csv_guide_col_notes, example: "Cliente fidèle" },
   ];
+  const REQUIRED_COLS = new Set(["email", "first_name"]);
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="bg-white w-full sm:rounded-2xl shadow-2xl max-w-lg max-h-[90dvh] flex flex-col rounded-t-2xl">
@@ -136,20 +163,22 @@ function ImportGuideModal({ onClose, onConfirm, onDownload }: {
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide w-1/3">CSV</th>
+                  <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide w-1/3">Colonne</th>
                   <th className="text-left px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {cols.map(col => (
-                  <tr key={col.key} className={col.key === "email" || col.key === "first_name" ? "bg-amber-50" : ""}>
+                  <tr key={col.key} className={REQUIRED_COLS.has(col.key) ? "bg-amber-50" : ""}>
                     <td className="px-3 py-2.5">
                       <code className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">{col.key}</code>
-                      {(col.key === "email" || col.key === "first_name") && (
+                      {REQUIRED_COLS.has(col.key) && (
                         <span className="ml-1 text-xs text-amber-600 font-semibold">*</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-gray-600">{col.label} <span className="text-gray-400 italic">({col.example})</span></td>
+                    <td className="px-3 py-2.5 text-xs text-gray-600">
+                      {col.label}{col.example && <span className="text-gray-400 italic"> ({col.example})</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -162,9 +191,9 @@ function ImportGuideModal({ onClose, onConfirm, onDownload }: {
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t.csv_guide_example}</p>
             <div className="bg-gray-900 rounded-xl p-3 overflow-x-auto">
               <code className="text-xs text-green-400 whitespace-pre font-mono">{
-`first_name,last_name,email,phone,notes
-Marie,Dupont,marie@exemple.com,+33612345678,Bonne cliente
-Paul,Martin,paul.m@mail.com,,`
+`first_name,last_name,email,phone,category,city,notes
+Marie,Dupont,marie@exemple.com,+33612345678,client,Bruxelles,Bonne cliente
+Paul,Martin,paul.m@mail.com,,prospect,,`
               }</code>
             </div>
           </div>
@@ -172,13 +201,26 @@ Paul,Martin,paul.m@mail.com,,`
 
         {/* Footer */}
         <div className="flex flex-col sm:flex-row gap-2 px-5 py-4 flex-shrink-0 border-t border-gray-100">
-          <button onClick={onDownload}
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 active:scale-95 transition-all">
-            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-            </svg>
-            {t.csv_guide_download}
-          </button>
+          <div className="relative flex-1">
+            <button onClick={() => setShowDownloadMenu(v => !v)}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 active:scale-95 transition-all">
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              {t.csv_guide_download}
+            </button>
+            {showDownloadMenu && (
+              <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1">
+                {(["csv", "xlsx"] as const).map(format => (
+                  <button key={format}
+                    onClick={() => { setShowDownloadMenu(false); onDownload(format); }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                    {format === "csv" ? "Modèle CSV (.csv)" : "Modèle Excel (.xlsx)"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={onConfirm}
             className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 text-white px-4 py-2.5 text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all shadow-sm">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -206,11 +248,13 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [inactiveOnly, setInactiveOnly] = useState(false);
   const [offset, setOffset] = useState(0);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [showTagsModal, setShowTagsModal] = useState(false);
   const [showImportGuide, setShowImportGuide] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -222,6 +266,7 @@ export default function ContactsPage() {
       const res = await api.getContacts({
         q: q || undefined,
         tag_id: tagFilter || undefined,
+        category: categoryFilter || undefined,
         inactive_only: inactiveOnly || undefined,
         limit: LIMIT,
         offset: currentOffset,
@@ -233,7 +278,7 @@ export default function ContactsPage() {
 
   const fetchTags = () => api.getTags().then(setTags).catch(() => {});
 
-  useEffect(() => { setOffset(0); fetchContacts(true, 0); }, [q, tagFilter, inactiveOnly]);
+  useEffect(() => { setOffset(0); fetchContacts(true, 0); }, [q, tagFilter, categoryFilter, inactiveOnly]);
   useEffect(() => { fetchTags(); }, []);
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -257,13 +302,8 @@ export default function ContactsPage() {
     }
   };
 
-  const downloadTemplate = () => {
-    const csv = "first_name,last_name,email,phone,notes\nMarie,Dupont,marie.dupont@exemple.com,+33 6 12 34 56 78,Cliente fidèle\n";
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "modele_contacts.csv"; a.click();
-    URL.revokeObjectURL(url);
+  const downloadTemplate = (format: "csv" | "xlsx") => {
+    api.downloadContactImportTemplate(format).catch((err: any) => setImportMsg(`Erreur : ${err.message}`));
   };
 
   const openFilePicker = () => {
@@ -303,14 +343,31 @@ export default function ContactsPage() {
               <span className="hidden sm:inline">{t.campaigns_nav}</span>
             </Link>
           )}
-          <button onClick={async () => { setExporting(true); try { await api.exportContactsCsv(); } finally { setExporting(false); } }}
-            disabled={exporting}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-50 transition-colors active:scale-95">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-            </svg>
-            <span className="hidden sm:inline">{exporting ? "…" : t.crm_export_csv}</span>
-          </button>
+          <div className="relative">
+            <button onClick={() => setShowExportMenu(v => !v)}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-50 transition-colors active:scale-95">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              <span className="hidden sm:inline">{exporting ? "…" : t.crm_export_csv}</span>
+            </button>
+            {showExportMenu && (
+              <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 min-w-[10rem] py-1">
+                {(["csv", "xlsx"] as const).map(format => (
+                  <button key={format}
+                    onClick={async () => {
+                      setShowExportMenu(false);
+                      setExporting(true);
+                      try { await api.exportContactsCsv(format); } finally { setExporting(false); }
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                    {format === "csv" ? "Fichier CSV (.csv)" : "Fichier Excel (.xlsx)"}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button onClick={() => setShowTagsModal(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 transition-colors active:scale-95">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -318,7 +375,7 @@ export default function ContactsPage() {
             </svg>
             <span className="hidden sm:inline">{t.crm_manage_tags}</span>
           </button>
-          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
+          <input ref={fileRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleImport} />
           <button onClick={() => setShowImportGuide(true)} disabled={importing}
             className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-700 shadow-sm hover:bg-primary-100 disabled:opacity-50 transition-colors active:scale-95">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -353,6 +410,15 @@ export default function ContactsPage() {
             {tags.map(tag => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
           </select>
         )}
+        <select value={categoryFilter ?? ""} onChange={e => setCategoryFilter(e.target.value || null)}
+          className="border border-gray-200 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-300">
+          <option value="">Toutes catégories</option>
+          <option value="client">Client</option>
+          <option value="prospect">Prospect</option>
+          <option value="partenaire">Partenaire</option>
+          <option value="fournisseur">Fournisseur</option>
+          <option value="autre">Autre</option>
+        </select>
         <label className="inline-flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
           <input type="checkbox" checked={inactiveOnly} onChange={e => setInactiveOnly(e.target.checked)}
             className="rounded accent-primary-600 w-4 h-4" />
@@ -390,6 +456,11 @@ export default function ContactsPage() {
                   {c.is_inactive && (
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                       {t.crm_inactive_badge}
+                    </span>
+                  )}
+                  {c.category && (
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 capitalize">
+                      {c.category}
                     </span>
                   )}
                   {(c.tags ?? []).map((tag: any) => <TagPill key={tag.id} tag={tag} />)}

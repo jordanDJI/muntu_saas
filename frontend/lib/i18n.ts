@@ -128,9 +128,9 @@ const fr = {
   crm_search_ph:       "Rechercher un contact…",
   crm_filter_all:      "Tous",
   crm_filter_inactive: "Inactifs (6 mois)",
-  crm_import_csv:      "Importer CSV",
-  csv_guide_title:     "Comment préparer votre fichier CSV ?",
-  csv_guide_explain:   "Un fichier CSV est un tableau simple (comme Excel) enregistré en format texte. Votre fichier doit avoir ces colonnes en première ligne :",
+  crm_import_csv:      "Importer",
+  csv_guide_title:     "Comment préparer votre fichier CSV ou Excel ?",
+  csv_guide_explain:   "Votre fichier (CSV ou Excel .xlsx) doit avoir ces colonnes en première ligne :",
   csv_guide_col_fn:    "Prénom",
   csv_guide_col_ln:    "Nom",
   csv_guide_col_email: "Email (sert à éviter les doublons)",
@@ -138,7 +138,7 @@ const fr = {
   csv_guide_col_notes: "Notes",
   csv_guide_tip:       "Au moins un des champs Prénom, Nom ou Email doit être rempli par ligne. Les contacts avec le même email que l'un de vos contacts existants seront ignorés automatiquement.",
   csv_guide_download:  "Télécharger un modèle vide",
-  csv_guide_choose:    "Choisir mon fichier CSV",
+  csv_guide_choose:    "Choisir mon fichier",
   csv_guide_cancel:    "Annuler",
   csv_guide_example:   "Exemple :",
   crm_empty:           "Aucun contact trouvé",
@@ -235,7 +235,7 @@ const fr = {
   reminders_mark_done:     "Marquer fait",
 
   // ── Export CSV ───────────────────────────────────────────────────────────────
-  crm_export_csv:          "Exporter CSV",
+  crm_export_csv:          "Exporter",
 
   // ── Timeline / notes horodatées ──────────────────────────────────────────────
   activity_title:          "Historique des échanges",
@@ -917,6 +917,7 @@ const fr = {
   sett_nav_notifications:    "Notifications",
   sett_nav_preferences:      "Préférences",
   sett_nav_membres:          "Équipe",
+  sett_nav_rgpd:             "RGPD",
   sett_nav_facturation:      "Facturation",
   sett_nav_integrations:     "Intégrations",
   sett_nav_export:           "Export & RGPD",
@@ -1599,9 +1600,9 @@ const en: T = {
   crm_search_ph:       "Search a contact…",
   crm_filter_all:      "All",
   crm_filter_inactive: "Inactive (6 months)",
-  crm_import_csv:      "Import CSV",
-  csv_guide_title:     "How to prepare your CSV file?",
-  csv_guide_explain:   "A CSV file is a simple table (like Excel) saved as plain text. Your file must have these columns in the first row:",
+  crm_import_csv:      "Import",
+  csv_guide_title:     "How to prepare your CSV or Excel file?",
+  csv_guide_explain:   "Your file (CSV or Excel .xlsx) must have these columns in the first row:",
   csv_guide_col_fn:    "First name",
   csv_guide_col_ln:    "Last name",
   csv_guide_col_email: "Email (used to avoid duplicates)",
@@ -1609,7 +1610,7 @@ const en: T = {
   csv_guide_col_notes: "Notes",
   csv_guide_tip:       "At least one of First name, Last name or Email must be filled per row. Contacts with the same email as an existing contact will be skipped automatically.",
   csv_guide_download:  "Download empty template",
-  csv_guide_choose:    "Choose my CSV file",
+  csv_guide_choose:    "Choose my file",
   csv_guide_cancel:    "Cancel",
   csv_guide_example:   "Example:",
   crm_empty:           "No contact found",
@@ -1701,7 +1702,7 @@ const en: T = {
   reminders_mark_done:     "Mark done",
 
   // ── Export CSV ───────────────────────────────────────────────────────────────
-  crm_export_csv:          "Export CSV",
+  crm_export_csv:          "Export",
 
   // ── Timeline / timestamped notes ─────────────────────────────────────────────
   activity_title:          "Activity history",
@@ -2371,6 +2372,7 @@ const en: T = {
   sett_nav_notifications:    "Notifications",
   sett_nav_preferences:      "Preferences",
   sett_nav_membres:          "Team",
+  sett_nav_rgpd:             "GDPR",
   sett_nav_facturation:      "Invoicing",
   sett_nav_integrations:     "Integrations",
   sett_nav_export:           "Export & GDPR",
@@ -3043,9 +3045,9 @@ const de: T = {
   crm_search_ph:       "Kontakt suchen…",
   crm_filter_all:      "Alle",
   crm_filter_inactive: "Inaktiv (6 Monate)",
-  crm_import_csv:      "CSV importieren",
-  csv_guide_title:     "Wie bereite ich meine CSV-Datei vor?",
-  csv_guide_explain:   "Eine CSV-Datei ist eine einfache Tabelle (wie Excel), die als Text gespeichert wird. Ihre Datei muss diese Spalten in der ersten Zeile enthalten:",
+  crm_import_csv:      "Importieren",
+  csv_guide_title:     "Wie bereite ich meine CSV- oder Excel-Datei vor?",
+  csv_guide_explain:   "Ihre Datei (CSV oder Excel .xlsx) muss diese Spalten in der ersten Zeile enthalten:",
   csv_guide_col_fn:    "Vorname",
   csv_guide_col_ln:    "Nachname",
   csv_guide_col_email: "E-Mail (zur Duplikatserkennung)",
@@ -3053,7 +3055,7 @@ const de: T = {
   csv_guide_col_notes: "Notizen",
   csv_guide_tip:       "Mindestens eines der Felder Vorname, Nachname oder E-Mail muss pro Zeile ausgefüllt sein. Kontakte mit derselben E-Mail wie ein bestehender Kontakt werden automatisch übersprungen.",
   csv_guide_download:  "Leere Vorlage herunterladen",
-  csv_guide_choose:    "Meine CSV-Datei auswählen",
+  csv_guide_choose:    "Meine Datei auswählen",
   csv_guide_cancel:    "Abbrechen",
   csv_guide_example:   "Beispiel:",
   crm_empty:           "Kein Kontakt gefunden",
@@ -3145,7 +3147,7 @@ const de: T = {
   reminders_mark_done:     "Als erledigt markieren",
 
   // ── Export CSV ───────────────────────────────────────────────────────────────
-  crm_export_csv:          "CSV exportieren",
+  crm_export_csv:          "Exportieren",
 
   // ── Verlauf / Notizen ────────────────────────────────────────────────────────
   activity_title:          "Aktivitätsverlauf",
@@ -3815,6 +3817,7 @@ const de: T = {
   sett_nav_notifications:    "Benachrichtigungen",
   sett_nav_preferences:      "Einstellungen",
   sett_nav_membres:          "Team",
+  sett_nav_rgpd:             "DSGVO",
   sett_nav_facturation:      "Abrechnung",
   sett_nav_integrations:     "Integrationen",
   sett_nav_export:           "Export & DSGVO",
@@ -4487,9 +4490,9 @@ const nl: T = {
   crm_search_ph:       "Contactpersoon zoeken…",
   crm_filter_all:      "Alle",
   crm_filter_inactive: "Inactief (6 maanden)",
-  crm_import_csv:      "CSV importeren",
-  csv_guide_title:     "Hoe bereidt u uw CSV-bestand voor?",
-  csv_guide_explain:   "Een CSV-bestand is een eenvoudige tabel (zoals Excel) opgeslagen als tekst. Uw bestand moet deze kolommen in de eerste rij hebben:",
+  crm_import_csv:      "Importeren",
+  csv_guide_title:     "Hoe bereidt u uw CSV- of Excel-bestand voor?",
+  csv_guide_explain:   "Uw bestand (CSV of Excel .xlsx) moet deze kolommen in de eerste rij hebben:",
   csv_guide_col_fn:    "Voornaam",
   csv_guide_col_ln:    "Achternaam",
   csv_guide_col_email: "E-mail (voor het vermijden van duplicaten)",
@@ -4497,7 +4500,7 @@ const nl: T = {
   csv_guide_col_notes: "Notities",
   csv_guide_tip:       "Minstens een van de velden Voornaam, Achternaam of E-mail moet per rij ingevuld zijn. Contacten met hetzelfde e-mailadres als een bestaand contact worden automatisch overgeslagen.",
   csv_guide_download:  "Lege sjabloon downloaden",
-  csv_guide_choose:    "Mijn CSV-bestand kiezen",
+  csv_guide_choose:    "Mijn bestand kiezen",
   csv_guide_cancel:    "Annuleren",
   csv_guide_example:   "Voorbeeld:",
   crm_empty:           "Geen contact gevonden",
@@ -4589,7 +4592,7 @@ const nl: T = {
   reminders_mark_done:     "Markeren als gedaan",
 
   // ── Export CSV ───────────────────────────────────────────────────────────────
-  crm_export_csv:          "CSV exporteren",
+  crm_export_csv:          "Exporteren",
 
   // ── Tijdlijn / horodatées notities ───────────────────────────────────────────
   activity_title:          "Activiteitsgeschiedenis",
@@ -5259,6 +5262,7 @@ const nl: T = {
   sett_nav_notifications:    "Meldingen",
   sett_nav_preferences:      "Voorkeuren",
   sett_nav_membres:          "Team",
+  sett_nav_rgpd:             "AVG",
   sett_nav_facturation:      "Facturatie",
   sett_nav_integrations:     "Integraties",
   sett_nav_export:           "Export & AVG",

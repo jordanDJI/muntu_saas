@@ -1,7 +1,8 @@
 """
-Pièces jointes par contact — stockage via Supabase Storage.
+Pièces jointes et photo de profil par contact — stockage via Supabase Storage.
 Limites plan : Pro 5 fichiers/contact · Business 10 fichiers/contact · 45 Mo max/fichier.
-Bucket Supabase requis : 'contact-attachments' (privé, pas public).
+Photo de profil : 5 Mo max, JPEG/PNG, disponible sur tous les plans.
+Buckets Supabase requis : 'contact-attachments' et 'contact-photos' (privés, pas publics).
 """
 import re
 import uuid
@@ -15,24 +16,31 @@ from app.services.subscription import get_tenant_plan
 router = APIRouter(prefix="/contacts", tags=["Attachments"])
 
 BUCKET = "contact-attachments"
+PHOTO_BUCKET = "contact-photos"
 MAX_FILE_BYTES = 45 * 1024 * 1024  # 45 Mo
+MAX_PHOTO_BYTES = 5 * 1024 * 1024  # 5 Mo
+PHOTO_CONTENT_TYPES = {"image/jpeg", "image/png"}
 
 
 def _safe_filename(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._\-]", "_", name)[:120]
 
 
-def _signed_url(sb, path: str) -> str:
+def _signed_url_bucket(sb, bucket: str, path: str) -> str:
     try:
-        resp = sb.storage.from_(BUCKET).create_signed_url(path, 3600)
+        resp = sb.storage.from_(bucket).create_signed_url(path, 3600)
         return resp.get("signedURL") or resp.get("signed_url") or ""
     except Exception:
         return ""
 
 
+def _signed_url(sb, path: str) -> str:
+    return _signed_url_bucket(sb, BUCKET, path)
+
+
 def _assert_contact_belongs(sb, contact_id: str, tenant_id: str):
     res = sb.table("contact").select("id").eq("id", contact_id).eq("tenant_id", tenant_id).maybe_single().execute()
-    if not res.data:
+    if not res or not res.data:
         raise HTTPException(404, "Contact introuvable")
 
 
@@ -129,7 +137,7 @@ async def delete_attachment(
     tenant_id: str = Depends(get_current_tenant),
 ):
     sb = get_supabase_admin()
-    row = (
+    res = (
         sb.table("contact_attachment")
         .select("storage_path")
         .eq("id", attachment_id)
@@ -137,7 +145,8 @@ async def delete_attachment(
         .eq("tenant_id", tenant_id)
         .maybe_single()
         .execute()
-    ).data
+    )
+    row = res.data if res else None
     if not row:
         raise HTTPException(404, "Pièce jointe introuvable")
 
@@ -147,3 +156,87 @@ async def delete_attachment(
         pass
 
     sb.table("contact_attachment").delete().eq("id", attachment_id).eq("tenant_id", tenant_id).execute()
+
+
+@router.post("/{contact_id}/photo")
+async def upload_contact_photo(
+    contact_id: str,
+    file: UploadFile = File(...),
+    tenant_id: str = Depends(get_current_tenant),
+):
+    """Upload/remplace la photo de profil d'un contact (bucket privé, URL signée)."""
+    sb = get_supabase_admin()
+    res = (
+        sb.table("contact")
+        .select("contact_details")
+        .eq("id", contact_id)
+        .eq("tenant_id", tenant_id)
+        .maybe_single()
+        .execute()
+    )
+    contact = res.data if res else None
+    if not contact:
+        raise HTTPException(404, "Contact introuvable")
+
+    if file.content_type not in PHOTO_CONTENT_TYPES:
+        raise HTTPException(400, "Format accepté : JPEG ou PNG")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(400, "Fichier vide")
+    if len(file_bytes) > MAX_PHOTO_BYTES:
+        raise HTTPException(413, "Fichier trop volumineux (max 5 Mo)")
+
+    ext = "png" if file.content_type == "image/png" else "jpg"
+    storage_path = f"{tenant_id}/{contact_id}/{uuid.uuid4()}.{ext}"
+
+    try:
+        sb.storage.from_(PHOTO_BUCKET).upload(
+            path=storage_path,
+            file=file_bytes,
+            file_options={"content-type": file.content_type, "upsert": "false"},
+        )
+    except Exception as exc:
+        raise HTTPException(500, f"Erreur de stockage : {exc}")
+
+    old_path = (contact.get("contact_details") or {}).get("photo_path")
+
+    details = {**(contact.get("contact_details") or {}), "photo_path": storage_path}
+    sb.table("contact").update({"contact_details": details}).eq("id", contact_id).eq("tenant_id", tenant_id).execute()
+
+    if old_path:
+        try:
+            sb.storage.from_(PHOTO_BUCKET).remove([old_path])
+        except Exception:
+            pass
+
+    return {"photo_path": storage_path, "signed_url": _signed_url_bucket(sb, PHOTO_BUCKET, storage_path)}
+
+
+@router.delete("/{contact_id}/photo", status_code=204)
+async def delete_contact_photo(
+    contact_id: str,
+    tenant_id: str = Depends(get_current_tenant),
+):
+    sb = get_supabase_admin()
+    res = (
+        sb.table("contact")
+        .select("contact_details")
+        .eq("id", contact_id)
+        .eq("tenant_id", tenant_id)
+        .maybe_single()
+        .execute()
+    )
+    contact = res.data if res else None
+    if not contact:
+        raise HTTPException(404, "Contact introuvable")
+
+    details = dict(contact.get("contact_details") or {})
+    old_path = details.pop("photo_path", None)
+    sb.table("contact").update({"contact_details": details}).eq("id", contact_id).eq("tenant_id", tenant_id).execute()
+
+    if old_path:
+        try:
+            sb.storage.from_(PHOTO_BUCKET).remove([old_path])
+        except Exception:
+            pass

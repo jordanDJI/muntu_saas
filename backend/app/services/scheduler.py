@@ -5,6 +5,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime, timedelta, timezone
 from app.core.supabase import get_supabase_admin
 from app.services.email import send_appointment_reminder, send_crm_reminder_to_contact, send_monthly_report, get_tenant_brand
+from app.services.retention import run_retention_purge
 
 scheduler = AsyncIOScheduler(timezone="Europe/Brussels")
 logger = logging.getLogger(__name__)
@@ -457,6 +458,16 @@ async def send_monthly_reports() -> None:
             logger.error("monthly_reports: email failed for %s: %s", tenant_id, exc)
 
 
+# ── Purge RGPD (rétention contacts) ──────────────────────────────────────────
+
+async def run_gdpr_retention_purge() -> None:
+    """Anonymise chaque jour les contacts dépassant la durée de rétention configurée par leur tenant."""
+    try:
+        await asyncio.to_thread(run_retention_purge)
+    except Exception as exc:
+        logger.error("GDPR retention purge failed: %s", exc)
+
+
 # ── Démarrage / arrêt ─────────────────────────────────────────────────────────
 
 def start_scheduler() -> None:
@@ -500,6 +511,15 @@ def start_scheduler() -> None:
         hour=9,
         minute=30,
         id="monthly_reports",
+        replace_existing=True,
+    )
+    # Purge RGPD : chaque jour à 3h00 (faible trafic)
+    scheduler.add_job(
+        run_gdpr_retention_purge,
+        "cron",
+        hour=3,
+        minute=0,
+        id="gdpr_retention_purge",
         replace_existing=True,
     )
     scheduler.start()

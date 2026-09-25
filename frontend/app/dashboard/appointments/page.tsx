@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../../lib/api";
+import { sanitizePhoneInput } from "../../../lib/phone";
 import { useLanguage } from "../../../contexts/LanguageContext";
 import { useSectorVocab } from "../../../lib/useSectorVocab";
 
@@ -180,8 +181,8 @@ function NewClientModal({ initialName, onConfirm, onClose }: {
           </div>
           <div>
             <label className="text-xs font-medium text-gray-600">{t.apt_phone}</label>
-            <input type="tel" value={ph} onChange={e => setPh(e.target.value)}
-              placeholder="+32 4xx xxx xxx"
+            <input type="tel" inputMode="tel" value={ph} onChange={e => setPh(sanitizePhoneInput(e.target.value))}
+              placeholder="+32498123456"
               className="w-full border rounded-lg px-3 py-2 text-sm mt-1"/>
           </div>
           <div>

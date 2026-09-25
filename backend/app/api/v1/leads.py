@@ -5,6 +5,7 @@ from app.core.supabase import get_supabase_admin
 from app.models.lead import LeadCreateIn, LeadUpdateIn, LeadOut
 from app.services.email import send_lead_notification, send_lead_acknowledgement, get_tenant_brand
 from app.api.v1.booking import _get_team_emails, _TEAM_EMAIL_ERROR
+from app.services.retention import CONSENT_CHANNELS, record_consent, touch_contact_interaction
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
@@ -72,6 +73,10 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
             "contact_type": body.contact_type,
         }).execute().data[0]
 
+    for channel in body.consent_channels:
+        if channel in CONSENT_CHANNELS:
+            record_consent(tenant_id, contact["id"], channel, granted=True, source="public_form")
+
     stage = supabase.table("pipeline_stage").select("id").eq("tenant_id", tenant_id).eq("position", 1).single().execute().data
     lead_data = {
         "tenant_id": tenant_id,
@@ -101,6 +106,8 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
             lead = supabase.table("lead").insert(lead_data).execute().data[0]
         else:
             raise
+
+    touch_contact_interaction(contact["id"])
 
     owner = supabase.table("membership").select("app_user(email)").eq("tenant_id", tenant_id).eq("role", "owner").single().execute().data
     if owner:
