@@ -15,7 +15,7 @@ ANONYMIZED_PLACEHOLDER = {
     "last_name": "anonymisé",
     "email": None,
     "phone": None,
-    "contact_details": {},
+    "custom_fields": {},
     "anonymized_at": None,  # posé explicitement par anonymize_contact()
 }
 

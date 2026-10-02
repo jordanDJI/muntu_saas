@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { OnbordaProvider, Onborda, useOnborda } from "onborda";
 import { supabase, api } from "../../lib/api";
+import { getActiveImportJob, clearActiveImportJob } from "../../lib/importJob";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { useSectorVocab } from "../../lib/useSectorVocab";
 import { TenantProvider, useTenant } from "../../contexts/TenantContext";
@@ -508,21 +509,116 @@ function PushPermissionBanner() {
   );
 }
 
+function ContactImportStatusBanner() {
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [job, setJob] = useState<any>(null);
+
+  // Reprend le suivi d'un import en cours même après un changement de page / rechargement.
+  useEffect(() => {
+    setJobId(getActiveImportJob());
+  }, []);
+
+  useEffect(() => {
+    if (!jobId) return;
+    let cancelled = false;
+    const poll = () => {
+      api.getContactImportJob(jobId).then(j => {
+        if (cancelled) return;
+        setJob(j);
+        if (j.status === "processing") {
+          setTimeout(poll, 2000);
+        } else {
+          clearActiveImportJob();
+        }
+      }).catch(() => {
+        if (!cancelled) { clearActiveImportJob(); setJobId(null); }
+      });
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, [jobId]);
+
+  if (!jobId || !job) return null;
+
+  const dismiss = () => { clearActiveImportJob(); setJobId(null); setJob(null); };
+
+  return (
+    <div className="fixed bottom-5 right-5 z-[90] w-full max-w-sm rounded-xl shadow-xl border overflow-hidden"
+      style={{ background: "#fff", borderColor: job.status === "error" ? "#FCA5A5" : "#E5E7EB" }}>
+      <div className="p-4 flex items-start gap-3">
+        {job.status === "processing" && (
+          <div className="w-5 h-5 mt-0.5 flex-shrink-0 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+        )}
+        {job.status === "done" && <span className="text-lg flex-shrink-0">✅</span>}
+        {job.status === "error" && <span className="text-lg flex-shrink-0">⚠️</span>}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-800">
+            {job.status === "processing" && "Import des contacts en cours…"}
+            {job.status === "done" && "Import terminé"}
+            {job.status === "error" && "Échec de l'import"}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">{job.filename}</p>
+          {job.status === "done" && (
+            <>
+              <p className="text-xs text-gray-600 mt-1">
+                {job.created_count ?? 0} contact{(job.created_count ?? 0) > 1 ? "s" : ""} importé{(job.created_count ?? 0) > 1 ? "s" : ""}
+                {(job.skipped_count ?? 0) > 0 ? ` · ${job.skipped_count} ignoré${job.skipped_count > 1 ? "s" : ""}` : ""}
+              </p>
+              {job.notice && <p className="text-xs text-amber-600 mt-1">{job.notice}</p>}
+            </>
+          )}
+          {job.status === "error" && (
+            <p className="text-xs text-red-600 mt-1">{job.error_message || "Une erreur inconnue est survenue."}</p>
+          )}
+        </div>
+        {job.status !== "processing" && (
+          <button onClick={dismiss} className="text-gray-300 hover:text-gray-600 text-lg leading-none flex-shrink-0">×</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ContactLimitBanner() {
   const { features, status, loading } = useSubscription();
   const { t } = useLanguage();
-  const [count, setCount] = useState<number | null>(null);
+  const [data, setData] = useState<{ count: number; max_contacts: number; ceiling: number | null; contact_overage_since: string | null } | null>(null);
 
   useEffect(() => {
     if (loading || status === "trial_expired") return;
     const max = features?.max_contacts;
     if (!max || max === -1) return; // illimité → pas de bannière
-    api.getContactsCount().then(r => setCount(r.count)).catch(() => {});
+    api.getContactsCount().then(r => setData(r)).catch(() => {});
   }, [loading, status, features]);
 
-  if (count === null) return null;
-  const max = features?.max_contacts;
+  if (!data) return null;
+  const { count, max_contacts: max, ceiling, contact_overage_since } = data;
   if (!max || max === -1) return null;
+
+  // Dépassement du plan : bandeau persistant distinct, avec compte à rebours sur la tolérance de 3 mois
+  if (contact_overage_since) {
+    const daysSince = Math.floor((Date.now() - new Date(contact_overage_since).getTime()) / 86400000);
+    const daysLeft = Math.max(0, 90 - daysSince);
+    return (
+      <div style={{
+        background: "rgba(191,51,51,.15)", borderBottom: "1px solid rgba(191,51,51,.3)",
+        padding: "10px 24px", display: "flex", alignItems: "center", justifyContent: "center",
+        gap: "16px", flexWrap: "wrap", fontSize: "13px",
+      }}>
+        <span style={{ color: "#FC8181", fontWeight: 600 }}>
+          Vous dépassez votre limite de {max} contacts ({count} actuellement) depuis {daysSince} jour{daysSince > 1 ? "s" : ""}
+          {daysLeft > 0 ? ` — il vous reste ${daysLeft} jour${daysLeft > 1 ? "s" : ""} de tolérance` : ""}.
+          {ceiling != null && ` Au-delà de ${ceiling} contacts, les imports seront refusés.`}
+        </span>
+        <Link
+          href="/dashboard/settings?section=abonnement"
+          style={{ background: "#FC8181", color: "#07222F", fontWeight: 700, fontSize: "12px", padding: "5px 14px", borderRadius: "100px", textDecoration: "none" }}
+        >
+          {t.lay_upgrade_business}
+        </Link>
+      </div>
+    );
+  }
 
   const pct = count / max;
   if (pct < 0.8) return null;
@@ -1095,6 +1191,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <RemindersBanner />
         {children}
       </div>
+      <ContactImportStatusBanner />
     </div>
         </Onborda>
       </OnbordaProvider>

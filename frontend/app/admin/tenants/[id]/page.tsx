@@ -292,6 +292,12 @@ export default function TenantDetailPage() {
               style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>
               {STATUS_LABEL[st] ?? st}
             </span>
+            {tenant.contact_overage_since && (
+              <span className="text-xs px-2 py-0.5 rounded-full"
+                style={{ background: "rgba(191,51,51,.15)", color: "#FC8181", border: "1px solid rgba(191,51,51,.3)" }}>
+                ⚠ Dépassement contacts depuis le {new Date(tenant.contact_overage_since).toLocaleDateString("fr-FR")}
+              </span>
+            )}
           </div>
           <p className="text-sm font-mono mt-1" style={{ color: "rgba(170,189,216,0.35)" }}>{tenant.slug}</p>
         </div>

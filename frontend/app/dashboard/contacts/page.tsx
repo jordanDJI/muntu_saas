@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "../../../lib/api";
+import { setActiveImportJob } from "../../../lib/importJob";
 import { useLanguage } from "../../../contexts/LanguageContext";
 import { useSubscription } from "../../../contexts/SubscriptionContext";
 import { useSectorVocab } from "../../../lib/useSectorVocab";
@@ -99,7 +100,8 @@ function ManageTagsModal({ tags, onClose, onRefresh }: { tags: any[]; onClose: (
   );
 }
 
-function ImportGuideModal({ onClose, onConfirm, onDownload }: {
+function ImportGuideModal({ fieldDefs, onClose, onConfirm, onDownload }: {
+  fieldDefs: any[];
   onClose: () => void;
   onConfirm: () => void;
   onDownload: (format: "csv" | "xlsx") => void;
@@ -107,36 +109,9 @@ function ImportGuideModal({ onClose, onConfirm, onDownload }: {
   const { t } = useLanguage();
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const cols = [
-    { key: "first_name",         label: t.csv_guide_col_fn,    example: "Marie" },
-    { key: "last_name",          label: t.csv_guide_col_ln,    example: "Dupont" },
-    { key: "first_name_2",       label: "2ᵉ prénom",            example: "Anne" },
-    { key: "first_name_3",       label: "3ᵉ prénom",            example: "" },
-    { key: "gender",             label: "Genre",                 example: "Femme" },
-    { key: "title",              label: "Titre",                 example: "Dr" },
-    { key: "nickname",           label: "Surnom",                example: "" },
-    { key: "email",              label: t.csv_guide_col_email, example: "marie@exemple.com" },
-    { key: "phone",              label: t.csv_guide_col_phone, example: "+33 6 12 34 56 78" },
-    { key: "email_pro",          label: "Email professionnel",   example: "" },
-    { key: "email_perso",        label: "Email personnel",       example: "" },
-    { key: "phone_pro",          label: "Téléphone professionnel", example: "" },
-    { key: "phone_perso",        label: "Téléphone personnel",   example: "" },
-    { key: "phone_preferred",    label: "Téléphone préféré (pro/perso)", example: "" },
-    { key: "category",           label: "Catégorie (client/prospect/partenaire/fournisseur/autre)", example: "client" },
-    { key: "segment",            label: "Segment (secteur, taille…)", example: "" },
-    { key: "country_residence",  label: "Pays de résidence",     example: "BE" },
-    { key: "country_origin",     label: "Pays d'origine",        example: "" },
-    { key: "birthday_day",       label: "Jour de naissance",     example: "" },
-    { key: "birthday_month",     label: "Mois de naissance",     example: "" },
-    { key: "street_number",      label: "N° de rue",             example: "" },
-    { key: "street",             label: "Rue",                   example: "" },
-    { key: "city",               label: "Ville",                 example: "" },
-    { key: "postal_code",        label: "Code postal",           example: "" },
-    { key: "region",             label: "Région",                example: "" },
-    { key: "website",            label: "Site internet",         example: "" },
-    { key: "linkedin",           label: "LinkedIn",              example: "" },
-    { key: "instagram",          label: "Instagram",             example: "" },
-    { key: "facebook",           label: "Facebook",              example: "" },
-    { key: "notes",              label: t.csv_guide_col_notes, example: "Cliente fidèle" },
+    ...[...fieldDefs].filter(f => f.enabled).sort((a, b) => a.position - b.position)
+      .map(f => ({ key: f.field_key, label: f.label, example: "" })),
+    { key: "notes", label: t.csv_guide_col_notes, example: "Cliente fidèle" },
   ];
   const REQUIRED_COLS = new Set(["email", "first_name"]);
   return (
@@ -185,18 +160,9 @@ function ImportGuideModal({ onClose, onConfirm, onDownload }: {
             </table>
           </div>
           <p className="text-xs text-amber-700 font-medium">* {t.csv_guide_tip}</p>
-
-          {/* Exemple visuel */}
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t.csv_guide_example}</p>
-            <div className="bg-gray-900 rounded-xl p-3 overflow-x-auto">
-              <code className="text-xs text-green-400 whitespace-pre font-mono">{
-`first_name,last_name,email,phone,category,city,notes
-Marie,Dupont,marie@exemple.com,+33612345678,client,Bruxelles,Bonne cliente
-Paul,Martin,paul.m@mail.com,,prospect,,`
-              }</code>
-            </div>
-          </div>
+          <p className="text-xs text-gray-400">
+            Ces colonnes reflètent les champs actuellement activés pour ton espace (configurables dans Paramètres → Champs contact). Télécharge le modèle ci-dessous pour un fichier déjà prêt avec ces colonnes.
+          </p>
         </div>
 
         {/* Footer */}
@@ -238,6 +204,149 @@ Paul,Martin,paul.m@mail.com,,prospect,,`
   );
 }
 
+function DuplicatesModal({ groups, onClose, onMerged, onIgnored }: {
+  groups: any[];
+  onClose: () => void;
+  onMerged: (keepId: string, mergeId: string) => void;
+  onIgnored: (matchType: string, matchValue: string) => void;
+}) {
+  const [keepByGroup, setKeepByGroup] = useState<Record<number, string>>({});
+  const [merging, setMerging] = useState<string | null>(null);
+  const [ignoring, setIgnoring] = useState<number | null>(null);
+
+  const getKeepId = (group: any, idx: number) => keepByGroup[idx] ?? group.contacts[0].id;
+
+  const handleMerge = async (group: any, idx: number) => {
+    const keepId = getKeepId(group, idx);
+    const mergeId = group.contacts.find((c: any) => c.id !== keepId)?.id;
+    if (!mergeId) return;
+    setMerging(keepId);
+    try {
+      await api.mergeContacts(keepId, mergeId);
+      onMerged(keepId, mergeId);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setMerging(null);
+    }
+  };
+
+  const handleIgnore = async (group: any, idx: number) => {
+    if (!confirm("Ce groupe ne sera plus jamais proposé comme doublon. Continuer ?")) return;
+    setIgnoring(idx);
+    try {
+      await api.ignoreDuplicateGroup(group.match_type, group.match_value);
+      onIgnored(group.match_type, group.match_value);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIgnoring(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full sm:rounded-2xl shadow-2xl max-w-lg max-h-[90dvh] flex flex-col rounded-t-2xl">
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0 border-b border-gray-100">
+          <h3 className="font-bold text-lg text-gray-900">Doublons probables</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors">×</button>
+        </div>
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+          {groups.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">Plus aucun doublon détecté.</p>
+          ) : groups.map((group, idx) => (
+            <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2">
+              <p className="text-xs text-gray-500">
+                Même {group.match_type === "email" ? "email" : "téléphone"} : <span className="font-medium">{group.match_value}</span>
+              </p>
+              <div className="space-y-1.5">
+                {group.contacts.map((c: any) => (
+                  <label key={c.id} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 cursor-pointer text-sm">
+                    <input type="radio" name={`keep-${idx}`} checked={getKeepId(group, idx) === c.id}
+                      onChange={() => setKeepByGroup(prev => ({ ...prev, [idx]: c.id }))}
+                      className="accent-primary-600" />
+                    <span className="flex-1 min-w-0">
+                      <span className="font-medium text-gray-800">{c.first_name} {c.last_name}</span>
+                      <span className="text-gray-400 ml-1.5 text-xs">{[c.email, c.phone].filter(Boolean).join(" · ")}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400">Le contact sélectionné sera conservé, les autres fusionnés dedans.</p>
+              <div className="flex gap-2">
+                <button onClick={() => handleMerge(group, idx)} disabled={merging !== null || ignoring !== null}
+                  className="flex-1 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg py-2 disabled:opacity-50 transition-colors">
+                  {merging ? "…" : "Fusionner"}
+                </button>
+                <button onClick={() => handleIgnore(group, idx)} disabled={merging !== null || ignoring !== null}
+                  title="Ne plus proposer ce groupe"
+                  className="text-xs font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors">
+                  {ignoring === idx ? "…" : "Ignorer"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ArchiveSuggestionsModal({ candidates, onClose, onArchived }: {
+  candidates: any[];
+  onClose: () => void;
+  onArchived: (id: string) => void;
+}) {
+  const [archiving, setArchiving] = useState<string | null>(null);
+
+  const handleArchive = async (id: string) => {
+    if (!confirm("Archiver ce contact ? Il n'apparaîtra plus dans la liste.")) return;
+    setArchiving(id);
+    try {
+      await api.archiveContact(id);
+      onArchived(id);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setArchiving(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full sm:rounded-2xl shadow-2xl max-w-lg max-h-[90dvh] flex flex-col rounded-t-2xl">
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0 border-b border-gray-100">
+          <h3 className="font-bold text-lg text-gray-900">Suggestions d'archivage</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors">×</button>
+        </div>
+        <div className="px-5 pt-3">
+          <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+            Contacts sans email ni téléphone et sans activité depuis longtemps. Rien n'est supprimé automatiquement — à toi de valider.
+          </p>
+        </div>
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-2">
+          {candidates.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">Plus aucune suggestion.</p>
+          ) : candidates.map((c: any) => (
+            <div key={c.id} className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-800 truncate">{c.first_name} {c.last_name}</p>
+                <p className="text-xs text-gray-400">
+                  Dernière activité : {c.last_interaction_at ? new Date(c.last_interaction_at).toLocaleDateString("fr-FR") : "jamais"}
+                </p>
+              </div>
+              <button onClick={() => handleArchive(c.id)} disabled={archiving !== null}
+                className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1.5 flex-shrink-0 disabled:opacity-50 transition-colors">
+                {archiving === c.id ? "…" : "Archiver"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ContactsPage() {
   const { t } = useLanguage();
   const { hasFeature } = useSubscription();
@@ -250,6 +359,7 @@ export default function ContactsPage() {
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [inactiveOnly, setInactiveOnly] = useState(false);
+  const [incompleteOnly, setIncompleteOnly] = useState(false);
   const [offset, setOffset] = useState(0);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
@@ -257,8 +367,18 @@ export default function ContactsPage() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showTagsModal, setShowTagsModal] = useState(false);
   const [showImportGuide, setShowImportGuide] = useState(false);
+  const [fieldDefs, setFieldDefs] = useState<any[]>([]);
+  const categoryOptions: string[] = fieldDefs.find(f => f.field_key === "category")?.options ?? [];
+  const [duplicates, setDuplicates] = useState<any[]>([]);
+  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
+  const [archiveSuggestions, setArchiveSuggestions] = useState<any[]>([]);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const loadingMoreRef = useRef(false);
   const LIMIT = 30;
+
+  const fetchDuplicates = () => api.getDuplicateContacts().then(setDuplicates).catch(() => {});
+  const fetchArchiveSuggestions = () => api.getArchiveSuggestions().then(setArchiveSuggestions).catch(() => {});
 
   const fetchContacts = async (reset = false, currentOffset = 0) => {
     setLoading(true);
@@ -268,18 +388,41 @@ export default function ContactsPage() {
         tag_id: tagFilter || undefined,
         category: categoryFilter || undefined,
         inactive_only: inactiveOnly || undefined,
+        incomplete_only: incompleteOnly || undefined,
         limit: LIMIT,
         offset: currentOffset,
       });
-      setContacts(reset ? res.contacts : prev => [...prev, ...res.contacts]);
+      setContacts(reset ? res.contacts : prev => {
+        const existingIds = new Set(prev.map((c: any) => c.id));
+        return [...prev, ...res.contacts.filter((c: any) => !existingIds.has(c.id))];
+      });
       setTotal(res.total);
     } finally { setLoading(false); }
   };
 
   const fetchTags = () => api.getTags().then(setTags).catch(() => {});
 
-  useEffect(() => { setOffset(0); fetchContacts(true, 0); }, [q, tagFilter, categoryFilter, inactiveOnly]);
-  useEffect(() => { fetchTags(); }, []);
+  useEffect(() => { setOffset(0); fetchContacts(true, 0); }, [q, tagFilter, categoryFilter, inactiveOnly, incompleteOnly]);
+  useEffect(() => {
+    fetchTags();
+    fetchDuplicates();
+    fetchArchiveSuggestions();
+    api.getContactFields().then(setFieldDefs).catch(() => {});
+  }, []);
+
+  const pollOwnImportJob = (jobId: string) => {
+    let cancelled = false;
+    const check = () => {
+      if (cancelled) return;
+      api.getContactImportJob(jobId).then(j => {
+        if (cancelled) return;
+        if (j.status === "processing") setTimeout(check, 2500);
+        else fetchContacts(true, 0); // si l'utilisateur est resté sur la page, rafraîchit dès que c'est fini
+      }).catch(() => {});
+    };
+    setTimeout(check, 2500);
+    return () => { cancelled = true; };
+  };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -287,13 +430,9 @@ export default function ContactsPage() {
     setImporting(true); setImportMsg("");
     try {
       const res = await api.importContactsCsv(file);
-      const msg = res.created > 0
-        ? `✓ ${res.created} contact${res.created > 1 ? "s" : ""} importé${res.created > 1 ? "s" : ""}${res.skipped > 0 ? ` · ${res.skipped} ignoré${res.skipped > 1 ? "s" : ""} (déjà présents)` : ""}`
-        : res.skipped > 0
-          ? `⚠ Aucun contact importé — ${res.skipped} ligne${res.skipped > 1 ? "s" : ""} ignorée${res.skipped > 1 ? "s" : ""} (emails déjà présents ou colonnes non reconnues)`
-          : "⚠ Aucun contact trouvé dans ce fichier. Vérifiez que la première ligne contient les en-têtes (first_name, last_name, email…).";
-      setImportMsg(msg);
-      fetchContacts(true, 0);
+      setActiveImportJob(res.job_id);
+      setImportMsg("⏳ Import démarré — suis sa progression en bas à droite de l'écran, même si tu changes de page.");
+      pollOwnImportJob(res.job_id);
     } catch (err: any) {
       setImportMsg(`Erreur : ${err.message}`);
     } finally {
@@ -312,9 +451,18 @@ export default function ContactsPage() {
   };
 
   const loadMore = async () => {
-    const next = offset + LIMIT;
-    setOffset(next);
-    await fetchContacts(false, next);
+    // Garde synchrone (ref, pas state) : un double-clic rapide peut survenir avant que React
+    // ne re-rende le bouton en disabled={loading}, ce qui déclenchait deux fetch sur le même
+    // offset et dupliquait la page de contacts dans la liste.
+    if (loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    try {
+      const next = offset + LIMIT;
+      setOffset(next);
+      await fetchContacts(false, next);
+    } finally {
+      loadingMoreRef.current = false;
+    }
   };
 
   return (
@@ -376,16 +524,37 @@ export default function ContactsPage() {
             <span className="hidden sm:inline">{t.crm_manage_tags}</span>
           </button>
           <input ref={fileRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleImport} />
-          <button onClick={() => setShowImportGuide(true)} disabled={importing}
+          <button onClick={() => { api.getContactFields().then(setFieldDefs).catch(() => {}); setShowImportGuide(true); }} disabled={importing}
             className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-700 shadow-sm hover:bg-primary-100 disabled:opacity-50 transition-colors active:scale-95">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-            </svg>
-            <span className="hidden sm:inline">{importing ? "…" : t.crm_import_csv}</span>
-            {importing && <span className="sm:hidden">…</span>}
+            {importing ? (
+              <span className="w-4 h-4 flex-shrink-0 border-2 border-primary-300 border-t-primary-700 rounded-full animate-spin" />
+            ) : (
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+              </svg>
+            )}
+            <span className="hidden sm:inline">{t.crm_import_csv}</span>
           </button>
         </div>
       </div>
+
+      {/* Doublons probables */}
+      {duplicates.length > 0 && (
+        <button onClick={() => setShowDuplicatesModal(true)}
+          className="w-full flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors">
+          <span>⚠ {duplicates.length} doublon{duplicates.length > 1 ? "s" : ""} probable{duplicates.length > 1 ? "s" : ""} détecté{duplicates.length > 1 ? "s" : ""}</span>
+          <span className="underline">Vérifier →</span>
+        </button>
+      )}
+
+      {/* Suggestions d'archivage */}
+      {archiveSuggestions.length > 0 && (
+        <button onClick={() => setShowArchiveModal(true)}
+          className="w-full flex items-center justify-between gap-2 rounded-lg px-4 py-3 text-sm font-medium bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100 transition-colors">
+          <span>🗃 {archiveSuggestions.length} fiche{archiveSuggestions.length > 1 ? "s" : ""} incomplète{archiveSuggestions.length > 1 ? "s" : ""} et inactive{archiveSuggestions.length > 1 ? "s" : ""} — suggestion d'archivage</span>
+          <span className="underline">Vérifier →</span>
+        </button>
+      )}
 
       {/* Message import */}
       {importMsg && (
@@ -413,16 +582,17 @@ export default function ContactsPage() {
         <select value={categoryFilter ?? ""} onChange={e => setCategoryFilter(e.target.value || null)}
           className="border border-gray-200 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-300">
           <option value="">Toutes catégories</option>
-          <option value="client">Client</option>
-          <option value="prospect">Prospect</option>
-          <option value="partenaire">Partenaire</option>
-          <option value="fournisseur">Fournisseur</option>
-          <option value="autre">Autre</option>
+          {categoryOptions.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
         <label className="inline-flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
           <input type="checkbox" checked={inactiveOnly} onChange={e => setInactiveOnly(e.target.checked)}
             className="rounded accent-primary-600 w-4 h-4" />
           {t.crm_filter_inactive}
+        </label>
+        <label className="inline-flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input type="checkbox" checked={incompleteOnly} onChange={e => setIncompleteOnly(e.target.checked)}
+            className="rounded accent-primary-600 w-4 h-4" />
+          Fiches incomplètes
         </label>
       </div>
 
@@ -456,6 +626,11 @@ export default function ContactsPage() {
                   {c.is_inactive && (
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                       {t.crm_inactive_badge}
+                    </span>
+                  )}
+                  {c.is_incomplete && (
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">
+                      Fiche incomplète
                     </span>
                   )}
                   {c.category && (
@@ -510,8 +685,28 @@ export default function ContactsPage() {
         />
       )}
 
+      {showDuplicatesModal && (
+        <DuplicatesModal
+          groups={duplicates}
+          onClose={() => setShowDuplicatesModal(false)}
+          onMerged={() => { fetchDuplicates(); fetchContacts(true, 0); }}
+          onIgnored={(matchType, matchValue) =>
+            setDuplicates(prev => prev.filter(g => !(g.match_type === matchType && g.match_value === matchValue)))
+          }
+        />
+      )}
+
+      {showArchiveModal && (
+        <ArchiveSuggestionsModal
+          candidates={archiveSuggestions}
+          onClose={() => setShowArchiveModal(false)}
+          onArchived={(id) => { setArchiveSuggestions(prev => prev.filter(c => c.id !== id)); fetchContacts(true, 0); }}
+        />
+      )}
+
       {showImportGuide && (
         <ImportGuideModal
+          fieldDefs={fieldDefs}
           onClose={() => setShowImportGuide(false)}
           onConfirm={openFilePicker}
           onDownload={downloadTemplate}

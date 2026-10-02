@@ -168,7 +168,7 @@ async def upload_contact_photo(
     sb = get_supabase_admin()
     res = (
         sb.table("contact")
-        .select("contact_details")
+        .select("custom_fields")
         .eq("id", contact_id)
         .eq("tenant_id", tenant_id)
         .maybe_single()
@@ -199,10 +199,10 @@ async def upload_contact_photo(
     except Exception as exc:
         raise HTTPException(500, f"Erreur de stockage : {exc}")
 
-    old_path = (contact.get("contact_details") or {}).get("photo_path")
+    old_path = (contact.get("custom_fields") or {}).get("photo_path")
 
-    details = {**(contact.get("contact_details") or {}), "photo_path": storage_path}
-    sb.table("contact").update({"contact_details": details}).eq("id", contact_id).eq("tenant_id", tenant_id).execute()
+    details = {**(contact.get("custom_fields") or {}), "photo_path": storage_path}
+    sb.table("contact").update({"custom_fields": details}).eq("id", contact_id).eq("tenant_id", tenant_id).execute()
 
     if old_path:
         try:
@@ -221,7 +221,7 @@ async def delete_contact_photo(
     sb = get_supabase_admin()
     res = (
         sb.table("contact")
-        .select("contact_details")
+        .select("custom_fields")
         .eq("id", contact_id)
         .eq("tenant_id", tenant_id)
         .maybe_single()
@@ -231,9 +231,9 @@ async def delete_contact_photo(
     if not contact:
         raise HTTPException(404, "Contact introuvable")
 
-    details = dict(contact.get("contact_details") or {})
+    details = dict(contact.get("custom_fields") or {})
     old_path = details.pop("photo_path", None)
-    sb.table("contact").update({"contact_details": details}).eq("id", contact_id).eq("tenant_id", tenant_id).execute()
+    sb.table("contact").update({"custom_fields": details}).eq("id", contact_id).eq("tenant_id", tenant_id).execute()
 
     if old_path:
         try:

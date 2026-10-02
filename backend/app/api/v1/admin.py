@@ -332,7 +332,7 @@ async def list_tenants(
     sb  = get_supabase_admin()
     now = datetime.now(timezone.utc)
 
-    q = sb.table("tenant").select("id, name, slug, sector, country, created_at, suspended_at, trial_extended_until, is_active")
+    q = sb.table("tenant").select("id, name, slug, sector, country, created_at, suspended_at, trial_extended_until, is_active, contact_overage_since")
     if search:
         q = q.or_(f"name.ilike.%{search}%,slug.ilike.%{search}%")
     if sector:

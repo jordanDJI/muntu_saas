@@ -119,11 +119,17 @@ export default function ContactDetailPage() {
   const [editPhone, setEditPhone]         = useState("");
   const [savingInfo, setSavingInfo]       = useState(false);
 
-  // Fiche enrichie (identité / coordonnées / catégorisation)
+  // Fiche enrichie — champs dynamiques configurés par le tenant (voir Settings → Champs contact)
+  const [fieldDefs, setFieldDefs]           = useState<any[]>([]);
   const [editingDetails, setEditingDetails] = useState(false);
-  const [detailsForm, setDetailsForm]       = useState<any>({});
+  const [detailsForm, setDetailsForm]       = useState<Record<string, string>>({});
   const [savingDetails, setSavingDetails]   = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const LOCKED_KEYS = new Set(["first_name", "last_name", "email", "phone"]);
+  const dynamicFields = fieldDefs.filter(f => f.enabled && !LOCKED_KEYS.has(f.field_key));
+  const fieldValue = (f: any): string =>
+    (f.storage_mode === "column" ? contact?.[f.field_key] : contact?.custom_fields?.[f.field_key]) ?? "";
 
   // Journal des modifications
   const [auditLog, setAuditLog]             = useState<any[]>([]);
@@ -206,6 +212,7 @@ export default function ContactDetailPage() {
       .then((r: any) => setInvoices(Array.isArray(r) ? r : (r.invoices ?? [])))
       .catch(() => {});
     api.getTags().then(setAllTags).catch(() => {});
+    api.getContactFields().then(setFieldDefs).catch(() => {});
     api.getContactAuditLog(id).then(setAuditLog).catch(() => {});
     fetchConsent();
     api.getMembers().then(r => {
@@ -276,58 +283,22 @@ export default function ContactDetailPage() {
   };
 
   const openEditDetails = () => {
-    const d = contact?.contact_details ?? {};
-    setDetailsForm({
-      category: contact?.category ?? "",
-      segment: contact?.segment ?? "",
-      gender: d.gender ?? "",
-      title: d.title ?? "",
-      nickname: d.nickname ?? "",
-      first_name_2: d.first_name_2 ?? "",
-      first_name_3: d.first_name_3 ?? "",
-      country_residence: d.country_residence ?? "",
-      country_origin: d.country_origin ?? "",
-      birthday_day: d.birthday?.day ?? "",
-      birthday_month: d.birthday?.month ?? "",
-      street_number: d.address?.street_number ?? "",
-      street: d.address?.street ?? "",
-      city: d.address?.city ?? "",
-      postal_code: d.address?.postal_code ?? "",
-      region: d.address?.region ?? "",
-      phone_pro: d.phone_pro ?? "",
-      phone_perso: d.phone_perso ?? "",
-      phone_preferred: d.phone_preferred ?? "",
-      email_pro: d.email_pro ?? "",
-      email_perso: d.email_perso ?? "",
-      website: d.urls?.website ?? "",
-      linkedin: d.urls?.linkedin ?? "",
-      instagram: d.urls?.instagram ?? "",
-      facebook: d.urls?.facebook ?? "",
-    });
+    const form: Record<string, string> = {};
+    for (const f of dynamicFields) form[f.field_key] = fieldValue(f);
+    setDetailsForm(form);
     setEditingDetails(true);
   };
 
   const saveDetails = async () => {
     setSavingDetails(true);
-    const f = detailsForm;
     try {
-      await api.updateContact(id, {
-        category: f.category || undefined,
-        segment: f.segment || undefined,
-        contact_details: {
-          gender: f.gender, title: f.title, nickname: f.nickname,
-          first_name_2: f.first_name_2, first_name_3: f.first_name_3,
-          country_residence: f.country_residence, country_origin: f.country_origin,
-          birthday: { day: f.birthday_day || null, month: f.birthday_month || null },
-          address: {
-            street_number: f.street_number, street: f.street,
-            city: f.city, postal_code: f.postal_code, region: f.region,
-          },
-          phone_pro: f.phone_pro, phone_perso: f.phone_perso, phone_preferred: f.phone_preferred,
-          email_pro: f.email_pro, email_perso: f.email_perso,
-          urls: { website: f.website, linkedin: f.linkedin, instagram: f.instagram, facebook: f.facebook },
-        },
-      });
+      const payload: any = { custom_fields: {} };
+      for (const f of dynamicFields) {
+        const val = detailsForm[f.field_key] ?? "";
+        if (f.storage_mode === "column") payload[f.field_key] = val || undefined;
+        else payload.custom_fields[f.field_key] = val;
+      }
+      await api.updateContact(id, payload);
       setEditingDetails(false);
       fetchContact();
       api.getContactAuditLog(id).then(setAuditLog).catch(() => {});
@@ -461,6 +432,11 @@ export default function ContactDetailPage() {
                       {contact.is_inactive && (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
                           {t.crm_inactive_badge}
+                        </span>
+                      )}
+                      {contact.is_incomplete && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">
+                          Fiche incomplète
                         </span>
                       )}
                       <button onClick={openEditInfo}
@@ -597,155 +573,60 @@ export default function ContactDetailPage() {
         </div>
 
         {!editingDetails ? (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-            <div>
-              <p className="text-xs font-semibold text-gray-400 mb-1.5">Catégorisation</p>
-              <div className="flex flex-wrap gap-1.5">
-                {contact.category
-                  ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 capitalize">{contact.category}</span>
-                  : <span className="text-gray-400 text-xs">Non renseigné</span>}
-                {contact.segment && (
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{contact.segment}</span>
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-gray-400 mb-1.5">Identité</p>
-              <div className="text-gray-600 space-y-0.5">
-                {contact.contact_details?.title && <p>{contact.contact_details.title}</p>}
-                {contact.contact_details?.nickname && <p>« {contact.contact_details.nickname} »</p>}
-                {contact.contact_details?.gender && <p>{contact.contact_details.gender}</p>}
-                {(contact.contact_details?.birthday?.day && contact.contact_details?.birthday?.month) && (
-                  <p>🎂 {contact.contact_details.birthday.day}/{contact.contact_details.birthday.month}</p>
-                )}
-                {!contact.contact_details?.title && !contact.contact_details?.nickname && !contact.contact_details?.gender && (
-                  <span className="text-gray-400 text-xs">Non renseigné</span>
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-gray-400 mb-1.5">Adresse</p>
-              {contact.contact_details?.address?.city ? (
-                <p className="text-gray-600">
-                  {contact.contact_details.address.street_number} {contact.contact_details.address.street}<br/>
-                  {contact.contact_details.address.postal_code} {contact.contact_details.address.city}
-                </p>
-              ) : (
-                <span className="text-gray-400 text-xs">Non renseignée</span>
-              )}
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            {dynamicFields.filter(f => fieldValue(f)).length === 0 ? (
+              <p className="text-gray-400 text-xs sm:col-span-2">Aucune information complémentaire renseignée</p>
+            ) : dynamicFields.map(f => {
+              const val = fieldValue(f);
+              if (!val) return null;
+              return (
+                <div key={f.field_key}>
+                  <p className="text-xs font-semibold text-gray-400 mb-0.5">{f.label}</p>
+                  {f.field_key === "category" ? (
+                    <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 capitalize">{val}</span>
+                  ) : (
+                    <p className="text-gray-700">{val}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">Catégorisation</p>
-              <div className="grid grid-cols-2 gap-2">
-                <select value={detailsForm.category} onChange={e => setDetailsForm({ ...detailsForm, category: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-300">
-                  <option value="">Catégorie…</option>
-                  <option value="client">Client</option>
-                  <option value="prospect">Prospect</option>
-                  <option value="partenaire">Partenaire</option>
-                  <option value="fournisseur">Fournisseur</option>
-                  <option value="autre">Autre</option>
-                </select>
-                <input value={detailsForm.segment} onChange={e => setDetailsForm({ ...detailsForm, segment: e.target.value })}
-                  placeholder="Segment (ex: secteur, taille…)"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">Identité</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <select value={detailsForm.gender} onChange={e => setDetailsForm({ ...detailsForm, gender: e.target.value })}
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-300">
-                  <option value="">Genre…</option>
-                  <option value="Femme">Femme</option>
-                  <option value="Homme">Homme</option>
-                  <option value="Autre">Autre</option>
-                </select>
-                <input value={detailsForm.title} onChange={e => setDetailsForm({ ...detailsForm, title: e.target.value })}
-                  placeholder="Titre (Dr, Maître…)"
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.nickname} onChange={e => setDetailsForm({ ...detailsForm, nickname: e.target.value })}
-                  placeholder="Surnom"
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.first_name_2} onChange={e => setDetailsForm({ ...detailsForm, first_name_2: e.target.value })}
-                  placeholder="2ᵉ prénom"
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.first_name_3} onChange={e => setDetailsForm({ ...detailsForm, first_name_3: e.target.value })}
-                  placeholder="3ᵉ prénom"
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <div className="flex gap-1">
-                  <input value={detailsForm.birthday_day} onChange={e => setDetailsForm({ ...detailsForm, birthday_day: e.target.value.replace(/\D/g, "") })}
-                    placeholder="Jour" maxLength={2}
-                    className="w-1/2 border border-gray-200 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                  <input value={detailsForm.birthday_month} onChange={e => setDetailsForm({ ...detailsForm, birthday_month: e.target.value.replace(/\D/g, "") })}
-                    placeholder="Mois" maxLength={2}
-                    className="w-1/2 border border-gray-200 rounded-lg px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+            <div className="grid grid-cols-2 gap-2">
+              {dynamicFields.map(f => (
+                <div key={f.field_key}>
+                  <label className="block text-xs text-gray-500 mb-1">{f.label}</label>
+                  {f.field_type === "select" ? (
+                    <select value={detailsForm[f.field_key] ?? ""} onChange={e => setDetailsForm({ ...detailsForm, [f.field_key]: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-300">
+                      <option value="">—</option>
+                      {(f.options || []).map((o: string) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : f.field_type === "phone" ? (
+                    <input type="tel" inputMode="tel" value={detailsForm[f.field_key] ?? ""}
+                      onChange={e => setDetailsForm({ ...detailsForm, [f.field_key]: sanitizePhoneInput(e.target.value) })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                  ) : f.field_type === "date" ? (
+                    <input type="date" value={detailsForm[f.field_key] ?? ""}
+                      onChange={e => setDetailsForm({ ...detailsForm, [f.field_key]: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                  ) : f.field_type === "number" ? (
+                    <input type="number" value={detailsForm[f.field_key] ?? ""}
+                      onChange={e => setDetailsForm({ ...detailsForm, [f.field_key]: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                  ) : (
+                    <input type={f.field_type === "email" ? "email" : "text"} value={detailsForm[f.field_key] ?? ""}
+                      onChange={e => setDetailsForm({ ...detailsForm, [f.field_key]: e.target.value })}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                  )}
                 </div>
-                <input value={detailsForm.country_residence} onChange={e => setDetailsForm({ ...detailsForm, country_residence: e.target.value })}
-                  placeholder="Pays de résidence"
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.country_origin} onChange={e => setDetailsForm({ ...detailsForm, country_origin: e.target.value })}
-                  placeholder="Pays d'origine"
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-              </div>
-              {contact.contact_details?.photo_path && (
-                <button onClick={removePhoto} className="mt-2 text-xs text-red-400 hover:text-red-600">Supprimer la photo</button>
-              )}
+              ))}
             </div>
 
-            <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">Adresse</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <input value={detailsForm.street_number} onChange={e => setDetailsForm({ ...detailsForm, street_number: e.target.value })}
-                  placeholder="N°" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.street} onChange={e => setDetailsForm({ ...detailsForm, street: e.target.value })}
-                  placeholder="Rue" className="sm:col-span-2 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.postal_code} onChange={e => setDetailsForm({ ...detailsForm, postal_code: e.target.value })}
-                  placeholder="Code postal" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.city} onChange={e => setDetailsForm({ ...detailsForm, city: e.target.value })}
-                  placeholder="Ville" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.region} onChange={e => setDetailsForm({ ...detailsForm, region: e.target.value })}
-                  placeholder="Région" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">Coordonnées complémentaires</p>
-              <div className="grid grid-cols-2 gap-2">
-                <input type="tel" inputMode="tel" value={detailsForm.phone_pro} onChange={e => setDetailsForm({ ...detailsForm, phone_pro: sanitizePhoneInput(e.target.value) })}
-                  placeholder="Téléphone pro" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input type="tel" inputMode="tel" value={detailsForm.phone_perso} onChange={e => setDetailsForm({ ...detailsForm, phone_perso: sanitizePhoneInput(e.target.value) })}
-                  placeholder="Téléphone perso" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.email_pro} onChange={e => setDetailsForm({ ...detailsForm, email_pro: e.target.value })}
-                  placeholder="Email pro" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.email_perso} onChange={e => setDetailsForm({ ...detailsForm, email_perso: e.target.value })}
-                  placeholder="Email perso" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <select value={detailsForm.phone_preferred} onChange={e => setDetailsForm({ ...detailsForm, phone_preferred: e.target.value })}
-                  className="col-span-2 border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-300">
-                  <option value="">Téléphone préféré…</option>
-                  <option value="pro">Pro</option>
-                  <option value="perso">Perso</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">Réseaux</p>
-              <div className="grid grid-cols-2 gap-2">
-                <input value={detailsForm.website} onChange={e => setDetailsForm({ ...detailsForm, website: e.target.value })}
-                  placeholder="Site internet" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.linkedin} onChange={e => setDetailsForm({ ...detailsForm, linkedin: e.target.value })}
-                  placeholder="LinkedIn" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.instagram} onChange={e => setDetailsForm({ ...detailsForm, instagram: e.target.value })}
-                  placeholder="Instagram" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-                <input value={detailsForm.facebook} onChange={e => setDetailsForm({ ...detailsForm, facebook: e.target.value })}
-                  placeholder="Facebook" className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
-              </div>
-            </div>
+            {contact.custom_fields?.photo_path && (
+              <button onClick={removePhoto} className="text-xs text-red-400 hover:text-red-600">Supprimer la photo</button>
+            )}
 
             <div className="flex gap-2 pt-1">
               <button onClick={saveDetails} disabled={savingDetails}

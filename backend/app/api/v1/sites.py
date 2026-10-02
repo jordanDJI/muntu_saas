@@ -5,6 +5,7 @@ from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.site import SiteCreateIn, SiteUpdateIn, SiteOut, ServiceOfferIn, TestimonialIn
 from app.services.activity import log_activity
 from app.services.google_indexing import notify_url_updated, notify_url_deleted
+from app.services.subscription import get_tenant_plan
 
 router = APIRouter(prefix="/sites", tags=["Sites"])
 
@@ -144,6 +145,16 @@ async def get_offers(site_id: UUID, tenant_id: str = Depends(get_current_tenant)
 async def replace_offers(site_id: UUID, offers: list[ServiceOfferIn], tenant_id: str = Depends(get_current_tenant)):
     sb = get_supabase()
     _assert_owner(sb, str(site_id), tenant_id)
+
+    plan = await get_tenant_plan(tenant_id)
+    service_photos_limit = plan["features"].get("service_photos_limit", 0)
+    for offer in offers:
+        if len(offer.photos or []) > service_photos_limit:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Prestation « {offer.name} » : {len(offer.photos)} photo(s), maximum {service_photos_limit} autorisé(es) par votre forfait.",
+            )
+
     try:
         sb.table("service_offer").delete().eq("site_id", str(site_id)).execute()
         if offers:

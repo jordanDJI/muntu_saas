@@ -16,7 +16,7 @@ const DesignRequestModal = dynamic(() => import("../../../components/DesignReque
 type Section =
   | "profil" | "securite" | "site" | "metriques"
   | "abonnement" | "notifications" | "preferences"
-  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire" | "facturation" | "support" | "rgpd";
+  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire" | "facturation" | "support" | "rgpd" | "contact_fields";
 
 function getNav(t: any) {
   return [
@@ -31,6 +31,7 @@ function getNav(t: any) {
     { key: "preferences",   label: t.sett_nav_preferences,   icon: "⚙️" },
     { key: "membres",       label: t.sett_nav_membres,       icon: "👥" },
     { key: "rgpd",          label: t.sett_nav_rgpd,          icon: "🛡️" },
+    { key: "contact_fields", label: t.sett_nav_contact_fields, icon: "🧩" },
     { key: "facturation",   label: t.sett_nav_facturation,   icon: "🧾" },
     { key: "integrations",  label: t.sett_nav_integrations,  icon: "🔗" },
     { key: "support",       label: t.sett_nav_support,       icon: "💬" },
@@ -1894,6 +1895,285 @@ function SectionRgpd() {
   );
 }
 
+// ── Section Champs contact ────────────────────────────────────────────────────
+
+const LOCKED_FIELD_KEYS = new Set(["first_name", "last_name", "email", "phone"]);
+const FIELD_TYPE_LABELS: Record<string, string> = {
+  text: "Texte", phone: "Téléphone", email: "Email", date: "Date", number: "Nombre", select: "Liste déroulante",
+};
+
+function SectionContactFields() {
+  const [fields, setFields] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [version, setVersion] = useState(0); // incrémenté à chaque fetch pour forcer le remount des inputs non-contrôlés (defaultValue)
+  const savedSnapshot = useRef<Record<string, any>>({});
+
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+  const dragYRef = useRef<number | null>(null);
+  const autoScrollRaf = useRef<number | null>(null);
+
+  const startAutoScroll = () => {
+    const EDGE = 120;     // zone sensible en haut/bas de l'écran (px)
+    const MAX_SPEED = 18; // vitesse max de scroll (px/frame)
+    const step = () => {
+      const y = dragYRef.current;
+      if (y !== null) {
+        if (y < EDGE) {
+          window.scrollBy(0, -Math.ceil((EDGE - y) / EDGE * MAX_SPEED));
+        } else if (y > window.innerHeight - EDGE) {
+          window.scrollBy(0, Math.ceil((y - (window.innerHeight - EDGE)) / EDGE * MAX_SPEED));
+        }
+      }
+      autoScrollRaf.current = requestAnimationFrame(step);
+    };
+    autoScrollRaf.current = requestAnimationFrame(step);
+  };
+
+  const stopAutoScroll = () => {
+    if (autoScrollRaf.current !== null) cancelAnimationFrame(autoScrollRaf.current);
+    autoScrollRaf.current = null;
+    dragYRef.current = null;
+  };
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newType, setNewType] = useState("text");
+  const [newOptions, setNewOptions] = useState("");
+  const [newRequired, setNewRequired] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const fetchFields = () => {
+    setLoading(true);
+    api.getContactFields().then((r: any[]) => {
+      const sorted = [...r].sort((a, b) => a.position - b.position);
+      setFields(sorted);
+      savedSnapshot.current = Object.fromEntries(sorted.map(f => [f.field_key, f]));
+      setDirty(false);
+      setVersion(v => v + 1);
+    }).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchFields(); }, []);
+
+  // Les actions ci-dessous ne modifient que l'état local — rien n'est envoyé au serveur
+  // tant que l'utilisateur n'a pas cliqué sur "Enregistrer".
+  const mutateField = (key: string, patch: any) => {
+    setFields(prev => prev.map(f => (f.field_key === key ? { ...f, ...patch } : f)));
+    setDirty(true);
+  };
+
+  const toggleEnabled = (f: any) => {
+    if (LOCKED_FIELD_KEYS.has(f.field_key)) return;
+    mutateField(f.field_key, { enabled: !f.enabled });
+  };
+
+  const updateLabel = (f: any, label: string) => {
+    if (!label.trim() || label === f.label) return;
+    mutateField(f.field_key, { label: label.trim() });
+  };
+
+  const updateOptions = (f: any, optionsText: string) => {
+    mutateField(f.field_key, { options: optionsText.split("\n").map(o => o.trim()).filter(Boolean) });
+  };
+
+  const moveField = (index: number, direction: -1 | 1) => {
+    const otherIndex = index + direction;
+    if (otherIndex < 0 || otherIndex >= fields.length) return;
+    setFields(prev => {
+      const reordered = [...prev];
+      [reordered[index], reordered[otherIndex]] = [reordered[otherIndex], reordered[index]];
+      return reordered.map((f, i) => ({ ...f, position: i }));
+    });
+    setDirty(true);
+  };
+
+  const reorderField = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    setFields(prev => {
+      const reordered = [...prev];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+      return reordered.map((f, i) => ({ ...f, position: i }));
+    });
+    setDirty(true);
+  };
+
+  const discardChanges = () => fetchFields();
+
+  const saveAll = async () => {
+    setSaving(true); setMsg("");
+    try {
+      const changed = fields.filter(f => {
+        const before = savedSnapshot.current[f.field_key];
+        if (!before) return false;
+        return (
+          before.label !== f.label || before.enabled !== f.enabled ||
+          before.required !== f.required || before.position !== f.position ||
+          JSON.stringify(before.options ?? []) !== JSON.stringify(f.options ?? [])
+        );
+      });
+      await Promise.all(changed.map(f => api.updateContactField(f.field_key, {
+        label: f.label, enabled: f.enabled, required: f.required, position: f.position,
+        options: f.field_type === "select" ? (f.options || []) : undefined,
+      })));
+      setMsg("Enregistré ✓");
+      fetchFields();
+    } catch (err: any) {
+      setMsg(`Erreur : ${err.message}`);
+    } finally { setSaving(false); }
+  };
+
+  const deleteField = async (f: any) => {
+    if (!confirm(`Supprimer le champ « ${f.label} » ? Les données déjà saisies dans ce champ seront perdues.`)) return;
+    await api.deleteContactField(f.field_key);
+    fetchFields();
+  };
+
+  const handleCreate = async () => {
+    if (!newLabel.trim()) return;
+    setCreating(true); setMsg("");
+    try {
+      await api.createContactField({
+        label: newLabel.trim(),
+        field_type: newType,
+        options: newType === "select" ? newOptions.split("\n").map(o => o.trim()).filter(Boolean) : undefined,
+        required: newRequired,
+      });
+      setNewLabel(""); setNewType("text"); setNewOptions(""); setNewRequired(false);
+      setShowAddForm(false);
+      fetchFields();
+    } catch (err: any) { setMsg(`Erreur : ${err.message}`); }
+    finally { setCreating(false); }
+  };
+
+  return (
+    <>
+      <SectionTitle title="Champs contact" subtitle="Les champs affichés sur la fiche contact de ton CRM — désactive ceux que tu n'utilises pas, ajoute les tiens." />
+
+      {dirty && (
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <p className="text-sm text-amber-700 font-medium">Modifications non enregistrées</p>
+          <div className="flex gap-2 flex-shrink-0">
+            <button onClick={discardChanges} disabled={saving}
+              className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 disabled:opacity-50 transition-colors">
+              Annuler
+            </button>
+            <button onClick={saveAll} disabled={saving}
+              className="bg-primary-600 text-white text-sm font-semibold rounded-lg px-4 py-1.5 hover:bg-primary-700 disabled:opacity-50 transition-colors">
+              {saving ? "…" : "Enregistrer"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <Card>
+        {loading ? (
+          <p className="text-sm text-gray-400">Chargement…</p>
+        ) : (
+          <div className="space-y-1.5">
+            {fields.map((f, i) => {
+              const locked = LOCKED_FIELD_KEYS.has(f.field_key);
+              return (
+                <div key={`${f.field_key}:${version}`}
+                  onDragOver={e => { e.preventDefault(); dragYRef.current = e.clientY; if (dragIndex !== null && dragIndex !== i) setOverIndex(i); }}
+                  onDragLeave={() => setOverIndex(prev => (prev === i ? null : prev))}
+                  onDrop={() => { if (dragIndex !== null) reorderField(dragIndex, i); setDragIndex(null); setOverIndex(null); }}
+                  className={[
+                    "relative border rounded-lg p-3 transition-all duration-150",
+                    dragIndex === i ? "opacity-40 scale-[0.99]" : "border-gray-100",
+                    overIndex === i && dragIndex !== i && dragIndex !== null && i < dragIndex ? "border-t-2 border-t-primary-500" : "",
+                    overIndex === i && dragIndex !== i && dragIndex !== null && i > dragIndex ? "border-b-2 border-b-primary-500" : "",
+                  ].filter(Boolean).join(" ")}>
+                  <div className="flex items-center gap-2">
+                    <span draggable
+                      onDragStart={e => { setDragIndex(i); dragYRef.current = e.clientY; startAutoScroll(); }}
+                      onDrag={e => { if (e.clientY) dragYRef.current = e.clientY; }}
+                      onDragEnd={() => { setDragIndex(null); setOverIndex(null); stopAutoScroll(); }}
+                      title="Glisser pour réordonner"
+                      className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 text-sm leading-none select-none px-0.5">⠿</span>
+                    <div className="flex flex-col">
+                      <button onClick={() => moveField(i, -1)} disabled={i === 0 || saving}
+                        className="text-gray-300 hover:text-gray-600 disabled:opacity-30 leading-none text-xs">▲</button>
+                      <button onClick={() => moveField(i, 1)} disabled={i === fields.length - 1 || saving}
+                        className="text-gray-300 hover:text-gray-600 disabled:opacity-30 leading-none text-xs">▼</button>
+                    </div>
+                    <input defaultValue={f.label} onBlur={e => updateLabel(f, e.target.value)}
+                      disabled={locked}
+                      className="flex-1 min-w-0 text-sm font-medium text-gray-800 border-none bg-transparent focus:outline-none focus:ring-1 focus:ring-primary-300 rounded px-1 disabled:text-gray-500"/>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 flex-shrink-0">
+                      {FIELD_TYPE_LABELS[f.field_type] ?? f.field_type}
+                    </span>
+                    {f.is_base && <span className="text-xs text-gray-400 flex-shrink-0">de base</span>}
+                    <button onClick={() => toggleEnabled(f)} disabled={locked || saving}
+                      title={locked ? "Ce champ ne peut pas être désactivé" : undefined}
+                      className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${f.enabled ? "bg-primary-600" : "bg-gray-300"} ${locked ? "opacity-50 cursor-not-allowed" : ""}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${f.enabled ? "left-4" : "left-0.5"}`}/>
+                    </button>
+                    {!locked && (
+                      <button onClick={() => deleteField(f)} title="Supprimer ce champ"
+                        className="text-gray-300 hover:text-red-500 text-lg leading-none flex-shrink-0">×</button>
+                    )}
+                  </div>
+                  {f.field_type === "select" && (
+                    <textarea defaultValue={(f.options || []).join("\n")} onBlur={e => updateOptions(f, e.target.value)}
+                      placeholder="Une option par ligne…" rows={2}
+                      className="mt-2 w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs resize-y focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <Feedback msg={msg} />
+      </Card>
+
+      <Card>
+        {!showAddForm ? (
+          <button onClick={() => setShowAddForm(true)}
+            className="w-full border border-dashed border-gray-300 rounded-lg px-3 py-2.5 text-sm text-gray-500 hover:border-primary-400 hover:text-primary-600 transition-colors">
+            + Ajouter un champ personnalisé
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Libellé du champ (ex: Numéro d'adhérent)"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+            <select value={newType} onChange={e => setNewType(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-300">
+              <option value="text">Texte</option>
+              <option value="phone">Téléphone</option>
+              <option value="email">Email</option>
+              <option value="date">Date</option>
+              <option value="number">Nombre</option>
+              <option value="select">Liste déroulante</option>
+            </select>
+            {newType === "select" && (
+              <textarea value={newOptions} onChange={e => setNewOptions(e.target.value)}
+                placeholder="Une option par ligne…" rows={3}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary-300"/>
+            )}
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+              <input type="checkbox" checked={newRequired} onChange={e => setNewRequired(e.target.checked)} className="accent-primary-600"/>
+              Obligatoire
+            </label>
+            <div className="flex gap-2 pt-1">
+              <button onClick={handleCreate} disabled={creating || !newLabel.trim()}
+                className="bg-primary-600 text-white text-sm font-semibold rounded-lg px-4 py-2 hover:bg-primary-700 disabled:opacity-50 transition-colors">
+                {creating ? "…" : "Ajouter"}
+              </button>
+              <button onClick={() => setShowAddForm(false)} className="text-sm text-gray-500 hover:text-gray-700 px-4">
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
+    </>
+  );
+}
+
 // ── Section Facturation ───────────────────────────────────────────────────────
 
 function SectionFacturation() {
@@ -3341,6 +3621,7 @@ const SECTION_MAP: Record<Exclude<Section, "domaine" | "support">, React.FC> = {
   preferences:   SectionPreferences,
   membres:       SectionMembres,
   rgpd:          SectionRgpd,
+  contact_fields: SectionContactFields,
   facturation:   SectionFacturation,
   integrations:  SectionIntegrations,
   export:        SectionExport,

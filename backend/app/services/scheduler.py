@@ -468,6 +468,44 @@ async def run_gdpr_retention_purge() -> None:
         logger.error("GDPR retention purge failed: %s", exc)
 
 
+# ── Suivi du dépassement de quota contacts ───────────────────────────────────
+
+async def update_contact_overage_status() -> None:
+    """
+    Pour chaque tenant actif, pose tenant.contact_overage_since dès que le nombre de contacts
+    dépasse max_contacts (déclenche l'avertissement 3 mois), et le remet à null si redescendu
+    sous la limite (le compteur repart à zéro en cas de nouveau dépassement futur).
+    Aucune action automatique au-delà de 3 mois — seule une intervention admin manuelle (override) peut restreindre.
+    """
+    from app.services.contact_limits import get_contact_quota
+
+    sb = get_supabase_admin()
+    try:
+        tenants = sb.table("tenant").select("id, contact_overage_since").eq("is_active", True).execute().data or []
+    except Exception as exc:
+        logger.error("update_contact_overage_status: tenant query failed: %s", exc)
+        return
+
+    for tenant in tenants:
+        tenant_id = tenant["id"]
+        try:
+            quota = await get_contact_quota(tenant_id)
+        except Exception as exc:
+            logger.warning("update_contact_overage_status: quota failed for %s: %s", tenant_id, exc)
+            continue
+
+        if quota["unlimited"]:
+            continue
+
+        is_over = quota["current"] > quota["max_contacts"]
+        was_over = tenant.get("contact_overage_since") is not None
+
+        if is_over and not was_over:
+            sb.table("tenant").update({"contact_overage_since": datetime.now(timezone.utc).isoformat()}).eq("id", tenant_id).execute()
+        elif not is_over and was_over:
+            sb.table("tenant").update({"contact_overage_since": None}).eq("id", tenant_id).execute()
+
+
 # ── Démarrage / arrêt ─────────────────────────────────────────────────────────
 
 def start_scheduler() -> None:
@@ -520,6 +558,15 @@ def start_scheduler() -> None:
         hour=3,
         minute=0,
         id="gdpr_retention_purge",
+        replace_existing=True,
+    )
+    # Suivi du dépassement de quota contacts : chaque jour à 3h30
+    scheduler.add_job(
+        update_contact_overage_status,
+        "cron",
+        hour=3,
+        minute=30,
+        id="contact_overage_status",
         replace_existing=True,
     )
     scheduler.start()

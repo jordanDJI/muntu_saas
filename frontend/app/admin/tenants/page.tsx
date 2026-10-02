@@ -259,6 +259,13 @@ export default function TenantsPage() {
                   <td className="px-4 py-3">
                     <p className="font-medium" style={{ color: K.text }}>{t.name}</p>
                     <p className="text-xs font-mono" style={{ color: "rgba(170,189,216,0.35)" }}>{t.slug}</p>
+                    {t.contact_overage_since && (
+                      <span className="inline-block mt-1 text-xs px-1.5 py-0.5 rounded"
+                        style={{ background: "rgba(191,51,51,.15)", color: "#FC8181" }}
+                        title={`Dépasse sa limite de contacts depuis le ${new Date(t.contact_overage_since).toLocaleDateString("fr-FR")}`}>
+                        ⚠ Dépassement contacts
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-xs" style={{ color: K.muted }}>{t.owner_email ?? "—"}</td>
                   <td className="px-4 py-3 text-sm" style={{ color: K.muted }}>{SECTORS[t.sector] ?? t.sector ?? "—"}</td>

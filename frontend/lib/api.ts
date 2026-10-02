@@ -98,7 +98,7 @@ export const api = {
     apiFetch(`/api/v1/logo-requests/admin/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   // Leads
-  getContactsCount: () => apiFetch<{ count: number }>("/api/v1/leads/contacts/count"),
+  getContactsCount: () => apiFetch<{ count: number; max_contacts: number; ceiling: number | null; unlimited: boolean; contact_overage_since: string | null }>("/api/v1/leads/contacts/count"),
   getLeads: (params?: { status?: string; audience_type?: string; limit?: number; offset?: number }) => {
     const filtered = Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined));
     const qs = Object.keys(filtered).length ? "?" + new URLSearchParams(filtered as any).toString() : "";
@@ -375,15 +375,15 @@ export const api = {
   adminDemoteMetier: (slug: string) => apiFetch(`/api/v1/admin/directory/metiers/${slug}`, { method: "DELETE" }),
 
   // CRM — Contacts enrichis
-  getContacts: (params?: { q?: string; tag_id?: string; inactive_only?: boolean; category?: string; segment?: string; limit?: number; offset?: number }) => {
+  getContacts: (params?: { q?: string; tag_id?: string; inactive_only?: boolean; incomplete_only?: boolean; category?: string; segment?: string; limit?: number; offset?: number }) => {
     const filtered = Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== undefined && v !== null));
     const qs = Object.keys(filtered).length ? "?" + new URLSearchParams(filtered as any).toString() : "";
     return apiFetch<{ contacts: any[]; total: number; offset: number; limit: number }>(`/api/v1/contacts/${qs}`);
   },
   getContact: (id: string) => apiFetch<any>(`/api/v1/contacts/${id}`),
-  updateContact: (id: string, body: { notes?: string; first_name?: string; last_name?: string; email?: string; phone?: string; category?: string; segment?: string; contact_details?: Record<string, any> }) =>
+  updateContact: (id: string, body: { notes?: string; first_name?: string; last_name?: string; email?: string; phone?: string; category?: string; segment?: string; custom_fields?: Record<string, any> }) =>
     apiFetch<any>(`/api/v1/contacts/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  importContactsCsv: async (file: File): Promise<{ created: number; skipped: number; errors: string[] }> => {
+  importContactsCsv: async (file: File): Promise<{ job_id: string; status: string }> => {
     const headers = await getAuthHeaders();
     const form = new FormData();
     form.append("file", file);
@@ -391,6 +391,10 @@ export const api = {
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail ?? `HTTP ${res.status}`); }
     return res.json();
   },
+  getContactImportJob: (jobId: string) =>
+    apiFetch<{ id: string; status: "processing" | "done" | "error"; filename: string; created_count: number | null; skipped_count: number | null; notice: string | null; error_message: string | null }>(`/api/v1/contacts/import/${jobId}`),
+  ignoreDuplicateGroup: (matchType: string, matchValue: string) =>
+    apiFetch(`/api/v1/contacts/duplicates/ignore`, { method: "POST", body: JSON.stringify({ match_type: matchType, match_value: matchValue }) }),
 
   // CRM — Tags
   getTags: () => apiFetch<any[]>("/api/v1/tags"),
@@ -456,6 +460,24 @@ export const api = {
     apiFetch(`/api/v1/contacts/${contactId}/activities/${activityId}`, { method: "DELETE" }),
   getContactAuditLog: (contactId: string) =>
     apiFetch<any[]>(`/api/v1/contacts/${contactId}/audit-log`),
+  getDuplicateContacts: () =>
+    apiFetch<any[]>(`/api/v1/contacts/duplicates`),
+  mergeContacts: (keepId: string, mergeId: string) =>
+    apiFetch<any>(`/api/v1/contacts/${keepId}/merge`, { method: "POST", body: JSON.stringify({ merge_id: mergeId }) }),
+  getArchiveSuggestions: () =>
+    apiFetch<any[]>(`/api/v1/contacts/archive-suggestions`),
+  archiveContact: (contactId: string) =>
+    apiFetch(`/api/v1/contacts/${contactId}/archive`, { method: "POST" }),
+
+  // Champs contact dynamiques (par tenant)
+  getContactFields: () =>
+    apiFetch<any[]>("/api/v1/contact-fields/"),
+  createContactField: (body: { label: string; field_type: string; options?: string[]; required?: boolean }) =>
+    apiFetch<any>("/api/v1/contact-fields/", { method: "POST", body: JSON.stringify(body) }),
+  updateContactField: (fieldKey: string, body: { label?: string; enabled?: boolean; required?: boolean; position?: number; options?: string[] }) =>
+    apiFetch<any>(`/api/v1/contact-fields/${fieldKey}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteContactField: (fieldKey: string) =>
+    apiFetch(`/api/v1/contact-fields/${fieldKey}`, { method: "DELETE" }),
 
   // RGPD
   getContactConsent: (contactId: string) =>

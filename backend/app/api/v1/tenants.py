@@ -33,6 +33,12 @@ async def create_tenant(
     sb = get_supabase_admin()
     user_id = user["sub"]
 
+    max_tenants = plan["features"].get("max_tenants", 0)
+    if max_tenants is not None and max_tenants >= 0:
+        owned = sb.table("membership").select("tenant_id").eq("user_id", user_id).eq("role", "owner").execute()
+        if len(owned.data or []) >= max_tenants:
+            raise HTTPException(status_code=403, detail="Limite du nombre d'espaces atteinte pour votre forfait.")
+
     # Slug disponible ?
     existing = sb.table("tenant").select("id").eq("slug", body.slug).execute()
     if existing.data:

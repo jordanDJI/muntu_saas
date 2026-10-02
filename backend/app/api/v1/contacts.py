@@ -5,23 +5,28 @@ Tags et reminders sont dans tags.py et reminders.py (routeurs séparés, même p
 """
 import csv
 import io
+import re
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import openpyxl
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
 
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant, get_current_user
 from app.api.v1.attachments import PHOTO_BUCKET, _signed_url_bucket
+from app.api.v1.contact_fields import ensure_default_fields
 from app.services.activity import log_activity
 from app.services.phone import clean_phone, is_valid_phone, validate_phone_field
+from app.services.contact_limits import get_contact_quota
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
 
 INACTIVE_DAYS = 180  # 6 mois sans RDV confirmé → inactif
+EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
 
 
 # ── Schémas ──────────────────────────────────────────────────────────────────
@@ -34,7 +39,7 @@ class ContactUpdate(BaseModel):
     phone: Optional[str] = None
     category: Optional[str] = None
     segment: Optional[str] = None
-    contact_details: Optional[dict] = None
+    custom_fields: Optional[dict] = None
 
     @field_validator("phone")
     @classmethod
@@ -42,33 +47,18 @@ class ContactUpdate(BaseModel):
         return validate_phone_field(v)
 
 
-CATEGORIES = {"client", "prospect", "partenaire", "fournisseur", "autre"}
-
-
 class ActivityCreate(BaseModel):
     type: str = "note"
     content: str
 
 
-# ── CSV export/import — colonnes alignées sur la fiche contact (contact_details JSONB) ───────
+# ── Champs dynamiques — colonnes CSV/Excel et validation construites depuis contact_field_def ──
 
-CSV_COLUMNS = [
-    "first_name", "last_name", "first_name_2", "first_name_3",
-    "gender", "title", "nickname",
-    "email", "phone", "email_pro", "email_perso", "phone_pro", "phone_perso", "phone_preferred",
-    "category", "segment",
-    "country_residence", "country_origin", "birthday_day", "birthday_month",
-    "street_number", "street", "city", "postal_code", "region",
-    "website", "linkedin", "instagram", "facebook",
-    "notes", "source", "created_at",
-]
-
-# Alias tolérants acceptés en import (colonne CSV → clé canonique), en plus du nom exact.
-CSV_COLUMN_ALIASES = {
+# Alias FR tolérants pour les champs de base, en plus du field_key et du label exacts.
+BASE_FIELD_ALIASES = {
     "prenom": "first_name", "prénom": "first_name",
     "nom": "last_name",
     "telephone": "phone", "téléphone": "phone",
-    "email_pro": "email_pro", "email_perso": "email_perso",
     "tel_pro": "phone_pro", "telephone_pro": "phone_pro", "téléphone_pro": "phone_pro",
     "tel_perso": "phone_perso", "telephone_perso": "phone_perso", "téléphone_perso": "phone_perso",
     "categorie": "category", "catégorie": "category",
@@ -76,80 +66,85 @@ CSV_COLUMN_ALIASES = {
     "pays_origine": "country_origin", "pays_d_origine": "country_origin",
     "jour_naissance": "birthday_day", "mois_naissance": "birthday_month",
     "numero_rue": "street_number", "n_rue": "street_number",
-    "rue": "street", "ville": "city", "code_postal": "postal_code", "region": "region",
+    "rue": "street", "ville": "city", "code_postal": "postal_code",
     "site_internet": "website", "site_web": "website",
 }
 
-
-def _contact_to_csv_row(c: dict) -> list:
-    d = c.get("contact_details") or {}
-    address = d.get("address") or {}
-    birthday = d.get("birthday") or {}
-    urls = d.get("urls") or {}
-    values = {
-        "first_name": c.get("first_name"), "last_name": c.get("last_name"),
-        "first_name_2": d.get("first_name_2"), "first_name_3": d.get("first_name_3"),
-        "gender": d.get("gender"), "title": d.get("title"), "nickname": d.get("nickname"),
-        "email": c.get("email"), "phone": c.get("phone"),
-        "email_pro": d.get("email_pro"), "email_perso": d.get("email_perso"),
-        "phone_pro": d.get("phone_pro"), "phone_perso": d.get("phone_perso"),
-        "phone_preferred": d.get("phone_preferred"),
-        "category": c.get("category"), "segment": c.get("segment"),
-        "country_residence": d.get("country_residence"), "country_origin": d.get("country_origin"),
-        "birthday_day": birthday.get("day"), "birthday_month": birthday.get("month"),
-        "street_number": address.get("street_number"), "street": address.get("street"),
-        "city": address.get("city"), "postal_code": address.get("postal_code"), "region": address.get("region"),
-        "website": urls.get("website"), "linkedin": urls.get("linkedin"),
-        "instagram": urls.get("instagram"), "facebook": urls.get("facebook"),
-        "notes": c.get("notes"), "source": c.get("source"),
-        "created_at": (c.get("created_at") or "")[:10],
-    }
-    return [values.get(col) if values.get(col) is not None else "" for col in CSV_COLUMNS]
+EXAMPLE_BY_TYPE = {
+    "text": "Exemple", "phone": "+32470123456", "email": "exemple@mail.com",
+    "date": "2026-01-15", "number": "1",
+}
 
 
-def _csv_row_to_contact_fields(row: dict) -> dict:
+def _enabled_fields(field_defs: list[dict]) -> list[dict]:
+    return sorted((f for f in field_defs if f["enabled"]), key=lambda f: f["position"])
+
+
+def _csv_header(field_defs: list[dict]) -> list[str]:
+    return [f["label"] for f in _enabled_fields(field_defs)] + ["Notes"]
+
+
+def _contact_to_csv_row(c: dict, field_defs: list[dict]) -> list:
+    custom = c.get("custom_fields") or {}
+    row = []
+    for f in _enabled_fields(field_defs):
+        val = c.get(f["field_key"]) if f["storage_mode"] == "column" else custom.get(f["field_key"])
+        row.append(val if val is not None else "")
+    row.append(c.get("notes") or "")
+    return row
+
+
+def _normalize_header(s: str) -> str:
+    """Insensible aux accents, à la casse et à tout séparateur (espace/underscore/tiret/apostrophe…)
+    pour que 'First Name', 'first_name' et 'Prénom' puissent tous matcher la même clé."""
+    s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def _build_field_lookup(field_defs: list[dict]) -> dict[str, str]:
+    """Normalise un en-tête CSV/Excel vers un field_key : label, field_key, ou alias FR connu (tous normalisés)."""
+    lookup: dict[str, str] = {_normalize_header("notes"): "notes"}
+    for f in field_defs:
+        lookup[_normalize_header(f["field_key"])] = f["field_key"]
+        lookup[_normalize_header(f["label"])] = f["field_key"]
+    for alias, key in BASE_FIELD_ALIASES.items():
+        lookup.setdefault(_normalize_header(alias), key)
+    return lookup
+
+
+def _csv_row_to_contact_fields(row: dict, field_defs: list[dict]) -> dict:
     """row : dict CSV normalisé (clés en minuscules, sans espaces). Retourne les champs prêts pour l'insert contact."""
-    normalized = {}
+    lookup = _build_field_lookup(field_defs)
+    defs_by_key = {f["field_key"]: f for f in field_defs}
+
+    normalized: dict[str, str] = {}
     for key, value in row.items():
-        canonical = CSV_COLUMN_ALIASES.get(key, key)
-        if canonical in CSV_COLUMNS and value:
+        canonical = lookup.get(_normalize_header(key or ""))
+        if canonical and value:
             normalized[canonical] = value
 
-    # Téléphones : on tolère les séparateurs courants (espaces, tirets) dans le CSV et on les nettoie ;
-    # si le résultat contient encore des lettres, on abandonne juste ce champ plutôt que de bloquer tout l'import.
-    for phone_key in ("phone", "phone_pro", "phone_perso"):
-        if phone_key in normalized:
-            cleaned = clean_phone(normalized[phone_key])
-            normalized[phone_key] = cleaned if is_valid_phone(cleaned) else ""
+    # Téléphones (tout champ de type 'phone', de base ou custom) : on tolère les séparateurs
+    # courants dans le CSV et on les nettoie ; si des lettres subsistent, on abandonne juste ce
+    # champ plutôt que de bloquer tout l'import.
+    for key, field in defs_by_key.items():
+        if field["field_type"] == "phone" and key in normalized:
+            cleaned = clean_phone(normalized[key])
+            normalized[key] = cleaned if is_valid_phone(cleaned) else ""
+        if field["field_type"] == "email" and key in normalized:
+            if not EMAIL_RE.match(normalized[key].strip().lower()):
+                normalized[key] = ""
 
-    category = normalized.get("category", "").lower()
-    if category not in CATEGORIES:
+    category_field = defs_by_key.get("category")
+    category = (normalized.get("category") or "").strip().lower()
+    allowed_categories = [o.lower() for o in ((category_field or {}).get("options") or [])]
+    if category not in allowed_categories:
         category = None
 
-    contact_details = {
-        "first_name_2": normalized.get("first_name_2", ""), "first_name_3": normalized.get("first_name_3", ""),
-        "gender": normalized.get("gender", ""), "title": normalized.get("title", ""),
-        "nickname": normalized.get("nickname", ""),
-        "email_pro": normalized.get("email_pro", ""), "email_perso": normalized.get("email_perso", ""),
-        "phone_pro": normalized.get("phone_pro", ""), "phone_perso": normalized.get("phone_perso", ""),
-        "phone_preferred": normalized.get("phone_preferred", ""),
-        "country_residence": normalized.get("country_residence", ""), "country_origin": normalized.get("country_origin", ""),
-        "birthday": {"day": normalized.get("birthday_day") or None, "month": normalized.get("birthday_month") or None},
-        "address": {
-            "street_number": normalized.get("street_number", ""), "street": normalized.get("street", ""),
-            "city": normalized.get("city", ""), "postal_code": normalized.get("postal_code", ""),
-            "region": normalized.get("region", ""),
-        },
-        "urls": {
-            "website": normalized.get("website", ""), "linkedin": normalized.get("linkedin", ""),
-            "instagram": normalized.get("instagram", ""), "facebook": normalized.get("facebook", ""),
-        },
+    custom_fields = {
+        f["field_key"]: normalized[f["field_key"]]
+        for f in field_defs
+        if f["storage_mode"] == "jsonb" and normalized.get(f["field_key"])
     }
-    # Ne garde contact_details que s'il contient au moins une valeur non vide (évite d'écraser avec du vide)
-    has_details = any(
-        v for v in (*{k: v for k, v in contact_details.items() if k not in ("birthday", "address", "urls")}.values(),
-                     *contact_details["birthday"].values(), *contact_details["address"].values(), *contact_details["urls"].values())
-    )
 
     return {
         "first_name": normalized.get("first_name") or None,
@@ -159,7 +154,7 @@ def _csv_row_to_contact_fields(row: dict) -> dict:
         "notes": normalized.get("notes") or None,
         "category": category,
         "segment": normalized.get("segment") or None,
-        "contact_details": contact_details if has_details else None,
+        "custom_fields": custom_fields or None,
     }
 
 
@@ -250,6 +245,7 @@ def _enrich_contacts(sb, tenant_id: str, contacts: list[dict]) -> list[dict]:
         last = last_appt.get(cid)
         c["last_appointment_at"] = last
         c["is_inactive"] = (last is None or last < cutoff)
+        c["is_incomplete"] = not c.get("email") and not c.get("phone")
 
     return contacts
 
@@ -263,28 +259,30 @@ async def export_contacts_csv(
 ):
     """Exporte tous les contacts du tenant en CSV ou Excel (téléchargement)."""
     sb = get_supabase_admin()
+    field_defs = ensure_default_fields(sb, tenant_id)
 
     contacts = (
         sb.table("contact")
-        .select("first_name, last_name, email, phone, category, segment, contact_details, notes, source, created_at")
+        .select("first_name, last_name, email, phone, category, segment, custom_fields, notes, source, created_at")
         .eq("tenant_id", tenant_id)
         .is_("deleted_at", "null")
         .order("created_at", desc=True)
         .execute()
     ).data or []
 
-    rows = [_contact_to_csv_row(c) for c in contacts]
+    header = _csv_header(field_defs) + ["Source", "Date de création"]
+    rows = [_contact_to_csv_row(c, field_defs) + [c.get("source") or "", (c.get("created_at") or "")[:10]] for c in contacts]
 
     if format == "xlsx":
         return Response(
-            content=_rows_to_xlsx_bytes(CSV_COLUMNS, rows),
+            content=_rows_to_xlsx_bytes(header, rows),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": "attachment; filename=contacts.xlsx"},
         )
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(CSV_COLUMNS)
+    writer.writerow(header)
     for row in rows:
         writer.writerow(row)
 
@@ -295,35 +293,38 @@ async def export_contacts_csv(
     )
 
 
-IMPORT_TEMPLATE_EXAMPLE = [
-    "Marie", "Dupont", "", "", "Femme", "", "",
-    "marie.dupont@exemple.com", "+33612345678", "", "", "", "", "",
-    "client", "", "BE", "", "", "",
-    "12", "Rue de la Loi", "Bruxelles", "1000", "",
-    "", "", "", "",
-    "Cliente fidèle",
-]
-
-
 @router.get("/import-template")
 async def download_import_template(
     format: str = Query(default="csv", pattern="^(csv|xlsx)$"),
     tenant_id: str = Depends(get_current_tenant),
 ):
-    """Modèle vide (avec une ligne d'exemple) à remplir pour l'import — colonnes alignées sur CSV_COLUMNS (sans source/created_at, réservés à l'export)."""
-    import_columns = [c for c in CSV_COLUMNS if c not in ("source", "created_at")]
+    """Modèle vide (avec une ligne d'exemple) à remplir pour l'import — colonnes = champs actuellement activés pour ce tenant."""
+    sb = get_supabase_admin()
+    field_defs = ensure_default_fields(sb, tenant_id)
+    enabled = _enabled_fields(field_defs)
+
+    header = _csv_header(field_defs)
+    example = []
+    for f in enabled:
+        if f["field_key"] == "category":
+            example.append((f.get("options") or ["client"])[0])
+        elif f["field_type"] == "select":
+            example.append((f.get("options") or [""])[0])
+        else:
+            example.append(EXAMPLE_BY_TYPE.get(f["field_type"], "Exemple"))
+    example.append("Cliente fidèle")  # notes
 
     if format == "xlsx":
         return Response(
-            content=_rows_to_xlsx_bytes(import_columns, [IMPORT_TEMPLATE_EXAMPLE]),
+            content=_rows_to_xlsx_bytes(header, [example]),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": "attachment; filename=modele_contacts.xlsx"},
         )
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(import_columns)
-    writer.writerow(IMPORT_TEMPLATE_EXAMPLE)
+    writer.writerow(header)
+    writer.writerow(example)
 
     return Response(
         content=output.getvalue(),
@@ -337,6 +338,7 @@ async def list_contacts(
     q: Optional[str] = None,
     tag_id: Optional[str] = None,
     inactive_only: bool = False,
+    incomplete_only: bool = False,
     category: Optional[str] = None,
     segment: Optional[str] = None,
     limit: int = Query(default=30, le=100),
@@ -384,6 +386,9 @@ async def list_contacts(
     if inactive_only:
         contacts = [c for c in contacts if c["is_inactive"]]
 
+    if incomplete_only:
+        contacts = [c for c in contacts if c["is_incomplete"]]
+
     # Compte total (approximate — pour la pagination)
     count_q = (
         sb.table("contact")
@@ -402,6 +407,185 @@ async def list_contacts(
     total = (count_q.execute()).count or 0
 
     return {"contacts": contacts, "total": total, "offset": offset, "limit": limit}
+
+
+@router.get("/duplicates")
+async def get_duplicate_contacts(
+    tenant_id: str = Depends(get_current_tenant),
+):
+    """Groupes de contacts probablement en doublon (même email ou même téléphone), à valider manuellement."""
+    sb = get_supabase_admin()
+    contacts = (
+        sb.table("contact")
+        .select("id, first_name, last_name, email, phone, category, created_at")
+        .eq("tenant_id", tenant_id)
+        .is_("deleted_at", "null")
+        .order("created_at")
+        .execute()
+    ).data or []
+
+    ignored = {
+        (row["match_type"], row["match_value"])
+        for row in (sb.table("contact_duplicate_ignore").select("match_type, match_value").eq("tenant_id", tenant_id).execute()).data or []
+    }
+
+    by_email: dict[str, list[dict]] = {}
+    by_phone: dict[str, list[dict]] = {}
+    for c in contacts:
+        email_key = (c.get("email") or "").strip().lower()
+        if email_key:
+            by_email.setdefault(email_key, []).append(c)
+        phone_key = clean_phone(c.get("phone"))
+        if phone_key:
+            by_phone.setdefault(phone_key, []).append(c)
+
+    groups = []
+    seen_ids: set[str] = set()
+    for match_type, buckets in (("email", by_email), ("phone", by_phone)):
+        for match_value, group in buckets.items():
+            if len(group) < 2 or (match_type, match_value) in ignored:
+                continue
+            key = tuple(sorted(c["id"] for c in group))
+            if key in seen_ids:
+                continue
+            seen_ids.add(key)
+            groups.append({"match_type": match_type, "match_value": match_value, "contacts": group})
+
+    return groups
+
+
+class IgnoreDuplicateIn(BaseModel):
+    match_type: str
+    match_value: str
+
+
+@router.post("/duplicates/ignore", status_code=204)
+async def ignore_duplicate_group(
+    body: IgnoreDuplicateIn,
+    tenant_id: str = Depends(get_current_tenant),
+):
+    """Marque un groupe de doublons comme non pertinent — il ne sera plus proposé."""
+    sb = get_supabase_admin()
+    sb.table("contact_duplicate_ignore").upsert(
+        {"tenant_id": tenant_id, "match_type": body.match_type, "match_value": body.match_value},
+        on_conflict="tenant_id,match_type,match_value",
+    ).execute()
+
+
+@router.get("/archive-suggestions")
+async def get_archive_suggestions(
+    tenant_id: str = Depends(get_current_tenant),
+):
+    """Contacts incomplets (ni email ni téléphone) et inactifs depuis longtemps — à archiver manuellement, jamais automatiquement."""
+    sb = get_supabase_admin()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=INACTIVE_DAYS)).isoformat()
+    rows = (
+        sb.table("contact")
+        .select("id, first_name, last_name, email, phone, last_interaction_at, created_at")
+        .eq("tenant_id", tenant_id)
+        .is_("deleted_at", "null")
+        .is_("anonymized_at", "null")
+        .lt("last_interaction_at", cutoff)
+        .execute()
+    ).data or []
+    # Filtré en Python (pas en SQL) car email/phone peuvent être "" (chaîne vide) plutôt que NULL selon le point d'entrée.
+    return [c for c in rows if not c.get("email") and not c.get("phone")]
+
+
+@router.post("/{contact_id}/archive", status_code=204)
+async def archive_contact(
+    contact_id: str,
+    tenant_id: str = Depends(get_current_tenant),
+    user: dict = Depends(get_current_user),
+):
+    """Archive manuellement un contact (soft-delete) — jamais déclenché automatiquement."""
+    sb = get_supabase_admin()
+    res = (
+        sb.table("contact")
+        .update({"deleted_at": datetime.now(timezone.utc).isoformat()})
+        .eq("id", contact_id)
+        .eq("tenant_id", tenant_id)
+        .is_("deleted_at", "null")
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(404, "Contact introuvable")
+    log_activity(tenant_id, user["sub"], "Contact archivé", None, target_type="contact", target_id=contact_id)
+
+
+class MergeContactsIn(BaseModel):
+    merge_id: str
+
+
+_MERGE_RELATED_TABLES = [
+    "lead", "appointment", "contact_activity", "contact_reminder", "contact_consent", "invoice",
+]
+
+
+@router.post("/{keep_id}/merge")
+async def merge_contacts(
+    keep_id: str,
+    body: MergeContactsIn,
+    tenant_id: str = Depends(get_current_tenant),
+    user: dict = Depends(get_current_user),
+):
+    """Fusionne merge_id dans keep_id : réaffecte toutes les relations, complète les champs vides, archive merge_id."""
+    sb = get_supabase_admin()
+    if keep_id == body.merge_id:
+        raise HTTPException(400, "Impossible de fusionner un contact avec lui-même")
+
+    keep_res = sb.table("contact").select("*").eq("id", keep_id).eq("tenant_id", tenant_id).maybe_single().execute()
+    keep = keep_res.data if keep_res else None
+    merge_res = sb.table("contact").select("*").eq("id", body.merge_id).eq("tenant_id", tenant_id).maybe_single().execute()
+    merge = merge_res.data if merge_res else None
+    if not keep or not merge:
+        raise HTTPException(404, "Contact introuvable")
+
+    # Complète les champs vides de keep avec ceux de merge (keep garde toujours la priorité)
+    updates: dict = {}
+    for field in ("first_name", "last_name", "email", "phone", "category", "segment"):
+        if not keep.get(field) and merge.get(field):
+            updates[field] = merge[field]
+    if merge.get("notes"):
+        updates["notes"] = (f"{keep.get('notes')}\n{merge['notes']}" if keep.get("notes") else merge["notes"])
+    merged_details = {**(merge.get("custom_fields") or {}), **(keep.get("custom_fields") or {})}
+    if merged_details:
+        updates["custom_fields"] = merged_details
+    if updates:
+        sb.table("contact").update(updates).eq("id", keep_id).eq("tenant_id", tenant_id).execute()
+
+    for table in _MERGE_RELATED_TABLES:
+        try:
+            sb.table(table).update({"contact_id": keep_id}).eq("contact_id", body.merge_id).execute()
+        except Exception:
+            continue  # table absente de cet environnement (ex. invoice) — on continue
+
+    # Tags : clé primaire (contact_id, tag_id) → ne reporter que les tags que keep_id n'a pas déjà
+    keep_tag_ids = {
+        row["tag_id"] for row in
+        (sb.table("contact_tag_link").select("tag_id").eq("contact_id", keep_id).execute()).data or []
+    }
+    merge_tag_links = (
+        sb.table("contact_tag_link").select("tag_id").eq("contact_id", body.merge_id).execute()
+    ).data or []
+    new_tag_ids = [row["tag_id"] for row in merge_tag_links if row["tag_id"] not in keep_tag_ids]
+    if new_tag_ids:
+        sb.table("contact_tag_link").insert(
+            [{"contact_id": keep_id, "tag_id": tag_id} for tag_id in new_tag_ids]
+        ).execute()
+    sb.table("contact_tag_link").delete().eq("contact_id", body.merge_id).execute()
+
+    sb.table("contact").update(
+        {"deleted_at": datetime.now(timezone.utc).isoformat()}
+    ).eq("id", body.merge_id).eq("tenant_id", tenant_id).execute()
+
+    log_activity(
+        tenant_id, user["sub"], "Contacts fusionnés",
+        f"{merge.get('first_name') or ''} {merge.get('last_name') or ''} fusionné dans ce contact",
+        target_type="contact", target_id=keep_id,
+    )
+
+    return {"status": "merged", "kept_id": keep_id}
 
 
 @router.get("/{contact_id}")
@@ -425,7 +609,7 @@ async def get_contact(
         raise HTTPException(404, "Contact introuvable")
     contact = res.data
 
-    photo_path = (contact.get("contact_details") or {}).get("photo_path")
+    photo_path = (contact.get("custom_fields") or {}).get("photo_path")
     contact["photo_signed_url"] = _signed_url_bucket(sb, PHOTO_BUCKET, photo_path) if photo_path else None
 
     # Tags
@@ -475,6 +659,7 @@ async def get_contact(
     contact["last_appointment_at"] = last
     cutoff = (datetime.now(timezone.utc) - timedelta(days=INACTIVE_DAYS)).isoformat()
     contact["is_inactive"] = (last is None or last < cutoff)
+    contact["is_incomplete"] = not contact.get("email") and not contact.get("phone")
 
     # Conversations agent IA (5 dernières)
     convs = (
@@ -517,21 +702,30 @@ async def update_contact(
     if not updates:
         raise HTTPException(400, "Aucun champ à mettre à jour")
 
-    if "category" in updates and updates["category"] not in CATEGORIES:
-        raise HTTPException(400, f"Catégorie invalide (attendu : {', '.join(sorted(CATEGORIES))})")
+    field_defs = ensure_default_fields(sb, tenant_id)
+    defs_by_key = {f["field_key"]: f for f in field_defs}
 
-    if "contact_details" in updates:
-        for phone_key in ("phone_pro", "phone_perso"):
-            raw = updates["contact_details"].get(phone_key)
-            cleaned = clean_phone(raw)
-            if raw and not is_valid_phone(cleaned):
-                raise HTTPException(400, "Le téléphone ne doit contenir que des chiffres et éventuellement un + au début.")
-            if cleaned is not None:
-                updates["contact_details"][phone_key] = cleaned
+    if "category" in updates:
+        allowed = [o.lower() for o in ((defs_by_key.get("category") or {}).get("options") or [])]
+        if updates["category"].lower() not in allowed:
+            raise HTTPException(400, f"Catégorie invalide (attendu : {', '.join(sorted(allowed))})")
+
+    if "custom_fields" in updates:
+        for key, value in list(updates["custom_fields"].items()):
+            field = defs_by_key.get(key)
+            if not field or not value:
+                continue
+            if field["field_type"] == "phone":
+                cleaned = clean_phone(value)
+                if not is_valid_phone(cleaned):
+                    raise HTTPException(400, f"« {field['label']} » ne doit contenir que des chiffres et éventuellement un + au début.")
+                updates["custom_fields"][key] = cleaned
+            elif field["field_type"] == "email" and not EMAIL_RE.match(value.strip().lower()):
+                raise HTTPException(400, f"« {field['label']} » doit être une adresse email valide.")
 
     current_res = (
         sb.table("contact")
-        .select("first_name, last_name, email, phone, category, segment, contact_details")
+        .select("first_name, last_name, email, phone, category, segment, custom_fields")
         .eq("id", contact_id)
         .eq("tenant_id", tenant_id)
         .maybe_single()
@@ -541,15 +735,15 @@ async def update_contact(
     if not current:
         raise HTTPException(404, "Contact introuvable")
 
-    if "contact_details" in updates:
-        updates["contact_details"] = {**(current.get("contact_details") or {}), **updates["contact_details"]}
+    if "custom_fields" in updates:
+        updates["custom_fields"] = {**(current.get("custom_fields") or {}), **updates["custom_fields"]}
 
     changes = [
         f"{field} : « {current.get(field) or ''} » → « {new_value or ''} »"
         for field, new_value in updates.items()
-        if field != "contact_details" and str(current.get(field) or "") != str(new_value or "")
+        if field != "custom_fields" and str(current.get(field) or "") != str(new_value or "")
     ]
-    if "contact_details" in updates and updates["contact_details"] != (current.get("contact_details") or {}):
+    if "custom_fields" in updates and updates["custom_fields"] != (current.get("custom_fields") or {}):
         changes.append("informations complémentaires mises à jour")
 
     res = (
@@ -639,86 +833,121 @@ async def delete_activity(
     sb.table("contact_activity").delete().eq("id", activity_id).eq("tenant_id", tenant_id).execute()
 
 
+async def _run_import_job(job_id: str, tenant_id: str, filename: str, content: bytes) -> None:
+    """Traitement réel de l'import — exécuté en arrière-plan, continue même si le tenant quitte la page."""
+    sb = get_supabase_admin()
+    try:
+        if filename.endswith(".xlsx"):
+            try:
+                rows = _read_xlsx_rows(content)
+            except Exception as e:
+                raise ValueError(f"Fichier Excel illisible : {e}")
+        else:
+            try:
+                text = content.decode("utf-8-sig")  # gère le BOM Excel
+            except UnicodeDecodeError:
+                text = content.decode("latin-1")
+            reader = csv.DictReader(io.StringIO(text))
+            rows = [{k.strip().lower(): v.strip() for k, v in row.items() if v is not None} for row in reader]
+
+        field_defs = ensure_default_fields(sb, tenant_id)
+
+        existing_emails = {
+            r["email"].lower()
+            for r in (
+                sb.table("contact").select("email").eq("tenant_id", tenant_id).is_("deleted_at", "null").execute()
+            ).data or []
+            if r.get("email")
+        }
+
+        created, skipped = 0, 0
+        to_insert: list[dict] = []
+
+        for row in rows:
+            fields = _csv_row_to_contact_fields(row, field_defs)
+
+            if not fields["first_name"] and not fields["last_name"] and not fields["email"] and not fields["phone"]:
+                skipped += 1
+                continue
+            if fields["email"] and fields["email"] in existing_emails:
+                skipped += 1
+                continue
+
+            to_insert.append({"tenant_id": tenant_id, "source": "csv_import", **fields})
+            if fields["email"]:
+                existing_emails.add(fields["email"])
+
+        notice = None
+        quota = await get_contact_quota(tenant_id)
+        if not quota["unlimited"] and len(to_insert) > quota["room"]:
+            room = quota["room"]
+            quota_skipped = len(to_insert) - room
+            to_insert = to_insert[:room]
+            skipped += quota_skipped
+            notice = (
+                f"Limite de votre plan atteinte : {len(to_insert)} contact(s) importé(s) sur "
+                f"{len(to_insert) + quota_skipped} demandé(s). Passez à un plan supérieur pour importer le reste."
+            )
+
+        if to_insert:
+            sb.table("contact").insert(to_insert).execute()
+            created = len(to_insert)
+
+        sb.table("contact_import_job").update({
+            "status": "done",
+            "created_count": created,
+            "skipped_count": skipped,
+            "notice": notice,
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", job_id).execute()
+    except Exception as e:
+        sb.table("contact_import_job").update({
+            "status": "error",
+            "error_message": str(e),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", job_id).execute()
+
+
 @router.post("/import")
 async def import_contacts_csv(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     tenant_id: str = Depends(get_current_tenant),
 ):
     """
-    Importe des contacts depuis un fichier CSV ou Excel (.xlsx).
-    Colonnes acceptées (insensible à la casse, alias fr tolérés) : voir CSV_COLUMNS.
-    Seuls first_name/last_name/email sont obligatoires (au moins un des trois).
+    Importe des contacts depuis un fichier CSV ou Excel (.xlsx), traité en arrière-plan
+    (continue même si le tenant quitte la page). Suivre la progression via GET /contacts/import/{job_id}.
+    Colonnes acceptées (insensible à la casse) : le libellé ou la clé de n'importe quel champ
+    actuellement configuré pour ce tenant (voir GET /contact-fields), plus quelques alias FR.
+    Au moins un identifiant (nom, prénom, email ou téléphone) est requis par ligne.
     Ignore les doublons (même email déjà présent pour ce tenant).
     """
-    filename = (file.filename or "").lower()
+    filename = (file.filename or "fichier").lower()
     if not filename.endswith((".csv", ".xlsx")):
         raise HTTPException(400, "Le fichier doit être au format CSV (.csv) ou Excel (.xlsx)")
 
     content = await file.read()
-
-    if filename.endswith(".xlsx"):
-        try:
-            rows = _read_xlsx_rows(content)
-        except Exception as e:
-            raise HTTPException(400, f"Fichier Excel illisible : {e}")
-    else:
-        try:
-            text = content.decode("utf-8-sig")  # gère le BOM Excel
-        except UnicodeDecodeError:
-            text = content.decode("latin-1")
-
-        reader = csv.DictReader(io.StringIO(text))
-        # Normalise les noms de colonnes en minuscules sans espaces
-        rows = []
-        for row in reader:
-            rows.append({k.strip().lower(): v.strip() for k, v in row.items() if v is not None})
-
-    if not rows:
-        return {"created": 0, "skipped": 0, "errors": []}
+    if not content:
+        raise HTTPException(400, "Fichier vide")
 
     sb = get_supabase_admin()
+    job = sb.table("contact_import_job").insert({
+        "tenant_id": tenant_id, "status": "processing", "filename": file.filename or "fichier",
+    }).execute().data[0]
 
-    # Emails déjà présents pour ce tenant
-    existing_emails = {
-        r["email"].lower()
-        for r in (
-            sb.table("contact")
-            .select("email")
-            .eq("tenant_id", tenant_id)
-            .is_("deleted_at", "null")
-            .execute()
-        ).data or []
-        if r.get("email")
-    }
+    background_tasks.add_task(_run_import_job, job["id"], tenant_id, filename, content)
 
-    created, skipped = 0, 0
-    errors: list[str] = []
-    to_insert: list[dict] = []
+    return {"job_id": job["id"], "status": "processing"}
 
-    for i, row in enumerate(rows, start=2):  # ligne 1 = header
-        fields = _csv_row_to_contact_fields(row)
 
-        if not fields["first_name"] and not fields["last_name"] and not fields["email"]:
-            skipped += 1
-            continue
-
-        if fields["email"] and fields["email"] in existing_emails:
-            skipped += 1
-            continue
-
-        to_insert.append({
-            "tenant_id": tenant_id,
-            "source": "csv_import",
-            **fields,
-        })
-        if fields["email"]:
-            existing_emails.add(fields["email"])
-
-    if to_insert:
-        try:
-            sb.table("contact").insert(to_insert).execute()
-            created = len(to_insert)
-        except Exception as e:
-            raise HTTPException(500, f"Erreur lors de l'insertion : {e}")
-
-    return {"created": created, "skipped": skipped, "errors": errors}
+@router.get("/import/{job_id}")
+async def get_import_job(
+    job_id: str,
+    tenant_id: str = Depends(get_current_tenant),
+):
+    sb = get_supabase_admin()
+    res = sb.table("contact_import_job").select("*").eq("id", job_id).eq("tenant_id", tenant_id).maybe_single().execute()
+    job = res.data if res else None
+    if not job:
+        raise HTTPException(404, "Import introuvable")
+    return job

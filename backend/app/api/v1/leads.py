@@ -6,6 +6,7 @@ from app.models.lead import LeadCreateIn, LeadUpdateIn, LeadOut
 from app.services.email import send_lead_notification, send_lead_acknowledgement, get_tenant_brand
 from app.api.v1.booking import _get_team_emails, _TEAM_EMAIL_ERROR
 from app.services.retention import CONSENT_CHANNELS, record_consent, touch_contact_interaction
+from app.services.contact_limits import get_contact_quota
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
@@ -13,8 +14,16 @@ router = APIRouter(prefix="/leads", tags=["Leads"])
 @router.get("/contacts/count")
 async def get_contacts_count(tenant_id: str = Depends(get_current_tenant)):
     supabase = get_supabase_admin()
-    result = supabase.table("contact").select("id", count="exact").eq("tenant_id", tenant_id).execute()
-    return {"count": result.count or 0}
+    quota = await get_contact_quota(tenant_id)
+    tenant = supabase.table("tenant").select("contact_overage_since").eq("id", tenant_id).maybe_single().execute()
+    overage_since = (tenant.data if tenant else None) or {}
+    return {
+        "count": quota["current"],
+        "max_contacts": quota["max_contacts"],
+        "ceiling": quota["ceiling"],
+        "unlimited": quota["unlimited"],
+        "contact_overage_since": overage_since.get("contact_overage_since"),
+    }
 
 
 @router.get("/", response_model=list[LeadOut])

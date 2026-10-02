@@ -24,6 +24,7 @@ from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant, get_current_user
 from app.services.email import send_team_invite
 from app.services.activity import log_activity
+from app.services.subscription import get_tenant_plan
 
 router = APIRouter(prefix="/members", tags=["members"])
 logger = logging.getLogger(__name__)
@@ -164,6 +165,19 @@ async def invite_member(
     my_role = _get_role(sb, tenant_id, user["sub"])
     if my_role not in ("owner", "admin"):
         raise HTTPException(status_code=403, detail="Seuls les propriétaires et admins peuvent inviter des membres.")
+
+    plan = await get_tenant_plan(tenant_id)
+    max_team_members = plan["features"].get("max_team_members", 0)
+    if max_team_members is not None and max_team_members >= 0:
+        current_members = (
+            sb.table("membership").select("id", count="exact").eq("tenant_id", tenant_id).execute()
+        ).count or 0
+        pending_invites = (
+            sb.table("team_invite").select("id", count="exact")
+            .eq("tenant_id", tenant_id).is_("accepted_at", "null").execute()
+        ).count or 0
+        if current_members + pending_invites >= max_team_members:
+            raise HTTPException(status_code=403, detail="Limite de membres d'équipe atteinte pour votre forfait.")
 
     token = secrets.token_urlsafe(32)
     expires_at = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
