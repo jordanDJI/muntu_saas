@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
 
     app_env: str = "development"
+    # Optionnel : active le rate limiter partagé entre instances.
+    # Sans valeur, le compteur reste local au process.
+    redis_url: str = ""
     app_url: str = "http://localhost:8000"
     frontend_url: str = "http://localhost:3000"
     frontend_url_prod: str = ""

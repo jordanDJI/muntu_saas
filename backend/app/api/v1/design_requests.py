@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.supabase import get_supabase_admin
+from app.middleware.roles import require_owner_or_admin
 from app.middleware.tenant import get_current_tenant
 from app.services import email as email_svc
 from app.services.subscription import get_tenant_plan
@@ -19,7 +20,7 @@ class DesignRequestIn(BaseModel):
 @router.post("/")
 async def create_design_request(
     body: DesignRequestIn,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_owner_or_admin),
 ):
     plan = await get_tenant_plan(tenant_id)
     if plan.get("plan_name") != "Business":

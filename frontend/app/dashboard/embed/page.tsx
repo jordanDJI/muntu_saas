@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, supabase } from "../../../lib/api";
+import { api } from "../../../lib/api";
 import { UpgradeGate } from "../components/UpgradeGate";
 import { useLanguage } from "../../../contexts/LanguageContext";
 
@@ -57,15 +57,10 @@ export default function EmbedPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: membership } = await supabase
-        .from("membership")
-        .select("tenant:tenant_id(slug)")
-        .eq("user_id", user.id)
-        .single();
-      const slug = (membership?.tenant as any)?.slug ?? "";
-      setTenantSlug(slug);
+      // Via l'API : le join imbriqué sur `tenant` depuis le client ne renvoyait
+      // rien, et le `.single()` cassait pour les comptes multi-espaces.
+      const tenant = await api.getMyTenant().catch(() => null);
+      setTenantSlug(tenant?.slug ?? "");
 
       const sites = await api.getSites().catch(() => []) as any[];
       const tracking = sites?.[0]?.site_style?.tracking;

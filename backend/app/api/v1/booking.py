@@ -12,9 +12,11 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from app.core.config import settings
 from app.core.supabase import get_supabase_admin
-from app.middleware.rate_limit import check_rate
+from app.middleware.rate_limit import check_rate, check_rate_async
 from app.models.calendar import PublicBookIn
 from app.services.lead import ensure_lead
+from app.services.paypal import (capture_order, create_order, get_deposit_config,
+                                 get_order, refund_capture, refund_order)
 from app.services.retention import CONSENT_CHANNELS, record_consent, touch_contact_interaction
 
 router = APIRouter(prefix="/booking", tags=["Booking"])
@@ -349,9 +351,157 @@ _TEAM_EMAIL_ERROR = (
 )
 
 
+# -- Validation de créneau (partagée par /book et /paypal-capture) -----------
+
+# Un RDV en attente de paiement n'immobilise le créneau que pendant ce délai :
+# passé ce point, le client a abandonné le tunnel PayPal et le créneau doit
+# redevenir réservable. Le job scheduler les annule par ailleurs.
+DEPOSIT_PENDING_TTL_MINUTES = 30
+
+_DAYS_FR = {0: "Lundi", 1: "Mardi", 2: "Mercredi", 3: "Jeudi",
+            4: "Vendredi", 5: "Samedi", 6: "Dimanche"}
+
+
+def _is_stale(created_at, cutoff: datetime) -> bool:
+    """True si created_at est antérieur au cutoff (naïf traité comme UTC)."""
+    if not created_at:
+        return False
+    try:
+        dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return False
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt < cutoff
+
+
+def _assert_slot_bookable(sb, tenant: dict, cal_id: str, start_local: datetime,
+                          end_local: datetime, party_size: int) -> None:
+    """
+    Valide qu'un créneau est réellement réservable. Lève une HTTPException sinon.
+
+    Appelée par les DEUX chemins de réservation publique. Auparavant seul
+    /book validait, et partiellement : capacité et taille de groupe étaient
+    contrôlées, mais ni les horaires d'ouverture, ni les périodes bloquées, ni
+    le fait que le créneau soit dans le futur. Un POST construit à la main
+    pouvait donc réserver un dimanche à 3 h du matin, et le chemin avec
+    acompte ne validait rien du tout.
+
+    start_local / end_local sont naïfs, en heure locale du tenant
+    (invariant de stockage du projet).
+    """
+    tz = _tenant_tz(tenant)
+    start_utc = start_local.replace(tzinfo=tz).astimezone(timezone.utc)
+    end_utc = end_local.replace(tzinfo=tz).astimezone(timezone.utc)
+
+    if end_utc <= start_utc:
+        raise HTTPException(status_code=400, detail="Créneau invalide.")
+
+    if start_utc <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=400,
+                            detail="Ce créneau est déjà passé. Veuillez choisir un autre horaire.")
+
+    day_of_week = start_local.weekday()
+    day_label = _DAYS_FR.get(day_of_week, "")
+
+    avail_res = (
+        sb.table("availability_slot")
+        .select("start_time, end_time, capacity, max_party_size")
+        .eq("calendar_id", cal_id)
+        .eq("day_of_week", day_of_week)
+        .eq("is_active", True)
+        .execute()
+    )
+    windows = avail_res.data or []
+    if not windows:
+        raise HTTPException(status_code=400,
+                            detail=f"Le professionnel ne prend pas de rendez-vous le {day_label.lower()}.")
+
+    # Le créneau demandé doit tenir entièrement dans une plage d'ouverture.
+    # On lit capacité et taille de groupe sur CETTE plage, et non en prenant
+    # le max de la journée : une pause déjeuner avec une capacité différente
+    # ne doit pas relever la limite du reste de la journée.
+    containing = None
+    for w in windows:
+        try:
+            h_s, m_s = map(int, str(w["start_time"])[:5].split(":"))
+            h_e, m_e = map(int, str(w["end_time"])[:5].split(":"))
+        except (ValueError, KeyError, TypeError):
+            continue
+        w_start = _local_slot(start_local.date(), h_s, m_s, tz)
+        w_end = _local_slot(start_local.date(), h_e, m_e, tz)
+        if w_start <= start_utc and end_utc <= w_end:
+            containing = w
+            break
+
+    if containing is None:
+        raise HTTPException(status_code=400,
+                            detail="Ce créneau est en dehors des horaires d'ouverture. "
+                                   "Veuillez choisir un autre horaire.")
+
+    capacity = max(1, int(containing.get("capacity") or 1))
+    max_party_size = max(1, int(containing.get("max_party_size") or 1))
+
+    # Message conservé à l'identique : il est documenté dans CLAUDE.md.
+    if party_size > max_party_size:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Le nombre de personnes maximum par réservation des {day_label} "
+                   f"pour cette période est de {max_party_size} personne(s).",
+        )
+
+    blocked_res = (
+        sb.table("blocked_period")
+        .select("start_at, end_at")
+        .eq("calendar_id", cal_id)
+        .lte("start_at", end_utc.isoformat())
+        .gte("end_at", start_utc.isoformat())
+        .execute()
+    )
+    for b in blocked_res.data or []:
+        try:
+            bs = datetime.fromisoformat(str(b["start_at"]).replace("Z", "+00:00"))
+            be = datetime.fromisoformat(str(b["end_at"]).replace("Z", "+00:00"))
+        except (ValueError, KeyError, TypeError):
+            continue
+        if bs.tzinfo is None:
+            bs = bs.replace(tzinfo=timezone.utc)
+        if be.tzinfo is None:
+            be = be.replace(tzinfo=timezone.utc)
+        if bs < end_utc and start_utc < be:
+            raise HTTPException(status_code=409,
+                                detail="Le professionnel est indisponible sur ce créneau. "
+                                       "Veuillez choisir un autre horaire.")
+
+    existing = (
+        sb.table("appointment")
+        .select("id, status, created_at")
+        .eq("calendar_id", cal_id)
+        .neq("status", "cancelled")
+        .lt("scheduled_at", end_local.isoformat())
+        .gt("end_at", start_local.isoformat())
+        .execute()
+    )
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(minutes=DEPOSIT_PENDING_TTL_MINUTES)
+    booked_count = 0
+    for a in existing.data or []:
+        if a.get("status") == "pending_payment" and _is_stale(a.get("created_at"), stale_cutoff):
+            continue
+        booked_count += 1
+
+    if booked_count >= capacity:
+        raise HTTPException(
+            status_code=409,
+            detail=("Ce créneau vient d'être réservé. Veuillez choisir un autre horaire."
+                    if capacity == 1
+                    else "Ce créneau est complet. Veuillez choisir un autre horaire."),
+        )
+
+
+
 @router.post("/{tenant_slug}/book", status_code=status.HTTP_201_CREATED)
 async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Request):
-    check_rate(request, "book", max_calls=5, window_seconds=300)  # 5 résa / IP / 5 min
+    await check_rate_async(request, "book", max_calls=5, window_seconds=300)  # 5 résa / IP / 5 min
     sb = get_supabase_admin()
     tenant, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
 
@@ -445,53 +595,8 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
         scheduled_at_store = body.scheduled_at
     end_at = scheduled_at_store + timedelta(minutes=body.slot_duration_min)
 
-    # Vérification anti-double réservation (TOCTOU)
-    target_date_val = scheduled_at_store.date()
-    day_of_week = target_date_val.weekday()
-    avail_check = (
-        sb.table("availability_slot")
-        .select("capacity, max_party_size")
-        .eq("calendar_id", cal_id)
-        .eq("day_of_week", day_of_week)
-        .eq("is_active", True)
-        .execute()
-    )
-    slot_capacity  = 1
-    max_party_size = 1  # défaut : solo
-    for avail in avail_check.data or []:
-        slot_capacity  = max(slot_capacity, int(avail.get("capacity") or 1))
-        mps = int(avail.get("max_party_size") or 1)
-        if mps > max_party_size:
-            max_party_size = mps
-
-    # Règle 2 : groupe trop grand
-    if body.party_size > max_party_size:
-        _DAYS_FR = {0:"Lundi",1:"Mardi",2:"Mercredi",3:"Jeudi",4:"Vendredi",5:"Samedi",6:"Dimanche"}
-        _day_name = _DAYS_FR.get(day_of_week, "")
-        raise HTTPException(
-            status_code=400,
-            detail=f"Le nombre de personnes maximum par réservation des {_day_name} pour cette période est de {max_party_size} personne(s).",
-        )
-
-    # Règle 1 : créneau plein (nb de réservations simultanées)
-    existing = (
-        sb.table("appointment")
-        .select("id")
-        .eq("calendar_id", cal_id)
-        .neq("status", "cancelled")
-        .lt("scheduled_at", end_at.isoformat())
-        .gt("end_at", scheduled_at_store.isoformat())
-        .execute()
-    )
-    booked_count = len(existing.data or [])
-    if booked_count >= slot_capacity:
-        spots_left = max(0, slot_capacity - booked_count)
-        detail = (
-            "Ce créneau vient d'être réservé. Veuillez choisir un autre horaire."
-            if slot_capacity == 1
-            else "Ce créneau est complet. Veuillez choisir un autre horaire."
-        )
-        raise HTTPException(status_code=409, detail=detail)
+    # Validation complète du créneau (horaires, blocages, capacité, groupe)
+    _assert_slot_bookable(sb, tenant, cal_id, scheduled_at_store, end_at, body.party_size)
 
     appt_row: dict = {
         "calendar_id": cal_id,
@@ -629,74 +734,81 @@ def _notify_tenant_pending(sb, tenant_id: str, first_name: str, last_name: str,
         send_message(cfg["telegram_bot_token"], cfg["telegram_notify_chat_id"], msg)
 
 
-# ── PayPal deposit endpoints ──────────────────────────────────────────────────
+# ── Acompte PayPal ────────────────────────────────────────────────────────────
 
 class _PaypalOrderIn(BaseModel):
-    """Corps de la requête pour créer un order PayPal avant la réservation."""
-    amount: float
-    currency: str = "EUR"
-    description: str = "Acompte réservation"
+    """
+    Corps de la requête pour créer un order PayPal avant la réservation.
+
+    Volontairement vide de toute donnée monétaire : le montant, la devise et
+    le mode sandbox sont lus côté serveur depuis site_style.deposit. Ils
+    étaient auparavant fournis par le client, qui pouvait donc régler un
+    acompte de 0,01 € en appelant l'endpoint directement.
+    """
+    pass
 
 
 class _PaypalCaptureIn(PublicBookIn):
-    """Corps de la requête pour capturer un paiement et créer le RDV en même temps."""
+    """Corps de la requête pour capturer un paiement et créer le RDV."""
     paypal_order_id: str
+
+
+def _deposit_or_400(sb, tenant_id: str) -> dict:
+    """Config d'acompte du tenant, ou 400 si l'acompte n'est pas utilisable."""
+    cfg = get_deposit_config(sb, tenant_id)
+    if cfg is None:
+        raise HTTPException(
+            status_code=400,
+            detail="L'acompte en ligne n'est pas disponible pour ce professionnel.",
+        )
+    return cfg
 
 
 @router.post("/{tenant_slug}/paypal-order", status_code=201)
 async def create_paypal_order(tenant_slug: str, body: _PaypalOrderIn, request: Request):
     """
     Crée un order PayPal côté backend.
-    Retourne { order_id, approve_url } — le frontend affiche les boutons PayPal avec order_id.
-    Le dépôt doit être activé (site_style.deposit.enabled = true) et les credentials PayPal configurés.
+    Retourne { order_id, approve_url } — le frontend affiche les boutons PayPal
+    avec order_id. Le montant provient exclusivement de la config du tenant.
     """
-    check_rate(request, "paypal_order", max_calls=10, window_seconds=300)
+    await check_rate_async(request, "paypal_order", max_calls=10, window_seconds=300)
     sb = get_supabase_admin()
     tenant, _ = _get_tenant_and_calendar(sb, tenant_slug)
+    cfg = _deposit_or_400(sb, tenant["id"])
 
-    site_res = (
-        sb.table("site")
-        .select("site_style, paypal_client_secret")
-        .eq("tenant_id", tenant["id"])
-        .execute()
-    )
-    site = (site_res.data or [{}])[0]
-    style = site.get("site_style") or {}
-    deposit = style.get("deposit") or {}
+    tenant_name = tenant.get("name") or ""
+    description = f"Acompte réservation {tenant_name}".strip()
 
-    if not deposit.get("enabled"):
-        raise HTTPException(status_code=400, detail="Le dépôt PayPal n'est pas activé pour ce professionnel.")
-
-    client_id = deposit.get("paypal_client_id", "")
-    client_secret = site.get("paypal_client_secret", "")
-    sandbox = bool(deposit.get("sandbox", False))
-    if not client_id or not client_secret:
-        raise HTTPException(status_code=400, detail="Credentials PayPal non configurés.")
-
-    from app.services.paypal import create_order
     try:
-        result = create_order(
-            client_id=client_id,
-            client_secret=client_secret,
-            amount=body.amount,
-            currency=body.currency,
-            description=body.description,
-            sandbox=sandbox,
+        result = await create_order(
+            client_id=cfg["client_id"],
+            client_secret=cfg["client_secret"],
+            amount=cfg["amount"],
+            currency=cfg["currency"],
+            description=description,
+            sandbox=cfg["sandbox"],
         )
     except Exception as exc:
         logger.error("PayPal create_order tenant %s : %s", tenant["id"], exc)
         raise HTTPException(status_code=502, detail="Erreur PayPal lors de la création de l'order.")
 
-    return result
+    # Montant renvoyé pour affichage uniquement — le backend ne le relit jamais
+    # depuis le client.
+    return {**result, "amount": cfg["amount"], "currency": cfg["currency"]}
 
 
 @router.post("/{tenant_slug}/paypal-capture", status_code=201)
 async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, request: Request):
     """
-    Capture le paiement PayPal puis crée le RDV (statut pending, deposit_status paid).
-    Si la capture échoue, le RDV n'est PAS créé.
+    Valide le créneau, capture le paiement PayPal, puis crée le RDV
+    (statut pending, deposit_status paid).
+
+    Ordre volontaire : la validation du créneau précède la capture, pour ne
+    jamais encaisser un acompte sur un créneau non réservable. Si une écriture
+    échoue APRÈS la capture, l'acompte est remboursé automatiquement — sans
+    quoi l'argent restait pris sans rendez-vous.
     """
-    check_rate(request, "paypal_capture", max_calls=5, window_seconds=300)
+    await check_rate_async(request, "paypal_capture", max_calls=5, window_seconds=300)
     sb = get_supabase_admin()
     tenant, cal_id = _get_tenant_and_calendar(sb, tenant_slug)
 
@@ -704,59 +816,8 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
     if body.email and body.email.strip().lower() in _get_team_emails(sb, tenant["id"]):
         raise HTTPException(status_code=403, detail=_TEAM_EMAIL_ERROR)
 
-    site_res = (
-        sb.table("site")
-        .select("site_style, paypal_client_secret")
-        .eq("tenant_id", tenant["id"])
-        .execute()
-    )
-    site = (site_res.data or [{}])[0]
-    style = site.get("site_style") or {}
-    deposit = style.get("deposit") or {}
-    client_id = deposit.get("paypal_client_id", "")
-    client_secret = site.get("paypal_client_secret", "")
-    sandbox = bool(deposit.get("sandbox", False))
+    cfg = _deposit_or_400(sb, tenant["id"])
 
-    if not client_id or not client_secret:
-        raise HTTPException(status_code=400, detail="Credentials PayPal non configurés.")
-
-    # 1. Capturer le paiement
-    from app.services.paypal import capture_order
-    try:
-        payment = capture_order(client_id, client_secret, body.paypal_order_id, sandbox=sandbox)
-    except Exception as exc:
-        logger.error("PayPal capture_order %s tenant %s : %s", body.paypal_order_id, tenant["id"], exc)
-        raise HTTPException(status_code=402, detail="Paiement PayPal non complété. Veuillez réessayer.")
-
-    # 2. Trouver ou créer le contact
-    contact_res = (
-        sb.table("contact")
-        .select("id")
-        .eq("tenant_id", tenant["id"])
-        .eq("email", body.email)
-        .execute()
-    )
-    if contact_res.data:
-        contact_id = contact_res.data[0]["id"]
-    else:
-        new_contact = sb.table("contact").insert({
-            "tenant_id": tenant["id"],
-            "first_name": body.first_name,
-            "last_name": body.last_name,
-            "email": body.email,
-            "phone": body.phone,
-            "contact_type": body.contact_type,
-        }).execute().data[0]
-        contact_id = new_contact["id"]
-
-    for channel in body.consent_channels:
-        if channel in CONSENT_CHANNELS:
-            record_consent(tenant["id"], contact_id, channel, granted=True, source="public_form")
-
-    ensure_lead(sb, tenant["id"], contact_id, "website", status="scheduled",
-                request_type="b2c_appointment", notes=body.message or None)
-
-    # 3. Créer le RDV
     if not body.scheduled_at:
         raise HTTPException(status_code=400, detail="scheduled_at requis")
 
@@ -767,26 +828,105 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
         scheduled_at_store = body.scheduled_at
     end_at = scheduled_at_store + timedelta(minutes=body.slot_duration_min)
 
-    appt_row: dict = {
-        "calendar_id": cal_id,
-        "contact_id": contact_id,
-        "service_offer_id": str(body.service_offer_id) if body.service_offer_id else None,
-        "scheduled_at": scheduled_at_store.isoformat(),
-        "end_at": end_at.isoformat(),
-        "status": "pending",
-        "type": "b2c_appointment",
-        "audience_type": "b2c",
-        "party_size": body.party_size,
-        "deposit_status": "paid",
-        "deposit_amount": payment["amount"],
-        "deposit_paypal_order_id": body.paypal_order_id,
-    }
-    if body.message and body.message.strip():
-        appt_row["notes"] = body.message.strip()
-    if body.custom_answers:
-        appt_row["custom_answers"] = body.custom_answers
+    # 1. Créneau réservable — avant tout encaissement
+    _assert_slot_bookable(sb, tenant, cal_id, scheduled_at_store, end_at, body.party_size)
 
-    appt = sb.table("appointment").insert(appt_row).execute().data[0]
+    # 2. Capturer le paiement
+    try:
+        payment = await capture_order(
+            cfg["client_id"], cfg["client_secret"], body.paypal_order_id, sandbox=cfg["sandbox"],
+        )
+    except Exception as exc:
+        logger.error("PayPal capture_order %s tenant %s : %s", body.paypal_order_id, tenant["id"], exc)
+        raise HTTPException(status_code=402, detail="Paiement PayPal non complété. Veuillez réessayer.")
+
+    # 3. Le montant capturé doit correspondre à l'acompte configuré. Un order
+    #    créé hors de notre endpoint pourrait sinon financer la réservation à
+    #    n'importe quel prix.
+    expected = round(float(cfg["amount"]), 2)
+    captured = round(float(payment["amount"]), 2)
+    if captured + 0.01 < expected or payment["currency"] != cfg["currency"]:
+        logger.error(
+            "PayPal montant/devise inattendu (tenant=%s order=%s) : %.2f %s au lieu de %.2f %s",
+            tenant["id"], body.paypal_order_id, captured, payment["currency"],
+            expected, cfg["currency"],
+        )
+        await _refund_and_record(
+            sb, tenant["id"], cfg, payment, body.paypal_order_id,
+            kind="deposit_amount_mismatch",
+            detail=f"capture {captured} {payment['currency']} au lieu de {expected} {cfg['currency']}",
+        )
+        raise HTTPException(
+            status_code=402,
+            detail="Le montant de l'acompte ne correspond pas. Le paiement a été remboursé.",
+        )
+
+    # 4. Créer contact + lead + RDV. Toute erreur ici déclenche un remboursement.
+    try:
+        contact_res = (
+            sb.table("contact")
+            .select("id")
+            .eq("tenant_id", tenant["id"])
+            .eq("email", body.email)
+            .execute()
+        )
+        if contact_res.data:
+            contact_id = contact_res.data[0]["id"]
+        else:
+            new_contact = sb.table("contact").insert({
+                "tenant_id": tenant["id"],
+                "first_name": body.first_name,
+                "last_name": body.last_name,
+                "email": body.email,
+                "phone": body.phone,
+                "contact_type": body.contact_type,
+            }).execute().data[0]
+            contact_id = new_contact["id"]
+
+        for channel in body.consent_channels:
+            if channel in CONSENT_CHANNELS:
+                record_consent(tenant["id"], contact_id, channel, granted=True, source="public_form")
+
+        ensure_lead(sb, tenant["id"], contact_id, "website", status="scheduled",
+                    request_type="b2c_appointment", notes=body.message or None)
+
+        appt_row: dict = {
+            "calendar_id": cal_id,
+            "contact_id": contact_id,
+            "service_offer_id": str(body.service_offer_id) if body.service_offer_id else None,
+            "scheduled_at": scheduled_at_store.isoformat(),
+            "end_at": end_at.isoformat(),
+            "status": "pending",
+            "type": "b2c_appointment",
+            "audience_type": "b2c",
+            "party_size": body.party_size,
+            "deposit_status": "paid",
+            "deposit_amount": captured,
+            "deposit_currency": payment["currency"],
+            "deposit_paypal_order_id": body.paypal_order_id,
+            "deposit_capture_id": payment.get("capture_id"),
+        }
+        if body.message and body.message.strip():
+            appt_row["notes"] = body.message.strip()
+        if body.custom_answers:
+            appt_row["custom_answers"] = body.custom_answers
+
+        appt = sb.table("appointment").insert(appt_row).execute().data[0]
+    except Exception as exc:
+        logger.error("Création RDV après capture PayPal échouée (tenant=%s order=%s): %s",
+                     tenant["id"], body.paypal_order_id, exc)
+        refunded = await _refund_and_record(
+            sb, tenant["id"], cfg, payment, body.paypal_order_id,
+            kind="deposit_booking_failed", detail=str(exc)[:500],
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=("Votre acompte a été remboursé, la réservation n'a pas pu être enregistrée. "
+                    "Veuillez réessayer." if refunded else
+                    "La réservation n'a pas pu être enregistrée. Notre équipe a été alertée et "
+                    "vous recontactera au sujet de votre acompte."),
+        )
+
     touch_contact_interaction(contact_id)
 
     _notify_tenant_pending(sb, tenant["id"], body.first_name, body.last_name,
@@ -796,7 +936,57 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
                           message=body.message)
     _email_client_booking_received(tenant, body.first_name, body.last_name, body.email, appt)
 
-    return {"type": "appointment", "id": appt["id"], "deposit_status": "paid", "deposit_amount": payment["amount"]}
+    return {"type": "appointment", "id": appt["id"], "deposit_status": "paid",
+            "deposit_amount": captured}
+
+
+async def _refund_and_record(sb, tenant_id: str, cfg: dict, payment: dict,
+                             order_id: str, kind: str, detail: str) -> bool:
+    """
+    Rembourse une capture et journalise l'incident. Renvoie True si le
+    remboursement a abouti.
+
+    L'incident est enregistré dans payment_incident même en cas de succès :
+    un acompte encaissé puis rendu doit rester traçable côté opérateur.
+    """
+    refunded = False
+    try:
+        capture_id = payment.get("capture_id")
+        if capture_id:
+            await refund_capture(
+                cfg["client_id"], cfg["client_secret"], capture_id, sandbox=cfg["sandbox"],
+                amount=payment.get("amount"), currency=payment.get("currency", cfg["currency"]),
+                note="Réservation non aboutie",
+            )
+        else:
+            await refund_order(
+                cfg["client_id"], cfg["client_secret"], order_id, sandbox=cfg["sandbox"],
+                note="Réservation non aboutie",
+            )
+        refunded = True
+    except Exception as exc:
+        logger.error("Remboursement PayPal échoué (tenant=%s order=%s): %s", tenant_id, order_id, exc)
+
+    try:
+        sb.table("payment_incident").insert({
+            "tenant_id": tenant_id,
+            "kind": kind,
+            "provider": "paypal",
+            "reference": order_id,
+            "amount": payment.get("amount"),
+            "currency": payment.get("currency"),
+            "refunded": refunded,
+            "detail": detail,
+        }).execute()
+    except Exception as exc:
+        logger.error("payment_incident non enregistré (%s): %s", kind, exc)
+
+    return refunded
+
+
+# ── PayPal return (flux Telegram) ─────────────────────────────────────────────
+
+
 
 
 # ── PayPal return (Telegram flow) ─────────────────────────────────────────────
@@ -862,7 +1052,7 @@ async def paypal_return_redirect(tenant_slug: str, token: str, appointment_id: s
         cal_ids = [c["id"] for c in (cal_res.data or [])]
         appt_res = (
             sb.table("appointment")
-            .select("id, status, calendar_id")
+            .select("id, status, calendar_id, deposit_paypal_order_id")
             .eq("id", appointment_id)
             .in_("calendar_id", cal_ids)
             .single()
@@ -873,34 +1063,53 @@ async def paypal_return_redirect(tenant_slug: str, token: str, appointment_id: s
             logger.warning("PayPal return: appt %s invalide ou déjà traité", appointment_id)
             return RedirectResponse(url=error_url)
 
-        # Récupérer credentials PayPal du tenant
-        site_res = sb.table("site").select("site_style, paypal_client_secret").eq("tenant_id", tenant["id"]).execute()
-        site = (site_res.data or [{}])[0]
-        style = site.get("site_style") or {}
-        deposit_cfg = style.get("deposit") or {}
-        client_id = deposit_cfg.get("paypal_client_id", "")
-        client_secret = site.get("paypal_client_secret", "")
-        sandbox = bool(deposit_cfg.get("sandbox", False))
-
-        if not client_id or not client_secret:
-            logger.error("PayPal return: credentials manquants pour tenant %s", tenant["id"])
+        # Le token renvoyé par PayPal doit être l'order émis pour CE rendez-vous.
+        # L'URL de retour est publique : sans ce contrôle, un order approuvé
+        # ailleurs pouvait être présenté pour valider le RDV d'un tiers.
+        expected_order = appt.get("deposit_paypal_order_id")
+        if expected_order and expected_order != token:
+            logger.warning("PayPal return: token %s != order attendu %s (appt %s)",
+                           token, expected_order, appointment_id)
             return RedirectResponse(url=error_url)
 
-        # Capturer le paiement
-        from app.services.paypal import capture_order
-        payment = capture_order(client_id, client_secret, token, sandbox=sandbox)
+        cfg = get_deposit_config(sb, tenant["id"])
+        if cfg is None:
+            logger.error("PayPal return: config d'acompte indisponible pour tenant %s", tenant["id"])
+            return RedirectResponse(url=error_url)
 
-        # Mettre à jour le RDV
+        payment = await capture_order(
+            cfg["client_id"], cfg["client_secret"], token, sandbox=cfg["sandbox"],
+        )
+
+        # Montant et devise doivent correspondre à l'acompte configuré, comme
+        # dans le flux web : le lien de paiement est public, rien ne garantit
+        # que l'order approuvé soit bien celui que nous avons créé.
+        expected = round(float(cfg["amount"]), 2)
+        captured = round(float(payment["amount"]), 2)
+        if captured + 0.01 < expected or payment["currency"] != cfg["currency"]:
+            logger.error(
+                "PayPal return: montant/devise inattendu (tenant=%s appt=%s) : %.2f %s au lieu de %.2f %s",
+                tenant["id"], appointment_id, captured, payment["currency"], expected, cfg["currency"],
+            )
+            await _refund_and_record(
+                sb, tenant["id"], cfg, payment, token,
+                kind="deposit_amount_mismatch",
+                detail=f"telegram appt={appointment_id} capture {captured} {payment['currency']}",
+            )
+            return RedirectResponse(url=error_url)
+
         sb.table("appointment").update({
             "status": "pending",
             "deposit_status": "paid",
-            "deposit_amount": payment["amount"],
+            "deposit_amount": captured,
+            "deposit_currency": payment["currency"],
             "deposit_paypal_order_id": token,
+            "deposit_capture_id": payment.get("capture_id"),
         }).eq("id", appointment_id).execute()
 
         # Notifier le tenant
         try:
-            _notify_tenant_deposit_paid(sb, tenant["id"], appointment_id, payment["amount"])
+            _notify_tenant_deposit_paid(sb, tenant["id"], appointment_id, captured)
         except Exception as exc:
             logger.warning("Notification dépôt PayPal échouée : %s", exc)
 
@@ -909,3 +1118,146 @@ async def paypal_return_redirect(tenant_slug: str, token: str, appointment_id: s
     except Exception as exc:
         logger.error("PayPal return failed (tenant=%s, appt=%s): %s", tenant_slug, appointment_id, exc)
         return RedirectResponse(url=error_url)
+
+
+# ── Webhook PayPal ────────────────────────────────────────────────────────────
+
+def _finalize_paid_deposit(sb, tenant_id: str, appointment_id: str, payment: dict) -> None:
+    """Passe un RDV de pending_payment à pending et notifie le professionnel."""
+    sb.table("appointment").update({
+        "status": "pending",
+        "deposit_status": "paid",
+        "deposit_amount": round(float(payment["amount"]), 2),
+        "deposit_currency": payment["currency"],
+        "deposit_paypal_order_id": payment.get("order_id"),
+        "deposit_capture_id": payment.get("capture_id"),
+    }).eq("id", appointment_id).execute()
+
+    try:
+        _notify_tenant_deposit_paid(sb, tenant_id, appointment_id, round(float(payment["amount"]), 2))
+    except Exception as exc:
+        logger.warning("Notification dépôt PayPal échouée : %s", exc)
+
+
+def _extract_order_id(payload: dict) -> str | None:
+    """
+    Retrouve l'identifiant d'order dans un événement PayPal.
+
+    Selon le type d'événement, il est soit la ressource elle-même
+    (CHECKOUT.ORDER.*), soit une donnée supplémentaire de la capture
+    (PAYMENT.CAPTURE.*).
+    """
+    resource = payload.get("resource") or {}
+    event_type = (payload.get("event_type") or "").upper()
+
+    if event_type.startswith("CHECKOUT.ORDER."):
+        return resource.get("id")
+
+    related = ((resource.get("supplementary_data") or {}).get("related_ids") or {})
+    return related.get("order_id")
+
+
+@router.post("/paypal/webhook", status_code=200)
+async def paypal_webhook(request: Request):
+    """
+    Notification PayPal sur un acompte.
+
+    Raison d'être : jusqu'ici la capture ne dépendait que du retour navigateur
+    du client. Si celui-ci approuvait le paiement puis fermait son onglet,
+    l'order restait APPROVED sans jamais être capturé — aucun encaissement, un
+    créneau gelé, et un professionnel jamais prévenu.
+
+    Le corps de la requête n'est PAS considéré comme fiable : chaque tenant
+    possède sa propre application PayPal, il n'existe donc pas d'identifiant de
+    webhook global permettant de vérifier une signature. On n'en extrait que
+    l'identifiant d'order, puis l'état réel est relu via un appel authentifié à
+    PayPal avec les credentials du tenant concerné. Un payload forgé ne peut
+    donc rien provoquer d'autre que ce que le flux légitime aurait fait.
+    """
+    await check_rate_async(request, "paypal_webhook", max_calls=120, window_seconds=60)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Payload invalide")
+
+    order_id = _extract_order_id(payload)
+    if not order_id:
+        # Événement sans order exploitable (remboursement, litige…) : on
+        # acquitte pour éviter que PayPal ne relance indéfiniment.
+        return {"received": True, "ignored": True}
+
+    sb = get_supabase_admin()
+    appt_res = (
+        sb.table("appointment")
+        .select("id, status, calendar_id, deposit_status")
+        .eq("deposit_paypal_order_id", order_id)
+        .limit(1)
+        .execute()
+    )
+    if not appt_res.data:
+        return {"received": True, "unknown_order": True}
+
+    appt = appt_res.data[0]
+    if appt.get("deposit_status") == "paid":
+        return {"received": True, "already_paid": True}
+
+    cal_res = sb.table("calendar").select("tenant_id").eq("id", appt["calendar_id"]).limit(1).execute()
+    if not cal_res.data:
+        return {"received": True, "orphan": True}
+    tenant_id = cal_res.data[0]["tenant_id"]
+
+    cfg = get_deposit_config(sb, tenant_id)
+    if cfg is None:
+        logger.error("Webhook PayPal : config d'acompte absente (tenant=%s order=%s)", tenant_id, order_id)
+        return {"received": True, "no_config": True}
+
+    # État authentique de l'order, côté PayPal
+    try:
+        order = await get_order(cfg["client_id"], cfg["client_secret"], order_id, sandbox=cfg["sandbox"])
+    except Exception as exc:
+        logger.error("Webhook PayPal : lecture order %s impossible : %s", order_id, exc)
+        raise HTTPException(status_code=502, detail="Order PayPal illisible")
+
+    status_order = (order.get("status") or "").upper()
+
+    if status_order == "APPROVED":
+        try:
+            payment = await capture_order(
+                cfg["client_id"], cfg["client_secret"], order_id, sandbox=cfg["sandbox"],
+            )
+        except Exception as exc:
+            logger.error("Webhook PayPal : capture %s échouée : %s", order_id, exc)
+            raise HTTPException(status_code=502, detail="Capture PayPal échouée")
+    elif status_order == "COMPLETED":
+        # Déjà capturé (course avec /paypal-return) : on relit le montant réel.
+        try:
+            capture = order["purchase_units"][0]["payments"]["captures"][0]
+            payment = {
+                "amount": float(capture["amount"]["value"]),
+                "currency": capture["amount"]["currency_code"].upper(),
+                "capture_id": capture.get("id", ""),
+            }
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            logger.error("Webhook PayPal : capture illisible sur %s : %s", order_id, exc)
+            return {"received": True, "unreadable": True}
+    else:
+        # CREATED, VOIDED, PAYER_ACTION_REQUIRED : rien à finaliser.
+        return {"received": True, "status": status_order}
+
+    payment["order_id"] = order_id
+
+    expected = round(float(cfg["amount"]), 2)
+    captured = round(float(payment["amount"]), 2)
+    if captured + 0.01 < expected or payment["currency"] != cfg["currency"]:
+        logger.error("Webhook PayPal : montant inattendu (order=%s) %.2f %s au lieu de %.2f %s",
+                     order_id, captured, payment["currency"], expected, cfg["currency"])
+        await _refund_and_record(
+            sb, tenant_id, cfg, payment, order_id,
+            kind="deposit_amount_mismatch",
+            detail=f"webhook appt={appt['id']} capture {captured} {payment['currency']}",
+        )
+        return {"received": True, "refunded": True}
+
+    _finalize_paid_deposit(sb, tenant_id, appt["id"], payment)
+    return {"received": True, "finalized": True}

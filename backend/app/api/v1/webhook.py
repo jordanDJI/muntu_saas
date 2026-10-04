@@ -439,27 +439,14 @@ async def _handle_telegram_booking_flow(
             contact_res = sb.table("contact").select("first_name, last_name").eq("id", contact_id).single().execute()
             contact_info = contact_res.data or {}
 
-            # Vérifier si un acompte PayPal est configuré pour ce tenant
+            # Config d'acompte : lue par get_deposit_config() pour que le flux
+            # Telegram et le flux web partagent exactement la même source de
+            # vérité (montant inclus — il ne vient jamais du client).
             deposit_cfg = None
             tenant_slug_val = ""
             try:
-                site_res = (
-                    sb.table("site")
-                    .select("site_style, paypal_client_secret")
-                    .eq("tenant_id", tenant_id)
-                    .limit(1)
-                    .execute()
-                )
-                site_data = (site_res.data or [{}])[0]
-                style = site_data.get("site_style") or {}
-                _dep = style.get("deposit") or {}
-                if (
-                    _dep.get("enabled")
-                    and _dep.get("paypal_client_id")
-                    and site_data.get("paypal_client_secret")
-                ):
-                    deposit_cfg = {**_dep, "paypal_client_secret": site_data["paypal_client_secret"]}
-
+                from app.services.paypal import get_deposit_config
+                deposit_cfg = get_deposit_config(sb, tenant_id)
                 tenant_res = sb.table("tenant").select("slug").eq("id", tenant_id).single().execute()
                 tenant_slug_val = (tenant_res.data or {}).get("slug", "")
             except Exception as exc:
@@ -495,25 +482,34 @@ async def _handle_telegram_booking_flow(
                     # Flux avec acompte : créer l'order PayPal et envoyer le lien de paiement
                     try:
                         from app.services.paypal import create_order as _paypal_create_order
-                        amount = float(deposit_cfg.get("amount", 0))
-                        currency = deposit_cfg.get("currency", "EUR")
-                        sandbox = bool(deposit_cfg.get("sandbox", False))
+                        amount = deposit_cfg["amount"]
+                        currency = deposit_cfg["currency"]
                         return_url = (
                             f"{settings.app_url}/api/v1/booking/{tenant_slug_val}/paypal-return"
                             f"?appointment_id={appt['id']}"
                         )
                         cancel_url = f"{settings.frontend_url_prod or settings.frontend_url}/paypal-return?status=cancelled"
-                        paypal_result = _paypal_create_order(
-                            client_id=deposit_cfg["paypal_client_id"],
-                            client_secret=deposit_cfg["paypal_client_secret"],
+                        paypal_result = await _paypal_create_order(
+                            client_id=deposit_cfg["client_id"],
+                            client_secret=deposit_cfg["client_secret"],
                             amount=amount,
                             currency=currency,
                             description=f"Acompte RDV {dt.strftime('%d/%m/%Y')}",
-                            sandbox=sandbox,
+                            sandbox=deposit_cfg["sandbox"],
                             return_url=return_url,
                             cancel_url=cancel_url,
                         )
                         approve_url = paypal_result.get("approve_url", "")
+
+                        # L'order est rattaché au RDV dès sa création : /paypal-return
+                        # peut ainsi vérifier que le token reçu est bien celui
+                        # qu'on a émis pour ce rendez-vous.
+                        sb.table("appointment").update({
+                            "deposit_status": "pending_payment",
+                            "deposit_amount": amount,
+                            "deposit_currency": currency,
+                            "deposit_paypal_order_id": paypal_result.get("order_id"),
+                        }).eq("id", appt["id"]).execute()
                         send_message(bot_token, chat_id,
                             f"Un acompte de {amount:.0f} {currency} est requis pour finaliser votre réservation.\n\n"
                             f"📅 {_DAYS_FR_LONG[dt.weekday()].capitalize()} {dt.strftime('%d/%m à %H:%M')}\n\n"

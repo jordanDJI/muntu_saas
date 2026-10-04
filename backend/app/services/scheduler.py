@@ -506,6 +506,56 @@ async def update_contact_overage_status() -> None:
             sb.table("tenant").update({"contact_overage_since": None}).eq("id", tenant_id).execute()
 
 
+async def cancel_abandoned_deposit_bookings() -> None:
+    """
+    Annule les rendez-vous restés en attente de paiement d'acompte.
+
+    Un RDV créé en `pending_payment` (tunnel PayPal du flux Telegram) dont le
+    client n'achève jamais le paiement restait dans cet état indéfiniment, et
+    continuait d'occuper le créneau : le contrôle anti-double réservation
+    compte tout ce qui n'est pas `cancelled`. Résultat, un abandon de panier
+    gelait un créneau à vie.
+
+    Le délai est le même que celui appliqué à la lecture par
+    booking._assert_slot_bookable, de sorte que le créneau redevienne
+    réservable immédiatement et que la ligne soit nettoyée ensuite.
+    """
+    from app.api.v1.booking import DEPOSIT_PENDING_TTL_MINUTES
+
+    sb = get_supabase_admin()
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=DEPOSIT_PENDING_TTL_MINUTES)).isoformat()
+
+    try:
+        stale = (
+            sb.table("appointment")
+            .select("id")
+            .eq("status", "pending_payment")
+            .lt("created_at", cutoff)
+            .limit(500)
+            .execute()
+        )
+    except Exception as exc:
+        logger.error("purge pending_payment: lecture echouee: %s", exc)
+        return
+
+    rows = stale.data or []
+    if not rows:
+        return
+
+    ids = [r["id"] for r in rows]
+    try:
+        # deposit_status repasse à "none" : aucun acompte n'a été encaissé sur
+        # ces lignes, les laisser en "pending_payment" brouillerait les
+        # statistiques de paiement.
+        sb.table("appointment").update({
+            "status": "cancelled",
+            "deposit_status": "none",
+        }).in_("id", ids).execute()
+        logger.info("purge pending_payment: %d rendez-vous annules", len(ids))
+    except Exception as exc:
+        logger.error("purge pending_payment: annulation echouee: %s", exc)
+
+
 # ── Démarrage / arrêt ─────────────────────────────────────────────────────────
 
 def start_scheduler() -> None:
@@ -567,6 +617,13 @@ def start_scheduler() -> None:
         hour=3,
         minute=30,
         id="contact_overage_status",
+        replace_existing=True,
+    )
+    # Purge des réservations abandonnées au paiement : toutes les 15 min
+    scheduler.add_job(
+        cancel_abandoned_deposit_bookings,
+        IntervalTrigger(minutes=15),
+        id="abandoned_deposit_bookings",
         replace_existing=True,
     )
     scheduler.start()

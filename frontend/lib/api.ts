@@ -590,6 +590,11 @@ export const api = {
     });
   },
 
+  // Remboursement d'acompte (owner/admin)
+  refundDeposit: (appointmentId: string) =>
+    apiFetch<{ refunded: boolean; refund_id: string; deposit_status: string }>(
+      `/api/v1/appointments/${appointmentId}/refund-deposit`, { method: "POST" }),
+
   // Booking config (questions + dépôt PayPal) — tenant authentifié
   getBookingConfig: (siteId: string) =>
     apiFetch<{ booking_questions: any[]; deposit: any; paypal_configured: boolean }>(`/api/v1/sites/${siteId}/booking-config`),

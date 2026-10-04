@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.core.urls import allowed_origins
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.api.v1 import sites, leads, appointments, subscriptions, onboarding, auth, chatbot, agents, calendar, booking, webhook, assistant, members, uploads, analytics, public, tenants, users, domains, directory, admin, design_requests, logo_requests, contacts, tags, reminders, campaigns, attachments, profile, secretary, invoices, content, support, push_notifications, gdpr, contact_fields
 
@@ -26,11 +27,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_ALWAYS_ALLOWED = ["https://klientys.co", "https://www.klientys.co", "https://muntu-saas.vercel.app"]
-_cors_origins = list({
-    *_ALWAYS_ALLOWED,
-    *[o.strip() for o in [settings.frontend_url, settings.frontend_url_prod] if o],
-})
+# Liste centralisée dans app/core/urls.py — partagée avec la validation des
+# URLs de redirection des sessions Stripe Checkout.
+_cors_origins = allowed_origins()
 
 app.add_middleware(
     CORSMiddleware,

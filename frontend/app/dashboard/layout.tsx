@@ -719,7 +719,7 @@ function RemindersBanner() {
 }
 
 function TrialBanner() {
-  const { status, trialDaysLeft, loading } = useSubscription();
+  const { status, trialDaysLeft, graceDaysLeft, loading } = useSubscription();
   const { t } = useLanguage();
   const pathname = usePathname();
   if (loading) return null;
@@ -757,6 +757,36 @@ function TrialBanner() {
             {t.lay_trial_data_safe}
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // Prélèvement échoué : bannière d'alerte, pas de blocage. Stripe relance la
+  // carte pendant deux à trois semaines ; couper l'accès au premier échec
+  // faisait perdre le service à des clients qui finissaient par payer.
+  if (status === "past_due") {
+    return (
+      <div style={{
+        background: "linear-gradient(90deg, rgba(185,28,28,.16), rgba(221,170,64,.14))",
+        border: "1px solid rgba(185,28,28,.35)", borderRadius: "12px",
+        padding: "12px 16px", marginBottom: "20px",
+        display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap",
+      }}>
+        <span style={{ fontSize: "18px" }}>⚠️</span>
+        <p style={{ margin: 0, flex: 1, minWidth: "220px", fontSize: "13px", color: "var(--text-primary)" }}>
+          Votre dernier paiement n&apos;a pas abouti.
+          {graceDaysLeft !== null && (
+            <> Votre accès reste actif {graceDaysLeft} jour{graceDaysLeft > 1 ? "s" : ""}.</>
+          )}{" "}
+          Mettez à jour votre moyen de paiement pour éviter toute interruption.
+        </p>
+        <Link
+          href="/dashboard/settings?section=abonnement"
+          className="l-btn l-btn-primary"
+          style={{ textDecoration: "none", fontSize: "12px", padding: "8px 14px" }}
+        >
+          Mettre à jour →
+        </Link>
       </div>
     );
   }

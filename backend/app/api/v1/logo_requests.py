@@ -6,6 +6,9 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.supabase import get_supabase_admin
+from app.core.urls import safe_redirect_url
+from app.middleware.admin import get_current_admin
+from app.middleware.roles import require_owner_or_admin
 from app.middleware.tenant import get_current_tenant
 from app.services import email as email_svc
 from app.services.llm import chat_completion
@@ -86,8 +89,10 @@ class LogoRequestIn(BaseModel):
 
 
 class CheckoutIn(BaseModel):
-    success_url: str
-    cancel_url: str
+    # Validées contre les origines autorisées (app/core/urls.py) avant d'être
+    # transmises à Stripe — sinon Stripe redirigerait vers une URL arbitraire.
+    success_url: str | None = None
+    cancel_url: str | None = None
 
 
 class AdminUpdateIn(BaseModel):
@@ -137,7 +142,7 @@ async def logo_chat(body: ChatIn, tenant_id: str = Depends(get_current_tenant)):
 
 
 @router.post("/")
-async def create_logo_request(body: LogoRequestIn, tenant_id: str = Depends(get_current_tenant)):
+async def create_logo_request(body: LogoRequestIn, tenant_id: str = Depends(require_owner_or_admin)):
     """Crée la demande de logo (avant paiement)."""
     if body.price_tier not in LOGO_TIERS:
         raise HTTPException(400, "Tier invalide")
@@ -175,7 +180,7 @@ async def create_logo_request(body: LogoRequestIn, tenant_id: str = Depends(get_
 
 
 @router.post("/{request_id}/checkout")
-async def logo_checkout(request_id: str, body: CheckoutIn, tenant_id: str = Depends(get_current_tenant)):
+async def logo_checkout(request_id: str, body: CheckoutIn, tenant_id: str = Depends(require_owner_or_admin)):
     """Crée une session Stripe de paiement unique pour la demande de logo."""
     sb = get_supabase_admin()
     req = sb.table("logo_request").select("*").eq("id", request_id).eq("tenant_id", tenant_id).maybe_single().execute()
@@ -193,6 +198,10 @@ async def logo_checkout(request_id: str, body: CheckoutIn, tenant_id: str = Depe
     try:
         session = stripe.checkout.Session.create(
             mode="payment",
+            # Carte uniquement : un moyen asynchrone (SEPA, Bancontact différé)
+            # émettrait checkout.session.completed AVANT encaissement.
+            payment_method_types=["card"],
+            client_reference_id=tenant_id,
             line_items=[{
                 "price_data": {
                     "currency": "eur",
@@ -204,8 +213,8 @@ async def logo_checkout(request_id: str, body: CheckoutIn, tenant_id: str = Depe
                 },
                 "quantity": 1,
             }],
-            success_url=body.success_url,
-            cancel_url=body.cancel_url,
+            success_url=safe_redirect_url(body.success_url, "/dashboard/site-builder?logo_paid=1"),
+            cancel_url=safe_redirect_url(body.cancel_url, "/dashboard/site-builder"),
             metadata={
                 "type":            "logo_request",
                 "logo_request_id": request_id,
@@ -231,8 +240,7 @@ async def get_my_requests(tenant_id: str = Depends(get_current_tenant)):
 # ── Endpoints admin ──────────────────────────────────────────────────────────
 
 @router.get("/admin/all")
-async def admin_list(status: str | None = None):
-    from app.middleware.admin import get_current_admin
+async def admin_list(status: str | None = None, admin=Depends(get_current_admin)):
     sb = get_supabase_admin()
     q = sb.table("logo_request").select("*").order("created_at", desc=True)
     if status:
@@ -242,7 +250,7 @@ async def admin_list(status: str | None = None):
 
 
 @router.patch("/admin/{request_id}")
-async def admin_update(request_id: str, body: AdminUpdateIn):
+async def admin_update(request_id: str, body: AdminUpdateIn, admin=Depends(get_current_admin)):
     sb = get_supabase_admin()
     updates: dict = {}
     if body.status is not None:
@@ -254,6 +262,7 @@ async def admin_update(request_id: str, body: AdminUpdateIn):
         updates["admin_notes"] = body.admin_notes
     if not updates:
         raise HTTPException(400, "Aucune mise à jour fournie")
-    updates["updated_at"] = "now()"
+    from datetime import datetime as _dt, timezone as _tz
+    updates["updated_at"] = _dt.now(_tz.utc).isoformat()
     sb.table("logo_request").update(updates).eq("id", request_id).execute()
     return {"ok": True}

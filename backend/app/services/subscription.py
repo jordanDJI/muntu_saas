@@ -76,6 +76,26 @@ PLAN_FEATURES: dict = {
 TRIAL_DAYS = 14
 BUSINESS_INCLUDED_MAX = 2  # espaces secondaires gratuits inclus dans un plan Business
 
+# Jours d'accès conservés après un prélèvement échoué. Stripe relance la carte
+# pendant deux à trois semaines (smart retries) : couper tout accès au premier
+# échec faisait perdre le service à des clients qui finissaient par payer.
+PAST_DUE_GRACE_DAYS = 7
+
+
+def merge_plan_features(plan_name: str, db_features: dict | None) -> dict:
+    """
+    Features d'un plan, le code faisant foi. Fonction pure (testable).
+
+    La migration 019 avait figé en base des valeurs devenues fausses (Pro à
+    500 contacts au lieu de 1000, analytics_roi désactivé, Essentiel sans agent
+    vitrine). Le merge d'origine faisait gagner la base sur PLAN_FEATURES : des
+    clients payants recevaient moins que la grille tarifaire, et même moins
+    qu'un compte en période d'essai. Les clés présentes uniquement en base sont
+    conservées, pour ne pas bloquer l'ajout d'une feature côté données.
+    """
+    hardcoded = PLAN_FEATURES.get(plan_name, ESSENTIEL_FEATURES)
+    return {**(db_features or {}), **hardcoded}
+
 
 def _apply_global_flags(features: dict, flags: list) -> dict:
     """Applique les feature_flag globaux sur le dict de features.
@@ -193,7 +213,7 @@ def _check_business_included(sb, tenant_id: str, global_flags: list, overrides: 
 
 async def get_tenant_plan(tenant_id: str) -> dict:
     from app.core.supabase import get_supabase_admin
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timezone, timedelta  # noqa: F811 — utilises plus bas
 
     sb = get_supabase_admin()
 
@@ -205,25 +225,48 @@ async def get_tenant_plan(tenant_id: str) -> dict:
     ov_res = sb.table("tenant_feature_override").select("feature_key, enabled, value_int").eq("tenant_id", tenant_id).execute()
     overrides = ov_res.data or []
 
-    # 1. Abonnement actif ou en période de grâce Stripe
+    # 1. Abonnement actif, en essai Stripe, ou impayé encore dans la grâce
     res = (
         sb.table("subscription")
-        .select("status, plan:plan_id(name, features)")
+        .select("status, past_due_since, plan:plan_id(name, features)")
         .eq("tenant_id", tenant_id)
-        .in_("status", ["active", "trialing"])
+        .in_("status", ["active", "trialing", "past_due"])
         .limit(1)
         .execute()
     )
-    if res.data:
-        row = res.data[0]
+    sub_row: dict | None = (res.data or [None])[0]
+    grace_days_left = None
+
+    if sub_row and sub_row["status"] == "past_due":
+        # past_due_since est NULL pour les lignes antérieures à la migration
+        # 072 : on reste indulgent plutôt que de couper un client dont on ne
+        # sait pas depuis quand il est en impayé.
+        since_raw = sub_row.get("past_due_since")
+        if since_raw:
+            since = datetime.fromisoformat(str(since_raw).replace("Z", "+00:00"))
+            if since.tzinfo is None:
+                since = since.replace(tzinfo=timezone.utc)
+            grace_end = since + timedelta(days=PAST_DUE_GRACE_DAYS)
+            now = datetime.now(timezone.utc)
+            if now >= grace_end:
+                # Grâce épuisée : on retombe sur la logique d'essai, qui
+                # aboutira à trial_expired et donc au blocage.
+                sub_row = None
+            else:
+                grace_days_left = max(1, (grace_end - now).days)
+        else:
+            grace_days_left = PAST_DUE_GRACE_DAYS
+
+    if sub_row:
+        row = sub_row
         plan = row["plan"]
-        hardcoded = PLAN_FEATURES.get(plan["name"], ESSENTIEL_FEATURES)
-        base = {**hardcoded, **(plan.get("features") or {})}
+        base = merge_plan_features(plan["name"], plan.get("features"))
         return {
             "plan_name": plan["name"],
             "status": row["status"],
             "features": _build_features(base, global_flags, overrides),
             "trial_days_left": None,
+            "grace_days_left": grace_days_left,
         }
 
     # 2. Espace secondaire inclus dans un Business (priorité sur le trial)

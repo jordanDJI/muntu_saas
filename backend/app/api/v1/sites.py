@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from uuid import UUID
+from app.middleware.roles import require_owner_or_admin
 from app.middleware.tenant import get_current_tenant, get_current_user
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.site import SiteCreateIn, SiteUpdateIn, SiteOut, ServiceOfferIn, TestimonialIn
@@ -200,7 +201,7 @@ class BookingConfigIn(BaseModel):
 
 
 @router.get("/{site_id}/booking-config")
-async def get_booking_config(site_id: UUID, tenant_id: str = Depends(get_current_tenant)):
+async def get_booking_config(site_id: UUID, tenant_id: str = Depends(require_owner_or_admin)):
     sb = get_supabase()
     _assert_owner(sb, str(site_id), tenant_id)
     res = sb.table("site").select("site_style, paypal_client_secret").eq("id", str(site_id)).single().execute()
@@ -215,9 +216,13 @@ async def get_booking_config(site_id: UUID, tenant_id: str = Depends(get_current
 
 
 @router.patch("/{site_id}/booking-config")
-async def update_booking_config(site_id: UUID, body: BookingConfigIn, tenant_id: str = Depends(get_current_tenant)):
+async def update_booking_config(site_id: UUID, body: BookingConfigIn, tenant_id: str = Depends(require_owner_or_admin)):
     """
     Met à jour la config questions + dépôt PayPal du site.
+
+    Réservé owner/admin : ce payload porte paypal_client_id et
+    paypal_client_secret. Ouvert à tout membre, il permettait de rediriger
+    les acomptes des clients vers un autre compte PayPal.
     booking_questions et deposit sont mergés dans site_style.
     paypal_client_secret est stocké dans une colonne séparée (jamais exposé publiquement).
     """

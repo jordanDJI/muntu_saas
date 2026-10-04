@@ -19,7 +19,7 @@ function _track(slug: string, type: string, section?: string, data?: object) {
 type Slot = { start: string; end: string; label: string; spots_left?: number; capacity?: number; max_party_size?: number };
 type Mode = "contact" | "appointment";
 type BookingQuestion = { id: string; label: string; type: "text" | "textarea" | "select"; options?: string[]; required: boolean };
-type DepositCfg = { enabled: boolean; amount: number; currency: string; paypal_client_id: string };
+type DepositCfg = { enabled: boolean; amount: number; currency: string; paypal_client_id: string; sandbox?: boolean };
 
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DAYS_FR = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
@@ -441,7 +441,6 @@ export default function ContactForm({
 
     const clientId = depositConfig?.paypal_client_id?.trim();
     const currency = depositConfig?.currency || "EUR";
-    const amount = depositConfig?.amount ?? 0;
 
     console.log("[PayPal] step=payment | clientId=", clientId ? clientId.slice(0, 8) + "…" : "VIDE/MANQUANT");
 
@@ -458,10 +457,13 @@ export default function ContactForm({
       w.paypal.Buttons({
         style: { layout: "vertical", color: "blue", shape: "rect", label: "pay" },
         createOrder: async () => {
+          // Aucune donnée monétaire envoyée : le backend lit le montant et la
+          // devise dans la config du tenant. Les transmettre depuis le client
+          // permettait de régler un acompte de 0,01 €.
           const r = await fetch(`${apiUrl}/api/v1/booking/${tenantSlug}/paypal-order`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ amount, currency, description: "Acompte réservation" }),
+            body: JSON.stringify({}),
           });
           if (!r.ok) {
             const err = await r.json().catch(() => ({}));
@@ -508,7 +510,11 @@ export default function ContactForm({
     // Inject SDK
     console.log("[PayPal] injection du script SDK…");
     const script = document.createElement("script");
-    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=${currency}&intent=capture`;
+    // Le SDK doit viser le même environnement que le backend : avec
+    // deposit.sandbox activé, charger le SDK de production affichait des
+    // boutons inutilisables (client ID sandbox sur l'endpoint live).
+    const sdkHost = depositConfig?.sandbox ? "https://www.sandbox.paypal.com" : "https://www.paypal.com";
+    script.src = `${sdkHost}/sdk/js?client-id=${clientId}&currency=${currency}&intent=capture`;
     script.onload = () => { console.log("[PayPal] SDK chargé !"); renderButtons(); };
     script.onerror = () => setPaypalError("Impossible de charger le module de paiement PayPal.");
     document.head.appendChild(script);

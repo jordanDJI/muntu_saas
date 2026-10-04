@@ -19,7 +19,40 @@ type Appointment = {
   party_size?: number;
   contact?: { first_name: string; last_name: string; email: string; phone?: string };
   service_offer?: { name: string };
+  // Acompte : none | pending_payment | paid | refunded | refund_failed
+  deposit_status?: string;
+  deposit_amount?: number;
+  deposit_currency?: string;
+  custom_answers?: Record<string, string>;
 };
+
+/** Pastille d'acompte — le professionnel ne voyait pas quels RDV étaient payés. */
+function DepositBadge({ appt }: { appt: Appointment }) {
+  const st = appt.deposit_status;
+  if (!st || st === "none") return null;
+
+  const amount = appt.deposit_amount != null
+    ? `${appt.deposit_amount} ${appt.deposit_currency ?? "EUR"}`
+    : "";
+
+  const style: Record<string, { bg: string; fg: string; label: string }> = {
+    paid:            { bg: "#dcfce7", fg: "#15803d", label: `Acompte payé${amount ? ` · ${amount}` : ""}` },
+    pending_payment: { bg: "#fef3c7", fg: "#b45309", label: "Acompte en attente" },
+    refunded:        { bg: "#e5e7eb", fg: "#4b5563", label: `Acompte remboursé${amount ? ` · ${amount}` : ""}` },
+    refund_failed:   { bg: "#fee2e2", fg: "#b91c1c", label: "Remboursement échoué" },
+  };
+  const conf = style[st];
+  if (!conf) return null;
+
+  return (
+    <span
+      className="rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap"
+      style={{ background: conf.bg, color: conf.fg }}
+    >
+      {conf.label}
+    </span>
+  );
+}
 
 type AvailSlot = {
   day_of_week: number;
@@ -683,6 +716,8 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
   const router = useRouter();
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [invoiceErr, setInvoiceErr] = useState("");
+  const [refunding, setRefunding] = useState(false);
+  const [refundError, setRefundError] = useState("");
   const [sendingFollowup, setSendingFollowup] = useState(false);
   const [followupMsg, setFollowupMsg] = useState<string | null>(null);
 
@@ -769,6 +804,47 @@ function ApptModal({ appt, offers, onConfirm, onCancel, onUpdate, onClose }: {
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
                 <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-1">{t.appt_client_message}</p>
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{appt.notes}</p>
+              </div>
+            )}
+
+            {/* Réponses au formulaire de réservation : stockées depuis la
+                migration 047 mais jamais affichées — le client répondait à des
+                questions que personne ne pouvait lire. */}
+            {appt.custom_answers && Object.keys(appt.custom_answers).length > 0 && (
+              <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 space-y-1.5">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Réponses au formulaire</p>
+                {Object.entries(appt.custom_answers).map(([k, v]) => (
+                  <p key={k} className="text-sm text-gray-700">
+                    <span className="text-gray-400">{k} : </span>{String(v)}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {appt.deposit_status && appt.deposit_status !== "none" && (
+              <div className="border border-gray-100 rounded-lg p-3 flex items-center justify-between gap-3 flex-wrap">
+                <DepositBadge appt={appt} />
+                {(appt.deposit_status === "paid" || appt.deposit_status === "refund_failed") && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm("Rembourser l'acompte de ce rendez-vous ? Cette action est définitive.")) return;
+                      setRefunding(true); setRefundError("");
+                      try {
+                        await api.refundDeposit(appt.id);
+                        onUpdate();
+                      } catch (e: any) {
+                        setRefundError(e?.message ?? "Le remboursement n'a pas abouti.");
+                      } finally {
+                        setRefunding(false);
+                      }
+                    }}
+                    disabled={refunding}
+                    className="text-xs font-medium text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-2.5 py-1 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {refunding ? "Remboursement…" : "Rembourser l'acompte"}
+                  </button>
+                )}
+                {refundError && <p className="text-xs text-red-500 w-full">{refundError}</p>}
               </div>
             )}
             <div className="flex items-center justify-between">
@@ -1451,6 +1527,7 @@ export default function AppointmentsPage() {
                     <span className="text-blue-400" title={a.notes}>✉</span>
                   )}
                 </button>
+                <DepositBadge appt={a} />
                 <span className="text-gray-400">
                   {new Date(a.scheduled_at).toLocaleString("fr-BE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                 </span>

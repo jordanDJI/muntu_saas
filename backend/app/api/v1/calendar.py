@@ -189,7 +189,7 @@ async def get_calendar_appointments(
 
     q = (
         sb.table("appointment")
-        .select("id, status, scheduled_at, end_at, notes, party_size, service_offer_id, contact_id, contact(first_name, last_name, email, phone), service_offer(name)")
+        .select("id, status, scheduled_at, end_at, notes, party_size, service_offer_id, contact_id, deposit_status, deposit_amount, deposit_currency, custom_answers, contact(first_name, last_name, email, phone), service_offer(name)")
         .eq("calendar_id", cal_id)
         .neq("status", "cancelled")
     )

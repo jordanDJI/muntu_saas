@@ -8,6 +8,7 @@ import stripe
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from app.middleware.roles import require_owner_or_admin
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin
 from app.core.config import settings
@@ -212,7 +213,7 @@ async def search_domains(
 
 
 @router.post("/purchase")
-async def purchase_domain_checkout(body: DomainPurchaseCheckoutIn, tenant_id: str = Depends(get_current_tenant)):
+async def purchase_domain_checkout(body: DomainPurchaseCheckoutIn, tenant_id: str = Depends(require_owner_or_admin)):
     """
     Crée une session Stripe Checkout pour l'achat du domaine.
     L'achat OVH réel est déclenché par le webhook Stripe après paiement confirmé.
@@ -274,7 +275,7 @@ async def purchase_domain_checkout(body: DomainPurchaseCheckoutIn, tenant_id: st
 
 
 @router.post("/addon/checkout")
-async def addon_checkout(body: AddonCheckoutIn, tenant_id: str = Depends(get_current_tenant)):
+async def addon_checkout(body: AddonCheckoutIn, tenant_id: str = Depends(require_owner_or_admin)):
     if not settings.stripe_domain_addon_price_id:
         raise HTTPException(status_code=503, detail="Option domaine non encore disponible à l'achat")
 

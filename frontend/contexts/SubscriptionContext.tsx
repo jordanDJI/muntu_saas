@@ -52,6 +52,8 @@ type SubscriptionCtx = {
   features: PlanFeatures;
   hasFeature: (key: FeatureKey) => boolean;
   trialDaysLeft: number | null;
+  /** Jours restants avant coupure quand le statut est "past_due". */
+  graceDaysLeft: number | null;
   loading: boolean;
 };
 
@@ -61,6 +63,7 @@ const SubscriptionContext = createContext<SubscriptionCtx>({
   features: ESSENTIEL_FEATURES,
   hasFeature: () => false,
   trialDaysLeft: null,
+  graceDaysLeft: null,
   loading: true,
 });
 
@@ -69,6 +72,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState("trial");
   const [features, setFeatures] = useState<PlanFeatures>(ESSENTIEL_FEATURES);
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null);
+  const [graceDaysLeft, setGraceDaysLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -78,6 +82,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setStatus(data.status ?? "trial");
         setFeatures({ ...ESSENTIEL_FEATURES, ...(data.features ?? {}) });
         setTrialDaysLeft(data.trial_days_left ?? null);
+        setGraceDaysLeft(data.grace_days_left ?? null);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -91,7 +96,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <SubscriptionContext.Provider value={{ planName, status, features, hasFeature, trialDaysLeft, loading }}>
+    <SubscriptionContext.Provider value={{ planName, status, features, hasFeature, trialDaysLeft, graceDaysLeft, loading }}>
       {children}
     </SubscriptionContext.Provider>
   );

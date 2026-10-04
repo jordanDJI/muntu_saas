@@ -797,6 +797,52 @@ def send_logo_request_admin(
     })
 
 
+# ── Incidents de paiement (alerte opérateur) ──────────────────────────────────
+
+def send_payment_incident_admin(
+    kind: str,
+    reference: str,
+    amount: float,
+    currency: str,
+    refunded: bool,
+    detail: str = "",
+) -> None:
+    """
+    Alerte l'opérateur SaaS sur un incident de paiement.
+
+    Existe parce qu'un échec après encaissement (enregistrement OVH impossible,
+    litige bancaire, remboursement d'acompte raté) ne laissait qu'une ligne de
+    log : personne n'était prévenu qu'un client avait payé sans rien recevoir.
+    """
+    status_badge = (
+        "<span style='color:#15803d;font-weight:600'>Remboursé automatiquement</span>"
+        if refunded else
+        "<span style='color:#b91c1c;font-weight:600'>NON remboursé — action requise</span>"
+    )
+    resend.Emails.send({
+        "from": f"{settings.email_from_name} <{settings.email_from}>",
+        "to": [settings.email_from],
+        "subject": f"[Klientys] Incident paiement — {kind} ({amount:.2f} {currency})",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;background:#fff">
+          <h2 style="color:#07222F;margin-bottom:4px">{kind}</h2>
+          <p style="color:#6b7280;font-size:13px;margin-top:0">Référence : {reference}</p>
+          <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:20px 0">
+            <p style="margin:0;font-weight:600;color:#07222F">{amount:.2f} {currency}</p>
+            <p style="margin:4px 0 0;font-size:13px">{status_badge}</p>
+          </div>
+          <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin:20px 0 8px">Détail</h3>
+          <p style="font-size:13px;color:#374151;white-space:pre-wrap;margin:0">{detail or "—"}</p>
+          <div style="margin-top:28px">
+            <a href="{settings.frontend_url}/admin/billing" style="background:#0D4B58;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">
+              Ouvrir la facturation →
+            </a>
+          </div>
+        </div>
+        """,
+    })
+
+
 # ── CRM — Relance client ──────────────────────────────────────────────────────
 
 def _crm_lang(country: str) -> str:

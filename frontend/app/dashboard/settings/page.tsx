@@ -349,11 +349,12 @@ function SectionSite() {
       const s = sites[0];
       if (s) { setSite(s); setTitle(s.title ?? ""); setAbsenceMode(s.absence_mode ?? false); setAbsenceMessage(s.absence_message ?? ""); }
     }).finally(() => setLoading(false));
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const { data } = await supabase.from("membership").select("tenant:tenant_id(slug)").eq("user_id", user.id).single();
-      setTenantSlug((data?.tenant as any)?.slug ?? "");
-    });
+    // Via l'API : le join imbriqué sur `tenant` avec la clé anon ne renvoyait
+    // rien (aucune policy pour le rôle authenticated), et le `.single()` sur
+    // membership échouait pour les comptes multi-espaces.
+    api.getMyTenant()
+      .then(t => setTenantSlug(t?.slug ?? ""))
+      .catch(() => setTenantSlug(""));
   }, []);
 
   const save = async (e: React.FormEvent) => {
@@ -728,6 +729,9 @@ function SectionMetriques() {
 
 // ── Section Abonnement ────────────────────────────────────────────────────────
 
+// `price` n'est plus qu'un repli d'affichage : le tarif réel vient de
+// plan_subscription.price_monthly via api.getPlans(), de sorte qu'un
+// changement de prix en base n'ait pas à être recopié ici.
 const PLANS_INFO = [
   {
     name: "Essentiel",
@@ -772,17 +776,21 @@ function SectionAbonnement() {
         setOneTimePurchases(reqs.filter((r: any) => r.is_additional));
       } catch { /* non critique */ }
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
-      const { data: mem } = await supabase.from("membership").select("tenant_id").eq("user_id", user.id).single();
-      if (!mem) { setLoading(false); return; }
-      const { data } = await supabase
-        .from("subscription")
-        .select("*, plan:plan_id(name, price_monthly), stripe_subscription_id")
-        .eq("tenant_id", mem.tenant_id)
-        .in("status", ["active", "trialing"])
-        .maybeSingle();
-      setSub(data);
+      // Lecture via l'API, et non plus en direct sur la table `subscription` :
+      // l'ancien `.single()` sur membership échouait dès qu'un compte avait
+      // plusieurs espaces (Business), et la requête ignorait l'espace actif.
+      try {
+        const p = await api.getMySubscription();
+        setSub(
+          p?.stripe_subscription_id || p?.subscription_status
+            ? {
+                stripe_subscription_id: p.stripe_subscription_id,
+                status: p.subscription_status,
+                plan: { name: p.plan_name, price_monthly: p.price_monthly },
+              }
+            : null
+        );
+      } catch { /* non critique — le contexte abonnement fournit le repli */ }
       setLoading(false);
     };
     loadData();
@@ -821,6 +829,7 @@ function SectionAbonnement() {
   const currentPlanName = sub?.plan?.name ?? ctxPlan ?? null;
   // Vrai abonnement Stripe = stripe_subscription_id présent (pas une activation admin gratuite)
   const hasRealStripeSub = !!(sub?.stripe_subscription_id);
+  const isLiveSub = ["active", "trialing", "past_due"].includes(sub?.status ?? "");
 
   const DESIGN_STATUS: Record<string, string> = {
     pending: "En attente", in_progress: "En cours", done: "Terminée",
@@ -838,8 +847,13 @@ function SectionAbonnement() {
                 <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Plan actuel</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-xl font-bold text-gray-900">{currentPlanName ?? "Aucun abonnement"}</p>
-                  {sub && (
+                  {isLiveSub && sub?.status !== "past_due" && (
                     <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Actif</span>
+                  )}
+                  {sub?.status === "past_due" && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700">
+                      Paiement en échec
+                    </span>
                   )}
                   {!sub && ctxStatus === "trial" && (
                     <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
@@ -904,7 +918,12 @@ function SectionAbonnement() {
                       )}
                       <div>
                         <p className="font-bold text-gray-900">{info.name}</p>
-                        <p className="text-lg font-bold text-gray-800 mt-0.5">{info.price} <span className="text-xs font-normal text-gray-400">€/mois</span></p>
+                        <p className="text-lg font-bold text-gray-800 mt-0.5">
+                          {dbPlan?.price_monthly != null
+                            ? Number(dbPlan.price_monthly).toFixed(2).replace(".", ",")
+                            : info.price}{" "}
+                          <span className="text-xs font-normal text-gray-400">€/mois</span>
+                        </p>
                       </div>
                       <ul className="flex flex-col gap-1.5 flex-1">
                         {info.features.map((f) => (

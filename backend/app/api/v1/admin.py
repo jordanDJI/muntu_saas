@@ -1415,8 +1415,11 @@ async def get_billing_overview(admin=Depends(get_current_admin)):
     now = datetime.now(timezone.utc)
     thirty_ago = (now - timedelta(days=30)).isoformat()
 
-    # Plans — lookup dict {id: {name, price_eur}}
-    plans_raw = sb.table("plan_subscription").select("id, name, price_eur").execute().data or []
+    # Plans — lookup dict {id: {name, price_monthly}}
+    # price_monthly est la colonne de référence (migration 073) : /admin/metrics
+    # la lisait déjà, /admin/billing lisait price_eur — les deux MRR du panel
+    # pouvaient donc afficher des chiffres différents.
+    plans_raw = sb.table("plan_subscription").select("id, name, price_monthly").execute().data or []
     plan_map: dict[str, dict] = {p["id"]: p for p in plans_raw}
 
     # Toutes les subscriptions (sans FK join — plus compatible)
@@ -1435,13 +1438,13 @@ async def get_billing_overview(admin=Depends(get_current_admin)):
     churned_30d  = [s for s in all_subs if s["status"] == "canceled" and (s.get("start_date") or "") >= thirty_ago]
 
     # MRR
-    mrr = sum((s["_plan"].get("price_eur") or 0) for s in active_subs)
+    mrr = sum((s["_plan"].get("price_monthly") or 0) for s in active_subs)
 
     # Répartition par plan
     plan_dist: dict[str, dict] = {}
     for s in active_subs:
         name  = s["_plan"].get("name") or "Autre"
-        price = s["_plan"].get("price_eur") or 0
+        price = s["_plan"].get("price_monthly") or 0
         if name not in plan_dist:
             plan_dist[name] = {"name": name, "count": 0, "mrr": 0}
         plan_dist[name]["count"] += 1

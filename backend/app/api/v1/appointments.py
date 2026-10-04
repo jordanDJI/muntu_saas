@@ -8,6 +8,8 @@ from app.core.config import settings
 from app.models.appointment import AppointmentCreateIn, AppointmentUpdateIn, AppointmentOut
 from app.services.email import send_appointment_confirmation, send_appointment_cancellation, get_tenant_brand
 from app.services import push as push_svc
+from app.services.deposits import is_refundable, refund_appointment_deposit
+from app.middleware.roles import require_owner_or_admin
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -209,6 +211,17 @@ async def cancel_appointment(
 
     supabase.table("lead").update({"status": "closed_lost"}).eq("contact_id", appt["contact_id"]).eq("tenant_id", tenant_id).execute()
 
+    # Refus d'une demande jamais acceptée : l'acompte est rendu automatiquement.
+    # Pour un RDV déjà confirmé, le remboursement reste à la main du pro via
+    # POST /appointments/{id}/refund-deposit.
+    deposit_refund: dict | None = None
+    if was_pending and is_refundable(appt):
+        deposit_refund = await refund_appointment_deposit(
+            supabase, tenant_id, appt, note="Demande de rendez-vous refusée",
+        )
+        if deposit_refund["refunded"]:
+            appt["deposit_status"] = "refunded"
+
     if was_confirmed or was_pending:
         contact = supabase.table("contact").select("first_name, last_name, email").eq("id", appt["contact_id"]).single().execute().data
         tenant = supabase.table("tenant").select("name, slug, timezone").eq("id", tenant_id).single().execute().data
@@ -241,6 +254,38 @@ async def cancel_appointment(
             )
 
     return appt
+
+
+@router.post("/{appointment_id}/refund-deposit")
+async def refund_deposit(
+    appointment_id: UUID,
+    tenant_id: str = Depends(require_owner_or_admin),
+):
+    """
+    Rembourse l'acompte d'un rendez-vous (owner/admin).
+
+    Utilisé pour les annulations de rendez-vous déjà confirmés, où la décision
+    de rendre l'acompte appartient au professionnel. Le refus d'une demande en
+    attente déclenche de son côté un remboursement automatique.
+    """
+    supabase = get_supabase()
+    appt = _get_tenant_appointment(supabase, appointment_id, tenant_id)
+
+    if not is_refundable(appt):
+        raise HTTPException(
+            status_code=400,
+            detail="Aucun acompte remboursable sur ce rendez-vous.",
+        )
+
+    result = await refund_appointment_deposit(supabase, tenant_id, appt)
+    if not result["refunded"]:
+        detail = {
+            "config_missing": "Les identifiants PayPal du site ne permettent plus de rembourser cet acompte.",
+            "paypal_error": "PayPal a refusé le remboursement. Réessayez ou remboursez depuis votre compte PayPal.",
+        }.get(result["reason"], "Le remboursement n'a pas abouti.")
+        raise HTTPException(status_code=502, detail=detail)
+
+    return {"refunded": True, "refund_id": result["refund_id"], "deposit_status": "refunded"}
 
 
 def _safe_push(coro) -> None:
