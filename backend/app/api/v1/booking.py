@@ -329,18 +329,50 @@ async def get_available_slots(tenant_slug: str, date: str, request: Request):
 
 
 def _get_team_emails(sb, tenant_id: str) -> set[str]:
-    """Retourne les emails de l'équipe du tenant pour bloquer les auto-réservations."""
+    """
+    Emails de l'équipe du tenant, pour bloquer les auto-réservations.
+
+    Appelée à **chaque** réservation publique et à chaque formulaire de contact.
+    Elle faisait un appel à l'API Auth *par membre* — six allers-retours réseau
+    pour un tenant à cinq membres, sur le chemin le plus sensible du produit.
+    Les emails sont désormais lus en une requête dans `app_user`.
+
+    L'API Auth reste utilisée en **repli ciblé**, uniquement pour les membres
+    absents de `app_user` : cette table est alimentée par le backend et pourrait
+    dériver de `auth.users`, et un email manquant ferait silencieusement sauter
+    le garde-fou pour ce membre.
+    """
     emails: set[str] = set()
+
     for s in (sb.table("site").select("email_contact").eq("tenant_id", tenant_id).execute().data or []):
         if s.get("email_contact"):
             emails.add(s["email_contact"].strip().lower())
-    for m in (sb.table("membership").select("user_id").eq("tenant_id", tenant_id).execute().data or []):
+
+    user_ids = [
+        m["user_id"]
+        for m in (sb.table("membership").select("user_id").eq("tenant_id", tenant_id).execute().data or [])
+        if m.get("user_id")
+    ]
+    if not user_ids:
+        return emails
+
+    resolved: set[str] = set()
+    try:
+        for u in (sb.table("app_user").select("id, email").in_("id", user_ids).execute().data or []):
+            if u.get("email"):
+                emails.add(u["email"].strip().lower())
+            resolved.add(u["id"])
+    except Exception as exc:
+        logger.warning("Lecture app_user échouée, repli sur l'API Auth : %s", exc)
+
+    for uid in set(user_ids) - resolved:
         try:
-            u = sb.auth.admin.get_user_by_id(m["user_id"])
+            u = sb.auth.admin.get_user_by_id(uid)
             if u and u.user and u.user.email:
                 emails.add(u.user.email.strip().lower())
         except Exception:
             pass
+
     return emails
 
 

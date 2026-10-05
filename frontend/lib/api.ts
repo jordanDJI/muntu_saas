@@ -45,8 +45,16 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
         }
       }
     }
-    const msg = typeof detail === "string" ? detail : `HTTP ${res.status}`;
-    throw new Error(msg);
+    // `detail` peut être un objet (ex. confirmation requise avec un décompte) :
+    // on garde le message lisible, et on expose la structure aux appelants qui
+    // en ont besoin via err.status / err.detail.
+    const msg = typeof detail === "string"
+      ? detail
+      : (detail?.message ?? `HTTP ${res.status}`);
+    const error = new Error(msg) as Error & { status?: number; detail?: unknown };
+    error.status = res.status;
+    error.detail = detail;
+    throw error;
   }
   if (res.status === 204) return null as T;
   const ct = res.headers.get("content-type");
@@ -383,16 +391,24 @@ export const api = {
   getContact: (id: string) => apiFetch<any>(`/api/v1/contacts/${id}`),
   updateContact: (id: string, body: { notes?: string; first_name?: string; last_name?: string; email?: string; phone?: string; category?: string; segment?: string; custom_fields?: Record<string, any> }) =>
     apiFetch<any>(`/api/v1/contacts/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  importContactsCsv: async (file: File): Promise<{ job_id: string; status: string }> => {
+  // mode "complete" ne remplit que les champs vides ; "overwrite" laisse le fichier
+  // remplacer les valeurs existantes. Une cellule vide n'efface jamais rien.
+  importContactsCsv: async (file: File, mode: "complete" | "overwrite" = "complete"): Promise<{ job_id: string; status: string; mode: string }> => {
     const headers = await getAuthHeaders();
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch(`${API_URL}/api/v1/contacts/import`, { method: "POST", headers, body: form });
+    const res = await fetch(`${API_URL}/api/v1/contacts/import?mode=${mode}`, { method: "POST", headers, body: form });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail ?? `HTTP ${res.status}`); }
     return res.json();
   },
   getContactImportJob: (jobId: string) =>
-    apiFetch<{ id: string; status: "processing" | "done" | "error"; filename: string; created_count: number | null; skipped_count: number | null; notice: string | null; error_message: string | null }>(`/api/v1/contacts/import/${jobId}`),
+    apiFetch<{
+      id: string; status: "processing" | "done" | "error"; filename: string; mode: string | null;
+      created_count: number | null; enriched_count: number | null;
+      skipped_count: number | null; ambiguous_count: number | null;
+      changes: { contact_id: string; name: string; fields: { field: string; from: any; to: any }[] }[] | null;
+      notice: string | null; error_message: string | null;
+    }>(`/api/v1/contacts/import/${jobId}`),
   ignoreDuplicateGroup: (matchType: string, matchValue: string) =>
     apiFetch(`/api/v1/contacts/duplicates/ignore`, { method: "POST", body: JSON.stringify({ match_type: matchType, match_value: matchValue }) }),
 
@@ -476,8 +492,18 @@ export const api = {
     apiFetch<any>("/api/v1/contact-fields/", { method: "POST", body: JSON.stringify(body) }),
   updateContactField: (fieldKey: string, body: { label?: string; enabled?: boolean; required?: boolean; position?: number; options?: string[] }) =>
     apiFetch<any>(`/api/v1/contact-fields/${fieldKey}`, { method: "PATCH", body: JSON.stringify(body) }),
-  deleteContactField: (fieldKey: string) =>
-    apiFetch(`/api/v1/contact-fields/${fieldKey}`, { method: "DELETE" }),
+  // purge=true confirme la suppression des valeurs. Sans ce drapeau, l'API renvoie
+  // 409 avec le nombre de contacts concernés pour qu'on puisse demander confirmation.
+  deleteContactField: (fieldKey: string, purge = false) =>
+    apiFetch<{ deleted: boolean; purged: number }>(
+      `/api/v1/contact-fields/${fieldKey}${purge ? "?purge=true" : ""}`, { method: "DELETE" }),
+  getContactFieldUsage: () =>
+    apiFetch<{ usage: Record<string, number>; orphans: { field_key: string; count: number }[] }>(
+      "/api/v1/contact-fields/usage"),
+  reattachContactField: (body: { field_key: string; label: string; field_type?: string; options?: string[] }) =>
+    apiFetch<any>("/api/v1/contact-fields/reattach", { method: "POST", body: JSON.stringify(body) }),
+  purgeOrphanField: (fieldKey: string) =>
+    apiFetch<{ purged: number }>(`/api/v1/contact-fields/orphans/${fieldKey}`, { method: "DELETE" }),
 
   // RGPD
   getContactConsent: (contactId: string) =>

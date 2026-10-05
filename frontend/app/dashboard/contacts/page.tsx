@@ -103,11 +103,12 @@ function ManageTagsModal({ tags, onClose, onRefresh }: { tags: any[]; onClose: (
 function ImportGuideModal({ fieldDefs, onClose, onConfirm, onDownload }: {
   fieldDefs: any[];
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (mode: "complete" | "overwrite") => void;
   onDownload: (format: "csv" | "xlsx") => void;
 }) {
   const { t } = useLanguage();
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [mode, setMode] = useState<"complete" | "overwrite">("complete");
   const cols = [
     ...[...fieldDefs].filter(f => f.enabled).sort((a, b) => a.position - b.position)
       .map(f => ({ key: f.field_key, label: f.label, example: "" })),
@@ -163,6 +164,42 @@ function ImportGuideModal({ fieldDefs, onClose, onConfirm, onDownload }: {
           <p className="text-xs text-gray-400">
             Ces colonnes reflètent les champs actuellement activés pour ton espace (configurables dans Paramètres → Champs contact). Télécharge le modèle ci-dessous pour un fichier déjà prêt avec ces colonnes.
           </p>
+
+          {/* Choix du traitement des contacts déjà présents */}
+          <div className="rounded-xl border border-gray-200 p-3 space-y-2">
+            <p className="text-xs font-semibold text-gray-700">Si un contact du fichier existe déjà</p>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Le rapprochement se fait sur l&apos;email, à défaut sur le téléphone. Les contacts
+              inconnus sont créés dans les deux cas.
+            </p>
+
+            {([
+              { v: "complete", title: "Compléter", desc: "Ne remplit que les informations manquantes. Rien n'est remplacé." },
+              { v: "overwrite", title: "Écraser", desc: "Les valeurs du fichier remplacent celles déjà enregistrées." },
+            ] as const).map(opt => (
+              <label key={opt.v}
+                className={`flex gap-2.5 items-start rounded-lg border p-2.5 cursor-pointer transition-colors ${
+                  mode === opt.v ? "border-primary-400 bg-primary-50" : "border-gray-150 hover:bg-gray-50"
+                }`}>
+                <input type="radio" name="import-mode" value={opt.v} checked={mode === opt.v}
+                  onChange={() => setMode(opt.v)} className="mt-0.5 accent-primary-600" />
+                <span className="flex-1">
+                  <span className="block text-xs font-semibold text-gray-800">{opt.title}</span>
+                  <span className="block text-xs text-gray-500 leading-relaxed">{opt.desc}</span>
+                </span>
+              </label>
+            ))}
+
+            {mode === "overwrite" && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 leading-relaxed">
+                ⚠️ Un fichier ancien peut écraser des informations plus récentes saisies dans
+                l&apos;application. Les modifications restent consultables dans le rapport d&apos;import.
+              </p>
+            )}
+            <p className="text-xs text-gray-400">
+              Dans les deux cas, une colonne vide n&apos;efface jamais une information existante.
+            </p>
+          </div>
         </div>
 
         {/* Footer */}
@@ -187,7 +224,7 @@ function ImportGuideModal({ fieldDefs, onClose, onConfirm, onDownload }: {
               </div>
             )}
           </div>
-          <button onClick={onConfirm}
+          <button onClick={() => onConfirm(mode)}
             className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 text-white px-4 py-2.5 text-sm font-semibold hover:bg-primary-700 active:scale-95 transition-all shadow-sm">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
@@ -367,6 +404,7 @@ export default function ContactsPage() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showTagsModal, setShowTagsModal] = useState(false);
   const [showImportGuide, setShowImportGuide] = useState(false);
+  const importModeRef = useRef<"complete" | "overwrite">("complete");
   const [fieldDefs, setFieldDefs] = useState<any[]>([]);
   const categoryOptions: string[] = fieldDefs.find(f => f.field_key === "category")?.options ?? [];
   const [duplicates, setDuplicates] = useState<any[]>([]);
@@ -429,7 +467,7 @@ export default function ContactsPage() {
     if (!file) return;
     setImporting(true); setImportMsg("");
     try {
-      const res = await api.importContactsCsv(file);
+      const res = await api.importContactsCsv(file, importModeRef.current);
       setActiveImportJob(res.job_id);
       setImportMsg("⏳ Import démarré — suis sa progression en bas à droite de l'écran, même si tu changes de page.");
       pollOwnImportJob(res.job_id);
@@ -445,7 +483,10 @@ export default function ContactsPage() {
     api.downloadContactImportTemplate(format).catch((err: any) => setImportMsg(`Erreur : ${err.message}`));
   };
 
-  const openFilePicker = () => {
+  // Le mode choisi dans la modale doit survivre à sa fermeture : le sélecteur de
+  // fichier s'ouvre après, et c'est handleImport qui en a besoin.
+  const openFilePicker = (mode: "complete" | "overwrite") => {
+    importModeRef.current = mode;
     setShowImportGuide(false);
     setTimeout(() => fileRef.current?.click(), 50);
   };

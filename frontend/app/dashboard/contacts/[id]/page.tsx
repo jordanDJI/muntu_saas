@@ -328,6 +328,9 @@ export default function ContactDetailPage() {
     setNotesSaving(true);
     try {
       await api.updateContact(id, { notes });
+      // Recaler l'état local : c'est lui qui désactive le bouton tant qu'il n'y
+      // a rien de nouveau à enregistrer.
+      setContact((c: any) => (c ? { ...c, notes } : c));
       setNotesSaved(true);
       setTimeout(() => setNotesSaved(false), 2000);
     } finally { setNotesSaving(false); }
@@ -756,6 +759,29 @@ export default function ContactDetailPage() {
 
         {/* Colonne droite — sidebar */}
         <div className="space-y-4">
+
+          {/* Notes internes — champ libre du tenant, saisi ici ou rempli par import.
+              Distinct de la timeline : du contenu, pas un événement daté. */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t.crm_notes_label}</h3>
+              {notesSaved && <span className="text-xs text-green-600">✓</span>}
+            </div>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveNotes(); }}
+              rows={4}
+              placeholder={t.crm_notes_ph}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-base sm:text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300 resize-y"
+            />
+            <div className="flex justify-end mt-2">
+              <button onClick={saveNotes} disabled={notesSaving || notes === (contact.notes ?? "")}
+                className="rounded-lg bg-primary-600 text-white px-3 py-1.5 text-sm font-semibold hover:bg-primary-700 disabled:opacity-40 transition-colors active:scale-95">
+                {notesSaving ? "…" : t.crm_notes_save}
+              </button>
+            </div>
+          </div>
 
           {/* Timeline / Historique des échanges */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">

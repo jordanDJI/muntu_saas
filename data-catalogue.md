@@ -1,74 +1,104 @@
-# Data Catalogue — Klientys Présence Digitale
+# Data Catalogue — Klientys
 
-**Version :** 1.1  
-**Date :** Avril 2026  
-**Base de données :** PostgreSQL avec Row-Level Security (RLS)  
-**Portée :** Toutes les tables du modèle physique
+**Version :** 2.0  
+**Date :** 04/10/2026  
+**Base de données :** PostgreSQL (Supabase) avec Row-Level Security  
+**Portée :** les 64 tables réellement présentes dans le schéma `public`
 
 ---
 
 ## Comment lire ce document
 
-Chaque table est décrite avec :
-- **Rôle** : ce que représente la table dans le métier
-- **Utilisée par** : les fonctionnalités qui lisent ou écrivent dans cette table
-- **Colonnes** : nom, type, nullable, description, exemple, contraintes
+Les **colonnes, types, contraintes et valeurs par défaut sont lus directement dans la base**
+(schéma OpenAPI exposé par PostgREST), pas recopiés à la main. Le **rôle**, les
+**utilisations** et les **règles métier** sont rédigés, car une base ne peut pas les dire.
 
-**Légende des types :**
+> **Pourquoi une version 2.0.** La version 1.1 décrivait le modèle de conception, qui a
+> divergé de la réalité : 15 des 40 tables documentées n'existent pas, et 39 tables réelles
+> n'y figuraient pas. Les tables prévues puis abandonnées ou remplacées sont conservées en
+> annexe, avec ce qui les remplace.
+
+**Légende des contraintes :**
+
 | Symbole | Signification |
 |---|---|
 | `PK` | Clé primaire |
-| `FK` | Clé étrangère (référence une autre table) |
-| `UQ` | Valeur unique dans toute la table |
+| `FK → table.colonne` | Clé étrangère, cible lue dans la base |
 | `NN` | Not Null — valeur obligatoire |
-| `IDX` | Colonne indexée pour la performance |
+| `défaut ...` | Valeur par défaut appliquée par Postgres |
+
+Les index ne sont pas listés ici ; ils se lisent dans les migrations et dans `pg_indexes`.
 
 ---
 
 ## Index des tables
 
-| # | Table | Catégorie | Description courte |
+| # | Table | Catégorie | Colonnes |
 |---|---|---|---|
-| 1 | [tenant](#1-tenant) | Plateforme | Organisation cliente du SaaS |
-| 2 | [app_user](#2-app_user) | Plateforme | Utilisateur humain du système |
-| 3 | [membership](#3-membership) | Plateforme | Lien utilisateur ↔ tenant avec rôle |
-| 4 | [permission](#4-permission) | Plateforme | Droit d'accès élémentaire |
-| 5 | [membership_permission](#5-membership_permission) | Plateforme | Association membership ↔ permission |
-| 6 | [plan_subscription](#6-plan_subscription) | Facturation | Formule tarifaire proposée |
-| 7 | [subscription](#7-subscription) | Facturation | Abonnement actif d'un tenant |
-| 8 | [invoice](#8-invoice) | Facturation | Facture générée pour un abonnement |
-| 9 | [template](#9-template) | Site | Modèle de site pré-configuré par métier |
-| 10 | [site](#10-site) | Site | Site web publié pour un tenant |
-| 11 | [page](#11-page) | Site | Page composant un site |
-| 12 | [service_offer](#12-service_offer) | Site | Service proposé par le tenant |
-| 13 | [service_area](#13-service_area) | Site | Zone géographique d'intervention |
-| 14 | [partner_account](#14-partner_account) | CRM | Organisation partenaire (B2B) |
-| 15 | [contact](#15-contact) | CRM | Personne physique (patient, client, pro) |
-| 16 | [pipeline_stage](#16-pipeline_stage) | CRM | Étape du pipeline commercial |
-| 17 | [traffic_source](#17-traffic_source) | Analytique | Source d'acquisition d'un visiteur |
-| 18 | [channel](#18-channel) | Messagerie | Canal de communication connecté |
-| 19 | [conversation](#19-conversation) | Messagerie | Fil d'échanges avec un contact |
-| 20 | [message](#20-message) | Messagerie | Message individuel dans une conversation |
-| 21 | [chatbot](#21-chatbot) | IA | Agent conversationnel d'un tenant |
-| 22 | [knowledge_base](#22-knowledge_base) | IA | Base documentaire du chatbot |
-| 23 | [knowledge_document](#23-knowledge_document) | IA | Document indexé dans la base |
-| 24 | [page_knowledge_document](#24-page_knowledge_document) | IA | Lien page ↔ document de connaissance |
-| 25 | [lead](#25-lead) | Leads | Demande ou opportunité entrante |
-| 26 | [calendar](#26-calendar) | Agenda | Agenda d'un tenant |
-| 27 | [availability_slot](#27-availability_slot) | Agenda | Créneau horaire réservable |
-| 28 | [appointment](#28-appointment) | Agenda | Rendez-vous ou coordination planifiée |
-| 29 | [notification](#29-notification) | Notifications | Message de rappel ou confirmation |
-| 30 | [visitor_session](#30-visitor_session) | Analytique | Session de navigation sur un site |
-| 31 | [tracking_event](#31-tracking_event) | Analytique | Action tracée sur le site |
-| 32 | [dashboard](#32-dashboard) | Pilotage | Tableau de bord d'un tenant |
-| 33 | [kpi](#33-kpi) | Pilotage | Indicateur de performance calculé |
-| 34 | [roi_model](#34-roi_model) | Pilotage | Modèle de calcul du ROI |
-| 35 | [roi_model_kpi](#35-roi_model_kpi) | Pilotage | Association ROI model ↔ KPI |
-| 36 | [recommendation](#36-recommendation) | Pilotage | Suggestion générée automatiquement |
-| 37 | [agent_config](#37-agent_config) | Agents IA | Configuration d'un agent IA par tenant |
-| 38 | [agent_link](#38-agent_link) | Agents IA | Token d'accès WhatsApp pour client converti |
-| 39 | [ocr_summary](#39-ocr_summary) | Agents IA | Résumé chiffré extrait par OCR (document jamais persisté) |
-| 40 | [agent_synthesis](#40-agent_synthesis) | Agents IA | Résumé consolidé des conversations produit par le Worker 4 |
+| 1 | [activity_log](#1-activity_log) | Plateforme | 8 |
+| 2 | [app_user](#2-app_user) | Plateforme | 10 |
+| 3 | [membership](#3-membership) | Plateforme | 6 |
+| 4 | [team_invite](#4-team_invite) | Plateforme | 10 |
+| 5 | [tenant](#5-tenant) | Plateforme | 24 |
+| 6 | [design_request](#6-design_request) | Facturation SaaS | 12 |
+| 7 | [logo_request](#7-logo_request) | Facturation SaaS | 14 |
+| 8 | [payment_incident](#8-payment_incident) | Facturation SaaS | 10 |
+| 9 | [plan_subscription](#9-plan_subscription) | Facturation SaaS | 11 |
+| 10 | [stripe_event](#10-stripe_event) | Facturation SaaS | 3 |
+| 11 | [subscription](#11-subscription) | Facturation SaaS | 8 |
+| 12 | [trial_reminder_log](#12-trial_reminder_log) | Facturation SaaS | 4 |
+| 13 | [admin_action_log](#13-admin_action_log) | Opérateur SaaS | 8 |
+| 14 | [feature_flag](#14-feature_flag) | Opérateur SaaS | 7 |
+| 15 | [support_message](#15-support_message) | Opérateur SaaS | 6 |
+| 16 | [support_ticket](#16-support_ticket) | Opérateur SaaS | 9 |
+| 17 | [system_config](#17-system_config) | Opérateur SaaS | 3 |
+| 18 | [tenant_feature_override](#18-tenant_feature_override) | Opérateur SaaS | 8 |
+| 19 | [blog_post](#19-blog_post) | Site vitrine | 15 |
+| 20 | [custom_domain](#20-custom_domain) | Site vitrine | 12 |
+| 21 | [landing_testimonial](#21-landing_testimonial) | Site vitrine | 10 |
+| 22 | [page](#22-page) | Site vitrine | 10 |
+| 23 | [service_area](#23-service_area) | Site vitrine | 6 |
+| 24 | [service_offer](#24-service_offer) | Site vitrine | 10 |
+| 25 | [site](#25-site) | Site vitrine | 23 |
+| 26 | [template](#26-template) | Site vitrine | 5 |
+| 27 | [testimonial](#27-testimonial) | Site vitrine | 7 |
+| 28 | [contact](#28-contact) | CRM | 23 |
+| 29 | [contact_activity](#29-contact_activity) | CRM | 6 |
+| 30 | [contact_attachment](#30-contact_attachment) | CRM | 8 |
+| 31 | [contact_consent](#31-contact_consent) | CRM | 8 |
+| 32 | [contact_duplicate_ignore](#32-contact_duplicate_ignore) | CRM | 5 |
+| 33 | [contact_field_def](#33-contact_field_def) | CRM | 12 |
+| 34 | [contact_import_job](#34-contact_import_job) | CRM | 11 |
+| 35 | [contact_reminder](#35-contact_reminder) | CRM | 10 |
+| 36 | [contact_tag](#36-contact_tag) | CRM | 5 |
+| 37 | [contact_tag_link](#37-contact_tag_link) | CRM | 2 |
+| 38 | [pipeline_stage](#38-pipeline_stage) | CRM | 5 |
+| 39 | [email_campaign](#39-email_campaign) | Leads & campagnes | 15 |
+| 40 | [email_campaign_contact](#40-email_campaign_contact) | Leads & campagnes | 11 |
+| 41 | [lead](#41-lead) | Leads & campagnes | 15 |
+| 42 | [appointment](#42-appointment) | Agenda | 25 |
+| 43 | [availability_slot](#43-availability_slot) | Agenda | 10 |
+| 44 | [blocked_period](#44-blocked_period) | Agenda | 8 |
+| 45 | [calendar](#45-calendar) | Agenda | 6 |
+| 46 | [invoice](#46-invoice) | Facturation tenant | 28 |
+| 47 | [invoice_line](#47-invoice_line) | Facturation tenant | 9 |
+| 48 | [invoice_sequence](#48-invoice_sequence) | Facturation tenant | 3 |
+| 49 | [agent_config](#49-agent_config) | Messagerie & agents IA | 26 |
+| 50 | [agent_document](#50-agent_document) | Messagerie & agents IA | 8 |
+| 51 | [agent_link](#51-agent_link) | Messagerie & agents IA | 8 |
+| 52 | [agent_synthesis](#52-agent_synthesis) | Messagerie & agents IA | 8 |
+| 53 | [channel](#53-channel) | Messagerie & agents IA | 6 |
+| 54 | [conversation](#54-conversation) | Messagerie & agents IA | 9 |
+| 55 | [message](#55-message) | Messagerie & agents IA | 6 |
+| 56 | [ocr_summary](#56-ocr_summary) | Messagerie & agents IA | 8 |
+| 57 | [google_analytics_connection](#57-google_analytics_connection) | Analytique | 6 |
+| 58 | [site_event](#58-site_event) | Analytique | 7 |
+| 59 | [tenant_roi_cache](#59-tenant_roi_cache) | Analytique | 5 |
+| 60 | [contact_push_subscription](#60-contact_push_subscription) | Notifications | 5 |
+| 61 | [notification](#61-notification) | Notifications | 11 |
+| 62 | [push_subscription](#62-push_subscription) | Notifications | 5 |
+| 63 | [tenant_notification](#63-tenant_notification) | Notifications | 8 |
+| 64 | [directory_listing](#64-directory_listing) | Annuaire | 13 |
 
 ---
 
@@ -76,291 +106,665 @@ Chaque table est décrite avec :
 
 ---
 
-## 1. `tenant`
+## 1. `activity_log`
 
-**Rôle :** Représente une organisation cliente du SaaS — typiquement un indépendant, une TPE ou une structure locale ayant souscrit un abonnement. C'est l'entité centrale du système multi-tenant : toutes les données métier lui sont rattachées.
+**Rôle :** Journal des actions faites par les utilisateurs d'un tenant dans son propre espace (à ne pas confondre avec `admin_action_log`, réservé à l'opérateur SaaS).
 
-**Utilisée par :** Création de compte, connexion, génération de site, gestion des leads, facturation, tableau de bord.
+**Utilisée par :** Fil d'activité du dashboard.
 
-**RLS activée :** Non (table de référence lue par le système).
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique du tenant | `a1b2c3d4-...` |
-| `name` | VARCHAR(150) | NN | Nom affiché de l'organisation | `MUNTU CURA` |
-| `slug` | VARCHAR(150) | NN, UQ | Identifiant URL de l'organisation (utilisé pour le sous-domaine) | `muntu-cura` |
-| `status` | VARCHAR(30) | NN, défaut `active` | État du compte : `active`, `suspended`, `trial`, `churned` | `active` |
-| `business_model` | VARCHAR(30) | NN, défaut `hybrid` | Mode d'activité : `b2c`, `b2b`, `hybrid` | `hybrid` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création du compte | `2026-01-15 10:00:00` |
-| `updated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de dernière modification | `2026-04-01 09:30:00` |
-
-**Règles métier :**
-- Le `slug` génère le sous-domaine par défaut : `{slug}.plateforme.com`
-- Un tenant `suspended` ne peut plus publier son site ni recevoir de leads
-- Un tenant `churned` conserve ses données pendant 90 jours avant anonymisation (RGPD)
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id` | Tenant propriétaire — porte l'isolation des données |
+| `action` | TEXT | NN |  |
+| `created_at` | TIMESTAMPTZ | défaut `now()` | Date de création |
+| `detail` | TEXT | — |  |
+| `target_id` | UUID | — |  |
+| `target_type` | TEXT | — |  |
+| `user_id` | UUID | — | Utilisateur concerné |
 
 ---
 
 ## 2. `app_user`
 
-**Rôle :** Représente toute personne humaine pouvant se connecter à la plateforme : l'indépendant lui-même, un collaborateur, ou un administrateur SaaS. Un même utilisateur peut appartenir à plusieurs tenants via la table `membership`.
+**Rôle :** Table utilisateur interne, gérée exclusivement par le backend en service role. L'authentification réelle vit dans Supabase Auth (`auth.users`) : c'est là que résident le mot de passe, l'email vérifié, `app_metadata.is_super_admin` et l'avatar.
 
-**Utilisée par :** Authentification, gestion des accès, historique des actions.
+**Utilisée par :** Jointures internes. Aucune écriture depuis le navigateur.
 
-**Note technique :** Le nom `app_user` est utilisé à la place de `user` car `USER` est un mot réservé en PostgreSQL.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `b2c3d4e5-...` |
-| `first_name` | VARCHAR(100) | NN | Prénom | `Yolande` |
-| `last_name` | VARCHAR(100) | NN | Nom de famille | `NYA` |
-| `email` | VARCHAR(255) | NN, UQ | Adresse email — sert d'identifiant de connexion | `yolande@muntu-cura.be` |
-| `password_hash` | VARCHAR(255) | NN | Mot de passe hashé (bcrypt ou Argon2) — jamais en clair | `$2b$12$...` |
-| `phone` | VARCHAR(50) | nullable | Numéro de téléphone optionnel | `+32470852516` |
-| `status` | VARCHAR(30) | NN, défaut `active` | État du compte : `active`, `inactive`, `banned` | `active` |
-| `last_login_at` | TIMESTAMP | nullable | Dernière connexion — utile pour détecter les comptes inactifs | `2026-04-15 08:00:00` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-01-15 10:00:00` |
-| `updated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de dernière modification | `2026-04-01 09:30:00` |
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `created_at` | TIMESTAMP | NN, défaut `now()` | Date de création |
+| `email` | VARCHAR | NN | Adresse email — sert d'identifiant de connexion |
+| `first_name` | VARCHAR | NN | Prénom |
+| `last_login_at` | TIMESTAMP | — | Dernière connexion — utile pour détecter les comptes inactifs |
+| `last_name` | VARCHAR | NN | Nom de famille |
+| `password_hash` | VARCHAR | — | Mot de passe hashé (bcrypt ou Argon2) — jamais en clair |
+| `phone` | VARCHAR | — | Numéro de téléphone optionnel |
+| `status` | VARCHAR | NN, défaut `active` | État du compte : `active`, `inactive`, `banned` |
+| `updated_at` | TIMESTAMP | NN, défaut `now()` | Date de dernière modification |
 
 **Règles métier :**
-- L'email doit être vérifié avant activation (token de confirmation envoyé à l'inscription)
-- Le `password_hash` n'est jamais exposé dans les réponses API
-- Un utilisateur supprimé est anonymisé (email remplacé par `deleted_{uuid}@anon.local`)
+
+- Ne pas confondre avec `auth.users` : l'avatar, par exemple, est dans `user_metadata` de Supabase Auth, pas ici
 
 ---
 
 ## 3. `membership`
 
-**Rôle :** Matérialise le lien entre un utilisateur et un tenant. Définit le rôle de cet utilisateur au sein de l'organisation. Un utilisateur peut avoir des rôles différents dans des tenants différents.
+**Rôle :** Lien utilisateur ↔ tenant, porteur du rôle et des permissions. Un utilisateur peut appartenir à plusieurs espaces (plan Business : jusqu'à 3).
 
-**Utilisée par :** Contrôle d'accès, gestion des collaborateurs.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `c3d4e5f6-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant auquel appartient ce membership | `a1b2c3d4-...` |
-| `user_id` | UUID | FK → `app_user.id`, NN, IDX | Utilisateur concerné | `b2c3d4e5-...` |
-| `role` | VARCHAR(50) | NN, défaut `owner` | Rôle dans le tenant : `owner`, `admin`, `collaborator`, `viewer` | `owner` |
-| `joined_at` | TIMESTAMP | NN, défaut `NOW()` | Date d'ajout dans le tenant | `2026-01-15 10:00:00` |
-
-**Contrainte :** `UNIQUE(tenant_id, user_id)` — un utilisateur ne peut avoir qu'un seul membership par tenant.
-
-**Règles métier :**
-- Le rôle `owner` est attribué automatiquement à la création du tenant
-- Seul un `owner` ou `admin` peut inviter de nouveaux collaborateurs
-- Seul un `owner` peut supprimer le tenant ou changer d'abonnement
-
----
-
-## 4. `permission`
-
-**Rôle :** Référentiel des droits d'accès disponibles dans la plateforme. Chaque permission correspond à une action précise (ex. : voir les leads, modifier le site, envoyer des notifications).
-
-**Utilisée par :** Contrôle d'accès fin par feature.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `d4e5f6g7-...` |
-| `code` | VARCHAR(100) | NN, UQ | Code technique de la permission | `leads:read`, `site:publish`, `billing:manage` |
-| `label` | VARCHAR(255) | NN | Description lisible par un humain | `Voir les demandes entrantes` |
-
-**Exemples de permissions :**
-| Code | Label |
-|---|---|
-| `site:read` | Consulter le site |
-| `site:publish` | Publier / dépublier le site |
-| `leads:read` | Voir les demandes |
-| `leads:manage` | Gérer les demandes (statut, notes) |
-| `appointments:manage` | Gérer le calendrier et les rendez-vous |
-| `billing:manage` | Gérer l'abonnement et les factures |
-| `users:invite` | Inviter des collaborateurs |
-
----
-
-## 5. `membership_permission`
-
-**Rôle :** Table de jointure qui associe des permissions spécifiques à un membership. Permet d'affiner les droits au-delà du rôle de base.
+**Utilisée par :** Autorisation de toutes les requêtes API, bascule multi-espaces, gestion d'équipe.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
-| `membership_id` | UUID | FK → `membership.id`, PK partielle | Membership concerné |
-| `permission_id` | UUID | FK → `permission.id`, PK partielle | Permission accordée |
-
-**Clé primaire composite :** `(membership_id, permission_id)`
-
----
-
-# CATÉGORIE : FACTURATION
-
----
-
-## 6. `plan_subscription`
-
-**Rôle :** Définit les formules tarifaires proposées aux tenants (Starter, Pro, Business). Chaque plan fixe les limites d'utilisation et les fonctionnalités accessibles.
-
-**Utilisée par :** Inscription, upgrade, contrôle des quotas.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `e5f6g7h8-...` |
-| `name` | VARCHAR(100) | NN | Nom du plan | `Pro` |
-| `price_monthly` | NUMERIC(10,2) | NN | Prix mensuel en euros | `59.00` |
-| `max_sites` | INT | NN | Nombre maximum de sites créables | `1` |
-| `max_users` | INT | NN | Nombre maximum de collaborateurs | `3` |
-| `max_messages` | INT | NN | Nombre maximum de messages/mois (chatbot + canaux) | `1000` |
-| `chatbot_enabled` | BOOLEAN | NN, défaut `false` | Accès au module chatbot | `true` |
-| `roi_enabled` | BOOLEAN | NN, défaut `false` | Accès au module ROI prédictif | `false` |
-
-**Plans actuels :**
-| Plan | Prix | Sites | Users | Messages | Chatbot | ROI |
-|---|---|---|---|---|---|---|
-| Starter | 29€/mois | 1 | 1 | 200 | Non | Non |
-| Pro | 59€/mois | 1 | 3 | illimité | Oui | Non |
-| Business | 99€/mois | 3 | 10 | illimité | Oui | Oui |
-
----
-
-## 7. `subscription`
-
-**Rôle :** Représente l'abonnement actif d'un tenant à un plan donné. Un tenant ne peut avoir qu'un seul abonnement actif à la fois.
-
-**Utilisée par :** Contrôle des accès aux fonctionnalités, renouvellement, résiliation.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `f6g7h8i9-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, UQ | Tenant abonné (unique : un seul abonnement par tenant) | `a1b2c3d4-...` |
-| `plan_id` | UUID | FK → `plan_subscription.id`, NN | Plan souscrit | `e5f6g7h8-...` |
-| `status` | VARCHAR(30) | NN, défaut `trialing` | État : `trialing`, `active`, `past_due`, `canceled`, `paused` | `active` |
-| `start_date` | DATE | NN | Date de début d'abonnement | `2026-02-01` |
-| `end_date` | DATE | nullable | Date de fin (null si actif indéfiniment) | `2026-03-01` |
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant auquel appartient ce membership |
+| `joined_at` | TIMESTAMP | NN, défaut `now()` | Date d'entrée dans l'espace |
+| `permissions` | TEXT[] | NN | Sections autorisées — ne s'applique qu'au rôle `member` |
+| `role` | VARCHAR | NN, défaut `owner` | `owner` \| `admin` \| `member` \| `secretary` |
+| `user_id` | UUID | FK → `app_user.id`, NN | Utilisateur concerné |
 
 **Règles métier :**
-- À la création d'un compte → `trialing` pendant 30 jours, sans carte bancaire
-- `past_due` : paiement échoué — accès restreint après 7 jours de grâce
-- `canceled` : le site reste accessible en lecture seule pendant 30 jours
+
+- Rôles : `owner` (un seul par tenant), `admin`, `member`, `secretary`
+- `permissions text[]` ne s'applique qu'au rôle `member` — `owner` et `admin` ont tout
+- Valeurs possibles : `crm`, `calendar`, `site_builder`, `analytics`, `agents`
+- Unicité `(tenant_id, user_id)` : le code lit le rôle avec un `.limit(1)` et en dépend
+- La colonne de date s'appelle `joined_at` (et non `created_at`)
 
 ---
 
-## 8. `invoice`
+## 4. `team_invite`
 
-**Rôle :** Facture générée automatiquement à chaque cycle de facturation (mensuel). Sert de preuve comptable pour le tenant et pour le SaaS.
+**Rôle :** Invitation d'un membre en attente d'acceptation. Les permissions choisies à l'invitation sont transférées vers `membership` à l'acceptation.
 
-**Utilisée par :** Historique de facturation, export comptable.
+**Utilisée par :** Section Membres des paramètres, email d'invitation, inscription par invitation.
 
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `g7h8i9j0-...` |
-| `subscription_id` | UUID | FK → `subscription.id`, NN, IDX | Abonnement concerné | `f6g7h8i9-...` |
-| `number` | VARCHAR(50) | NN, UQ | Numéro de facture (format séquentiel) | `INV-2026-00042` |
-| `amount` | NUMERIC(10,2) | NN | Montant TTC en euros | `59.00` |
-| `status` | VARCHAR(30) | NN, défaut `pending` | État : `pending`, `paid`, `void`, `uncollectible` | `paid` |
-| `due_date` | DATE | NN | Date d'échéance | `2026-03-01` |
-| `paid_at` | TIMESTAMP | nullable | Date et heure de paiement effectif | `2026-02-28 14:23:00` |
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `accepted_at` | TIMESTAMPTZ | — | Renseigné = invitation consommée |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `email` | TEXT | NN |  |
+| `expires_at` | TIMESTAMPTZ | NN, défaut `(now() + '7 days')` | Fin de validité du jeton |
+| `invited_by` | UUID | — |  |
+| `permissions` | TEXT[] | NN | Permissions transférées vers `membership` à l'acceptation |
+| `role` | VARCHAR | NN, défaut `member` |  |
+| `token` | TEXT | NN | Jeton d'invitation à usage unique |
 
----
+**Règles métier :**
 
-# CATÉGORIE : SITE
-
----
-
-## 9. `template`
-
-**Rôle :** Modèle de site pré-configuré par type de métier. Contient les textes par défaut, la structure de pages, les services pré-remplis et les mentions légales adaptées. Permet de créer un site complet en moins de 15 minutes.
-
-**Utilisée par :** Générateur de site lors de la création d'un compte.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `h8i9j0k1-...` |
-| `name` | VARCHAR(150) | NN | Nom affiché | `Infirmière indépendante` |
-| `business_type` | VARCHAR(50) | NN | Code métier | `nurse`, `plumber`, `coach`, `beautician` |
-| `version` | VARCHAR(20) | NN, défaut `1.0` | Version du template (pour gestion des mises à jour) | `1.2` |
-| `active` | BOOLEAN | NN, défaut `true` | Si `false`, le template n'est plus proposé aux nouveaux tenants | `true` |
+- `token` est à usage unique, `expires_at` borne sa validité
+- `accepted_at` renseigné → invitation consommée
 
 ---
 
-## 10. `site`
+## 5. `tenant`
 
-**Rôle :** Site web publié pour un tenant. Un tenant peut avoir plusieurs sites (selon son plan). Le site contient des pages, des offres de services et couvre des zones géographiques.
+**Rôle :** Organisation cliente du SaaS — typiquement un indépendant, une TPE ou une structure locale. Racine de l'isolation des données : presque toutes les autres tables portent un `tenant_id`.
 
-**Utilisée par :** Génération du site, publication, mode absence, tracking des visites.
+**Utilisée par :** Onboarding, résolution du slug public, panel admin, calcul du plan.
 
-**RLS activée.**
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique du tenant |
+| `api_key` | TEXT | — | Clé d'API du tenant |
+| `business_model` | VARCHAR | NN, défaut `hybrid` | Mode d'activité : `b2c`, `b2b`, `hybrid` |
+| `contact_overage_since` | TIMESTAMPTZ | — | Début du dépassement du quota de contacts |
+| `contact_retention_months` | INT | — | Durée de conservation des contacts inactifs (RGPD) |
+| `country` | VARCHAR | défaut `BE` |  |
+| `created_at` | TIMESTAMP | NN, défaut `now()` | Date de création du compte |
+| `custom_domain_addon` | BOOL | défaut `False` | Option domaine payée (+5 €/mois) |
+| `custom_domain_addon_sub_id` | TEXT | — | Abonnement Stripe de l'option — permet de la désactiver |
+| `invoice_settings` | JSONB | — | Paramètres de facturation du tenant vers ses clients |
+| `is_active` | BOOL | défaut `True` |  |
+| `locale` | VARCHAR | défaut `fr` |  |
+| `name` | VARCHAR | NN | Nom affiché de l'organisation |
+| `plan_id` | UUID | FK → `plan_subscription.id` |  |
+| `sector` | VARCHAR | — |  |
+| `slug` | VARCHAR | NN | Identifiant d'URL publique : `klientys.co/{slug}` |
+| `status` | VARCHAR | NN, défaut `trial` | État du compte : `active`, `suspended`, `trial`, `churned` |
+| `stripe_customer_id` | VARCHAR | — | Client Stripe, nécessaire au portail de facturation |
+| `suspended_at` | TIMESTAMPTZ | — | Suspension par l'opérateur — prime sur l'abonnement |
+| `suspended_reason` | TEXT | — | Motif de suspension |
+| `timezone` | VARCHAR | défaut `Europe/Brussels` |  |
+| `trend_keywords` | TEXT[] | — | Mots-clés Google Trends propres au tenant |
+| `trial_extended_until` | TIMESTAMPTZ | — | Essai prolongé au-delà des 14 jours |
+| `updated_at` | TIMESTAMP | NN, défaut `now()` | Date de dernière modification |
 
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `i9j0k1l2-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Propriétaire du site | `a1b2c3d4-...` |
-| `template_id` | UUID | FK → `template.id`, nullable | Template utilisé pour initialiser le site | `h8i9j0k1-...` |
-| `domain` | VARCHAR(255) | nullable | Nom de domaine personnalisé (ex: muntu-cura.be). Si null, utilise le sous-domaine par défaut | `muntu-cura.be` |
-| `title` | VARCHAR(255) | NN | Titre du site (affiché dans l'onglet navigateur) | `MUNTU CURA — Infirmière à domicile` |
-| `status` | VARCHAR(30) | NN, défaut `draft` | État : `draft`, `published`, `unpublished` | `published` |
-| `audience_mode` | VARCHAR(30) | NN, défaut `hybrid` | Public cible principal : `b2c`, `b2b`, `hybrid` | `hybrid` |
-| `default_language` | VARCHAR(10) | NN, défaut `fr` | Langue par défaut du site | `fr` |
-| `absence_mode` | BOOLEAN | NN, défaut `false` | Si `true` : calendrier bloqué + bandeau d'absence affiché | `false` |
-| `absence_message` | TEXT | nullable | Message affiché pendant l'absence | `En congé du 10 au 20 août. Je reprends le 21 août.` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-01-15 10:00:00` |
-| `updated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de dernière modification | `2026-04-10 16:00:00` |
+**Règles métier :**
 
----
-
-## 11. `page`
-
-**Rôle :** Page individuelle composant un site. Chaque site a au minimum une page d'accueil. Les pages peuvent être orientées vers les particuliers (B2C) ou les partenaires professionnels (B2B).
-
-**Utilisée par :** Rendu du site, SEO, alimentation de la base de connaissance du chatbot.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `j0k1l2m3-...` |
-| `site_id` | UUID | FK → `site.id`, NN, IDX | Site auquel appartient la page | `i9j0k1l2-...` |
-| `title` | VARCHAR(255) | NN | Titre de la page | `Nos services` |
-| `slug` | VARCHAR(255) | NN | Chemin URL de la page | `nos-services` |
-| `type` | VARCHAR(50) | NN, défaut `content` | Type : `home`, `services`, `about`, `contact`, `b2b_partners`, `legal`, `content` | `services` |
-| `audience_type` | VARCHAR(30) | NN, défaut `all` | Public de la page : `all`, `b2c`, `b2b` | `b2b` |
-| `seo_title` | VARCHAR(255) | nullable | Titre SEO (balise `<title>`) — si null, utilise `title` | `Infirmière à domicile Halle — Soins sur mesure` |
-| `seo_description` | TEXT | nullable | Meta description pour les moteurs de recherche | `Infirmière indépendante à Halle, Lembeek, Beersel...` |
-| `status` | VARCHAR(30) | NN, défaut `draft` | État : `draft`, `published` | `published` |
-| `updated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de dernière modification | `2026-04-01 11:00:00` |
-
-**Contrainte :** `UNIQUE(site_id, slug)` — deux pages du même site ne peuvent pas avoir le même chemin URL.
+- `slug` est unique et sert d'URL publique : `klientys.co/{slug}`
+- `suspended_at` renseigné → le tenant est suspendu, quel que soit son abonnement
+- `trial_extended_until` prolonge la période d'essai au-delà des 14 jours par défaut
+- `custom_domain_addon` / `custom_domain_addon_sub_id` : option domaine à 5 €/mois, désactivée automatiquement à la résiliation de l'abonnement Stripe correspondant
 
 ---
 
-## 12. `service_offer`
-
-**Rôle :** Service proposé par le tenant sur son site. Peut être réservable directement (si `bookable = true`) et cibler un public B2C, B2B ou les deux.
-
-**Utilisée par :** Affichage sur le site, prise de rendez-vous, qualification des leads.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `k1l2m3n4-...` |
-| `site_id` | UUID | FK → `site.id`, NN, IDX | Site exposant ce service | `i9j0k1l2-...` |
-| `name` | VARCHAR(255) | NN | Nom du service | `Prise de sang à domicile` |
-| `description` | TEXT | nullable | Description détaillée | `Prélèvement sanguin à votre domicile, résultat sous 24h` |
-| `target_audience` | VARCHAR(30) | NN, défaut `all` | Public visé : `all`, `b2c`, `b2b` | `b2c` |
-| `price_from` | NUMERIC(10,2) | nullable | Prix indicatif à partir de (en euros). Null si non affiché | `25.00` |
-| `bookable` | BOOLEAN | NN, défaut `true` | Si `true`, ce service apparaît dans le widget de réservation | `true` |
-| `duration_minutes` | INT | nullable | Durée du service en minutes — utilisée pour bloquer le créneau | `30` |
+# CATÉGORIE : FACTURATION SAAS
 
 ---
 
-## 13. `service_area`
+## 6. `design_request`
 
-**Rôle :** Zone géographique couverte par un tenant. Un site peut en avoir plusieurs. Utilisé pour le SEO local et pour filtrer les demandes hors zone.
+**Rôle :** Demande de refonte de design réalisée par l'équipe Klientys. Incluse au plan Business ; `is_additional` marque les demandes supplémentaires, facturées à l'unité.
 
-**Utilisée par :** Affichage sur le site, SEO local, qualification des leads.
+**Utilisée par :** Paramètres (achats ponctuels), support, suivi par l'opérateur.
 
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `l2m3n4o5-...` |
-| `site_id` | UUID | FK → `site.id`, NN | Site concerné | `i9j0k1l2-...` |
-| `city` | VARCHAR(150) | nullable | Nom de la ville | `Halle` |
-| `postal_code` | VARCHAR(20) | nullable | Code postal | `1500` |
-| `region` | VARCHAR(150) | nullable | Région ou province | `Brabant flamand` |
-| `country` | VARCHAR(50) | NN, défaut `BE` | Code pays ISO 3166-1 alpha-2 | `BE` |
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id` | Tenant propriétaire — porte l'isolation des données |
+| `admin_notes` | TEXT | — |  |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `is_additional` | BOOL | NN, défaut `False` |  |
+| `message` | TEXT | — |  |
+| `site_id` | UUID | FK → `site.id` | Site concerné |
+| `site_name` | TEXT | — |  |
+| `status` | TEXT | NN, défaut `pending` |  |
+| `support_ticket_id` | UUID | FK → `support_ticket.id` |  |
+| `tenant_name` | TEXT | — |  |
+| `updated_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de dernière modification |
+
+---
+
+## 7. `logo_request`
+
+**Rôle :** Demande de création de logo, prestation ponctuelle payante. Le brief est collecté par une conversation IA avant paiement Stripe.
+
+**Utilisée par :** Site-builder (tunnel de brief), paiement Stripe, suivi par l'opérateur.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id` | Tenant propriétaire — porte l'isolation des données |
+| `admin_notes` | TEXT | — |  |
+| `brief` | JSONB | NN | Brief structuré produit par la conversation IA |
+| `chat_history` | JSONB | NN |  |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `delivered_at` | TIMESTAMPTZ | — |  |
+| `price_eur` | NUMERIC | NN |  |
+| `price_tier` | TEXT | NN, défaut `standard` | `essentiel` (149 €) \| `standard` (299 €) \| `premium` (499 €) |
+| `status` | TEXT | NN, défaut `pending_payment` | `pending_payment` → `paid` → `in_progress` → `done` |
+| `stripe_checkout_session_id` | TEXT | — |  |
+| `stripe_payment_intent_id` | TEXT | — |  |
+| `tenant_name` | TEXT | — |  |
+| `updated_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de dernière modification |
+
+**Règles métier :**
+
+- Tarifs : Essentiel 149 € · Standard 299 € · Premium 499 €
+- Statuts : `pending_payment` → `paid` → `in_progress` → `done`
+- Le passage à `paid` est fait par le webhook Stripe, jamais par le client
+
+---
+
+## 8. `payment_incident`
+
+**Rôle :** Trace d'un encaissement qui n'a pas abouti à une livraison : enregistrement de domaine OVH échoué après paiement, acompte à rembourser, remboursement raté, litige bancaire. Existe parce qu'un tel échec ne laissait avant qu'une ligne de log.
+
+**Utilisée par :** Webhook Stripe, capture d'acompte PayPal, service de remboursement. Lecture par l'opérateur.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id` | Tenant propriétaire — porte l'isolation des données |
+| `amount` | NUMERIC | — |  |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `currency` | TEXT | — |  |
+| `detail` | TEXT | — | Message d'erreur ou contexte |
+| `kind` | TEXT | NN | Nature de l'incident (`domain_purchase_failed`, `deposit_booking_failed`…) |
+| `provider` | TEXT | NN | `stripe` ou `paypal` |
+| `reference` | TEXT | — | Identifiant côté prestataire (session, order, payment intent) |
+| `refunded` | BOOL | NN, défaut `False` | L'argent a-t-il été rendu automatiquement |
+
+**Règles métier :**
+
+- `kind` : `domain_purchase_failed`, `deposit_booking_failed`, `deposit_amount_mismatch`, `refund_failed`, `charge_disputed`…
+- `refunded` indique si l'argent a été rendu automatiquement
+- **Toute ligne ici mérite un examen** : elle signale un client qui a payé sans recevoir
+
+---
+
+## 9. `plan_subscription`
+
+**Rôle :** Formules tarifaires proposées aux tenants : Essentiel, Pro, Business. Référence des prix et des quotas.
+
+**Utilisée par :** Page Abonnement, création de session Stripe Checkout, calcul du plan et des features.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `chatbot_enabled` | BOOL | NN, défaut `False` | Hérité du modèle d'origine — non lu par le code actuel |
+| `features` | JSONB | — | Quotas en JSONB, **surclassés par `PLAN_FEATURES` dans le code** |
+| `max_messages` | INT | NN, défaut `200` | Hérité du modèle d'origine — non lu par le code actuel |
+| `max_sites` | INT | NN, défaut `1` | Hérité du modèle d'origine — non lu par le code actuel |
+| `max_users` | INT | NN, défaut `1` | Hérité du modèle d'origine — non lu par le code actuel |
+| `name` | VARCHAR | NN | Nom du plan |
+| `price_eur` | NUMERIC | NN, défaut `0` | LEGACY — synchronisée par trigger, ne plus lire |
+| `price_monthly` | NUMERIC | NN | **Prix de référence** affiché au client |
+| `roi_enabled` | BOOL | NN, défaut `False` | Hérité du modèle d'origine — non lu par le code actuel |
+| `stripe_price_id` | VARCHAR | — | Prix Stripe réellement facturé (`price_...`) |
+
+**Règles métier :**
+
+- **`price_monthly` est la colonne de référence.** `price_eur` est conservée synchronisée par le trigger `sync_plan_price` (migration 073) pour les lectures historiques — ne plus la lire
+- `stripe_price_id` relie le plan au prix Stripe réellement facturé
+- `features` (JSONB) est **surclassé par le code** : `PLAN_FEATURES` dans `services/subscription.py` fait foi, les clés présentes seulement en base sont conservées. Les valeurs figées par la migration 019 étaient devenues fausses
+- Tarifs : Essentiel 29,90 € · Pro 59,90 € · Business 99,90 €
+- `max_sites`, `max_users`, `max_messages`, `chatbot_enabled`, `roi_enabled` sont des colonnes héritées du modèle d'origine, non lues par le code actuel
+
+---
+
+## 10. `stripe_event`
+
+**Rôle :** Déduplication des webhooks Stripe. Stripe relivre un événement jusqu'à trois jours en cas d'erreur ; sans cette table, un retry renvoyait un reçu au client et rejouait la logique métier.
+
+**Utilisée par :** Webhook Stripe uniquement. Table interne, service role exclusivement.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | TEXT | PK, NN | Identifiant Stripe de l'événement (`evt_...`) — c'est lui qui déduplique |
+| `processed_at` | TIMESTAMPTZ | NN, défaut `now()` | Date du premier traitement |
+| `type` | TEXT | NN | Type d'événement Stripe reçu |
+
+**Règles métier :**
+
+- `id` est l'identifiant Stripe (`evt_...`), clé primaire — c'est lui qui fait la dédup
+- Si la table est inaccessible, le webhook traite l'événement quand même : perdre une souscription est plus grave qu'un doublon
+
+---
+
+## 11. `subscription`
+
+**Rôle :** Abonnement Stripe d'un tenant. Une seule ligne par tenant, mise à jour par le webhook Stripe. Son absence ne signifie pas « pas de service » : la période d'essai de 14 jours est calculée depuis `tenant.created_at`, sans ligne ici.
+
+**Utilisée par :** Calcul du plan et des features, portail de facturation, panel admin, MRR.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant abonné (unique : un seul abonnement par tenant) |
+| `end_date` | DATE | — | Date de fin (null si actif indéfiniment) |
+| `past_due_since` | TIMESTAMPTZ | — | Début de l'impayé — base du calcul des 7 jours de grâce |
+| `plan_id` | UUID | FK → `plan_subscription.id`, NN | Plan souscrit |
+| `start_date` | DATE | NN, défaut `CURRENT_DATE` | Date de début d'abonnement |
+| `status` | VARCHAR | NN, défaut `trialing` | `trialing` \| `active` \| `past_due` \| `canceled` \| `incomplete` \| `paused` |
+| `stripe_subscription_id` | VARCHAR | — | Abonnement Stripe (`sub_...`). NULL = activation manuelle |
+
+**Règles métier :**
+
+- Unicité sur `tenant_id` — l'upsert du webhook Stripe en dépend (`on_conflict`)
+- Statuts : `trialing`, `active`, `past_due`, `canceled`, `incomplete`, `paused`
+- `past_due` n'interrompt pas le service : **7 jours de grâce** calculés depuis `past_due_since`, puis bascule en essai expiré. Stripe relance la carte pendant deux à trois semaines
+- `stripe_subscription_id` NULL = activation manuelle par l'opérateur (`force-activate`), pas un paiement
+- Les colonnes de dates s'appellent `start_date` / `end_date`
+
+---
+
+## 12. `trial_reminder_log`
+
+**Rôle :** Marque les rappels d'expiration d'essai déjà envoyés (J-7, J-3, J-1), pour qu'un tenant ne reçoive pas deux fois le même.
+
+**Utilisée par :** Tâche planifiée quotidienne de rappel d'essai.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `days_before` | INT | NN | Jalon du rappel : 7, 3 ou 1 jour avant expiration |
+| `sent_at` | TIMESTAMPTZ | défaut `now()` | Date d'envoi effectif |
+
+---
+
+# CATÉGORIE : OPÉRATEUR SAAS
+
+---
+
+## 13. `admin_action_log`
+
+**Rôle :** Piste d'audit de toutes les actions de l'opérateur SaaS sur les tenants : suspension, activation gratuite, prolongation d'essai, impersonation, suppression.
+
+**Utilisée par :** Panel admin (page Log), audit de sécurité.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `action_type` | TEXT | NN | Action réalisée (`force_activate`, `suspend`, `impersonate`…) |
+| `admin_email` | TEXT | — |  |
+| `admin_user_id` | UUID | NN |  |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `payload` | JSONB | — | Contexte de l'action, en JSONB |
+| `target_tenant_id` | UUID | FK → `tenant.id` |  |
+| `target_tenant_name` | TEXT | — |  |
+
+**Règles métier :**
+
+- Première entrée : juin 2026. Une action antérieure à cette date n'a donc **aucune trace** ici, ce qui n'est pas un signe d'anomalie
+- `_log()` doit être appelé **avant** une suppression de tenant : la clé étrangère `target_tenant_id` interdit d'insérer après
+
+---
+
+## 14. `feature_flag`
+
+**Rôle :** Interrupteurs globaux de fonctionnalités, appliqués à tous les tenants. Un flag désactivé agit comme coupe-circuit, y compris sur les quotas numériques (mis à 0).
+
+**Utilisée par :** Calcul du plan, page Config du panel admin.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `description` | TEXT | — |  |
+| `enabled` | BOOL | NN, défaut `False` |  |
+| `key` | TEXT | NN |  |
+| `name` | TEXT | NN |  |
+| `updated_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de dernière modification |
+
+---
+
+## 15. `support_message`
+
+**Rôle :** Message d'un fil de support, côté tenant ou côté opérateur.
+
+**Utilisée par :** Espace support, notifications.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `body` | TEXT | NN |  |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `sender` | TEXT | NN |  |
+| `ticket_id` | UUID | FK → `support_ticket.id`, NN |  |
+
+---
+
+## 16. `support_ticket`
+
+**Rôle :** Demande d'assistance ouverte par un tenant.
+
+**Utilisée par :** Espace support du dashboard, panel admin.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `priority` | TEXT | NN, défaut `normal` |  |
+| `resolved_at` | TIMESTAMPTZ | — |  |
+| `status` | TEXT | NN, défaut `open` |  |
+| `subject` | TEXT | NN |  |
+| `ticket_type` | TEXT | NN, défaut `general` |  |
+| `updated_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de dernière modification |
+
+---
+
+## 17. `system_config`
+
+**Rôle :** Configuration système en clé/valeur JSONB : mode maintenance, message de maintenance, mots-clés Google Trends par secteur, libellés de secteurs.
+
+**Utilisée par :** Service Trends, page Config du panel admin.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `key` | TEXT | PK, NN | Clé de configuration (`maintenance_mode`, `sector_keywords`…) |
+| `updated_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de dernière modification |
+| `value` | JSONB | NN | Valeur en JSONB |
+
+**Règles métier :**
+
+- Les mots-clés secteurs sont éditables sans redéploiement, avec repli sur les valeurs codées en dur
+
+---
+
+## 18. `tenant_feature_override`
+
+**Rôle :** Dérogation par tenant sur une fonctionnalité, indépendamment de son plan. Priorité maximale : écrase le plan et les flags globaux.
+
+**Utilisée par :** Calcul du plan, détail tenant du panel admin.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `enabled` | BOOL | NN |  |
+| `expires_at` | TIMESTAMPTZ | — |  |
+| `feature_key` | TEXT | NN | Clé de la fonctionnalité dérogée |
+| `note` | TEXT | — |  |
+| `value_int` | INT | — | Quota précis, au lieu d'un simple on/off |
+
+**Règles métier :**
+
+- Usage typique : activer `analytics` pour un bêta-testeur en essai expiré
+- `value_int` permet de fixer un quota précis plutôt qu'un simple on/off
+
+---
+
+# CATÉGORIE : SITE VITRINE
+
+---
+
+## 19. `blog_post`
+
+**Rôle :** Article du blog marketing de Klientys (et non du site d'un tenant). Multilingue.
+
+**Utilisée par :** Pages `/blog`, sitemap, panel admin (page Contenu), agent de contenu automatisé.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `body_html` | TEXT | — |  |
+| `category` | TEXT | — |  |
+| `created_at` | TIMESTAMPTZ | défaut `now()` | Date de création |
+| `description` | TEXT | — |  |
+| `lang` | TEXT | NN, défaut `fr` | `fr` \| `en` \| `de` \| `nl` |
+| `metier` | TEXT | — |  |
+| `published_at` | DATE | — |  |
+| `reading_minutes` | INT | NN, défaut `5` |  |
+| `slug` | TEXT | NN |  |
+| `status` | TEXT | NN, défaut `draft` | `draft` ou `published` |
+| `title` | TEXT | NN |  |
+| `translated_from` | UUID | FK → `blog_post.id` | Article source, si généré par traduction |
+| `translation_group_id` | UUID | NN, défaut `gen_random_uuid()` | Relie les versions linguistiques d'un même article |
+| `updated_at` | TIMESTAMPTZ | défaut `now()` | Date de dernière modification |
+
+**Règles métier :**
+
+- Unicité sur `(slug, lang)`, pas sur `slug` seul
+- `translation_group_id` relie les versions linguistiques d'un même article
+- Toute traduction est créée en `draft` : une traduction IA est relue avant publication
+
+---
+
+## 20. `custom_domain`
+
+**Rôle :** Domaine personnalisé d'un tenant, connecté depuis l'extérieur ou acheté via OVH.
+
+**Utilisée par :** Paramètres (domaine), routage du middleware frontend, webhook Stripe.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `auto_renew` | BOOL | défaut `True` | Renouvellement automatique OVH |
+| `created_at` | TIMESTAMPTZ | défaut `now()` | Date de création |
+| `dns_record_name` | TEXT | défaut `www` |  |
+| `dns_record_type` | TEXT | défaut `CNAME` |  |
+| `dns_record_value` | TEXT | défaut `cname.vercel-dns.com` |  |
+| `domain` | TEXT | NN |  |
+| `source` | TEXT | NN, défaut `external` | `external` ou `ovh_purchased` |
+| `status` | TEXT | NN, défaut `pending` | `pending` \| `active` \| `error` |
+| `vercel_status` | TEXT | — | État de configuration rapporté par Vercel |
+| `verified_at` | TIMESTAMPTZ | — | Date de validation DNS + SSL |
+
+**Règles métier :**
+
+- `status` : `pending` → `active` quand le DNS est propagé **et** le SSL valide
+- `source` : `external` (le tenant possède le domaine) ou `ovh_purchased`
+- Unicité sur `tenant_id` **et** sur `domain` : un domaine ne peut pointer qu'un espace
+- L'achat OVH n'est déclenché qu'après confirmation du paiement Stripe
+
+---
+
+## 21. `landing_testimonial`
+
+**Rôle :** Témoignage affiché sur la landing page de Klientys.
+
+**Utilisée par :** Landing page, panel admin (page Contenu).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `active` | BOOL | NN, défaut `True` |  |
+| `bg_color` | TEXT | NN, défaut `rgba(13,75,88,.4)` |  |
+| `created_at` | TIMESTAMPTZ | défaut `now()` | Date de création |
+| `initials` | TEXT | — |  |
+| `name` | TEXT | NN |  |
+| `role` | TEXT | — |  |
+| `sort_order` | INT | NN, défaut `0` |  |
+| `text` | TEXT | NN |  |
+| `text_color` | TEXT | NN, défaut `var(--l-teal-xl)` |  |
+
+---
+
+## 22. `page`
+
+**Rôle :** Page d'un site. Table héritée du modèle d'origine : le site-builder actuel gère les pages via `site_style.pages_enabled`, pas par des lignes ici.
+
+**Utilisée par :** Aucun usage dans le code actuel.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `audience_type` | VARCHAR | NN, défaut `all` | Public de la page : `all`, `b2c`, `b2b` |
+| `seo_description` | TEXT | — | Meta description pour les moteurs de recherche |
+| `seo_title` | VARCHAR | — | Titre SEO (balise `<title>`) — si null, utilise `title` |
+| `site_id` | UUID | FK → `site.id`, NN | Site auquel appartient la page |
+| `slug` | VARCHAR | NN | Chemin URL de la page |
+| `status` | VARCHAR | NN, défaut `draft` | État : `draft`, `published` |
+| `title` | VARCHAR | NN | Titre de la page |
+| `type` | VARCHAR | NN, défaut `content` | Type : `home`, `services`, `about`, `contact`, `b2b_partners`, `legal`, `content` |
+| `updated_at` | TIMESTAMP | NN, défaut `now()` | Date de dernière modification |
+
+---
+
+## 23. `service_area`
+
+**Rôle :** Zone géographique d'intervention du tenant.
+
+**Utilisée par :** Site-builder, site public, annuaire, potentiel de demande locale.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `city` | VARCHAR | — | Nom de la ville |
+| `country` | VARCHAR | NN, défaut `BE` | Code pays ISO 3166-1 alpha-2 |
+| `postal_code` | VARCHAR | — | Code postal |
+| `region` | VARCHAR | — | Région ou province |
+| `site_id` | UUID | FK → `site.id`, NN | Site concerné |
+
+**Règles métier :**
+
+- Lisible publiquement uniquement pour les sites publiés (migration 069)
+
+---
+
+## 24. `service_offer`
+
+**Rôle :** Prestation proposée par le tenant : nom, description, durée, prix, photos.
+
+**Utilisée par :** Site-builder, site public, choix de prestation à la réservation, facturation.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `category` | TEXT | — |  |
+| `description` | TEXT | — | Description détaillée |
+| `duration_min` | INT | — |  |
+| `image_url` | TEXT | — |  |
+| `name` | VARCHAR | NN | Nom du service |
+| `photos` | TEXT[] | — |  |
+| `price_eur` | NUMERIC | — |  |
+| `service_type` | TEXT | NN, défaut `service` |  |
+| `site_id` | UUID | FK → `site.id`, NN | Site exposant ce service |
+
+---
+
+## 25. `site`
+
+**Rôle :** Site vitrine d'un tenant : contenu, coordonnées, préférences visuelles et config de réservation. Une ligne par tenant en pratique.
+
+**Utilisée par :** Site-builder, site public, formulaire de réservation, acompte PayPal.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Propriétaire du site |
+| `absence_message` | TEXT | — | Message affiché pendant l'absence |
+| `absence_mode` | BOOL | NN, défaut `False` | Si `true` : calendrier bloqué + bandeau d'absence affiché |
+| `address` | TEXT | — |  |
+| `audience_mode` | VARCHAR | NN, défaut `hybrid` | Public cible principal : `b2c`, `b2b`, `hybrid` |
+| `coverage_zones` | JSONB | — |  |
+| `created_at` | TIMESTAMP | NN, défaut `now()` | Date de création |
+| `default_language` | VARCHAR | NN, défaut `fr` | Langue par défaut du site |
+| `description` | TEXT | — |  |
+| `domain` | VARCHAR | — | Nom de domaine personnalisé (ex: muntu-cura.be). Si null, utilise le sous-domaine par défaut |
+| `email_contact` | VARCHAR | — |  |
+| `paypal_client_secret` | TEXT | — | **Jamais exposé par l'API publique** |
+| `phone` | VARCHAR | — |  |
+| `published_snapshot` | JSONB | — |  |
+| `site_style` | JSONB | — | Préférences visuelles et structurelles, sans migration |
+| `social_links` | JSONB | — |  |
+| `status` | VARCHAR | NN, défaut `draft` | `draft` ou `published` |
+| `tagline` | VARCHAR | — |  |
+| `template_id` | UUID | FK → `template.id` | Template utilisé pour initialiser le site |
+| `title` | VARCHAR | NN | Titre du site (affiché dans l'onglet navigateur) |
+| `updated_at` | TIMESTAMP | NN, défaut `now()` | Date de dernière modification |
+| `values_list` | JSONB | — |  |
+
+**Règles métier :**
+
+- `status` : `draft` ou `published`. Le site public exige `published`, sauf en mode preview (`?preview=true`)
+- `site_style` (JSONB) porte sans migration : couleurs, police, pages activées, photos, adresse détaillée, tracking, questions de réservation, config d'acompte
+- **`paypal_client_secret` ne doit jamais sortir de l'API publique.** `public.py` le retire explicitement, et `SiteOut` ne le déclare pas
+
+---
+
+## 26. `template`
+
+**Rôle :** Modèle de site pré-configuré par type d'activité, proposé à la création.
+
+**Utilisée par :** Création de site.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `active` | BOOL | NN, défaut `True` | Si `false`, le template n'est plus proposé aux nouveaux tenants |
+| `business_type` | VARCHAR | NN | Code métier |
+| `name` | VARCHAR | NN | Nom affiché |
+| `version` | VARCHAR | NN, défaut `1.0` | Version du template (pour gestion des mises à jour) |
+
+---
+
+## 27. `testimonial`
+
+**Rôle :** Témoignage client affiché sur le site vitrine du tenant.
+
+**Utilisée par :** Site-builder, site public.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique |
+| `author_name` | VARCHAR | NN |  |
+| `author_role` | VARCHAR | — |  |
+| `content` | TEXT | NN |  |
+| `created_at` | TIMESTAMP | défaut `now()` | Date de création |
+| `rating` | SMALLINT | défaut `5` |  |
+| `site_id` | UUID | FK → `site.id`, NN | Site concerné |
 
 ---
 
@@ -368,265 +772,319 @@ Chaque table est décrite avec :
 
 ---
 
-## 14. `partner_account`
+## 28. `contact`
 
-**Rôle :** Organisation externe avec laquelle le tenant collabore dans un cadre B2B — maison de repos, mutuelle, médecin référent, établissement de soins, etc. Un partenaire peut avoir plusieurs contacts individuels (`contact`).
+**Rôle :** Personne physique ayant interagi avec le tenant : patient, client, prospect. Cœur du CRM.
 
-**Utilisée par :** CRM B2B, qualification des leads, attribution des rendez-vous.
-
-**RLS activée.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `m3n4o5p6-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant propriétaire de ce partenaire | `a1b2c3d4-...` |
-| `organization_name` | VARCHAR(255) | NN | Nom de l'organisation | `Résidence Les Quatre Saisons` |
-| `type` | VARCHAR(50) | nullable | Type d'organisation : `maison_repos`, `mutuelle`, `medecin`, `hopital`, `autre` | `maison_repos` |
-| `status` | VARCHAR(30) | NN, défaut `active` | État : `active`, `inactive`, `prospect` | `active` |
-| `relationship_type` | VARCHAR(50) | nullable | Nature de la relation : `contract`, `referral`, `occasional` | `contract` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-02-01 09:00:00` |
-| `updated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de dernière modification | `2026-04-01 09:00:00` |
-| `deleted_at` | TIMESTAMP | nullable | Soft delete — si renseigné, le partenaire est masqué mais conservé | `null` |
-
----
-
-## 15. `contact`
-
-**Rôle :** Personne physique ayant interagi avec le tenant — patient, client particulier, représentant d'un partenaire B2B. Un contact peut être rattaché à un `partner_account` s'il représente une organisation.
-
-**Utilisée par :** Leads, rendez-vous, conversations, notifications.
-
-**RLS activée. Données potentiellement médicales → chiffrement applicatif recommandé sur les champs sensibles.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `n4o5p6q7-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant propriétaire | `a1b2c3d4-...` |
-| `partner_account_id` | UUID | FK → `partner_account.id`, nullable, IDX | Organisation à laquelle appartient ce contact (si B2B) | `m3n4o5p6-...` |
-| `first_name` | VARCHAR(100) | NN | Prénom | `Marie` |
-| `last_name` | VARCHAR(100) | NN | Nom de famille | `Dupont` |
-| `email` | VARCHAR(255) | nullable, IDX | Adresse email | `marie.dupont@email.com` |
-| `phone` | VARCHAR(50) | nullable | Numéro de téléphone | `+32478123456` |
-| `contact_type` | VARCHAR(30) | NN, défaut `individual` | Type : `individual` (B2C), `professional` (représentant B2B) | `individual` |
-| `company_name` | VARCHAR(255) | nullable | Nom de la société si contact professionnel | `null` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-02-15 14:00:00` |
-| `updated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de dernière modification | `2026-04-01 10:00:00` |
-| `deleted_at` | TIMESTAMP | nullable | Soft delete (droit à l'oubli RGPD) | `null` |
-
-**Règles métier :**
-- Un contact `deleted_at` non nul est masqué de tous les affichages
-- Après 90 jours, une procédure d'anonymisation remplace les données personnelles par des valeurs génériques
-- L'email et le téléphone ne sont jamais obligatoires (un contact peut être créé avec juste un prénom)
-
----
-
-## 16. `pipeline_stage`
-
-**Rôle :** Étape du pipeline commercial d'un tenant. Chaque tenant peut définir ses propres étapes dans l'ordre souhaité. Les leads progressent d'étape en étape.
-
-**Utilisée par :** Gestion des leads, tableau de bord commercial.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `o5p6q7r8-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire | `a1b2c3d4-...` |
-| `name` | VARCHAR(100) | NN | Nom de l'étape | `Nouveau`, `Contacté`, `Rendez-vous planifié`, `Converti` |
-| `position` | INT | NN | Ordre d'affichage (de gauche à droite dans le kanban) | `1`, `2`, `3`, `4` |
-| `is_final` | BOOLEAN | NN, défaut `false` | Si `true`, cette étape clôt le pipeline (converti ou perdu) | `true` |
-
-**Étapes par défaut créées à la création d'un tenant :**
-| Position | Nom | is_final |
-|---|---|---|
-| 1 | Nouveau | Non |
-| 2 | En cours | Non |
-| 3 | À rappeler | Non |
-| 4 | Planifié | Non |
-| 5 | Converti | Oui |
-| 6 | Perdu | Oui |
-
----
-
-# CATÉGORIE : ANALYTIQUE
-
----
-
-## 17. `traffic_source`
-
-**Rôle :** Origine d'une visite ou d'un lead. Permet d'identifier quel canal (Google, réseaux sociaux, bouche-à-oreille, etc.) génère le plus de valeur pour un tenant.
-
-**Utilisée par :** Attribution des leads, tableau de bord, calcul du ROI.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `p6q7r8s9-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant concerné | `a1b2c3d4-...` |
-| `channel` | VARCHAR(50) | nullable | Canal : `organic_search`, `direct`, `social`, `referral`, `email`, `whatsapp`, `telegram` | `organic_search` |
-| `campaign` | VARCHAR(255) | nullable | Nom de campagne marketing (UTM) | `avril-promo-halle` |
-| `medium` | VARCHAR(100) | nullable | Medium (UTM) | `cpc`, `email`, `social` |
-| `keyword` | VARCHAR(255) | nullable | Mot-clé ayant généré la visite (si recherche payante) | `infirmière domicile Halle` |
-
----
-
-# CATÉGORIE : MESSAGERIE
-
----
-
-## 18. `channel`
-
-**Rôle :** Canal de communication connecté à la plateforme pour un tenant donné. Chaque canal reçoit des messages entrants (formulaire site, WhatsApp, Telegram, email) qui sont centralisés dans la boîte unifiée.
-
-**Utilisée par :** Boîte unifiée, routing des messages, conversations.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `q7r8s9t0-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant propriétaire | `a1b2c3d4-...` |
-| `type` | VARCHAR(30) | NN | Type de canal : `site_form`, `email`, `whatsapp`, `telegram` | `whatsapp` |
-| `external_identifier` | VARCHAR(255) | nullable | Identifiant dans le système externe (numéro WhatsApp, token Telegram) | `+32470852516` |
-| `status` | VARCHAR(30) | NN, défaut `connected` | État : `connected`, `disconnected`, `error` | `connected` |
-| `connected_at` | TIMESTAMP | NN, défaut `NOW()` | Date de connexion du canal | `2026-02-01 10:00:00` |
-
----
-
-## 19. `conversation`
-
-**Rôle :** Fil d'échanges entre le tenant (ou son chatbot) et un contact. Une conversation est associée à un canal et peut contenir plusieurs messages. Elle peut générer un lead si qualifiée.
-
-**Utilisée par :** Boîte unifiée, chatbot, CRM.
-
-**RLS activée.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `r8s9t0u1-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant concerné | `a1b2c3d4-...` |
-| `channel_id` | UUID | FK → `channel.id`, NN | Canal utilisé | `q7r8s9t0-...` |
-| `contact_id` | UUID | FK → `contact.id`, nullable, IDX | Contact identifié (null si inconnu au départ) | `n4o5p6q7-...` |
-| `status` | VARCHAR(30) | NN, défaut `open` | État : `open`, `pending`, `closed` | `open` |
-| `started_at` | TIMESTAMP | NN, défaut `NOW()` | Date d'ouverture | `2026-04-10 09:00:00` |
-| `closed_at` | TIMESTAMP | nullable | Date de clôture | `null` |
-
----
-
-## 20. `message`
-
-**Rôle :** Message individuel au sein d'une conversation. Un message peut être envoyé par un utilisateur humain (tenant), par un contact externe, ou généré automatiquement par le chatbot.
-
-**Utilisée par :** Affichage de la conversation, chatbot, historique CRM.
-
-**RLS activée. Données potentiellement sensibles → chiffrement recommandé sur `content`.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `s9t0u1v2-...` |
-| `conversation_id` | UUID | FK → `conversation.id`, NN, IDX | Conversation parente | `r8s9t0u1-...` |
-| `user_id` | UUID | FK → `app_user.id`, nullable | Utilisateur humain auteur (si côté tenant) | `b2c3d4e5-...` |
-| `contact_id` | UUID | FK → `contact.id`, nullable | Contact auteur (si côté client) | `n4o5p6q7-...` |
-| `chatbot_id` | UUID | FK → `chatbot.id`, nullable | Chatbot auteur (si réponse automatique) | `t0u1v2w3-...` |
-| `sender_type` | VARCHAR(30) | NN | Type d'expéditeur : `user`, `contact`, `chatbot`, `system` | `contact` |
-| `content` | TEXT | NN | Contenu textuel du message | `Bonjour, j'aurais besoin d'un pansement à domicile.` |
-| `sent_at` | TIMESTAMP | NN, défaut `NOW()`, IDX | Date et heure d'envoi | `2026-04-10 09:05:00` |
-| `is_automated` | BOOLEAN | NN, défaut `false` | `true` si généré automatiquement (chatbot ou rappel) | `false` |
-
-**Règles métier :**
-- Un seul des trois champs `user_id`, `contact_id`, `chatbot_id` doit être renseigné
-- Le `sender_type` doit être cohérent avec le champ renseigné
-
----
-
-# CATÉGORIE : IA / CHATBOT
-
----
-
-## 21. `chatbot`
-
-**Rôle :** Agent conversationnel configuré pour un tenant. Répond automatiquement aux questions fréquentes des visiteurs, les qualifie et les oriente. Utilise une base de connaissance et un modèle de langage (LLM) ou des règles statiques.
-
-**Utilisée par :** Widget chatbot sur le site, module de réponse automatique.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `t0u1v2w3-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire | `a1b2c3d4-...` |
-| `name` | VARCHAR(150) | NN | Nom affiché du chatbot | `Assistant MUNTU CURA` |
-| `status` | VARCHAR(30) | NN, défaut `active` | État : `active`, `inactive`, `training` | `active` |
-| `model` | VARCHAR(100) | NN, défaut `faq_static` | Modèle utilisé : `faq_static` (MVP), `mistral-small`, `gpt-4o-mini` | `faq_static` |
-| `system_prompt` | TEXT | nullable | Prompt système envoyé au LLM pour contextualiser les réponses (MVP : null) | `Tu es l'assistant de Yolande, infirmière à Halle...` |
-
----
-
-## 22. `knowledge_base`
-
-**Rôle :** Base documentaire associée à un chatbot. Contient l'ensemble des documents et FAQ que le chatbot consulte pour répondre aux questions.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `u1v2w3x4-...` |
-| `chatbot_id` | UUID | FK → `chatbot.id`, NN | Chatbot utilisant cette base | `t0u1v2w3-...` |
-| `name` | VARCHAR(150) | NN | Nom de la base | `FAQ MUNTU CURA` |
-| `status` | VARCHAR(30) | NN, défaut `active` | État : `active`, `indexing`, `error` | `active` |
-| `last_indexed_at` | TIMESTAMP | nullable | Dernière date d'indexation complète | `2026-04-01 02:00:00` |
-
----
-
-## 23. `knowledge_document`
-
-**Rôle :** Document individuel indexé dans une base de connaissance — peut être une entrée FAQ, une page du site, un PDF de tarifs, etc. Peut cibler un public B2C ou B2B.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `v2w3x4y5-...` |
-| `knowledge_base_id` | UUID | FK → `knowledge_base.id`, NN | Base parente | `u1v2w3x4-...` |
-| `title` | VARCHAR(255) | NN | Titre du document | `Quels sont vos tarifs pour une prise de sang ?` |
-| `type` | VARCHAR(50) | NN, défaut `faq` | Type : `faq`, `page`, `pdf`, `manual_entry` | `faq` |
-| `source_url` | VARCHAR(500) | nullable | URL source si le document vient d'une page web | `/nos-services` |
-| `audience_type` | VARCHAR(30) | NN, défaut `all` | Public ciblé : `all`, `b2c`, `b2b` | `b2c` |
-| `synced_at` | TIMESTAMP | nullable | Dernière synchronisation depuis la source | `2026-04-01 02:05:00` |
-
----
-
-## 24. `page_knowledge_document`
-
-**Rôle :** Table de jointure indiquant qu'une page du site alimente un document de connaissance du chatbot. Quand la page est modifiée, le document peut être resynchronisé automatiquement.
+**Utilisée par :** CRM, réservation publique, campagnes, relances, agents IA, facturation.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
-| `page_id` | UUID | FK → `page.id`, PK partielle | Page source |
-| `knowledge_document_id` | UUID | FK → `knowledge_document.id`, PK partielle | Document alimenté |
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire |
+| `agent_memory` | TEXT | — |  |
+| `anonymized_at` | TIMESTAMPTZ | — |  |
+| `category` | TEXT | — |  |
+| `company_name` | VARCHAR | — | Nom de la société si contact professionnel |
+| `contact_type` | VARCHAR | NN, défaut `individual` | Type : `individual` (B2C), `professional` (représentant B2B) |
+| `created_at` | TIMESTAMP | NN, défaut `now()` | Date de création |
+| `custom_fields` | JSONB | NN | Champs configurables, **map plate** `{field_key: value}` |
+| `deleted_at` | TIMESTAMP | — | Soft delete (droit à l'oubli RGPD) |
+| `deletion_requested_at` | TIMESTAMPTZ | — |  |
+| `email` | VARCHAR | — | Adresse email |
+| `first_name` | VARCHAR | — | Prénom |
+| `last_interaction_at` | TIMESTAMPTZ | défaut `now()` |  |
+| `last_name` | VARCHAR | — | Nom de famille |
+| `marketing_opt_out` | BOOL | NN, défaut `False` |  |
+| `notes` | TEXT | — |  |
+| `phone` | VARCHAR | — | Numéro de téléphone |
+| `segment` | TEXT | — |  |
+| `source` | VARCHAR | — |  |
+| `telegram_chat_id` | BIGINT | — |  |
+| `unsubscribe_token` | UUID | défaut `gen_random_uuid()` |  |
+| `updated_at` | TIMESTAMP | NN, défaut `now()` | Date de dernière modification |
 
-**Clé primaire composite :** `(page_id, knowledge_document_id)`
+**Règles métier :**
+
+- Seuls `first_name`, `last_name`, `email`, `phone` sont de vraies colonnes indispensables ; le reste de la fiche est configurable par tenant
+- `custom_fields` (JSONB) est une **map plate** `{field_key: value}`, sans sous-objets
+- `custom_fields.photo_path` est un chemin dans un bucket privé, jamais une URL publique
 
 ---
 
-# CATÉGORIE : LEADS
+## 29. `contact_activity`
+
+**Rôle :** Événements de la vie d'un contact, pour alimenter sa chronologie.
+
+**Utilisée par :** Fiche contact (onglet activité).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `contact_id` | UUID | FK → `contact.id`, NN | Contact concerné |
+| `content` | TEXT | NN |  |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `type` | TEXT | NN, défaut `note` |  |
 
 ---
 
-## 25. `lead`
+## 30. `contact_attachment`
 
-**Rôle :** Demande ou opportunité commerciale entrante — qu'elle vienne d'un formulaire de contact, d'un message WhatsApp, d'un email ou d'une interaction chatbot. C'est l'entité centrale du pipeline commercial. Un lead est toujours lié à un contact et progresse à travers les étapes du pipeline.
+**Rôle :** Pièce jointe d'une fiche contact, stockée dans un bucket privé.
 
-**Utilisée par :** Boîte unifiée, pipeline CRM, calcul du ROI.
+**Utilisée par :** Fiche contact. Quota par plan.
 
-**RLS activée.**
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `contact_id` | UUID | FK → `contact.id`, NN | Contact concerné |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `file_name` | TEXT | NN |  |
+| `file_size` | INT | NN |  |
+| `mime_type` | TEXT | — |  |
+| `storage_path` | TEXT | NN |  |
 
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `w3x4y5z6-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant propriétaire | `a1b2c3d4-...` |
-| `contact_id` | UUID | FK → `contact.id`, NN, IDX | Contact à l'origine de la demande | `n4o5p6q7-...` |
-| `partner_account_id` | UUID | FK → `partner_account.id`, nullable | Organisation partenaire si demande B2B | `m3n4o5p6-...` |
-| `service_offer_id` | UUID | FK → `service_offer.id`, nullable | Service concerné par la demande | `k1l2m3n4-...` |
-| `pipeline_stage_id` | UUID | FK → `pipeline_stage.id`, nullable | Étape actuelle dans le pipeline | `o5p6q7r8-...` |
-| `traffic_source_id` | UUID | FK → `traffic_source.id`, nullable | Source d'acquisition | `p6q7r8s9-...` |
-| `conversation_id` | UUID | FK → `conversation.id`, nullable | Conversation ayant généré ce lead | `r8s9t0u1-...` |
-| `source` | VARCHAR(50) | nullable | Canal d'origine : `site_form`, `whatsapp`, `telegram`, `email`, `phone` | `site_form` |
-| `status` | VARCHAR(30) | NN, défaut `new`, IDX | État : `new`, `in_progress`, `to_call`, `scheduled`, `converted`, `lost`, `archived` | `new` |
-| `priority` | VARCHAR(30) | NN, défaut `normal` | Priorité : `low`, `normal`, `high`, `urgent` | `normal` |
-| `audience_type` | VARCHAR(30) | NN, défaut `b2c` | Type de demande : `b2c`, `b2b` | `b2c` |
-| `request_type` | VARCHAR(50) | NN | Nature de la demande : `appointment`, `information`, `quote`, `partnership`, `other` | `appointment` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()`, IDX | Date de création | `2026-04-10 09:10:00` |
-| `updated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de dernière modification | `2026-04-10 15:00:00` |
+---
+
+## 31. `contact_consent`
+
+**Rôle :** Consentement RGPD d'un contact, par canal de communication, avec son origine.
+
+**Utilisée par :** Formulaire public, campagnes email, relances, export RGPD.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `channel` | TEXT | NN | Canal concerné (`email`, `telephone`, `sms`…) |
+| `consent_text` | TEXT | — |  |
+| `contact_id` | UUID | FK → `contact.id`, NN | Contact concerné |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `granted` | BOOL | NN | Consentement accordé ou refusé |
+| `source` | TEXT | NN | Origine du consentement (`public_form`, `import`…) |
+
+**Règles métier :**
+
+- Un consentement refusé ou révoqué bloque l'envoi sur ce canal
+
+---
+
+## 32. `contact_duplicate_ignore`
+
+**Rôle :** Paires de contacts que le tenant a explicitement déclarées comme non doublons, pour que la détection cesse de les proposer.
+
+**Utilisée par :** Détection de doublons du CRM.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `match_type` | TEXT | NN |  |
+| `match_value` | TEXT | NN |  |
+
+---
+
+## 33. `contact_field_def`
+
+**Rôle :** Définition des champs de la fiche contact, configurable par tenant : champs de base fournis par Klientys et champs personnalisés créés par le tenant.
+
+**Utilisée par :** Paramètres (champs contact), fiche contact, import/export CSV et Excel.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `enabled` | BOOL | NN, défaut `True` |  |
+| `field_key` | TEXT | NN | Clé technique — `cf_<8 hex>` pour un champ personnalisé |
+| `field_type` | TEXT | NN | `text` \| `phone` \| `email` \| `date` \| `number` \| `select` |
+| `is_base` | BOOL | NN, défaut `False` | Champ prédéfini par Klientys — affichage seulement |
+| `label` | TEXT | NN |  |
+| `options` | JSONB | — | Valeurs proposées pour un champ `select` |
+| `position` | INT | NN, défaut `0` | Ordre d'affichage |
+| `required` | BOOL | NN, défaut `False` |  |
+| `storage_mode` | TEXT | NN | `column` (colonne de `contact`) ou `jsonb` (`custom_fields`) |
+
+**Règles métier :**
+
+- `storage_mode` : `column` (vraie colonne de `contact`) ou `jsonb` (`custom_fields`)
+- `first_name`, `last_name`, `email`, `phone` sont verrouillés : ni désactivables, ni supprimables
+- Le catalogue de champs de base est créé paresseusement au premier appel de l'API, sans migration de backfill
+- Les champs personnalisés ont un `field_key` généré serveur (`cf_<8 hex>`)
+
+---
+
+## 34. `contact_import_job`
+
+**Rôle :** Suivi d'un import de contacts par fichier : avancement, lignes traitées, erreurs.
+
+**Utilisée par :** Import CSV/Excel, bandeau de progression du dashboard.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `created_count` | INT | — |  |
+| `error_message` | TEXT | — |  |
+| `errors` | JSONB | — |  |
+| `filename` | TEXT | — |  |
+| `finished_at` | TIMESTAMPTZ | — |  |
+| `notice` | TEXT | — |  |
+| `skipped_count` | INT | — |  |
+| `status` | TEXT | NN, défaut `processing` |  |
+
+---
+
+## 35. `contact_reminder`
+
+**Rôle :** Relance programmée sur un contact, manuelle ou automatique.
+
+**Utilisée par :** Page Rappels, tâche planifiée d'envoi quotidien.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `auto_send` | BOOL | NN, défaut `False` |  |
+| `contact_id` | UUID | FK → `contact.id`, NN | Contact concerné |
+| `created_at` | TIMESTAMPTZ | défaut `now()` | Date de création |
+| `done` | BOOL | NN, défaut `False` |  |
+| `due_date` | DATE | NN |  |
+| `note` | TEXT | — |  |
+| `reminder_type` | TEXT | NN, défaut `custom` |  |
+| `sent_at` | TIMESTAMPTZ | — | Date d'envoi effectif |
+
+---
+
+## 36. `contact_tag`
+
+**Rôle :** Étiquette de segmentation définie par le tenant.
+
+**Utilisée par :** CRM, campagnes.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `color` | VARCHAR | NN, défaut `blue` |  |
+| `created_at` | TIMESTAMPTZ | défaut `now()` | Date de création |
+| `name` | VARCHAR | NN |  |
+
+---
+
+## 37. `contact_tag_link`
+
+**Rôle :** Association contact ↔ étiquette.
+
+**Utilisée par :** CRM, campagnes.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `contact_id` | UUID | PK, FK → `contact.id`, NN | Contact concerné |
+| `tag_id` | UUID | PK, FK → `contact_tag.id`, NN |  |
+
+---
+
+## 38. `pipeline_stage`
+
+**Rôle :** Étape du pipeline commercial du tenant.
+
+**Utilisée par :** Vue pipeline des leads.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire |
+| `is_final` | BOOL | NN, défaut `False` | Si `true`, cette étape clôt le pipeline (converti ou perdu) |
+| `name` | VARCHAR | NN | Nom de l'étape |
+| `position` | INT | NN | Ordre d'affichage (de gauche à droite dans le kanban) |
+
+---
+
+# CATÉGORIE : LEADS & CAMPAGNES
+
+---
+
+## 39. `email_campaign`
+
+**Rôle :** Campagne email adressée à une sélection de contacts.
+
+**Utilisée par :** Page Campagnes. Réservée aux plans Pro et Business.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `body` | TEXT | NN |  |
+| `click_count` | INT | NN, défaut `0` |  |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `failed_count` | INT | NN, défaut `0` |  |
+| `name` | TEXT | NN |  |
+| `open_count` | INT | NN, défaut `0` |  |
+| `segment` | TEXT | NN, défaut `all` |  |
+| `sent_at` | TIMESTAMPTZ | NN, défaut `now()` | Date d'envoi effectif |
+| `sent_count` | INT | NN, défaut `0` |  |
+| `status` | TEXT | NN, défaut `sent` |  |
+| `subject` | TEXT | NN |  |
+| `tag_id` | UUID | FK → `contact_tag.id` |  |
+| `unsubscribed_count` | INT | NN, défaut `0` |  |
+
+---
+
+## 40. `email_campaign_contact`
+
+**Rôle :** Destinataire d'une campagne et suivi de son état : envoyé, ouvert, cliqué, désabonné, en erreur.
+
+**Utilisée par :** Campagnes, statistiques, lien de désabonnement.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `campaign_id` | UUID | FK → `email_campaign.id`, NN |  |
+| `click_count` | INT | NN, défaut `0` |  |
+| `clicked_at` | TIMESTAMPTZ | — |  |
+| `contact_id` | UUID | FK → `contact.id`, NN | Contact concerné |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `open_count` | INT | NN, défaut `0` |  |
+| `opened_at` | TIMESTAMPTZ | — |  |
+| `token` | UUID | NN, défaut `gen_random_uuid()` |  |
+| `unsubscribed_at` | TIMESTAMPTZ | — |  |
+
+---
+
+## 41. `lead`
+
+**Rôle :** Demande entrante : formulaire de contact, réservation publique, message d'un agent IA.
+
+**Utilisée par :** Page Leads, notifications, statistiques de conversion.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire |
+| `audience_type` | VARCHAR | NN, défaut `b2c` | Type de demande : `b2c`, `b2b` |
+| `channel_id` | UUID | FK → `channel.id` |  |
+| `contact_id` | UUID | FK → `contact.id`, NN | Contact à l'origine de la demande |
+| `created_at` | TIMESTAMP | NN, défaut `now()` | Date de création |
+| `internal_note` | TEXT | — |  |
+| `notes` | TEXT | — |  |
+| `pipeline_stage_id` | UUID | FK → `pipeline_stage.id` | Étape actuelle dans le pipeline |
+| `priority` | VARCHAR | NN, défaut `normal` | Priorité : `low`, `normal`, `high`, `urgent` |
+| `request_type` | VARCHAR | NN, défaut `appointment` | Nature de la demande : `appointment`, `information`, `quote`, `partnership`, `other` |
+| `service_offer_id` | UUID | FK → `service_offer.id` | Service concerné par la demande |
+| `source` | VARCHAR | NN, défaut `site_form` | Canal d'origine : `site_form`, `whatsapp`, `telegram`, `email`, `phone` |
+| `status` | VARCHAR | NN, défaut `new` | État : `new`, `in_progress`, `to_call`, `scheduled`, `converted`, `lost`, `archived` |
+| `updated_at` | TIMESTAMP | NN, défaut `now()` | Date de dernière modification |
+
+**Règles métier :**
+
+- **Plusieurs leads par contact** : aucune contrainte d'unicité, chaque demande crée une ligne
+- Un lead issu d'un RDV en attente a un pipeline restreint : `new` → `confirmed` / `refused`
 
 ---
 
@@ -634,91 +1092,375 @@ Chaque table est décrite avec :
 
 ---
 
-## 26. `calendar`
+## 42. `appointment`
 
-**Rôle :** Agenda d'un tenant. Contient les créneaux disponibles et les rendez-vous planifiés. Peut être synchronisé avec Google Calendar ou Cal.com.
+**Rôle :** Rendez-vous entre le tenant et un contact, créé depuis le dashboard, le site public ou un agent conversationnel.
 
-**RLS activée.**
+**Utilisée par :** Calendrier, emails de confirmation et de rappel, facturation, acomptes.
 
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `x4y5z6a7-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant propriétaire | `a1b2c3d4-...` |
-| `name` | VARCHAR(150) | NN | Nom de l'agenda | `Agenda principal` |
-| `timezone` | VARCHAR(50) | NN, défaut `Europe/Brussels` | Fuseau horaire (IANA) | `Europe/Brussels` |
-| `external_calendar_id` | VARCHAR(255) | nullable | ID dans Google Calendar ou Cal.com si synchronisé | `yolande@gmail.com` |
-| `last_synced_at` | TIMESTAMP | nullable | Dernière synchronisation avec le calendrier externe | `2026-04-15 06:00:00` |
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `audience_type` | VARCHAR | NN, défaut `b2c` | Nature : `b2c`, `b2b` |
+| `cal_booking_id` | VARCHAR | — |  |
+| `calendar_id` | UUID | FK → `calendar.id`, NN | Agenda dans lequel le rendez-vous est planifié |
+| `contact_id` | UUID | FK → `contact.id`, NN | Contact concerné |
+| `conversation_summary` | TEXT | — | Résumé IA de la conversation ayant mené au RDV (agent Telegram) |
+| `created_at` | TIMESTAMP | NN, défaut `now()` | Date de création |
+| `custom_answers` | JSONB | — | Réponses aux questions du formulaire de réservation |
+| `deposit_amount` | NUMERIC | — | Montant de l'acompte encaissé |
+| `deposit_capture_id` | TEXT | — | Capture PayPal — requise pour rembourser |
+| `deposit_currency` | TEXT | — | Devise de l'acompte |
+| `deposit_paypal_order_id` | TEXT | — | Order PayPal — **unique**, un order ne finance qu'un RDV |
+| `deposit_refund_id` | TEXT | — | Remboursement PayPal émis |
+| `deposit_refunded_at` | TIMESTAMPTZ | — | Date du remboursement |
+| `deposit_status` | TEXT | défaut `none` | `none` \| `pending_payment` \| `paid` \| `refunded` \| `refund_failed` |
+| `end_at` | TIMESTAMP | NN | Fin — **heure locale naïve du tenant** |
+| `lead_id` | UUID | FK → `lead.id` | Lead converti en rendez-vous |
+| `notes` | TEXT | — |  |
+| `party_size` | INT | NN, défaut `1` | Nombre de personnes dans la réservation |
+| `reminder_sent_at` | TIMESTAMPTZ | — | Date d'envoi du rappel 24 h |
+| `scheduled_at` | TIMESTAMP | NN | Début — **heure locale naïve du tenant** |
+| `service_offer_id` | UUID | FK → `service_offer.id` | Service concerné |
+| `status` | VARCHAR | NN, défaut `pending` | `pending` \| `pending_payment` \| `confirmed` \| `cancelled` |
+| `type` | VARCHAR | NN, défaut `b2c_appointment` | Type : `b2c_appointment`, `b2b_coordination`, `phone_call`, `home_visit` |
+| `updated_at` | TIMESTAMP | NN, défaut `now()` | Date de dernière modification |
 
----
+**Règles métier :**
 
-## 27. `availability_slot`
-
-**Rôle :** Créneau horaire déclaré disponible par le tenant. Quand un rendez-vous est pris, le créneau passe en statut `reserved`. Permet d'éviter les doubles réservations.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `y5z6a7b8-...` |
-| `calendar_id` | UUID | FK → `calendar.id`, NN, IDX | Agenda parent | `x4y5z6a7-...` |
-| `start_at` | TIMESTAMP | NN, IDX | Début du créneau | `2026-04-20 09:00:00` |
-| `end_at` | TIMESTAMP | NN | Fin du créneau | `2026-04-20 09:30:00` |
-| `status` | VARCHAR(30) | NN, défaut `free` | État : `free`, `reserved`, `blocked` | `free` |
-
-**Contrainte :** `CHECK (end_at > start_at)` — la fin doit être postérieure au début.
-
----
-
-## 28. `appointment`
-
-**Rôle :** Rendez-vous ou coordination planifiée entre le tenant et un contact ou partenaire. Peut être un soin à domicile (B2C), une réunion de coordination avec une maison de repos (B2B), ou un appel téléphonique.
-
-**Utilisée par :** Calendrier, rappels automatiques, conversion des leads.
-
-**RLS activée.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `z6a7b8c9-...` |
-| `calendar_id` | UUID | FK → `calendar.id`, NN, IDX | Agenda dans lequel le rendez-vous est planifié | `x4y5z6a7-...` |
-| `contact_id` | UUID | FK → `contact.id`, NN, IDX | Contact concerné | `n4o5p6q7-...` |
-| `partner_account_id` | UUID | FK → `partner_account.id`, nullable, IDX | Partenaire concerné (si B2B) | `m3n4o5p6-...` |
-| `lead_id` | UUID | FK → `lead.id`, nullable, IDX | Lead converti en rendez-vous | `w3x4y5z6-...` |
-| `service_offer_id` | UUID | FK → `service_offer.id`, nullable | Service concerné | `k1l2m3n4-...` |
-| `availability_slot_id` | UUID | FK → `availability_slot.id`, nullable | Créneau réservé | `y5z6a7b8-...` |
-| `type` | VARCHAR(50) | NN, défaut `b2c_appointment` | Type : `b2c_appointment`, `b2b_coordination`, `phone_call`, `home_visit` | `home_visit` |
-| `audience_type` | VARCHAR(30) | NN, défaut `b2c` | Nature : `b2c`, `b2b` | `b2c` |
-| `status` | VARCHAR(30) | NN, défaut `pending` | État : `pending`, `confirmed`, `canceled`, `completed`, `no_show` | `confirmed` |
-| `scheduled_at` | TIMESTAMP | NN, IDX | Début du rendez-vous | `2026-04-20 09:00:00` |
-| `end_at` | TIMESTAMP | NN | Fin du rendez-vous | `2026-04-20 09:30:00` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-04-15 11:00:00` |
-| `updated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de dernière modification | `2026-04-18 08:00:00` |
-
-**Contrainte :** `CHECK (end_at > scheduled_at)`
+- **Invariant de stockage : heure locale naïve du tenant** (`YYYY-MM-DDTHH:MM:SS`, sans fuseau). La réservation publique convertit avant écriture
+- Statuts : `pending`, `pending_payment`, `confirmed`, `cancelled`
+- `pending_payment` : acompte attendu. Au-delà de 30 minutes le créneau redevient réservable, et une tâche planifiée annule la ligne
+- `deposit_status` : `none` | `pending_payment` | `paid` | `refunded` | `refund_failed`
+- `deposit_capture_id` est requis pour rembourser : l'API Refunds de PayPal s'applique à la capture, pas à l'order
+- `deposit_paypal_order_id` est unique : un order ne peut pas financer deux rendez-vous
+- `custom_answers` porte les réponses aux questions du formulaire de réservation
 
 ---
 
-# CATÉGORIE : NOTIFICATIONS
+## 43. `availability_slot`
+
+**Rôle :** Plage horaire réservable, par jour de la semaine. Plusieurs lignes par jour sont possibles, ce qui permet de gérer une pause déjeuner.
+
+**Utilisée par :** Génération des créneaux publics, validation de réservation, panneau Disponibilités.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique |
+| `calendar_id` | UUID | FK → `calendar.id`, NN | Agenda parent |
+| `capacity` | INT | NN, défaut `1` | Réservations simultanées acceptées sur le créneau |
+| `created_at` | TIMESTAMP | défaut `now()` | Date de création |
+| `day_of_week` | SMALLINT | NN | 0 = lundi … 6 = dimanche |
+| `end_time` | TIME WITHOUT TIME ZONE | NN |  |
+| `is_active` | BOOL | NN, défaut `True` |  |
+| `max_party_size` | INT | — | Personnes maximum par réservation (1 = solo) |
+| `slot_duration_min` | INT | NN, défaut `30` | Durée d'un créneau, en minutes |
+| `start_time` | TIME WITHOUT TIME ZONE | NN |  |
+
+**Règles métier :**
+
+- `capacity` : nombre de réservations simultanées acceptées sur un même créneau
+- `max_party_size` : nombre de personnes maximum par réservation (1 = solo)
+- La validation lit ces deux valeurs sur la plage **contenant** le créneau demandé, et non le maximum de la journée
 
 ---
 
-## 29. `notification`
+## 44. `blocked_period`
 
-**Rôle :** Message de rappel ou de confirmation envoyé automatiquement à un contact (rappel de rendez-vous, confirmation de demande, accusé de réception). Géré par un worker asynchrone.
+**Rôle :** Période d'indisponibilité : congés, fermeture exceptionnelle.
 
-**RLS activée.**
+**Utilisée par :** Génération des créneaux publics, validation de réservation, panneau Bloquer.
 
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `a7b8c9d0-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant émetteur | `a1b2c3d4-...` |
-| `contact_id` | UUID | FK → `contact.id`, nullable | Destinataire contact | `n4o5p6q7-...` |
-| `appointment_id` | UUID | FK → `appointment.id`, nullable, IDX | Rendez-vous concerné (rappels) | `z6a7b8c9-...` |
-| `lead_id` | UUID | FK → `lead.id`, nullable | Lead concerné (accusés de réception) | `w3x4y5z6-...` |
-| `type` | VARCHAR(50) | NN | Type : `appointment_reminder_24h`, `appointment_reminder_1h`, `lead_confirmation`, `appointment_confirmation` | `appointment_reminder_24h` |
-| `channel` | VARCHAR(30) | NN | Canal d'envoi : `email`, `whatsapp`, `telegram`, `sms` | `email` |
-| `status` | VARCHAR(30) | NN, défaut `pending` | État : `pending`, `sent`, `failed`, `canceled` | `sent` |
-| `content` | TEXT | NN | Contenu du message envoyé (pour archivage) | `Rappel : rendez-vous demain à 9h00 avec Yolande NYA.` |
-| `scheduled_at` | TIMESTAMP | nullable, IDX | Date d'envoi programmée | `2026-04-19 09:00:00` |
-| `sent_at` | TIMESTAMP | nullable | Date d'envoi effectif | `2026-04-19 09:00:05` |
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique |
+| `calendar_id` | UUID | FK → `calendar.id`, NN | Agenda concerné |
+| `color` | TEXT | — |  |
+| `created_at` | TIMESTAMP | défaut `now()` | Date de création |
+| `created_by` | VARCHAR | défaut `user` |  |
+| `end_at` | TIMESTAMPTZ | NN |  |
+| `reason` | TEXT | — |  |
+| `start_at` | TIMESTAMPTZ | NN |  |
+
+**Règles métier :**
+
+- Une réservation chevauchant une période bloquée est refusée côté public ; le tenant peut forcer depuis son dashboard
+
+---
+
+## 45. `calendar`
+
+**Rôle :** Agenda d'un tenant. Un seul par tenant en pratique.
+
+**Utilisée par :** Réservation publique, calendrier du dashboard, rappels.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire |
+| `external_calendar_id` | VARCHAR | — | ID dans Google Calendar ou Cal.com si synchronisé |
+| `last_synced_at` | TIMESTAMP | — | Dernière synchronisation avec le calendrier externe |
+| `name` | VARCHAR | NN, défaut `Agenda principal` | Nom de l'agenda |
+| `timezone` | VARCHAR | NN, défaut `Europe/Brussels` | Fuseau horaire (IANA) |
+
+---
+
+# CATÉGORIE : FACTURATION TENANT
+
+---
+
+## 46. `invoice`
+
+**Rôle :** Facture émise par **le tenant à ses propres clients** — et non par Klientys au tenant. La facturation de l'abonnement Klientys vit chez Stripe, pas en base.
+
+**Utilisée par :** Module de facturation du dashboard, génération PDF et UBL.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `appointment_id` | UUID | FK → `appointment.id` | Rendez-vous concerné |
+| `client_address` | TEXT | — |  |
+| `client_email` | TEXT | — |  |
+| `client_name` | TEXT | — |  |
+| `client_vat` | TEXT | — | TVA du client, **recopiée** à l'émission |
+| `contact_id` | UUID | FK → `contact.id` | Contact concerné |
+| `created_at` | TIMESTAMPTZ | défaut `now()` | Date de création |
+| `currency` | TEXT | NN, défaut `EUR` |  |
+| `due_date` | DATE | — | Date d'échéance |
+| `issue_date` | DATE | NN, défaut `CURRENT_DATE` |  |
+| `notes` | TEXT | — |  |
+| `number` | TEXT | NN | Numéro séquentiel sans trou, exigence comptable |
+| `paid_at` | TIMESTAMPTZ | — | Date et heure de paiement effectif |
+| `payment_terms` | TEXT | — |  |
+| `pdf_url` | TEXT | — | PDF généré, stocké dans un bucket privé |
+| `sent_at` | TIMESTAMPTZ | — | Date d'envoi effectif |
+| `status` | TEXT | NN, défaut `draft` | État : `pending`, `paid`, `void`, `uncollectible` |
+| `subtotal` | NUMERIC | NN, défaut `0` |  |
+| `tax_amount` | NUMERIC | NN, défaut `0` |  |
+| `tax_rate` | NUMERIC | NN, défaut `0` | Taux de TVA appliqué, en pourcentage |
+| `tenant_address` | TEXT | — |  |
+| `tenant_name` | TEXT | — |  |
+| `tenant_vat` | TEXT | — | TVA du tenant, **recopiée** à l'émission |
+| `total` | NUMERIC | NN, défaut `0` |  |
+| `ubl_url` | TEXT | — | XML conforme à la facturation électronique européenne |
+| `updated_at` | TIMESTAMPTZ | défaut `now()` | Date de dernière modification |
+
+**Règles métier :**
+
+- Les coordonnées du tenant et du client sont **recopiées** sur la facture à l'émission : une facture ne doit pas changer si la fiche contact est modifiée ensuite
+- `ubl_url` : version XML conforme à la facturation électronique européenne
+- Peut être rattachée à un rendez-vous (`appointment_id`)
+
+---
+
+## 47. `invoice_line`
+
+**Rôle :** Ligne d'une facture : désignation, quantité, prix unitaire, total.
+
+**Utilisée par :** Module de facturation, PDF, UBL.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `created_at` | TIMESTAMPTZ | défaut `now()` | Date de création |
+| `description` | TEXT | NN |  |
+| `invoice_id` | UUID | FK → `invoice.id`, NN | Facture concernée |
+| `position` | INT | NN, défaut `0` | Ordre d'affichage |
+| `quantity` | NUMERIC | NN, défaut `1` |  |
+| `tax_rate` | NUMERIC | NN, défaut `0` |  |
+| `total` | NUMERIC | NN, défaut `0` |  |
+| `unit_price` | NUMERIC | NN, défaut `0` |  |
+
+---
+
+## 48. `invoice_sequence`
+
+**Rôle :** Compteur de numérotation des factures par tenant, pour garantir une séquence continue sans trou, exigée comptablement.
+
+**Utilisée par :** Attribution du numéro à l'émission.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `tenant_id` | UUID | PK, FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `last_number` | INT | NN, défaut `0` |  |
+| `year` | INT | PK, NN |  |
+
+---
+
+# CATÉGORIE : MESSAGERIE & AGENTS IA
+
+---
+
+## 49. `agent_config`
+
+**Rôle :** Configuration d'un agent IA pour un tenant : persona, canaux, jetons.
+
+**Utilisée par :** Page Agents IA, chatbot public, webhooks Telegram et WhatsApp, notifications.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire |
+| `agent_type` | PUBLIC.AGENT_TYPE_ENUM | NN | Type d'agent : `vitrine`, `support_client`, `assistant_tenant` |
+| `created_at` | TIMESTAMP | défaut `now()` | Date de création |
+| `diagnostic_mode_enabled` | BOOL | défaut `False` |  |
+| `escalation_triggers` | TEXT[] | — |  |
+| `faq_pairs` | JSONB | — |  |
+| `followup_delay_hours` | INT | défaut `24` |  |
+| `followup_enabled` | BOOL | défaut `False` |  |
+| `followup_message` | TEXT | — |  |
+| `knowledge_base` | TEXT | — |  |
+| `memory_enabled` | BOOL | défaut `True` |  |
+| `model` | VARCHAR | NN, défaut `mistral-small-latest` | Modèle LLM utilisé : `faq_static`, `mistral-small`, `mistral-large` |
+| `persona_name` | TEXT | — |  |
+| `persona_tone` | TEXT | défaut `friendly` |  |
+| `photo_diagnosis_enabled` | BOOL | défaut `False` |  |
+| `quote_enabled` | BOOL | défaut `False` |  |
+| `quote_variables` | JSONB | — |  |
+| `status` | VARCHAR | NN, défaut `active` | État : `active`, `inactive`, `training` |
+| `synthesis_schedule_minutes` | INT | NN, défaut `180` | Fréquence en minutes du Worker de synthèse (Agent 3 uniquement) |
+| `system_prompt` | TEXT | — | Prompt système envoyé au LLM pour contextualiser les réponses |
+| `telegram_bot_token` | VARCHAR | — |  |
+| `telegram_notify_chat_id` | BIGINT | — |  |
+| `updated_at` | TIMESTAMP | défaut `now()` | Date de dernière modification |
+| `urgent_keywords` | TEXT[] | — |  |
+| `whatsapp_number` | VARCHAR | — |  |
+
+**Règles métier :**
+
+- Trois types : `vitrine` (gratuit, tous les plans), `support_client`, `assistant_tenant`
+- `telegram_bot_token` est synchronisé entre `support_client` et `assistant_tenant`
+
+---
+
+## 50. `agent_document`
+
+**Rôle :** Document fourni à un agent IA comme source de connaissance, découpé et vectorisé pour la recherche sémantique.
+
+**Utilisée par :** Agents IA (réponses documentées).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `agent_type` | TEXT | NN, défaut `support_client` |  |
+| `content` | TEXT | — |  |
+| `created_at` | TIMESTAMPTZ | défaut `now()` | Date de création |
+| `embedding` | PUBLIC.VECTOR(768) | — |  |
+| `filename` | TEXT | — |  |
+| `metadata` | JSONB | — |  |
+
+---
+
+## 51. `agent_link`
+
+**Rôle :** Jeton d'accès permettant de relier un interlocuteur externe à un tenant sur WhatsApp.
+
+**Utilisée par :** Agents IA.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant émetteur |
+| `channel` | VARCHAR | NN, défaut `whatsapp` | Canal cible : `whatsapp`, `telegram` |
+| `contact_id` | UUID | FK → `contact.id`, NN | Contact destinataire du lien |
+| `created_at` | TIMESTAMP | défaut `now()` | Date de génération |
+| `expires_at` | TIMESTAMP | NN | Date d'expiration du token |
+| `token` | VARCHAR | NN | JWT signé (HS256) embarquant `contact_id`, `tenant_id`, `exp` |
+| `used_at` | TIMESTAMP | — | Date de première utilisation — token invalidé après usage |
+
+---
+
+## 52. `agent_synthesis`
+
+**Rôle :** Synthèse consolidée des conversations d'une période, produite par une tâche de fond.
+
+**Utilisée par :** Page Agents IA (onglet Synthèses).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant concerné |
+| `agent_config_id` | UUID | FK → `agent_config.id`, NN | Configuration de l'agent ayant déclenché la synthèse |
+| `content` | TEXT | NN | Texte du résumé consolidé généré par le LLM |
+| `created_at` | TIMESTAMP | défaut `now()` | Date de création |
+| `delivered_at` | TIMESTAMP | — | Date de livraison effective au tenant (null si en attente) |
+| `period_end` | TIMESTAMP | NN | Fin de la période couverte |
+| `period_start` | TIMESTAMP | NN | Début de la période couverte par la synthèse |
+
+---
+
+## 53. `channel`
+
+**Rôle :** Canal de communication connecté à un tenant. Table héritée : la configuration des canaux se fait en pratique dans `agent_config`.
+
+**Utilisée par :** Aucun usage dans le code actuel.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire |
+| `connected_at` | TIMESTAMP | NN, défaut `now()` | Date de connexion du canal |
+| `external_identifier` | VARCHAR | — | Identifiant dans le système externe (numéro WhatsApp, token Telegram) |
+| `status` | VARCHAR | NN, défaut `connected` | État : `connected`, `disconnected`, `error` |
+| `type` | VARCHAR | NN, défaut `site_form` | Type de canal : `site_form`, `email`, `whatsapp`, `telegram` |
+
+---
+
+## 54. `conversation`
+
+**Rôle :** Fil d'échanges entre un agent IA et un interlocuteur, sur un canal donné.
+
+**Utilisée par :** Agents IA, synthèses, chronologie du contact.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant concerné |
+| `agent_type` | VARCHAR | NN |  |
+| `channel` | VARCHAR | NN, défaut `whatsapp` |  |
+| `contact_id` | UUID | FK → `contact.id` | Contact identifié (null si inconnu au départ) |
+| `deleted_at` | TIMESTAMPTZ | — |  |
+| `ended_at` | TIMESTAMPTZ | — |  |
+| `metadata` | JSONB | NN |  |
+| `started_at` | TIMESTAMPTZ | NN, défaut `now()` | Date d'ouverture |
+
+---
+
+## 55. `message`
+
+**Rôle :** Message individuel d'une conversation, côté visiteur ou côté agent.
+
+**Utilisée par :** Agents IA, synthèses.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique |
+| `content` | TEXT | NN | Contenu textuel du message |
+| `conversation_id` | UUID | FK → `conversation.id`, NN | Conversation parente |
+| `metadata` | JSONB | NN |  |
+| `sender_type` | VARCHAR | NN | Type d'expéditeur : `user`, `contact`, `chatbot`, `system` |
+| `sent_at` | TIMESTAMPTZ | NN, défaut `now()` | Date et heure d'envoi |
+
+---
+
+## 56. `ocr_summary`
+
+**Rôle :** Résumé chiffré extrait d'un document par OCR. Le document source n'est jamais conservé.
+
+**Utilisée par :** Agents IA.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant concerné |
+| `appointment_id` | UUID | FK → `appointment.id` | Rendez-vous préparé par ce document |
+| `contact_id` | UUID | FK → `contact.id`, NN | Contact ayant envoyé le document |
+| `created_at` | TIMESTAMP | défaut `now()` | Date de création |
+| `document_type` | VARCHAR | — | Type de document identifié : `ordonnance`, `analyse_sang`, `imagerie`, `autre` |
+| `processed_at` | TIMESTAMP | NN, défaut `now()` | Date de traitement OCR |
+| `summary_encrypted` | TEXT | NN | Résumé chiffré (pgcrypto) extrait par OCR |
 
 ---
 
@@ -726,317 +1468,219 @@ Chaque table est décrite avec :
 
 ---
 
-## 30. `visitor_session`
+## 57. `google_analytics_connection`
 
-**Rôle :** Session de navigation d'un visiteur sur un site tenant. Le visiteur peut être anonyme (pas encore identifié) ou identifié ultérieurement comme contact. L'IP est stockée sous forme de hash (RGPD).
+**Rôle :** Connexion OAuth d'un tenant à sa propriété Google Analytics 4.
 
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `b8c9d0e1-...` |
-| `site_id` | UUID | FK → `site.id`, NN, IDX | Site visité | `i9j0k1l2-...` |
-| `anonymous_id` | VARCHAR(255) | nullable | Identifiant anonyme côté navigateur (cookie ou fingerprint) | `anon_abc123` |
-| `device_type` | VARCHAR(30) | nullable | Type d'appareil : `mobile`, `desktop`, `tablet` | `mobile` |
-| `referrer` | VARCHAR(500) | nullable | URL de provenance | `https://www.google.com/` |
-| `ip_hash` | VARCHAR(64) | nullable | Hash SHA-256 de l'IP (jamais l'IP en clair — conformité RGPD) | `e3b0c44298fc...` |
-| `started_at` | TIMESTAMP | NN, défaut `NOW()`, IDX | Début de la session | `2026-04-15 14:00:00` |
-| `ended_at` | TIMESTAMP | nullable | Fin de la session (null si encore active) | `2026-04-15 14:08:00` |
-
----
-
-## 31. `tracking_event`
-
-**Rôle :** Action tracée durant une session visiteur — page vue, clic sur "Prendre rendez-vous", soumission d'un formulaire. Données à fort volume : prévoir une stratégie de purge au-delà de 6 mois.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `c9d0e1f2-...` |
-| `visitor_session_id` | UUID | FK → `visitor_session.id`, NN, IDX | Session parente | `b8c9d0e1-...` |
-| `page_id` | UUID | FK → `page.id`, nullable | Page sur laquelle l'événement a eu lieu | `j0k1l2m3-...` |
-| `traffic_source_id` | UUID | FK → `traffic_source.id`, nullable | Source attribuée à cet événement | `p6q7r8s9-...` |
-| `event_type` | VARCHAR(50) | NN | Type : `page_view`, `form_submit`, `booking_click`, `chatbot_open`, `phone_click` | `form_submit` |
-| `page_url` | VARCHAR(500) | nullable | URL complète de la page | `https://muntu-cura.be/contact` |
-| `source` | VARCHAR(100) | nullable | Source simplifiée | `google` |
-| `occurred_at` | TIMESTAMP | NN, défaut `NOW()`, IDX | Date et heure de l'événement | `2026-04-15 14:03:00` |
-
----
-
-# CATÉGORIE : PILOTAGE
-
----
-
-## 32. `dashboard`
-
-**Rôle :** Tableau de bord généré pour un tenant. Contient un ensemble de KPI calculés à intervalles réguliers. Un tenant peut avoir plusieurs tableaux de bord (ex. : hebdomadaire, mensuel).
-
-**RLS activée.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `d0e1f2g3-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire | `a1b2c3d4-...` |
-| `name` | VARCHAR(150) | NN | Nom du tableau de bord | `Dashboard mensuel — Avril 2026` |
-| `generated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de génération | `2026-05-01 00:00:00` |
-
----
-
-## 33. `kpi`
-
-**Rôle :** Indicateur de performance calculé et stocké pour un tableau de bord. Peut être segmenté par audience (B2C vs B2B) ou par canal.
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `e1f2g3h4-...` |
-| `dashboard_id` | UUID | FK → `dashboard.id`, NN, IDX | Dashboard parent | `d0e1f2g3-...` |
-| `code` | VARCHAR(100) | NN | Code technique de l'indicateur | `leads_total`, `conversion_rate`, `avg_response_time` |
-| `label` | VARCHAR(255) | NN | Libellé lisible | `Nombre de demandes reçues` |
-| `segment` | VARCHAR(30) | nullable | Segment : `b2c`, `b2b`, `all`, `organic`, `whatsapp` | `b2c` |
-| `value` | NUMERIC(15,4) | nullable | Valeur calculée | `42.0000` |
-| `computed_at` | TIMESTAMP | NN, défaut `NOW()` | Date de calcul | `2026-05-01 00:05:00` |
-
-**KPI standards calculés automatiquement :**
-| Code | Label |
-|---|---|
-| `visits_total` | Nombre de visites |
-| `leads_total` | Nombre de demandes reçues |
-| `leads_b2c` | Demandes B2C |
-| `leads_b2b` | Demandes B2B |
-| `appointments_total` | Rendez-vous planifiés |
-| `conversion_rate` | Taux de conversion visite → demande (%) |
-| `avg_response_time_hours` | Temps moyen de réponse (heures) |
-| `top_traffic_source` | Principale source de trafic |
-
----
-
-## 34. `roi_model`
-
-**Rôle :** Calcul du retour sur investissement estimé pour un tenant, basé sur les données réelles collectées (trafic, leads, taux de conversion) et la valeur client fournie par le tenant. Mis à jour périodiquement.
-
-**RLS activée.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `f2g3h4i5-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant concerné | `a1b2c3d4-...` |
-| `version` | VARCHAR(20) | NN, défaut `1.0` | Version du modèle de calcul | `1.2` |
-| `estimated_monthly_leads` | NUMERIC(10,2) | nullable | Nombre de leads estimés par mois | `12.00` |
-| `estimated_conversion_rate` | NUMERIC(5,4) | nullable | Taux de conversion estimé (0–1) | `0.3500` (= 35%) |
-| `average_client_value` | NUMERIC(10,2) | nullable | Valeur moyenne d'un client en euros (saisie par le tenant) | `80.00` |
-| `estimated_value` | NUMERIC(10,2) | nullable | Chiffre d'affaires estimé généré par le site (€/mois) | `336.00` |
-| `estimated_cost` | NUMERIC(10,2) | nullable | Coût mensuel du SaaS pour ce tenant | `59.00` |
-| `estimated_roi` | NUMERIC(10,4) | nullable | ROI calculé : `(valeur - coût) / coût` | `4.6949` (= ~470%) |
-| `computed_at` | TIMESTAMP | NN, défaut `NOW()` | Date de calcul | `2026-05-01 00:10:00` |
-
-**Formule de calcul :**
-```
-estimated_value    = estimated_monthly_leads × estimated_conversion_rate × average_client_value
-estimated_roi      = (estimated_value - estimated_cost) / estimated_cost
-```
-
----
-
-## 35. `roi_model_kpi`
-
-**Rôle :** Table de jointure reliant un modèle ROI aux KPI qu'il a consommés pour son calcul. Permet de tracer la provenance des données utilisées.
+**Utilisée par :** Paramètres (intégrations), page Analytics.
 
 | Colonne | Type | Contraintes | Description |
 |---|---|---|---|
-| `roi_model_id` | UUID | FK → `roi_model.id`, PK partielle | Modèle ROI |
-| `kpi_id` | UUID | FK → `kpi.id`, PK partielle | KPI consommé |
-
-**Clé primaire composite :** `(roi_model_id, kpi_id)`
-
----
-
-## 36. `recommendation`
-
-**Rôle :** Suggestion générée automatiquement à destination du tenant, basée sur l'analyse des KPI et du modèle ROI. Exemples : "Votre temps de réponse moyen est de 6h — réduire à 2h augmenterait votre taux de conversion de ~20%".
-
-**RLS activée.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `g3h4i5j6-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant destinataire | `a1b2c3d4-...` |
-| `roi_model_id` | UUID | FK → `roi_model.id`, NN | Modèle ROI ayant généré cette suggestion | `f2g3h4i5-...` |
-| `type` | VARCHAR(50) | NN | Type : `response_time`, `conversion_rate`, `content_gap`, `channel_add`, `absence_detected` | `response_time` |
-| `priority` | VARCHAR(30) | NN, défaut `medium` | Priorité : `low`, `medium`, `high` | `high` |
-| `message` | TEXT | NN | Texte de la recommandation affiché au tenant | `Votre délai de réponse moyen est de 6h. En répondant sous 2h, vous pourriez convertir ~20% de leads supplémentaires.` |
-| `status` | VARCHAR(30) | NN, défaut `active` | État : `active`, `dismissed`, `applied` | `active` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-05-01 00:15:00` |
-
----
-
-# CATÉGORIE : AGENTS IA
-
----
-
-## 37. `agent_config`
-
-**Rôle :** Configuration d'un agent IA pour un tenant donné. Chaque type d'agent (chatbot vitrine, support client, assistant tenant) a sa propre ligne de configuration. Permet au tenant de personnaliser le prompt système, le modèle LLM et la fréquence de synthèse.
-
-**Utilisée par :** Instanciation des agents, Worker de synthèse, Dashboard de configuration.
-
-**RLS activée.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `h4i5j6k7-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant propriétaire | `a1b2c3d4-...` |
-| `agent_type` | ENUM | NN | Type d'agent : `vitrine`, `support_client`, `assistant_tenant` | `vitrine` |
-| `status` | VARCHAR(30) | NN, défaut `active` | État : `active`, `inactive`, `training` | `active` |
-| `model` | VARCHAR(100) | NN, défaut `mistral-small` | Modèle LLM utilisé : `faq_static`, `mistral-small`, `mistral-large` | `mistral-small` |
-| `system_prompt` | TEXT | nullable | Prompt système envoyé au LLM pour contextualiser les réponses | `Tu es l'assistant de Yolande, infirmière à Halle...` |
-| `synthesis_schedule_minutes` | INT | NN, défaut `180` | Fréquence en minutes du Worker de synthèse (Agent 3 uniquement) | `180` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-02-01 10:00:00` |
-| `updated_at` | TIMESTAMP | NN, défaut `NOW()` | Date de dernière modification | `2026-04-10 09:00:00` |
-
-**Contrainte :** `UNIQUE(tenant_id, agent_type)` — un tenant ne peut avoir qu'une configuration par type d'agent.
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `access_token` | TEXT | NN |  |
+| `connected_at` | TIMESTAMPTZ | NN, défaut `now()` |  |
+| `ga4_property_id` | TEXT | — |  |
+| `refresh_token` | TEXT | — |  |
 
 **Règles métier :**
-- `synthesis_schedule_minutes` n'est pertinent que pour le type `assistant_tenant`
-- Un agent `inactive` ne répond plus mais sa configuration est conservée
-- Le `system_prompt` doit être validé pour éviter tout contenu hors-sujet (injection de prompt)
+
+- `ga4_property_id` est stocké au format `properties/123456789`
 
 ---
 
-## 38. `agent_link`
+## 58. `site_event`
 
-**Rôle :** Token d'accès sécurisé remis au client converti pour accéder à l'Agent 2 (Support & RDV) via WhatsApp. Chaque lien est unique, signé, expirant, et lié à un contact précis. Garantit qu'un numéro WhatsApp correspond bien à un contact identifié.
+**Rôle :** Événement comportemental sur le site vitrine d'un tenant : page vue, section lue, clic sur un appel à l'action, ouverture de formulaire, message au chatbot. Moteur propriétaire, distinct de GA4.
 
-**Utilisée par :** Génération du lien/QR code post-conversion, authentification de l'Agent 2.
+**Utilisée par :** Script de tracking du site public, page Analytics.
 
-**RLS activée.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `i5j6k7l8-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant émetteur | `a1b2c3d4-...` |
-| `contact_id` | UUID | FK → `contact.id`, NN, IDX | Contact destinataire du lien | `n4o5p6q7-...` |
-| `token` | VARCHAR(512) | NN, UQ | JWT signé (HS256) embarquant `contact_id`, `tenant_id`, `exp` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` |
-| `channel` | VARCHAR(30) | NN, défaut `whatsapp` | Canal cible : `whatsapp`, `telegram` | `whatsapp` |
-| `expires_at` | TIMESTAMP | NN | Date d'expiration du token | `2026-07-22 10:00:00` |
-| `used_at` | TIMESTAMP | nullable | Date de première utilisation — token invalidé après usage | `2026-04-22 14:30:00` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de génération | `2026-04-22 10:00:00` |
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `data` | JSONB | NN |  |
+| `event_type` | TEXT | NN | `pageview`, `section_view`, `cta_click`, `form_open`… |
+| `section` | TEXT | — | Section du site concernée |
+| `session_id` | TEXT | NN | Identifiant d'onglet (sessionStorage), non nominatif |
 
 **Règles métier :**
-- Un token déjà utilisé (`used_at` non null) est rejeté — usage unique
-- Un token expiré (`expires_at < NOW()`) est rejeté
-- La durée d'expiration est configurable par le tenant (30, 60, 90 jours)
-- Un contact peut avoir plusieurs liens (si le tenant en génère un nouveau), mais un seul actif à la fois
+
+- Soumis au consentement cookies : le tracker ne se charge que si la catégorie analytique est acceptée
+- `session_id` est un identifiant d'onglet, conservé en `sessionStorage`
 
 ---
 
-## 39. `ocr_summary`
+## 59. `tenant_roi_cache`
 
-**Rôle :** Résumé structuré extrait par OCR d'un document envoyé par un client à l'Agent 2 (ordonnance, dossier médical, image médicale). **Le document source n'est jamais persisté en base** — seul ce résumé chiffré est conservé pour préparer le rendez-vous.
+**Rôle :** Cache 24 h du potentiel de demande locale calculé via Google Trends, par tenant et par période. Évite de dépasser les limites de l'API.
 
-**Utilisée par :** Agent 2 (Support & RDV), préparation des rendez-vous, historique contact.
+**Utilisée par :** Carte Potentiel de demande locale.
 
-**RLS activée. Données de santé (Article 9 RGPD) → `summary_encrypted` chiffré via `pgcrypto`.**
-
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `j6k7l8m9-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant concerné | `a1b2c3d4-...` |
-| `contact_id` | UUID | FK → `contact.id`, NN, IDX | Contact ayant envoyé le document | `n4o5p6q7-...` |
-| `appointment_id` | UUID | FK → `appointment.id`, nullable, IDX | Rendez-vous préparé par ce document | `z6a7b8c9-...` |
-| `summary_encrypted` | TEXT | NN | Résumé chiffré (pgcrypto) extrait par OCR | `[contenu chiffré]` |
-| `document_type` | VARCHAR(100) | nullable | Type de document identifié : `ordonnance`, `analyse_sang`, `imagerie`, `autre` | `ordonnance` |
-| `processed_at` | TIMESTAMP | NN, défaut `NOW()` | Date de traitement OCR | `2026-04-18 10:15:00` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-04-18 10:15:00` |
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `computed_at` | TIMESTAMPTZ | NN, défaut `now()` | Date du calcul — cache de 24 h |
+| `data` | JSONB | NN |  |
+| `period` | TEXT | NN | `week` \| `month` \| `quarter` \| `year` |
 
 **Règles métier :**
-- Le fichier original (image, PDF) est traité en mémoire puis immédiatement détruit — jamais stocké sur disque ou en base
-- `summary_encrypted` doit être déchiffré au niveau applicatif, jamais exposé brut dans les logs
-- Soumis au droit à l'oubli RGPD : supprimé lors de l'anonymisation du contact
+
+- Unicité sur `(tenant_id, period)`
 
 ---
 
-## 40. `agent_synthesis`
+# CATÉGORIE : NOTIFICATIONS
 
-**Rôle :** Résumé consolidé produit par le Worker 4 à intervalles réguliers. Agrège les conversations tenues par les agents 1 et 2 sur une période donnée et pousse le résultat à l'Agent 3 (Assistant Tenant) pour notification au professionnel.
+---
 
-**Utilisée par :** Worker de synthèse (Worker 4), Agent 3 (notification tenant), Dashboard back-office.
+## 60. `contact_push_subscription`
 
-**RLS activée.**
+**Rôle :** Abonnement Web Push d'un contact, pour recevoir confirmations et rappels.
 
-| Colonne | Type | Contraintes | Description | Exemple |
-|---|---|---|---|---|
-| `id` | UUID | PK, NN | Identifiant unique | `k7l8m9n0-...` |
-| `tenant_id` | UUID | FK → `tenant.id`, NN, IDX | Tenant concerné | `a1b2c3d4-...` |
-| `agent_config_id` | UUID | FK → `agent_config.id`, NN | Configuration de l'agent ayant déclenché la synthèse | `h4i5j6k7-...` |
-| `content` | TEXT | NN | Texte du résumé consolidé généré par le LLM | `Entre 07h00 et 10h00 : 3 nouvelles demandes de RDV...` |
-| `period_start` | TIMESTAMP | NN, IDX | Début de la période couverte par la synthèse | `2026-04-22 07:00:00` |
-| `period_end` | TIMESTAMP | NN, IDX | Fin de la période couverte | `2026-04-22 10:00:00` |
-| `delivered_at` | TIMESTAMP | nullable | Date de livraison effective au tenant (null si en attente) | `2026-04-22 10:00:30` |
-| `created_at` | TIMESTAMP | NN, défaut `NOW()` | Date de création | `2026-04-22 10:00:00` |
+**Utilisée par :** Notifications push côté client.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `contact_id` | UUID | FK → `contact.id`, NN | Contact concerné |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `subscription` | JSONB | NN |  |
+
+---
+
+## 61. `notification`
+
+**Rôle :** Notification programmée ou envoyée à un contact. Table héritée du modèle d'origine, dont la forme en base diffère de celle décrite par la migration 001.
+
+**Utilisée par :** Aucun usage dans le code actuel.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant émetteur |
+| `appointment_id` | UUID | FK → `appointment.id` | Rendez-vous concerné (rappels) |
+| `channel` | VARCHAR | NN, défaut `email` | Canal d'envoi : `email`, `whatsapp`, `telegram`, `sms` |
+| `contact_id` | UUID | FK → `contact.id` | Destinataire contact |
+| `content` | TEXT | NN | Contenu du message envoyé (pour archivage) |
+| `lead_id` | UUID | FK → `lead.id` | Lead concerné (accusés de réception) |
+| `scheduled_at` | TIMESTAMP | — | Date d'envoi programmée |
+| `sent_at` | TIMESTAMP | — | Date d'envoi effectif |
+| `status` | VARCHAR | NN, défaut `pending` | État : `pending`, `sent`, `failed`, `canceled` |
+| `type` | VARCHAR | NN | Type : `appointment_reminder_24h`, `appointment_reminder_1h`, `lead_confirmation`, `appointment_confirmation` |
+
+---
+
+## 62. `push_subscription`
+
+**Rôle :** Abonnement Web Push d'un utilisateur du dashboard, pour un espace donné.
+
+**Utilisée par :** Notifications push (nouveau RDV, nouveau lead).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `subscription` | JSONB | NN |  |
+| `user_id` | UUID | NN | Utilisateur concerné |
 
 **Règles métier :**
-- Une synthèse couvre exactement la période depuis la dernière synthèse (`period_start` = `period_end` de la précédente)
-- `delivered_at` null = livraison en attente (retry possible en cas d'erreur WhatsApp/Dashboard)
-- Conservé 90 jours puis supprimé (données opérationnelles non critiques)
+
+- Unicité sur `(user_id, tenant_id)`
 
 ---
 
-## Récapitulatif des relations clés
+## 63. `tenant_notification`
 
-```
-tenant ──< membership >── app_user
-tenant ──< site ──< page
-tenant ──< subscription ──< invoice
-tenant ──< partner_account ──< contact ──< lead ──< appointment
-tenant ──< conversation ──< message
-tenant ──< chatbot ──< knowledge_base ──< knowledge_document
-tenant ──< calendar ──< availability_slot
-tenant ──< dashboard ──< kpi
-tenant ──< roi_model ──< recommendation
-site ──< visitor_session ──< tracking_event
+**Rôle :** Notification interne destinée au tenant dans son dashboard.
 
--- Agents IA
-tenant ──< agent_config           (1 par type d'agent : vitrine / support_client / assistant_tenant)
-tenant ──< agent_link >── contact (token WhatsApp remis au client converti)
-tenant ──< ocr_summary >── contact, appointment (résumé chiffré, document jamais persisté)
-tenant ──< agent_synthesis ──< agent_config (résumés Worker 4 → Agent 3)
-```
+**Utilisée par :** Cloche de notifications du dashboard.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id`, NN | Tenant propriétaire — porte l'isolation des données |
+| `body` | TEXT | NN |  |
+| `created_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de création |
+| `data` | JSONB | — |  |
+| `read_at` | TIMESTAMPTZ | — |  |
+| `title` | TEXT | NN |  |
+| `type` | TEXT | NN, défaut `feature_override` |  |
 
 ---
 
-## Glossaire des valeurs d'énumération
+# CATÉGORIE : ANNUAIRE
 
-| Champ | Valeurs possibles |
+---
+
+## 64. `directory_listing`
+
+**Rôle :** Fiche d'un tenant dans l'annuaire public multi-secteurs, indexable par les moteurs de recherche. Sur opt-in explicite.
+
+**Utilisée par :** Pages `/annuaire`, paramètres (annuaire).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | UUID | PK, NN, défaut `gen_random_uuid()` | Identifiant unique |
+| `tenant_id` | UUID | FK → `tenant.id` | Tenant propriétaire — porte l'isolation des données |
+| `accepts_booking` | BOOL | NN, défaut `True` |  |
+| `display_name` | TEXT | NN |  |
+| `is_listed` | BOOL | NN, défaut `False` | Visibilité dans l'annuaire public |
+| `listed_at` | TIMESTAMPTZ | — |  |
+| `metier_label` | TEXT | — |  |
+| `metier_slug` | TEXT | NN | Slug du métier dans l'URL de l'annuaire |
+| `primary_zone` | TEXT | NN | Zone principale affichée |
+| `profile_photo_url` | TEXT | — |  |
+| `tagline` | TEXT | — |  |
+| `updated_at` | TIMESTAMPTZ | NN, défaut `now()` | Date de dernière modification |
+| `zones` | TEXT[] | NN | Zones d'intervention — **toujours en Title Case** |
+
+**Règles métier :**
+
+- `is_listed` pilote la visibilité ; l'opt-out le passe à `false` sans supprimer la fiche
+- **Les zones sont toujours stockées en Title Case** (`Rennes`, `Saint-Brieuc`) : les requêtes `contains` de Postgres sont sensibles à la casse sur les tableaux
+
+---
+
+# ANNEXE — Tables prévues, jamais implémentées
+
+Décrites par la version 1.1 du catalogue, absentes de la base. Elles sont conservées ici
+parce qu'elles documentent une intention de conception, et parce que savoir ce qui les
+remplace évite de les recréer.
+
+| Table prévue | Ce qui la remplace |
 |---|---|
-| `tenant.status` | `active`, `suspended`, `trial`, `churned` |
-| `tenant.business_model` | `b2c`, `b2b`, `hybrid` |
-| `app_user.status` | `active`, `inactive`, `banned` |
-| `membership.role` | `owner`, `admin`, `collaborator`, `viewer` |
-| `subscription.status` | `trialing`, `active`, `past_due`, `canceled`, `paused` |
-| `invoice.status` | `pending`, `paid`, `void`, `uncollectible` |
-| `site.status` | `draft`, `published`, `unpublished` |
-| `site.audience_mode` | `b2c`, `b2b`, `hybrid` |
-| `page.type` | `home`, `services`, `about`, `contact`, `b2b_partners`, `legal`, `content` |
-| `page.audience_type` | `all`, `b2c`, `b2b` |
-| `channel.type` | `site_form`, `email`, `whatsapp`, `telegram` |
-| `channel.status` | `connected`, `disconnected`, `error` |
-| `conversation.status` | `open`, `pending`, `closed` |
-| `message.sender_type` | `user`, `contact`, `chatbot`, `system` |
-| `chatbot.model` | `faq_static`, `mistral-small`, `gpt-4o-mini` |
-| `lead.status` | `new`, `in_progress`, `to_call`, `scheduled`, `converted`, `lost`, `archived` |
-| `lead.priority` | `low`, `normal`, `high`, `urgent` |
-| `lead.audience_type` | `b2c`, `b2b` |
-| `lead.request_type` | `appointment`, `information`, `quote`, `partnership`, `other` |
-| `appointment.type` | `b2c_appointment`, `b2b_coordination`, `phone_call`, `home_visit` |
-| `appointment.status` | `pending`, `confirmed`, `canceled`, `completed`, `no_show` |
-| `notification.type` | `appointment_reminder_24h`, `appointment_reminder_1h`, `lead_confirmation`, `appointment_confirmation` |
-| `notification.status` | `pending`, `sent`, `failed`, `canceled` |
-| `tracking_event.event_type` | `page_view`, `form_submit`, `booking_click`, `chatbot_open`, `phone_click` |
-| `recommendation.type` | `response_time`, `conversion_rate`, `content_gap`, `channel_add`, `absence_detected` |
-| `recommendation.priority` | `low`, `medium`, `high` |
-| `agent_config.agent_type` | `vitrine`, `support_client`, `assistant_tenant` |
-| `agent_config.status` | `active`, `inactive`, `training` |
-| `agent_config.model` | `faq_static`, `mistral-small`, `mistral-large` |
-| `agent_link.channel` | `whatsapp`, `telegram` |
-| `ocr_summary.document_type` | `ordonnance`, `analyse_sang`, `imagerie`, `autre` |
+| `chatbot` | Agent conversationnel — remplacé par `agent_config` |
+| `dashboard` | Tableau de bord configurable — les KPI affichés vivent dans `user_metadata` |
+| `knowledge_base` | Base documentaire du chatbot — remplacée par `agent_document` |
+| `knowledge_document` | Document indexé — remplacé par `agent_document` |
+| `kpi` | Indicateur calculé — calculé à la volée par l'API analytics |
+| `membership_permission` | Association membership ↔ permission — remplacée par le même tableau |
+| `page_knowledge_document` | Lien page ↔ document — abandonné |
+| `partner_account` | Organisation partenaire B2B — le modèle B2B passe par `contact.contact_type` |
+| `permission` | Droit d'accès élémentaire — remplacé par `membership.permissions text[]` |
+| `recommendation` | Suggestion automatique — non implémentée |
+| `roi_model` | Modèle de calcul du ROI — remplacé par le service Trends et `tenant_roi_cache` |
+| `roi_model_kpi` | Association ROI ↔ KPI — abandonnée |
+| `tracking_event` | Action tracée — remplacé par `site_event` |
+| `traffic_source` | Source d'acquisition — couvert par `site_event` et GA4 |
+| `visitor_session` | Session de navigation — couvert par `site_event.session_id` |
 
 ---
 
-*Document maintenu par Jordan — à synchroniser avec le MPD à chaque modification du schéma. Dernière mise à jour : avril 2026 (v1.1 — ajout catégorie Agents IA : tables 37–40).*
+## Régénérer ce document
+
+Les colonnes viennent de l'OpenAPI de PostgREST :
+
+```bash
+curl -s -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+     -H "Accept: application/openapi+json" \
+     "$SUPABASE_URL/rest/v1/" > openapi.json
+```
+
+La prose métier (rôle, utilisations, règles) est rédigée à la main et doit être reprise
+depuis la version précédente lors d'une régénération.

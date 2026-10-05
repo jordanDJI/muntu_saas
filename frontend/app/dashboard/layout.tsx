@@ -561,9 +561,41 @@ function ContactImportStatusBanner() {
           {job.status === "done" && (
             <>
               <p className="text-xs text-gray-600 mt-1">
-                {job.created_count ?? 0} contact{(job.created_count ?? 0) > 1 ? "s" : ""} importé{(job.created_count ?? 0) > 1 ? "s" : ""}
-                {(job.skipped_count ?? 0) > 0 ? ` · ${job.skipped_count} ignoré${job.skipped_count > 1 ? "s" : ""}` : ""}
+                {[
+                  `${job.created_count ?? 0} créé${(job.created_count ?? 0) > 1 ? "s" : ""}`,
+                  (job.enriched_count ?? 0) > 0
+                    ? `${job.enriched_count} enrichi${(job.enriched_count ?? 0) > 1 ? "s" : ""}`
+                    : null,
+                  (job.skipped_count ?? 0) > 0
+                    ? `${job.skipped_count} ignoré${(job.skipped_count ?? 0) > 1 ? "s" : ""}`
+                    : null,
+                  (job.ambiguous_count ?? 0) > 0
+                    ? `${job.ambiguous_count} à vérifier`
+                    : null,
+                ].filter(Boolean).join(" · ")}
               </p>
+              {/* Écraser est destructif : on donne un aperçu de ce qui a changé,
+                  pas seulement un compteur. */}
+              {job.mode === "overwrite" && (job.changes?.length ?? 0) > 0 && (
+                <details className="mt-1.5">
+                  <summary className="text-xs text-primary-600 cursor-pointer hover:underline">
+                    Voir les {job.changes!.length} contact{job.changes!.length > 1 ? "s" : ""} modifié{job.changes!.length > 1 ? "s" : ""}
+                  </summary>
+                  <div className="mt-1.5 max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                    {job.changes!.map(c => (
+                      <div key={c.contact_id} className="text-xs border-l-2 border-gray-150 pl-2">
+                        <p className="font-medium text-gray-700">{c.name || "Sans nom"}</p>
+                        {c.fields.map(f => (
+                          <p key={f.field} className="text-gray-400">
+                            {f.field} : <span className="line-through">{String(f.from ?? "—")}</span>{" → "}
+                            <span className="text-gray-600">{String(f.to ?? "—")}</span>
+                          </p>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
               {job.notice && <p className="text-xs text-amber-600 mt-1">{job.notice}</p>}
             </>
           )}

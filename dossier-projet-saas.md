@@ -1024,7 +1024,7 @@ Le MCD décrit les entités métier et leurs relations, indépendamment de toute
 | UTILISATEUR           | Personne accédant à l'espace d'un tenant (le professionnel ou un collaborateur) |
 | MEMBERSHIP            | Lien entre un utilisateur et un tenant, avec son rôle                            |
 | PERMISSION            | Droit d'accès associé à un membership                                          |
-| PLAN_ABONNEMENT       | Formule tarifaire (Starter, Pro, Business)                                        |
+| PLAN_ABONNEMENT       | Formule tarifaire (Essentiel, Pro, Business)                                      |
 | ABONNEMENT            | Souscription active d'un tenant à un plan                                        |
 | FACTURE               | Facture liée à un abonnement                                                    |
 | TEMPLATE              | Modèle de site pré-configuré par métier                                       |
@@ -1170,6 +1170,42 @@ AGENT_SYNTHESIS(id PK, tenant_id FK->TENANT.id, agent_config_id FK->AGENT_CONFIG
 ---
 
 ## 15. MPD — Modèle Physique de Données (PostgreSQL)
+
+> ### ⚠️ Note d'écart — modèle de conception vs schéma en production
+>
+> **Ce MPD décrit le modèle tel qu'il a été conçu, en avril 2026.** Le schéma réellement
+> déployé a évolué depuis. Écart mesuré le **04/10/2026** entre ce script et la base de
+> production :
+>
+> | | |
+> |---|---|
+> | Tables décrites ici | 41 |
+> | …dont **absentes** de la base | **15** |
+> | Tables en production **non décrites** ici | **38** |
+> | Total en production | 64 |
+>
+> Les 15 tables non implémentées ont été remplacées plutôt qu'abandonnées : `chatbot` par
+> `agent_config`, `knowledge_base` et `knowledge_document` par `agent_document`, `permission`
+> et `membership_permission` par un simple tableau `membership.permissions`, `roi_model` et
+> `kpi` par le service Google Trends et le cache `tenant_roi_cache`, `visitor_session` et
+> `tracking_event` par `site_event`, `partner_account` par le champ `contact.contact_type`.
+>
+> Trois principes d'implémentation énoncés ci-dessous ne sont que partiellement tenus :
+>
+> - **RLS sur toutes les tables portant un `tenant_id`** : 44 tables portent un `tenant_id`,
+>   la RLS n'est pas activée sur toutes. Elle a par ailleurs été resserrée en lecture seule
+>   sur les tables sensibles par la migration `071` — les policies antérieures autorisaient
+>   aussi l'écriture depuis le navigateur.
+> - **Soft delete via `deleted_at`** : présent sur `contact` et `conversation` uniquement,
+>   pas sur `lead`.
+> - **Colonnes `created_at` / `updated_at` systématiques** : 21 tables n'ont pas de
+>   `created_at` (dont `subscription`, `membership`, `service_offer`).
+>
+> **Référence du schéma réel : [`data-catalogue.md`](data-catalogue.md)** (version 2.0), dont
+> les colonnes, types et contraintes sont lus directement dans la base et non recopiés.
+>
+> Ce MPD est conservé en l'état : il documente la conception initiale et reste cohérent avec
+> le diagramme de classes (§12), le MCD (§13) et le MLD (§14) qui le précèdent.
 
 ### Principes d'implémentation
 

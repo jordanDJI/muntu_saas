@@ -5,6 +5,7 @@ Tags et reminders sont dans tags.py et reminders.py (routeurs séparés, même p
 """
 import csv
 import io
+import logging
 import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -24,6 +25,7 @@ from app.services.phone import clean_phone, is_valid_phone, validate_phone_field
 from app.services.contact_limits import get_contact_quota
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
+logger = logging.getLogger(__name__)
 
 INACTIVE_DAYS = 180  # 6 mois sans RDV confirmé → inactif
 EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
@@ -154,7 +156,11 @@ def _csv_row_to_contact_fields(row: dict, field_defs: list[dict]) -> dict:
         "notes": normalized.get("notes") or None,
         "category": category,
         "segment": normalized.get("segment") or None,
-        "custom_fields": custom_fields or None,
+        # Jamais None : contact.custom_fields est NOT NULL DEFAULT '{}', et une
+        # valeur par défaut ne s'applique que si la clé est ABSENTE de l'insert.
+        # Envoyer null faisait échouer toute la requête — donc tout l'import —
+        # dès qu'une ligne n'avait aucune valeur de champ JSONB.
+        "custom_fields": custom_fields,
     }
 
 
@@ -833,8 +839,173 @@ async def delete_activity(
     sb.table("contact_activity").delete().eq("id", activity_id).eq("tenant_id", tenant_id).execute()
 
 
-async def _run_import_job(job_id: str, tenant_id: str, filename: str, content: bytes) -> None:
-    """Traitement réel de l'import — exécuté en arrière-plan, continue même si le tenant quitte la page."""
+IMPORT_MODES = ("complete", "overwrite")
+
+# Champs stockés en colonne que l'import peut écrire (les 4 verrouillés + les 2 de base).
+# `notes` est traité à part : c'est du texte libre, pas un champ de fiche.
+_IMPORT_COLUMN_KEYS = ("first_name", "last_name", "email", "phone", "category", "segment", "notes")
+
+# Plafond du détail conservé dans contact_import_job.changes — un import de
+# 5 000 lignes ne doit pas produire une ligne de base ingérable.
+_MAX_CHANGES = 300
+
+
+def _is_blank(v) -> bool:
+    return v in (None, "", [], {})
+
+
+def _plan_enrichment(contact: dict, fields: dict, mode: str, field_defs: list[dict]) -> tuple[dict, list]:
+    """
+    Calcule la mise à jour d'un contact existant à partir d'une ligne de fichier.
+
+    Renvoie (updates, changements). Deux règles tiennent tout :
+      - une cellule vide n'écrase jamais rien (vide = « information absente ») ;
+      - en mode `complete`, on ne remplit que ce qui est vide en base.
+    """
+    updates: dict = {}
+    changes: list[dict] = []
+    overwrite = mode == "overwrite"
+
+    def consider(key: str, old, new, container: str):
+        if _is_blank(new) or old == new:
+            return
+        if not _is_blank(old) and not overwrite:
+            return
+        changes.append({"field": key, "from": old, "to": new, "where": container})
+        return True
+
+    for key in _IMPORT_COLUMN_KEYS:
+        if consider(key, contact.get(key), fields.get(key), "column"):
+            updates[key] = fields[key]
+
+    jsonb_keys = [f["field_key"] for f in field_defs if f["storage_mode"] == "jsonb"]
+    incoming_custom = fields.get("custom_fields") or {}
+    current_custom = dict(contact.get("custom_fields") or {})
+    custom_changed = False
+    for key in jsonb_keys:
+        if consider(key, current_custom.get(key), incoming_custom.get(key), "custom_fields"):
+            current_custom[key] = incoming_custom[key]
+            custom_changed = True
+    if custom_changed:
+        updates["custom_fields"] = current_custom
+
+    return updates, changes
+
+
+def _match_existing(fields: dict, by_email: dict, by_phone: dict) -> list:
+    """
+    Rapproche une ligne d'un contact existant.
+
+    L'email, quand il est présent, est la **seule** clé : un email inconnu
+    signifie « nouvelle personne », même si le téléphone est déjà connu.
+    Sans cette règle, deux personnes d'un même foyer partageant un numéro mais
+    ayant des emails distincts fusionnaient en un seul contact.
+
+    Le téléphone ne sert de clé que pour les lignes sans email.
+
+    Renvoie la liste des candidats. Deux candidats ou plus signifie ambiguïté :
+    on préfère signaler la ligne plutôt que de choisir au hasard.
+    """
+    email = (fields.get("email") or "").lower()
+    if email:
+        return by_email.get(email, [])
+
+    phone = clean_phone(fields.get("phone") or "")
+    if phone:
+        return by_phone.get(phone, [])
+    return []
+
+
+_BATCH_SIZE = 500
+
+
+def _bulk_update_contacts(sb, tenant_id: str, contacts: list[dict], columns: set[str]) -> int:
+    """
+    Écrit les enrichissements en upserts groupés. Renvoie le nombre de contacts écrits.
+
+    Deux précautions non évidentes :
+
+    - **Le jeu de colonnes est uniforme sur tout le lot.** PostgREST construit une
+      seule requête : une clé absente d'une ligne serait interprétée comme NULL et
+      effacerait la valeur. Les colonnes non modifiées pour un contact donné sont
+      donc renvoyées avec leur valeur courante, qu'on a déjà en mémoire.
+    - **`tenant_id` et `custom_fields` sont toujours inclus.** L'upsert passe par un
+      `INSERT ... ON CONFLICT`, et l'insertion doit produire une ligne valide : ces
+      deux colonnes sont NOT NULL.
+
+    En cas de refus du lot, on reprend contact par contact : un enrichissement
+    fautif ne doit pas annuler les autres.
+    """
+    if not contacts:
+        return 0
+
+    cols = sorted(columns | {"custom_fields"})
+    now = datetime.now(timezone.utc).isoformat()
+    written = 0
+
+    def payload_for(c: dict) -> dict:
+        row = {"id": c["id"], "tenant_id": tenant_id, "updated_at": now}
+        for col in cols:
+            value = c.get(col)
+            row[col] = ({} if value is None else value) if col == "custom_fields" else value
+        return row
+
+    for i in range(0, len(contacts), _BATCH_SIZE):
+        chunk = contacts[i:i + _BATCH_SIZE]
+        try:
+            sb.table("contact").upsert([payload_for(c) for c in chunk], on_conflict="id").execute()
+            written += len(chunk)
+            continue
+        except Exception as exc:
+            logger.warning("Upsert groupé refusé (%d contacts), reprise une à une : %s", len(chunk), exc)
+
+        for c in chunk:
+            try:
+                row = payload_for(c)
+                row.pop("id", None)
+                row.pop("tenant_id", None)
+                sb.table("contact").update(row).eq("id", c["id"]).execute()
+                written += 1
+            except Exception as exc:
+                logger.warning("Enrichissement contact %s échoué : %s", c.get("id"), exc)
+
+    return written
+
+
+def _insert_contacts(sb, rows: list[dict]) -> tuple[int, list[str]]:
+    """
+    Insère les nouveaux contacts. Renvoie (nb inséré, erreurs des lignes refusées).
+
+    L'insertion se fait d'abord en une requête, pour la rapidité. En cas d'échec,
+    on reprend ligne par ligne : une seule ligne refusée par la base ne doit pas
+    faire perdre tout l'import, ce qui était le cas avec l'insert global.
+    """
+    try:
+        sb.table("contact").insert(rows).execute()
+        return len(rows), []
+    except Exception as exc:
+        logger.warning("Insert groupé refusé (%d lignes), reprise ligne par ligne : %s", len(rows), exc)
+
+    inserted, errors = 0, []
+    for row in rows:
+        try:
+            sb.table("contact").insert(row).execute()
+            inserted += 1
+        except Exception as exc:
+            errors.append(str(exc)[:300])
+    return inserted, errors
+
+
+async def _run_import_job(job_id: str, tenant_id: str, filename: str, content: bytes,
+                          mode: str = "complete") -> None:
+    """
+    Traitement réel de l'import — en arrière-plan, continue si le tenant quitte la page.
+
+    Trois issues par ligne : insertion d'un nouveau contact, enrichissement d'un
+    contact existant, ou signalement. Le rapprochement se fait sur l'email puis
+    sur le téléphone — l'ancienne version ne regardait que l'email, ce qui
+    réinsérait un doublon à chaque import pour les lignes sans email.
+    """
     sb = get_supabase_admin()
     try:
         if filename.endswith(".xlsx"):
@@ -852,30 +1023,84 @@ async def _run_import_job(job_id: str, tenant_id: str, filename: str, content: b
 
         field_defs = ensure_default_fields(sb, tenant_id)
 
-        existing_emails = {
-            r["email"].lower()
-            for r in (
-                sb.table("contact").select("email").eq("tenant_id", tenant_id).is_("deleted_at", "null").execute()
-            ).data or []
-            if r.get("email")
-        }
+        existing = (
+            sb.table("contact")
+            .select("id, first_name, last_name, email, phone, category, segment, notes, custom_fields")
+            .eq("tenant_id", tenant_id).is_("deleted_at", "null").execute()
+        ).data or []
 
-        created, skipped = 0, 0
+        by_email: dict[str, list] = {}
+        by_phone: dict[str, list] = {}
+        for c in existing:
+            if c.get("email"):
+                by_email.setdefault(c["email"].lower(), []).append(c)
+            if c.get("phone"):
+                cleaned = clean_phone(c["phone"])
+                if cleaned:
+                    by_phone.setdefault(cleaned, []).append(c)
+
+        created = enriched = skipped = ambiguous = 0
         to_insert: list[dict] = []
+        # Indexé par id : deux lignes du fichier peuvent viser le même contact
+        # (doublon dans le fichier). Postgres refuse un ON CONFLICT qui touche
+        # deux fois la même ligne dans un seul INSERT, et les enrichissements
+        # successifs sont de toute façon cumulés dans le même dict en mémoire.
+        to_update: dict[str, dict] = {}
+        touched_columns: set[str] = set()
+        activities: list[dict] = []
+        change_log: list[dict] = []
 
         for row in rows:
             fields = _csv_row_to_contact_fields(row, field_defs)
 
-            if not fields["first_name"] and not fields["last_name"] and not fields["email"] and not fields["phone"]:
-                skipped += 1
-                continue
-            if fields["email"] and fields["email"] in existing_emails:
+            if not any(fields.get(k) for k in ("first_name", "last_name", "email", "phone")):
                 skipped += 1
                 continue
 
+            candidates = _match_existing(fields, by_email, by_phone)
+
+            if len(candidates) > 1:
+                ambiguous += 1
+                continue
+
+            if candidates:
+                contact = candidates[0]
+                updates, changes = _plan_enrichment(contact, fields, mode, field_defs)
+                if not updates:
+                    skipped += 1
+                    continue
+                # Appliqué en mémoire d'abord : les lignes suivantes du même
+                # fichier doivent voir l'état déjà enrichi. L'écriture est
+                # groupée après la boucle — une requête par contact coûtait
+                # 3 000 allers-retours sur un fichier de 5 000 lignes.
+                contact.update(updates)
+                to_update[contact["id"]] = contact
+                touched_columns.update(updates.keys())
+
+                name = f"{contact.get('first_name') or ''} {contact.get('last_name') or ''}".strip()
+                if len(change_log) < _MAX_CHANGES:
+                    change_log.append({
+                        "contact_id": contact["id"],
+                        "name": name or contact.get("email") or "",
+                        "fields": changes[:12],
+                    })
+
+                # Trace dans la chronologie du contact : écraser est destructif.
+                activities.append({
+                    "tenant_id": tenant_id,
+                    "contact_id": contact["id"],
+                    "type": "note",
+                    "content": f"Import « {filename} » — champs mis à jour : "
+                               + ", ".join(c["field"] for c in changes[:8]),
+                })
+                continue
+
             to_insert.append({"tenant_id": tenant_id, "source": "csv_import", **fields})
-            if fields["email"]:
-                existing_emails.add(fields["email"])
+            if fields.get("email"):
+                by_email.setdefault(fields["email"].lower(), []).append({"id": None})
+            cleaned_new = clean_phone(fields.get("phone") or "")
+            if cleaned_new:
+                by_phone.setdefault(cleaned_new, []).append({"id": None})
 
         notice = None
         quota = await get_contact_quota(tenant_id)
@@ -890,13 +1115,42 @@ async def _run_import_job(job_id: str, tenant_id: str, filename: str, content: b
             )
 
         if to_insert:
-            sb.table("contact").insert(to_insert).execute()
-            created = len(to_insert)
+            created, rejected = _insert_contacts(sb, to_insert)
+            if rejected:
+                skipped += len(rejected)
+                if not notice:
+                    notice = (
+                        f"{len(rejected)} ligne(s) refusée(s) par la base et ignorée(s). "
+                        f"Première erreur : {rejected[0]}"
+                    )
+
+        if to_update:
+            rows_to_update = list(to_update.values())
+            enriched = _bulk_update_contacts(sb, tenant_id, rows_to_update, touched_columns)
+            skipped += len(rows_to_update) - enriched
+
+        # Les traces ne conditionnent pas le succès de l'import : si elles
+        # échouent, l'enrichissement reste acquis.
+        for i in range(0, len(activities), _BATCH_SIZE):
+            try:
+                sb.table("contact_activity").insert(activities[i:i + _BATCH_SIZE]).execute()
+            except Exception as exc:
+                logger.warning("Traces d'import non enregistrées : %s", exc)
+
+        if ambiguous and not notice:
+            notice = (
+                f"{ambiguous} ligne(s) correspondent à plusieurs contacts existants et n'ont pas "
+                "été traitées. Fusionnez les doublons concernés, puis réimportez."
+            )
 
         sb.table("contact_import_job").update({
             "status": "done",
+            "mode": mode,
             "created_count": created,
+            "enriched_count": enriched,
             "skipped_count": skipped,
+            "ambiguous_count": ambiguous,
+            "changes": change_log or None,
             "notice": notice,
             "finished_at": datetime.now(timezone.utc).isoformat(),
         }).eq("id", job_id).execute()
@@ -912,16 +1166,33 @@ async def _run_import_job(job_id: str, tenant_id: str, filename: str, content: b
 async def import_contacts_csv(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    mode: str = Query("complete", description="complete | overwrite"),
     tenant_id: str = Depends(get_current_tenant),
 ):
     """
     Importe des contacts depuis un fichier CSV ou Excel (.xlsx), traité en arrière-plan
     (continue même si le tenant quitte la page). Suivre la progression via GET /contacts/import/{job_id}.
-    Colonnes acceptées (insensible à la casse) : le libellé ou la clé de n'importe quel champ
-    actuellement configuré pour ce tenant (voir GET /contact-fields), plus quelques alias FR.
-    Au moins un identifiant (nom, prénom, email ou téléphone) est requis par ligne.
-    Ignore les doublons (même email déjà présent pour ce tenant).
+
+    Colonnes acceptées (insensible à la casse, aux accents et aux séparateurs) : le libellé ou
+    la clé de n'importe quel champ configuré pour ce tenant (voir GET /contact-fields), plus
+    quelques alias FR. Au moins un identifiant (nom, prénom, email ou téléphone) par ligne.
+
+    Une ligne est rapprochée d'un contact existant par **email**, à défaut par **téléphone** :
+
+    - correspondance unique → le contact est **enrichi** ;
+    - aucune correspondance → le contact est **créé** ;
+    - plusieurs correspondances → la ligne est **signalée** et laissée de côté.
+
+    `mode` décide du sort des valeurs déjà renseignées en base :
+
+    - `complete` (défaut) — ne remplit que les champs vides, rien n'est perdu ;
+    - `overwrite` — les valeurs du fichier remplacent celles en base.
+
+    Dans les deux cas une cellule vide n'efface jamais rien.
     """
+    if mode not in IMPORT_MODES:
+        raise HTTPException(400, f"Mode invalide (attendu : {' ou '.join(IMPORT_MODES)})")
+
     filename = (file.filename or "fichier").lower()
     if not filename.endswith((".csv", ".xlsx")):
         raise HTTPException(400, "Le fichier doit être au format CSV (.csv) ou Excel (.xlsx)")
@@ -933,11 +1204,12 @@ async def import_contacts_csv(
     sb = get_supabase_admin()
     job = sb.table("contact_import_job").insert({
         "tenant_id": tenant_id, "status": "processing", "filename": file.filename or "fichier",
+        "mode": mode,
     }).execute().data[0]
 
-    background_tasks.add_task(_run_import_job, job["id"], tenant_id, filename, content)
+    background_tasks.add_task(_run_import_job, job["id"], tenant_id, filename, content, mode)
 
-    return {"job_id": job["id"], "status": "processing"}
+    return {"job_id": job["id"], "status": "processing", "mode": mode}
 
 
 @router.get("/import/{job_id}")

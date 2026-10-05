@@ -70,16 +70,15 @@ SaaS/
 ### 1. Supabase
 
 1. Créer un projet sur [supabase.com](https://supabase.com)
-2. Dans l'éditeur SQL, exécuter dans l'ordre :
-   ```
-   backend/supabase/migrations/001_mvp_schema.sql
-   backend/supabase/migrations/002_seed.sql
-   backend/supabase/migrations/003_agents.sql
-   ```
-3. Migration optionnelle (renommage colonnes service_offer) :
-   ```
-   backend/supabase/migrations/004_fix_service_offer_columns.sql
-   ```
+2. Dans l'éditeur SQL, exécuter **tous** les fichiers de `backend/supabase/migrations/`
+   dans l'ordre numérique, de `001` à `075`.
+
+> **Attention.** Les migrations ne reconstituent pas exactement le schéma de production :
+> la `001` n'a jamais été appliquée telle quelle, et une cinquantaine de colonnes ont été
+> ajoutées à la main avant d'être déclarées par la `074`. La référence du schéma réel est
+> [`data-catalogue.md`](data-catalogue.md), généré depuis la base. Pour un environnement
+> identique à la production, partir d'un dump plutôt que des migrations :
+> `supabase db dump --schema public`.
 
 ### 2. Backend
 
@@ -89,7 +88,10 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env             # Remplir les valeurs
-uvicorn app.main:app --reload
+
+# --reload-dir app est important : le venv vit dans backend/, sans ce drapeau
+# un pip install déclenche une tempête de rechargements
+uvicorn app.main:app --reload --reload-dir app
 ```
 
 Swagger : http://localhost:8000/docs
@@ -104,6 +106,20 @@ npm run dev
 ```
 
 App : http://localhost:3000
+
+### 4. Tests
+
+```bash
+cd backend
+python -m unittest discover -s tests -v     # aucune base requise
+```
+
+Couvre les fonctions pures de la chaîne de paiement : validation du montant d'acompte,
+précédence des features de plan, URLs de redirection, marge sur les domaines. Les chemins
+qui touchent Supabase, Stripe ou PayPal demandent un environnement de test réel — le
+projet n'utilise pas de mock de base de données.
+
+`pytest` est disponible via `requirements-dev.txt` mais n'est pas nécessaire.
 
 ---
 
@@ -184,17 +200,38 @@ App : http://localhost:3000
 
 ### Backend (`.env`)
 
+**Obligatoires** — le backend refuse de démarrer sans elles :
+
 | Variable | Description |
 |---|---|
 | `SUPABASE_URL` | URL du projet Supabase |
 | `SUPABASE_ANON_KEY` | Clé publique Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé admin Supabase (bypass RLS) |
-| `SUPABASE_JWT_SECRET` | Secret JWT Supabase |
 | `RESEND_API_KEY` | Clé API Resend (emails transactionnels) |
+| `EMAIL_FROM` | Adresse d'expédition des emails |
 | `STRIPE_SECRET_KEY` | Clé secrète Stripe |
-| `STRIPE_WEBHOOK_SECRET` | Secret webhook Stripe |
-| `FRONTEND_URL` | URL du frontend (CORS) |
-| `GEMINI_API_KEY` | Clé API Google Gemini (chatbot IA) |
+| `STRIPE_WEBHOOK_SECRET` | Secret de signature du webhook Stripe |
+| `SECRET_KEY` | Secret applicatif |
+
+**Principales optionnelles :**
+
+| Variable | Description |
+|---|---|
+| `APP_URL` | URL publique du backend — doit être HTTPS pour les webhooks Telegram et PayPal |
+| `FRONTEND_URL` / `FRONTEND_URL_PROD` | Origines autorisées (CORS et redirections de paiement) |
+| `GEMINI_API_KEY` | Clé API Google Gemini (agents IA) |
+| `REDIS_URL` | Rate limiter partagé entre instances. Sans elle, le compteur est local au process et le quota est multiplié par le nombre de workers |
+| `STRIPE_DOMAIN_ADDON_PRICE_ID` | Prix Stripe de l'option domaine |
+| `DOMAIN_MARKUP_PERCENT` | Marge appliquée au prix OVH (défaut 25) |
+| `AGENT_LINK_SECRET` | Signature des liens d'agent |
+| `CONTENT_AGENT_SECRET` | Secret partagé de l'agent de contenu (articles en brouillon) |
+| `REVALIDATE_SECRET` | Revalidation du cache Next.js — même valeur côté frontend |
+| `OVH_*`, `VERCEL_*`, `GOOGLE_*`, `VAPID_*` | Achat de domaines, domaines custom, Analytics, Web Push |
+
+> `SUPABASE_JWT_SECRET` figure encore dans `.env.example` mais n'est plus lue : les JWT sont
+> vérifiés via le JWKS de Supabase (`middleware/tenant.py`).
+
+La liste complète et à jour est dans `backend/app/core/config.py`.
 
 ### Frontend (`.env.local`)
 
@@ -229,18 +266,27 @@ Toute la configuration visuelle et de tracking d'un site est stockée dans la co
 
 ### Isolation multi-tenant
 
-- **RLS PostgreSQL** activée sur toutes les tables métier — chaque requête ne peut lire que les données du tenant courant
-- Le `tenant_id` est extrait du JWT Supabase (`app_metadata.tenant_id`) par le middleware backend
-- Le backend utilise le **service_role** pour bypass RLS quand nécessaire (opérations cross-tenant)
+- Le `tenant_id` vient du header **`X-Tenant-Id`**, validé contre la table `membership`
+  (bascule multi-espaces). Replis successifs : `app_metadata.tenant_id` du JWT, puis le
+  premier membership trouvé. Voir `backend/app/middleware/tenant.py`.
+- **Le rôle n'est pas vérifié par ce middleware** — il ne contrôle que l'appartenance. Les
+  opérations sensibles (facturation, moyens de paiement) passent par
+  `require_owner_or_admin` dans `backend/app/middleware/roles.py`.
+- Le backend travaille **systématiquement en service_role**, donc hors RLS : l'isolation
+  côté API repose sur les filtres `tenant_id` du code, pas sur Postgres.
+- La RLS protège les lectures faites **depuis le navigateur** avec la clé anon. Elle est
+  restreinte en `SELECT` seul sur les tables sensibles depuis la migration `071` — les
+  policies précédentes, en `FOR ALL` sans `WITH CHECK`, autorisaient aussi l'écriture.
 
-### Mapping colonnes service_offer
+### Normalisation service_offer
 
-La table `service_offer` en base a des noms de colonnes qui diffèrent du modèle applicatif. Un mapping est maintenu dans `backend/app/api/v1/sites.py` (`_offer_from_db` / `_offer_to_db`) en attendant que la migration 004 soit appliquée.
+La migration `004` est appliquée : la base expose directement `duration_min` et `price_eur`,
+il n'y a plus de renommage de colonnes.
 
-| Colonne DB | Alias API |
-|---|---|
-| `duration_minutes` | `duration_min` |
-| `price_from` | `price_eur` |
+`_offer_from_db` / `_offer_to_db` dans `backend/app/api/v1/sites.py` restent utiles pour une
+autre raison : ils maintiennent la cohérence entre `image_url` (champ historique, une seule
+image) et `photos` (tableau). Une écriture renseigne les deux, une lecture expose `image_url`
+comme première photo s'il n'y a pas de tableau.
 
 ---
 

@@ -1963,6 +1963,8 @@ function SectionContactFields() {
   const [newOptions, setNewOptions] = useState("");
   const [newRequired, setNewRequired] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [usage, setUsage] = useState<Record<string, number>>({});
+  const [orphans, setOrphans] = useState<{ field_key: string; count: number }[]>([]);
 
   const fetchFields = () => {
     setLoading(true);
@@ -1975,7 +1977,15 @@ function SectionContactFields() {
     }).finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchFields(); }, []);
+  // Comptage séparé : il parcourt tous les contacts du tenant, donc il n'a pas sa
+  // place dans le chargement d'une fiche. Appelé seulement depuis cet écran.
+  const loadUsage = () => {
+    api.getContactFieldUsage()
+      .then(r => { setUsage(r.usage || {}); setOrphans(r.orphans || []); })
+      .catch(() => { /* non bloquant : l'écran reste utilisable sans les décomptes */ });
+  };
+
+  useEffect(() => { fetchFields(); loadUsage(); }, []);
 
   // Les actions ci-dessous ne modifient que l'état local — rien n'est envoyé au serveur
   // tant que l'utilisateur n'a pas cliqué sur "Enregistrer".
@@ -2046,9 +2056,44 @@ function SectionContactFields() {
   };
 
   const deleteField = async (f: any) => {
-    if (!confirm(`Supprimer le champ « ${f.label} » ? Les données déjà saisies dans ce champ seront perdues.`)) return;
-    await api.deleteContactField(f.field_key);
-    fetchFields();
+    // Premier appel sans purge : si des contacts portent une valeur, l'API répond
+    // 409 avec leur nombre. On ne demande donc jamais de confirmer à l'aveugle,
+    // et la suppression efface réellement les valeurs — avant, elles restaient
+    // en base, invisibles mais toujours exportées en RGPD.
+    try {
+      await api.deleteContactField(f.field_key);
+      setMsg(`Champ « ${f.label} » supprimé.`);
+      fetchFields(); loadUsage();
+      return;
+    } catch (err: any) {
+      if (err?.status !== 409) { setMsg(`Erreur : ${err.message}`); return; }
+      const count = err?.detail?.count ?? 0;
+      const ok = confirm(
+        `« ${f.label} » est renseigné sur ${count} contact${count > 1 ? "s" : ""}.\n\n` +
+        `Supprimer le champ effacera aussi ${count > 1 ? "ces valeurs" : "cette valeur"}. ` +
+        `Cette action est définitive.\n\n` +
+        `Pour conserver les données, désactive le champ au lieu de le supprimer.`
+      );
+      if (!ok) return;
+    }
+    try {
+      const res = await api.deleteContactField(f.field_key, true);
+      setMsg(`Champ « ${f.label} » supprimé — ${res.purged} valeur(s) effacée(s).`);
+      fetchFields(); loadUsage();
+    } catch (err: any) { setMsg(`Erreur : ${err.message}`); }
+  };
+
+  const reattach = async (o: { field_key: string; count: number }) => {
+    const label = prompt(
+      `Ré-attacher ${o.count} valeur(s) orpheline(s) sous la clé « ${o.field_key} ».\n\n` +
+      `Libellé du champ à recréer :`
+    );
+    if (!label?.trim()) return;
+    try {
+      const res = await api.reattachContactField({ field_key: o.field_key, label: label.trim() });
+      setMsg(`Champ « ${res.label} » recréé — ${res.recovered} valeur(s) récupérée(s).`);
+      fetchFields(); loadUsage();
+    } catch (err: any) { setMsg(`Erreur : ${err.message}`); }
   };
 
   const handleCreate = async () => {
@@ -2126,6 +2171,17 @@ function SectionContactFields() {
                       {FIELD_TYPE_LABELS[f.field_type] ?? f.field_type}
                     </span>
                     {f.is_base && <span className="text-xs text-gray-400 flex-shrink-0">de base</span>}
+                    {/* Un champ désactivé qui porte des données ne doit pas être
+                        invisible : sans ce repère, on le supprime sans savoir. */}
+                    {(usage[f.field_key] ?? 0) > 0 && (
+                      <span
+                        title={`Renseigné sur ${usage[f.field_key]} contact(s)`}
+                        className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
+                          f.enabled ? "bg-gray-100 text-gray-500" : "bg-amber-100 text-amber-700 font-medium"
+                        }`}>
+                        {usage[f.field_key]} ✎
+                      </span>
+                    )}
                     <button onClick={() => toggleEnabled(f)} disabled={locked || saving}
                       title={locked ? "Ce champ ne peut pas être désactivé" : undefined}
                       className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${f.enabled ? "bg-primary-600" : "bg-gray-300"} ${locked ? "opacity-50 cursor-not-allowed" : ""}`}>
@@ -2148,6 +2204,57 @@ function SectionContactFields() {
         )}
         <Feedback msg={msg} />
       </Card>
+
+      {/* Valeurs restées en base après la suppression d'un champ. Un champ recréé
+          normalement reçoit une clé aléatoire : seul le ré-attachement sur la clé
+          d'origine permet de retrouver ces données. */}
+      {orphans.length > 0 && (
+        <Card className="border-amber-200">
+          <p className="text-xs font-semibold uppercase tracking-widest text-amber-600 mb-1">
+            Données orphelines
+          </p>
+          <p className="text-sm text-gray-500 leading-relaxed mb-3">
+            Ces informations sont encore enregistrées sur des contacts, mais plus
+            rattachées à aucun champ — elles proviennent de champs supprimés. Elles
+            n&apos;apparaissent nulle part dans l&apos;application, mais figurent toujours
+            dans un export RGPD.
+          </p>
+          <div className="flex flex-col gap-2">
+            {orphans.map(o => (
+              <div key={o.field_key}
+                className="flex items-center justify-between gap-3 flex-wrap rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+                <div className="min-w-0">
+                  <code className="text-xs font-mono text-gray-700">{o.field_key}</code>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {o.count} contact{o.count > 1 ? "s" : ""} concerné{o.count > 1 ? "s" : ""}
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => reattach(o)}
+                    className="text-xs font-medium text-primary-600 hover:text-primary-800 border border-primary-200 rounded-lg px-2.5 py-1 hover:bg-primary-50 transition-colors">
+                    Ré-attacher
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!confirm(
+                        `Effacer définitivement ${o.count} valeur(s) sous « ${o.field_key} » ?\n\n` +
+                        `Pour les récupérer à la place, utilise « Ré-attacher ».`
+                      )) return;
+                      try {
+                        const res = await api.purgeOrphanField(o.field_key);
+                        setMsg(`${res.purged} valeur(s) orpheline(s) effacée(s).`);
+                        loadUsage();
+                      } catch (err: any) { setMsg(`Erreur : ${err.message}`); }
+                    }}
+                    className="text-xs font-medium text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-2.5 py-1 hover:bg-red-50 transition-colors">
+                    Purger
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card>
         {!showAddForm ? (
