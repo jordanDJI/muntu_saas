@@ -36,10 +36,19 @@ def _client_ip(request: Request) -> str:
 
     Derrière Vercel/Railway, request.client.host est l'IP du reverse proxy :
     sans lire X-Forwarded-For, tous les visiteurs partageaient un seul quota.
+
+    Un reverse proxy conforme (Railway/Vercel inclus) AJOUTE l'IP du client
+    qu'il reçoit à la fin de la chaîne — il ne la préfixe jamais. La **dernière**
+    valeur est donc toujours celle vue par notre unique proxy de confiance ;
+    tout ce qui précède peut être fourni par l'appelant lui-même (un client
+    envoyant "1.2.3.4" dans son propre header se faisait passer pour cette IP
+    et contournait entièrement le rate limiting en la changeant à chaque appel).
     """
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
     return request.client.host if request.client else "unknown"
 
 

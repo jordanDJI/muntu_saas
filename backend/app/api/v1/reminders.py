@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant
+from app.middleware.roles import require_crm_access
 
 router = APIRouter(prefix="/reminders", tags=["Reminders"])
 
@@ -66,7 +67,7 @@ async def list_reminders(
 @router.post("/", status_code=201)
 async def create_reminder(
     body: ReminderCreate,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
 
@@ -103,7 +104,7 @@ async def create_reminder(
 async def update_reminder(
     reminder_id: str,
     body: ReminderUpdate,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
@@ -129,7 +130,7 @@ async def update_reminder(
 @router.delete("/{reminder_id}", status_code=204)
 async def delete_reminder(
     reminder_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
     res = (
@@ -151,7 +152,7 @@ class ReminderSendOptions(BaseModel):
 @router.get("/{reminder_id}/preview")
 async def preview_reminder(
     reminder_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """
     Retourne le sujet et le corps pré-remplis depuis le template,
@@ -198,7 +199,7 @@ async def preview_reminder(
 async def send_reminder_email(
     reminder_id: str,
     opts: ReminderSendOptions = ReminderSendOptions(),
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """
     Envoie immédiatement la relance par email au contact.
@@ -281,6 +282,6 @@ async def send_reminder_email(
                 pass
 
     now = datetime.now(timezone.utc).isoformat()
-    sb.table("contact_reminder").update({"sent_at": now}).eq("id", reminder_id).execute()
+    sb.table("contact_reminder").update({"sent_at": now}).eq("id", reminder_id).eq("tenant_id", tenant_id).execute()
 
     return {"sent": True, "sent_at": now}

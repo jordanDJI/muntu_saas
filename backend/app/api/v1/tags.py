@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant
+from app.middleware.roles import require_crm_access
 
 router = APIRouter(tags=["Tags"])
 
@@ -43,7 +44,7 @@ async def list_tags(tenant_id: str = Depends(get_current_tenant)):
 
 
 @router.post("/tags", status_code=201)
-async def create_tag(body: TagCreate, tenant_id: str = Depends(get_current_tenant)):
+async def create_tag(body: TagCreate, tenant_id: str = Depends(require_crm_access)):
     if body.color not in ALLOWED_COLORS:
         raise HTTPException(400, f"Couleur invalide. Valeurs acceptées : {', '.join(sorted(ALLOWED_COLORS))}")
     sb = get_supabase_admin()
@@ -64,7 +65,7 @@ async def create_tag(body: TagCreate, tenant_id: str = Depends(get_current_tenan
 async def update_tag(
     tag_id: str,
     body: TagUpdate,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
     updates: dict = {}
@@ -89,7 +90,7 @@ async def update_tag(
 
 
 @router.delete("/tags/{tag_id}", status_code=204)
-async def delete_tag(tag_id: str, tenant_id: str = Depends(get_current_tenant)):
+async def delete_tag(tag_id: str, tenant_id: str = Depends(require_crm_access)):
     sb = get_supabase_admin()
     res = (
         sb.table("contact_tag")
@@ -108,7 +109,7 @@ async def delete_tag(tag_id: str, tenant_id: str = Depends(get_current_tenant)):
 async def add_tag_to_contact(
     contact_id: str,
     tag_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
 
@@ -151,7 +152,19 @@ async def add_tag_to_contact(
 async def remove_tag_from_contact(
     contact_id: str,
     tag_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
+
+    contact = (
+        sb.table("contact")
+        .select("id")
+        .eq("id", contact_id)
+        .eq("tenant_id", tenant_id)
+        .single()
+        .execute()
+    ).data
+    if not contact:
+        raise HTTPException(404, "Contact introuvable")
+
     sb.table("contact_tag_link").delete().eq("contact_id", contact_id).eq("tag_id", tag_id).execute()

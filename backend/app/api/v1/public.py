@@ -3,21 +3,27 @@ Endpoints publics (sans authentification) pour servir les données du site vitri
 Utilise la clé service-role côté backend — le frontend n'a pas besoin de SUPABASE_SERVICE_ROLE_KEY.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from app.core.supabase import get_supabase_admin as get_supabase
+from app.middleware.rate_limit import check_rate
 
 router = APIRouter(prefix="/public", tags=["Public"])
 
 
 @router.get("/stats")
-async def get_public_stats():
+async def get_public_stats(request: Request):
+    check_rate(request, "public_stats", max_calls=30, window_seconds=60)
     sb = get_supabase()
     res = sb.table("tenant").select("id", count="exact").eq("is_active", True).execute()
     return {"tenant_count": res.count or 0}
 
 
 @router.get("/published-slugs")
-async def get_published_slugs():
+async def get_published_slugs(request: Request):
+    # Appelé par sitemap.ts côté serveur Next.js (trafic peu fréquent, partagé
+    # entre tous les domaines) : seuil large pour ne jamais gêner une génération
+    # de sitemap légitime, juste assez bas pour empêcher un scraping continu.
+    check_rate(request, "published_slugs", max_calls=30, window_seconds=60)
     sb = get_supabase()
     rows = (
         sb.table("tenant")
@@ -30,7 +36,8 @@ async def get_published_slugs():
 
 
 @router.get("/directory-slugs")
-async def get_directory_slugs():
+async def get_directory_slugs(request: Request):
+    check_rate(request, "directory_slugs", max_calls=30, window_seconds=60)
     import unicodedata
     def to_slug(s: str) -> str:
         s = unicodedata.normalize("NFD", s.lower())
@@ -60,7 +67,8 @@ async def get_directory_slugs():
 
 
 @router.get("/site/{slug}")
-async def get_public_site(slug: str, preview: bool = Query(False)):
+async def get_public_site(request: Request, slug: str, preview: bool = Query(False)):
+    check_rate(request, "public_site", max_calls=60, window_seconds=60)
     sb = get_supabase()
 
     tenant_res = sb.table("tenant").select("id, name, country, sector").eq("slug", slug).limit(1).execute()

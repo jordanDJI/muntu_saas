@@ -10,6 +10,14 @@ import platform
 import logging
 from datetime import date
 
+from app.services.invoice_legal import (
+    document_label,
+    insurance_mentions,
+    issuer_identity_line,
+    penalty_mentions,
+    resolve_vat_regime,
+)
+
 _log = logging.getLogger(__name__)
 
 # ── Détection moteur PDF ──────────────────────────────────────────────────────
@@ -106,6 +114,22 @@ def _fmt_date(d) -> str:
     except Exception:
         return str(d)
 
+def _compose_address(street, postal_code, city, country) -> str:
+    """
+    Adresse sur une ligne à partir des champs structurés.
+
+    Retombe sur la rue seule tant que le tenant n'a pas renseigné le détail :
+    les factures émises avant la migration 077 ne portent qu'une chaîne libre.
+    """
+    street = (street or "").strip()
+    line2 = " ".join(p for p in [(postal_code or "").strip(), (city or "").strip()] if p)
+    country = (country or "").strip().upper()
+    parts = [p for p in [street, line2] if p]
+    if country and country not in ("FR", ""):
+        parts.append(country)
+    return ", ".join(parts)
+
+
 def _status_label(status: str) -> tuple[str, str]:
     """Retourne (label, couleur) selon le statut."""
     return {
@@ -126,7 +150,12 @@ def _build_html(invoice: dict, lines: list[dict], settings: dict) -> str:
 
     # Infos tenant
     t_name    = _esc(invoice.get("tenant_name") or settings.get("company_name") or "")
-    t_address = _esc(invoice.get("tenant_address") or "")
+    t_address = _esc(_compose_address(
+        invoice.get("tenant_street") or invoice.get("tenant_address"),
+        invoice.get("tenant_postal_code"),
+        invoice.get("tenant_city"),
+        invoice.get("tenant_country"),
+    ))
     t_vat     = _esc(invoice.get("tenant_vat") or settings.get("vat_number") or "")
     t_iban    = _esc(settings.get("bank_iban") or "")
     t_bic     = _esc(settings.get("bank_bic") or "")
@@ -137,9 +166,21 @@ def _build_html(invoice: dict, lines: list[dict], settings: dict) -> str:
 
     # Infos client
     c_name    = _esc(invoice.get("client_name") or "")
-    c_address = _esc(invoice.get("client_address") or "")
+    c_address = _esc(_compose_address(
+        invoice.get("client_street") or invoice.get("client_address"),
+        invoice.get("client_postal_code"),
+        invoice.get("client_city"),
+        invoice.get("client_country"),
+    ))
     c_vat     = _esc(invoice.get("client_vat") or "")
     c_email   = _esc(invoice.get("client_email") or "")
+
+    # Mentions légales figées à l'émission
+    mentions   = invoice.get("legal_mentions") or {}
+    country    = (invoice.get("tenant_country") or settings.get("address_country") or "").upper()
+    doc_label  = document_label(invoice.get("document_type"))
+    identity   = _esc(issuer_identity_line(invoice, mentions))
+    regime     = resolve_vat_regime(invoice.get("vat_regime"), invoice.get("tax_rate"))
 
     # Montants
     subtotal   = _fmt_amount(invoice.get("subtotal", 0))
@@ -204,6 +245,37 @@ def _build_html(invoice: dict, lines: list[dict], settings: dict) -> str:
     # Pied de page custom
     footer_custom = f' · {t_footer}' if t_footer else ""
 
+    # ── Mentions légales obligatoires ─────────────────────────────────────────
+    # Leur absence est sanctionnée par amende, et c'est l'émetteur de la facture
+    # qui la supporte — pas l'éditeur du logiciel. Elles sont donc imprimées
+    # systématiquement, sans dépendre d'une saisie libre du professionnel.
+    legal_lines: list[str] = []
+    if regime["mention"]:
+        legal_lines.append(regime["mention"])
+    legal_lines += penalty_mentions(mentions, country)
+    legal_lines += insurance_mentions(mentions)
+
+    legal_block = ""
+    if legal_lines:
+        items = "".join(
+            f'<div style="margin-bottom:2px">{_esc(l)}</div>' for l in legal_lines
+        )
+        legal_block = f"""
+<div style="margin-top:14px;padding:10px 14px;background:{_BG};border-radius:6px;border:1px solid {_BORD}">
+  <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:{_MUTED};margin-bottom:4px">Mentions légales</div>
+  <div style="font-size:9px;color:{_TEXT};line-height:1.45">{items}</div>
+</div>"""
+
+    # Référence à la facture corrigée — exigée sur un avoir
+    credit_ref_block = ""
+    if invoice.get("document_type") == "credit_note" and invoice.get("credit_note_of_number"):
+        reason = invoice.get("credit_reason") or ""
+        reason_html = f' — motif : {_esc(reason)}' if reason else ""
+        credit_ref_block = f"""
+<div style="margin-top:12px;padding:10px 14px;background:#FEF2F2;border-radius:6px;border:1px solid #FECACA">
+  <div style="font-size:9px;color:#991B1B">Avoir se rapportant à la facture <strong>{_esc(invoice['credit_note_of_number'])}</strong>{reason_html}</div>
+</div>"""
+
     # Adresse client (nouvelles lignes pour le bloc Facturé à)
     c_details = ""
     if c_address:
@@ -246,11 +318,12 @@ def _build_html(invoice: dict, lines: list[dict], settings: dict) -> str:
       {f'<div style="font-size:10px;color:{_MUTED}">TVA : {t_vat}</div>' if t_vat else ''}
     </td>
     <td style="width:45%;vertical-align:top;text-align:right">
-      <div style="font-size:30px;font-weight:900;color:{header_bg};line-height:1">FACTURE</div>
+      <div style="font-size:30px;font-weight:900;color:{header_bg};line-height:1">{doc_label}</div>
       <div style="font-size:14px;font-weight:700;color:{thead_bg};margin-top:4px">N° {_esc(invoice.get('number',''))}</div>
       <div style="margin-top:10px;font-size:10px;color:{_MUTED}">
         Date d'émission : <strong style="color:{_TEXT}">{_fmt_date(invoice.get('issue_date'))}</strong>
       </div>
+      {f'<div style="font-size:10px;color:{_MUTED}">Date de la prestation : <strong style="color:{_TEXT}">{_fmt_date(invoice.get("service_date"))}</strong></div>' if invoice.get('service_date') else ''}
       {f'<div style="font-size:10px;color:{_MUTED}">Date d\'échéance : <strong style="color:{_TEXT}">{_fmt_date(invoice.get("due_date"))}</strong></div>' if invoice.get('due_date') else ''}
       <div style="margin-top:8px">{badge}</div>
     </td>
@@ -267,7 +340,7 @@ def _build_html(invoice: dict, lines: list[dict], settings: dict) -> str:
       <div class="lbl">Émetteur</div>
       <div style="font-weight:700;font-size:12px;color:{_TEXT}">{t_name}</div>
       {f'<div style="font-size:10px;color:{_MUTED}">{t_address}</div>' if t_address else ''}
-      {f'<div style="font-size:10px;color:{_MUTED}">TVA : {t_vat}</div>' if t_vat else ''}
+      {f'<div style="font-size:9px;color:{_MUTED};margin-top:3px;line-height:1.4">{identity}</div>' if identity else ''}
     </td>
     <td style="width:4%;border-left:1px solid {_BORD}"></td>
     <td style="width:48%;vertical-align:top;padding-left:16px">
@@ -309,13 +382,15 @@ def _build_html(invoice: dict, lines: list[dict], settings: dict) -> str:
 </table>
 
 {terms_block}
+{credit_ref_block}
 {payment_block}
 {notes_block}
+{legal_block}
 
 <!-- ── PIED DE PAGE ── -->
 <div style="position:fixed;bottom:0;left:0;right:0;border-top:1px solid {_BORD};padding:7px 18mm;font-size:8px;color:{_MUTED};display:table;width:100%">
-  <div style="display:table-cell">{t_name}{f' — {t_address}' if t_address else ''}{f' — TVA : {t_vat}' if t_vat else ''}{footer_custom}</div>
-  <div style="display:table-cell;text-align:right">Facture {_esc(invoice.get('number',''))} · klientys.co</div>
+  <div style="display:table-cell">{t_name}{f' — {t_address}' if t_address else ''}{f' — {identity}' if identity else ''}{footer_custom}</div>
+  <div style="display:table-cell;text-align:right">{doc_label.capitalize()} {_esc(invoice.get('number',''))} · klientys.co</div>
 </div>
 
 </body>

@@ -4,11 +4,12 @@ Routes publiques : GET /directory/listings, GET /directory/listing/{slug}
 Routes auth      : GET|POST|PATCH|DELETE /directory/my-listing
 """
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from typing import Optional
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
+from app.middleware.rate_limit import check_rate
 
 _log = logging.getLogger(__name__)
 
@@ -32,11 +33,13 @@ class ListingUpsertIn(BaseModel):
 
 @router.get("/listings")
 async def list_listings(
+    request: Request,
     ville:   str = Query(...),
     metier:  Optional[str] = Query(None),
     page:    int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=50),
 ):
+    check_rate(request, "directory_listings", max_calls=60, window_seconds=60)
     sb = get_supabase()
     offset = (page - 1) * per_page
     ville_title = ville.strip().title()
@@ -94,7 +97,8 @@ async def list_listings(
 
 
 @router.get("/listing/{slug}")
-async def get_listing_by_slug(slug: str):
+async def get_listing_by_slug(request: Request, slug: str):
+    check_rate(request, "directory_listing", max_calls=60, window_seconds=60)
     sb = get_supabase()
     tenant_res = sb.table("tenant").select("id, slug").eq("slug", slug).single().execute()
     if not tenant_res.data:

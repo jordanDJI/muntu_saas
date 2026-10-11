@@ -15,9 +15,14 @@ ANONYMIZED_PLACEHOLDER = {
     "last_name": "anonymisé",
     "email": None,
     "phone": None,
+    "notes": None,
     "custom_fields": {},
     "anonymized_at": None,  # posé explicitement par anonymize_contact()
 }
+
+_REDACTED_ACTIVITY_CONTENT = "Contenu anonymisé (droit à l'oubli)"
+_REDACTED_IMPORT_NAME = "Contact anonymisé"
+_REDACTED_IMPORT_FIELDS = ["Données anonymisées (droit à l'oubli)"]
 
 
 def record_consent(
@@ -52,13 +57,56 @@ def touch_contact_interaction(contact_id: str) -> None:
         logger.warning("touch_contact_interaction failed for %s: %s", contact_id, exc)
 
 
-def anonymize_contact(contact_id: str) -> None:
-    """Vide les champs PII d'un contact tout en conservant la ligne (FK appointment/lead/invoice valides)."""
+def _redact_contact_activity(sb, contact_id: str) -> None:
+    """Le texte libre de la timeline (contact_activity.content) peut porter des PII
+    (ex. un email collé dans une note) — droit à l'oubli incomplet sans ce nettoyage."""
+    sb.table("contact_activity").update(
+        {"content": _REDACTED_ACTIVITY_CONTENT}
+    ).eq("contact_id", contact_id).execute()
+
+
+def _redact_import_job_changes(sb, tenant_id: str, contact_id: str) -> None:
+    """
+    contact_import_job.changes est un instantané {from, to} par champ enrichi
+    (nom/email/téléphone compris), conservé indéfiniment — sans ce nettoyage,
+    un contact anonymisé reste reconstructible depuis son propre historique d'import.
+    """
+    jobs = (
+        sb.table("contact_import_job")
+        .select("id, changes")
+        .eq("tenant_id", tenant_id)
+        .not_.is_("changes", "null")
+        .execute()
+    ).data or []
+    for job in jobs:
+        changes = job.get("changes") or []
+        touched = False
+        for entry in changes:
+            if entry.get("contact_id") == contact_id and entry.get("name") != _REDACTED_IMPORT_NAME:
+                entry["name"] = _REDACTED_IMPORT_NAME
+                entry["fields"] = _REDACTED_IMPORT_FIELDS
+                touched = True
+        if touched:
+            sb.table("contact_import_job").update({"changes": changes}).eq("id", job["id"]).execute()
+
+
+def anonymize_contact(contact_id: str, tenant_id: str | None = None) -> None:
+    """
+    Vide les champs PII d'un contact tout en conservant la ligne (FK appointment/lead/invoice
+    valides), et nettoie les traces PII laissées ailleurs (timeline, historique d'import).
+
+    tenant_id est optionnel pour compat arrière, mais sans lui la purge de
+    contact_import_job.changes est sautée (elle a besoin de scoper la recherche).
+    """
     sb = get_supabase_admin()
     sb.table("contact").update({
         **{k: v for k, v in ANONYMIZED_PLACEHOLDER.items() if k != "anonymized_at"},
         "anonymized_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", contact_id).execute()
+
+    _redact_contact_activity(sb, contact_id)
+    if tenant_id:
+        _redact_import_job_changes(sb, tenant_id, contact_id)
 
 
 def _has_blocking_relations(sb, contact_id: str) -> bool:
@@ -129,7 +177,7 @@ def run_retention_purge() -> dict:
                 skipped += 1
                 continue
             try:
-                anonymize_contact(c["id"])
+                anonymize_contact(c["id"], tenant["id"])
                 anonymized += 1
             except Exception as exc:
                 logger.error("Retention purge failed for contact %s: %s", c["id"], exc)

@@ -10,7 +10,10 @@ type Invoice = {
   id: string;
   number: string;
   status: "draft" | "sent" | "paid" | "cancelled" | "overdue";
+  document_type?: "invoice" | "credit_note";
+  credit_note_of?: string | null;
   issue_date: string;
+  service_date?: string;
   due_date?: string;
   currency: string;
   subtotal: number;
@@ -406,6 +409,23 @@ export default function InvoicesPage() {
     finally { setAction(inv.id, false); }
   }
 
+  // Une facture déjà remise au client ne s'annule pas : on émet un avoir, qui
+  // reprend ses lignes en négatif et la référence. Il naît en brouillon.
+  async function handleCreditNote(inv: Invoice) {
+    const reason = prompt(
+      `Émettre un avoir annulant la facture ${inv.number}.\n\nMotif (figure sur l'avoir) :`,
+      "",
+    );
+    if (reason === null) return;
+    setAction(inv.id, true);
+    try {
+      await api.createCreditNote(inv.id, { reason: reason.trim() || undefined });
+      load();
+    }
+    catch (e: any) { setAction(inv.id, false, e.message); }
+    finally { setAction(inv.id, false); }
+  }
+
   async function handleDownloadPdf(inv: Invoice) {
     setAction(inv.id, true);
     try { await api.downloadInvoicePdf(inv.id, inv.number); }
@@ -510,7 +530,14 @@ export default function InvoicesPage() {
                   const sStyle = STATUS_STYLE[inv.status] ?? { bg: "#F3F4F6", color: "#6B7280" };
                   return (
                     <tr key={inv.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs font-semibold text-gray-700">{inv.number}</td>
+                      <td className="px-4 py-3 font-mono text-xs font-semibold text-gray-700">
+                        {inv.number}
+                        {inv.document_type === "credit_note" && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-sans font-semibold bg-red-50 text-red-600 border border-red-200">
+                            Avoir
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-800">{inv.client_name || "—"}</div>
                         {inv.client_email && <div className="text-xs text-gray-400">{inv.client_email}</div>}
@@ -600,8 +627,20 @@ export default function InvoicesPage() {
                             </svg>
                           </button>
 
-                          {/* Annuler */}
-                          {["draft","sent","overdue"].includes(inv.status) && (
+                          {/* Avoir — seule correction possible d'une facture envoyée */}
+                          {inv.document_type !== "credit_note"
+                            && ["sent","overdue","paid"].includes(inv.status) && (
+                            <button onClick={() => handleCreditNote(inv)} disabled={actionLoading[inv.id]}
+                              title="Émettre un avoir"
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50">
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 14l6-6M3 12a9 9 0 1018 0 9 9 0 00-18 0z" />
+                              </svg>
+                            </button>
+                          )}
+
+                          {/* Annuler — uniquement tant que la facture n'est pas sortie */}
+                          {inv.status === "draft" && (
                             <button onClick={() => handleCancel(inv)} disabled={actionLoading[inv.id]}
                               title={t.inv_action_cancel}
                               className="p-1.5 rounded-lg text-gray-400 hover:text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-50">

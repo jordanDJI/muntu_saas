@@ -56,7 +56,10 @@ def download_media(media_id: str) -> tuple[bytes, str]:
 def verify_signature(payload: bytes, signature: str) -> bool:
     """Vérifie la signature HMAC-SHA256 envoyée par 360dialog sur le webhook."""
     if not settings.dialog360_webhook_secret:
-        return True  # Pas de secret configuré — mode développement
+        logger.error("DIALOG360_WEBHOOK_SECRET non configuré — webhook WhatsApp rejeté")
+        return False
+    if not signature:
+        return False
     expected = "sha256=" + hmac.new(
         settings.dialog360_webhook_secret.encode(),
         payload,

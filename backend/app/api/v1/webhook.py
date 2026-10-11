@@ -125,9 +125,11 @@ def _verify_telegram_secret(request: Request, bot_token: str) -> None:
     import hmac as _hmac, hashlib as _hashlib
     received = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
     if not received:
-        # Webhook non encore re-enregistré avec secret_token → tolérance temporaire
+        # register_webhook() pose toujours un secret_token (agents.py) : Telegram
+        # l'inclut alors systématiquement. Son absence signifie que l'appelant
+        # n'est pas Telegram — jamais un bot légitime pas encore re-enregistré.
         logger.warning("Webhook Telegram sans secret_token (bot ...%s)", bot_token[-6:])
-        return
+        raise HTTPException(status_code=403, detail="Signature webhook Telegram manquante")
     _secret = settings.agent_link_secret or settings.secret_key
     expected = _hmac.new(
         _secret.encode(), bot_token.encode(), _hashlib.sha256

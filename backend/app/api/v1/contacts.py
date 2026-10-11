@@ -19,7 +19,8 @@ from pydantic import BaseModel, field_validator
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant, get_current_user
 from app.api.v1.attachments import PHOTO_BUCKET, _signed_url_bucket
-from app.api.v1.contact_fields import ensure_default_fields
+from app.api.v1.contact_fields import ensure_default_fields, RESERVED_CUSTOM_FIELD_KEYS
+from app.middleware.roles import require_crm_access
 from app.services.activity import log_activity
 from app.services.phone import clean_phone, is_valid_phone, validate_phone_field
 from app.services.contact_limits import get_contact_quota
@@ -261,7 +262,7 @@ def _enrich_contacts(sb, tenant_id: str, contacts: list[dict]) -> list[dict]:
 @router.get("/export")
 async def export_contacts_csv(
     format: str = Query(default="csv", pattern="^(csv|xlsx)$"),
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """Exporte tous les contacts du tenant en CSV ou Excel (téléchargement)."""
     sb = get_supabase_admin()
@@ -302,7 +303,7 @@ async def export_contacts_csv(
 @router.get("/import-template")
 async def download_import_template(
     format: str = Query(default="csv", pattern="^(csv|xlsx)$"),
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """Modèle vide (avec une ligne d'exemple) à remplir pour l'import — colonnes = champs actuellement activés pour ce tenant."""
     sb = get_supabase_admin()
@@ -349,7 +350,7 @@ async def list_contacts(
     segment: Optional[str] = None,
     limit: int = Query(default=30, le=100),
     offset: int = 0,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """Liste paginée des contacts avec enrichissement (tags, valeur, inactivité)."""
     sb = get_supabase_admin()
@@ -417,7 +418,7 @@ async def list_contacts(
 
 @router.get("/duplicates")
 async def get_duplicate_contacts(
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """Groupes de contacts probablement en doublon (même email ou même téléphone), à valider manuellement."""
     sb = get_supabase_admin()
@@ -468,7 +469,7 @@ class IgnoreDuplicateIn(BaseModel):
 @router.post("/duplicates/ignore", status_code=204)
 async def ignore_duplicate_group(
     body: IgnoreDuplicateIn,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """Marque un groupe de doublons comme non pertinent — il ne sera plus proposé."""
     sb = get_supabase_admin()
@@ -480,7 +481,7 @@ async def ignore_duplicate_group(
 
 @router.get("/archive-suggestions")
 async def get_archive_suggestions(
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """Contacts incomplets (ni email ni téléphone) et inactifs depuis longtemps — à archiver manuellement, jamais automatiquement."""
     sb = get_supabase_admin()
@@ -501,7 +502,7 @@ async def get_archive_suggestions(
 @router.post("/{contact_id}/archive", status_code=204)
 async def archive_contact(
     contact_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
     user: dict = Depends(get_current_user),
 ):
     """Archive manuellement un contact (soft-delete) — jamais déclenché automatiquement."""
@@ -532,7 +533,7 @@ _MERGE_RELATED_TABLES = [
 async def merge_contacts(
     keep_id: str,
     body: MergeContactsIn,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
     user: dict = Depends(get_current_user),
 ):
     """Fusionne merge_id dans keep_id : réaffecte toutes les relations, complète les champs vides, archive merge_id."""
@@ -562,7 +563,12 @@ async def merge_contacts(
 
     for table in _MERGE_RELATED_TABLES:
         try:
-            sb.table(table).update({"contact_id": keep_id}).eq("contact_id", body.merge_id).execute()
+            query = sb.table(table).update({"contact_id": keep_id}).eq("contact_id", body.merge_id)
+            # appointment n'a pas de colonne tenant_id (sécurité assurée par contact_id,
+            # déjà validé ci-dessus) ; les autres tables l'ont, on la réapplique en défense.
+            if table != "appointment":
+                query = query.eq("tenant_id", tenant_id)
+            query.execute()
         except Exception:
             continue  # table absente de cet environnement (ex. invoice) — on continue
 
@@ -597,7 +603,7 @@ async def merge_contacts(
 @router.get("/{contact_id}")
 async def get_contact(
     contact_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """Fiche contact unifiée : infos + tags + leads + RDV + conversations + valeur + reminders."""
     sb = get_supabase_admin()
@@ -616,7 +622,15 @@ async def get_contact(
     contact = res.data
 
     photo_path = (contact.get("custom_fields") or {}).get("photo_path")
-    contact["photo_signed_url"] = _signed_url_bucket(sb, PHOTO_BUCKET, photo_path) if photo_path else None
+    # Un chemin légitime est toujours posé par upload_contact_photo() sous
+    # "{tenant_id}/{contact_id}/...". Rejeter tout le reste empêche de faire
+    # signer un chemin appartenant à un autre tenant/contact.
+    valid_photo_path = (
+        photo_path and str(photo_path).startswith(f"{tenant_id}/{contact_id}/")
+    )
+    contact["photo_signed_url"] = (
+        _signed_url_bucket(sb, PHOTO_BUCKET, photo_path) if valid_photo_path else None
+    )
 
     # Tags
     tag_links = (
@@ -698,7 +712,7 @@ async def get_contact(
 async def update_contact(
     contact_id: str,
     body: ContactUpdate,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
     user: dict = Depends(get_current_user),
 ):
     """Met à jour les champs éditables d'un contact."""
@@ -717,6 +731,8 @@ async def update_contact(
             raise HTTPException(400, f"Catégorie invalide (attendu : {', '.join(sorted(allowed))})")
 
     if "custom_fields" in updates:
+        for key in RESERVED_CUSTOM_FIELD_KEYS:
+            updates["custom_fields"].pop(key, None)
         for key, value in list(updates["custom_fields"].items()):
             field = defs_by_key.get(key)
             if not field or not value:
@@ -775,7 +791,7 @@ async def update_contact(
 async def get_contact_audit_log(
     contact_id: str,
     limit: int = Query(default=50, le=200),
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """Journal des modifications apportées à la fiche (qui/quoi/quand)."""
     sb = get_supabase_admin()
@@ -795,7 +811,7 @@ async def get_contact_audit_log(
 @router.get("/{contact_id}/activities")
 async def list_activities(
     contact_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
     rows = (
@@ -813,7 +829,7 @@ async def list_activities(
 async def create_activity(
     contact_id: str,
     body: ActivityCreate,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     if not body.content.strip():
         raise HTTPException(400, "Le contenu ne peut pas être vide")
@@ -833,13 +849,15 @@ async def create_activity(
 async def delete_activity(
     contact_id: str,
     activity_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
     sb.table("contact_activity").delete().eq("id", activity_id).eq("tenant_id", tenant_id).execute()
 
 
 IMPORT_MODES = ("complete", "overwrite")
+MAX_IMPORT_FILE_BYTES = 20 * 1024 * 1024  # 20 Mo — largement au-dessus de tout import légitime
+MAX_IMPORT_ROWS = 50_000  # bien au-delà de max_contacts de n'importe quel forfait
 
 # Champs stockés en colonne que l'import peut écrire (les 4 verrouillés + les 2 de base).
 # `notes` est traité à part : c'est du texte libre, pas un champ de fiche.
@@ -964,7 +982,7 @@ def _bulk_update_contacts(sb, tenant_id: str, contacts: list[dict], columns: set
                 row = payload_for(c)
                 row.pop("id", None)
                 row.pop("tenant_id", None)
-                sb.table("contact").update(row).eq("id", c["id"]).execute()
+                sb.table("contact").update(row).eq("id", c["id"]).eq("tenant_id", tenant_id).execute()
                 written += 1
             except Exception as exc:
                 logger.warning("Enrichissement contact %s échoué : %s", c.get("id"), exc)
@@ -1020,6 +1038,11 @@ async def _run_import_job(job_id: str, tenant_id: str, filename: str, content: b
                 text = content.decode("latin-1")
             reader = csv.DictReader(io.StringIO(text))
             rows = [{k.strip().lower(): v.strip() for k, v in row.items() if v is not None} for row in reader]
+
+        if len(rows) > MAX_IMPORT_ROWS:
+            raise ValueError(
+                f"Fichier trop volumineux : {len(rows)} lignes (maximum {MAX_IMPORT_ROWS}). Scindez le fichier."
+            )
 
         field_defs = ensure_default_fields(sb, tenant_id)
 
@@ -1167,7 +1190,7 @@ async def import_contacts_csv(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     mode: str = Query("complete", description="complete | overwrite"),
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """
     Importe des contacts depuis un fichier CSV ou Excel (.xlsx), traité en arrière-plan
@@ -1200,12 +1223,34 @@ async def import_contacts_csv(
     content = await file.read()
     if not content:
         raise HTTPException(400, "Fichier vide")
+    if len(content) > MAX_IMPORT_FILE_BYTES:
+        raise HTTPException(413, f"Fichier trop volumineux (max {MAX_IMPORT_FILE_BYTES // (1024*1024)} Mo)")
 
     sb = get_supabase_admin()
-    job = sb.table("contact_import_job").insert({
-        "tenant_id": tenant_id, "status": "processing", "filename": file.filename or "fichier",
-        "mode": mode,
-    }).execute().data[0]
+
+    # Un seul import à la fois par tenant : au-delà de fermer une vraie course entre
+    # plusieurs jobs (le quota est recalculé une fois par job, pas verrouillé en base),
+    # ça évite aussi deux imports concurrents de se marcher sur les pieds sur les mêmes
+    # contacts existants (upsert groupé par lot de 500).
+    in_progress = (
+        sb.table("contact_import_job").select("id")
+        .eq("tenant_id", tenant_id).eq("status", "processing").limit(1).execute().data
+    )
+    if in_progress:
+        raise HTTPException(409, "Un import est déjà en cours pour ce compte. Attendez sa fin avant d'en lancer un autre.")
+
+    try:
+        job = sb.table("contact_import_job").insert({
+            "tenant_id": tenant_id, "status": "processing", "filename": file.filename or "fichier",
+            "mode": mode,
+        }).execute().data[0]
+    except Exception as exc:
+        # Filet de sécurité : la vérification ci-dessus laisse une fenêtre de course
+        # (deux requêtes simultanées peuvent la passer toutes les deux) que l'index
+        # unique partiel (migration 078) referme côté base.
+        if "idx_contact_import_job_one_processing" in str(exc):
+            raise HTTPException(409, "Un import est déjà en cours pour ce compte. Attendez sa fin avant d'en lancer un autre.")
+        raise
 
     background_tasks.add_task(_run_import_job, job["id"], tenant_id, filename, content, mode)
 
@@ -1215,6 +1260,9 @@ async def import_contacts_csv(
 @router.get("/import/{job_id}")
 async def get_import_job(
     job_id: str,
+    # Pas de require_crm_access ici : interrogé par le bandeau d'import global
+    # (persiste via localStorage à travers toute la navigation du dashboard),
+    # pas seulement depuis /dashboard/contacts.
     tenant_id: str = Depends(get_current_tenant),
 ):
     sb = get_supabase_admin()

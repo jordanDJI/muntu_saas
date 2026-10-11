@@ -1,0 +1,12 @@
+{
+  "name": "klientys-capture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Capture des ecrans produit Klientys pour la pub motion design",
+  "scripts": {
+    "capture": "node capture.js"
+  },
+  "dependencies": {
+    "puppeteer": "^23.0.0"
+  }
+}

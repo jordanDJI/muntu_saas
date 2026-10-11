@@ -95,3 +95,17 @@ class PublicBookIn(BaseModel):
     @classmethod
     def strip_name(cls, v: str) -> str:
         return v.strip()
+
+    @field_validator("custom_answers")
+    @classmethod
+    def validate_custom_answers(cls, v: Optional[dict]) -> Optional[dict]:
+        if not v:
+            return v
+        if len(v) > 50:
+            raise ValueError("Trop de réponses au formulaire")
+        for key, value in v.items():
+            if len(str(key)) > 100:
+                raise ValueError("Identifiant de question invalide")
+            if value is not None and len(str(value)) > 5000:
+                raise ValueError("Réponse trop longue")
+        return v

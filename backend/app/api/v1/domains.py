@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from app.middleware.roles import require_owner_or_admin
 from app.middleware.tenant import get_current_tenant
+from app.middleware.rate_limit import check_rate_by_key
 from app.core.supabase import get_supabase_admin
 from app.core.config import settings
 from app.services import vercel_domains, ovh_domains
@@ -293,7 +294,14 @@ async def addon_checkout(body: AddonCheckoutIn, tenant_id: str = Depends(require
 
 @router.get("/resolve")
 async def resolve_domain(domain: str = Query(...)):
-    """Utilisé par le middleware Next.js pour router les domaines custom."""
+    """
+    Utilisé par le middleware Next.js pour router les domaines custom — appelé
+    côté serveur à chaque requête (toutes les IPs visiteurs se confondent derrière
+    l'infra Vercel). Limité par domaine, pas par IP : un domaine populaire légitime
+    peut être résolu très souvent sans jamais être bloqué, seul le scraping répété
+    d'un même domaine est freiné.
+    """
+    check_rate_by_key(domain, "domain_resolve", max_calls=600, window_seconds=60)
     sb = get_supabase_admin()
     row = (
         sb.table("custom_domain")

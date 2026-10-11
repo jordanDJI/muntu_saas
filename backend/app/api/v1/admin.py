@@ -7,7 +7,7 @@ import stripe as stripe_lib
 logger = logging.getLogger(__name__)
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 import secrets
@@ -15,10 +15,11 @@ import secrets
 from app.core.config import settings
 from app.core.supabase import get_supabase_admin
 from app.middleware.admin import get_current_admin, viewer_or_above, support_or_above
-from app.middleware.rate_limit import check_rate_by_key
+from app.middleware.rate_limit import check_rate, check_rate_by_key
 from app.services import email as email_svc
 from app.services.google_indexing import notify_url_updated, notify_url_deleted
 from app.services.revalidate import revalidate_frontend_path
+from app.services.html_sanitize import sanitize_blog_html
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -2320,18 +2321,22 @@ async def admin_list_blog(admin=Depends(viewer_or_above)):
 
 
 def _check_content_agent_secret(secret: str):
-    if not settings.content_agent_secret or secret != settings.content_agent_secret:
+    import hmac as _hmac
+    if not settings.content_agent_secret or not _hmac.compare_digest(
+        secret.encode(), settings.content_agent_secret.encode()
+    ):
         raise HTTPException(403, "Non autorisé")
 
 
 @router.get("/content/blog/agent-list")
-async def agent_list_blog(x_content_agent_secret: str = Header(default="")):
+async def agent_list_blog(request: Request, x_content_agent_secret: str = Header(default="")):
     """
     Lecture seule, même auth scopée (secret partagé) que /propose. Permet à l'agent
     de contenu automatisé de savoir quels sujets (draft + published) sont déjà
     traités d'un run à l'autre, sans avoir besoin de persister d'état ailleurs
     (ex. commit git) — les runs planifiés démarrent d'un environnement propre à chaque fois.
     """
+    check_rate(request, "content_agent_secret", max_calls=20, window_seconds=300)
     _check_content_agent_secret(x_content_agent_secret)
     rows = (
         get_supabase_admin().table("blog_post")
@@ -2353,7 +2358,7 @@ class BlogProposeIn(BaseModel):
 
 
 @router.post("/content/blog/propose")
-async def propose_blog_post(body: BlogProposeIn, x_content_agent_secret: str = Header(default="")):
+async def propose_blog_post(request: Request, body: BlogProposeIn, x_content_agent_secret: str = Header(default="")):
     """
     Endpoint dédié à un agent de contenu automatisé (cron externe, ex. proposition
     d'articles 2x/semaine). Auth par secret partagé — volontairement PAS un JWT admin,
@@ -2361,6 +2366,7 @@ async def propose_blog_post(body: BlogProposeIn, x_content_agent_secret: str = H
     et lang="fr" (les traductions se font via /translate, après validation humaine du FR) :
     même si le secret fuite, rien ne peut être publié sans validation humaine dans /admin/content.
     """
+    check_rate(request, "content_agent_secret", max_calls=20, window_seconds=300)
     _check_content_agent_secret(x_content_agent_secret)
 
     sb = get_supabase_admin()
@@ -2378,7 +2384,7 @@ async def propose_blog_post(body: BlogProposeIn, x_content_agent_secret: str = H
         "description":     body.description,
         "category":        body.category,
         "metier":          body.metier,
-        "body_html":       body.body_html,
+        "body_html":       sanitize_blog_html(body.body_html),
         "reading_minutes": body.reading_minutes,
         "status":          "draft",   # forcé — ne peut jamais être publié par ce endpoint
         "published_at":    None,
@@ -2399,7 +2405,7 @@ async def admin_create_blog(body: BlogPostIn, admin=Depends(get_current_admin)):
         "description":     body.description,
         "category":        body.category,
         "metier":          body.metier,
-        "body_html":       body.body_html,
+        "body_html":       sanitize_blog_html(body.body_html),
         "reading_minutes": body.reading_minutes,
         "status":          body.status,
         "published_at":    body.published_at,
@@ -2424,7 +2430,7 @@ async def admin_update_blog(post_id: str, body: BlogPostIn, admin=Depends(get_cu
         "description":     body.description,
         "category":        body.category,
         "metier":          body.metier,
-        "body_html":       body.body_html,
+        "body_html":       sanitize_blog_html(body.body_html),
         "reading_minutes": body.reading_minutes,
         "status":          body.status,
         "published_at":    body.published_at,
@@ -2556,7 +2562,7 @@ async def translate_blog_post(post_id: str, body: TranslateIn, admin=Depends(get
             "description":          translated.get("description", source.get("description")),
             "category":             source.get("category"),
             "metier":               source.get("metier"),
-            "body_html":            translated.get("body_html"),
+            "body_html":            sanitize_blog_html(translated.get("body_html")),
             "reading_minutes":      source.get("reading_minutes", 5),
             "status":               "draft",
             "lang":                 lang,

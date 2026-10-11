@@ -105,7 +105,7 @@ async def confirm_contact_deletion(
     sb = get_supabase_admin()
     _assert_contact_belongs(sb, contact_id, tenant_id)
 
-    anonymize_contact(contact_id)
+    anonymize_contact(contact_id, tenant_id)
     log_activity(tenant_id, user["sub"], "Contact anonymisé (droit à l'oubli)", None,
                  target_type="contact", target_id=contact_id)
     return {"status": "anonymized"}

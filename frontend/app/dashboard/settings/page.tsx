@@ -2302,6 +2302,17 @@ function SectionContactFields() {
 
 // ── Section Facturation ───────────────────────────────────────────────────────
 
+// Régimes de TVA — doivent rester alignés sur VAT_REGIMES côté backend
+// (backend/app/services/invoice_legal.py) : la valeur envoyée y est validée.
+const VAT_REGIME_OPTIONS: { value: string; label: string; hint: string }[] = [
+  { value: "standard",       label: "Régime normal de TVA",            hint: "Vous facturez la TVA au taux applicable." },
+  { value: "franchise",      label: "Franchise en base (art. 293 B)",  hint: "Micro-entreprise sous les seuils : « TVA non applicable »." },
+  { value: "medical",        label: "Actes médicaux (art. 261-4-1°)",  hint: "Infirmiers, kinés, professions de santé réglementées." },
+  { value: "reverse_charge", label: "Autoliquidation (art. 283-2)",    hint: "La TVA est due par votre client, pas par vous." },
+  { value: "intracom",       label: "Livraison intracommunautaire",    hint: "Client professionnel établi dans un autre État membre." },
+  { value: "export",         label: "Exportation hors UE",             hint: "Client établi en dehors de l'Union européenne." },
+];
+
 function SectionFacturation() {
   const { t } = useLanguage();
   const [settings, setSettings] = useState<Record<string, any>>({});
@@ -2309,9 +2320,15 @@ function SectionFacturation() {
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
   const [err, setErr]           = useState("");
+  const [compliance, setCompliance] = useState<{ country: string; compliant: boolean; missing: string[] } | null>(null);
+
+  function refreshCompliance() {
+    api.getInvoiceCompliance().then(setCompliance).catch(() => setCompliance(null));
+  }
 
   useEffect(() => {
     api.getInvoiceSettings().then((d: any) => { setSettings(d ?? {}); setLoading(false); }).catch(() => setLoading(false));
+    refreshCompliance();
   }, []);
 
   function handleChange(field: string, value: string | number) {
@@ -2324,36 +2341,169 @@ function SectionFacturation() {
     try {
       await api.updateInvoiceSettings(settings);
       setSaved(true);
+      refreshCompliance();
     } catch (e: any) { setErr(e.message ?? "Erreur lors de la sauvegarde."); }
     finally { setSaving(false); }
   }
 
   if (loading) return <p className="text-sm text-gray-500">Chargement…</p>;
 
+  const regimeHint = VAT_REGIME_OPTIONS.find(o => o.value === (settings.vat_regime ?? "standard"))?.hint ?? "";
+
   return (
     <>
       <SectionTitle title={t.sett_fact_title} subtitle={t.sett_fact_subtitle} />
+
+      {compliance && !compliance.compliant && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">
+            Vos factures ne sont pas encore conformes
+          </p>
+          <p className="text-xs text-amber-800 mt-1">
+            Il manque {compliance.missing.join(", ")}. Ces mentions sont obligatoires
+            en France : tant qu'elles manquent, l'envoi d'une facture est bloqué.
+          </p>
+        </div>
+      )}
+      {compliance?.compliant && (
+        <p className="text-xs text-emerald-700">✓ Mentions légales complètes.</p>
+      )}
+
       <Card>
-        <p className="text-sm font-semibold text-gray-700">Informations légales</p>
+        <p className="text-sm font-semibold text-gray-700">Identité de l'entreprise</p>
+        <p className="text-xs text-gray-500">
+          Obligatoire sur chaque facture. Le SIREN sert aussi d'identifiant dans
+          l'annuaire de la facturation électronique.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Numéro de TVA</label>
+            <label className="text-xs font-medium text-gray-500 block mb-1">SIREN ou SIRET *</label>
             <input
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-              placeholder="BE0123456789"
-              value={settings.vat_number ?? ""}
-              onChange={e => handleChange("vat_number", e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono"
+              placeholder="812345678"
+              value={settings.legal_id ?? ""}
+              onChange={e => handleChange("legal_id", e.target.value)}
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Préfixe de numérotation</label>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Numéro de TVA</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm font-mono"
+              placeholder="FR12812345678"
+              value={settings.vat_number ?? ""}
+              onChange={e => handleChange("vat_number", e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">Laissez vide en franchise en base.</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Forme juridique</label>
             <input
               className="w-full border rounded-lg px-3 py-2 text-sm"
-              placeholder="FAC"
-              value={settings.prefix ?? "FAC"}
-              onChange={e => handleChange("prefix", e.target.value)}
+              placeholder="EI, SASU, SARL…"
+              value={settings.legal_form ?? ""}
+              onChange={e => handleChange("legal_form", e.target.value)}
             />
-            <p className="text-xs text-gray-400 mt-1">Ex : FAC-2025-0001</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Capital social</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="1 000 €"
+              value={settings.share_capital ?? ""}
+              onChange={e => handleChange("share_capital", e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">Sociétés uniquement.</p>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="text-xs font-medium text-gray-500 block mb-1">Ville du RCS</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Rennes"
+              value={settings.rcs_city ?? ""}
+              onChange={e => handleChange("rcs_city", e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">Ville du greffe d'immatriculation, si vous êtes au RCS.</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <p className="text-sm font-semibold text-gray-700">Adresse de facturation</p>
+        <p className="text-xs text-gray-500">
+          Le pays est obligatoire au format électronique : sans lui, le fichier est rejeté.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2">
+            <label className="text-xs font-medium text-gray-500 block mb-1">Rue et numéro *</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="12 rue des Lilas"
+              value={settings.address_street ?? ""}
+              onChange={e => handleChange("address_street", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Code postal *</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="35000"
+              value={settings.address_postal_code ?? ""}
+              onChange={e => handleChange("address_postal_code", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Ville *</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Rennes"
+              value={settings.address_city ?? ""}
+              onChange={e => handleChange("address_city", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Pays *</label>
+            <select
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+              value={settings.address_country ?? ""}
+              onChange={e => handleChange("address_country", e.target.value)}
+            >
+              <option value="">Choisir…</option>
+              <option value="FR">France</option>
+              <option value="BE">Belgique</option>
+              <option value="LU">Luxembourg</option>
+              <option value="CH">Suisse</option>
+              <option value="CA">Canada</option>
+              <option value="DE">Allemagne</option>
+              <option value="NL">Pays-Bas</option>
+            </select>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <p className="text-sm font-semibold text-gray-700">Régime de TVA</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2">
+            <label className="text-xs font-medium text-gray-500 block mb-1">Votre situation</label>
+            <select
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+              value={settings.vat_regime ?? "standard"}
+              onChange={e => handleChange("vat_regime", e.target.value)}
+            >
+              {VAT_REGIME_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-400 mt-1">{regimeHint}</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Taux de TVA par défaut (%)</label>
+            <input
+              type="number" min={0} max={100} step="0.1"
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={settings.default_tax_rate ?? 0}
+              onChange={e => handleChange("default_tax_rate", parseFloat(e.target.value) || 0)}
+            />
           </div>
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">Délai de paiement (jours)</label>
@@ -2364,6 +2514,86 @@ function SectionFacturation() {
               value={settings.payment_terms_days ?? 30}
               onChange={e => handleChange("payment_terms_days", parseInt(e.target.value) || 0)}
             />
+            {(settings.payment_terms_days ?? 30) > 60 && (
+              <p className="text-xs text-amber-600 mt-1">
+                Au-delà de 60 jours, le délai dépasse le plafond légal entre professionnels.
+              </p>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <p className="text-sm font-semibold text-gray-700">Retard de paiement et assurance</p>
+        <p className="text-xs text-gray-500">
+          Mentions obligatoires entre professionnels. Laissées vides, les factures
+          portent la mention légale par défaut et l'indemnité de 40 €.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Taux de pénalité annuel (%)</label>
+            <input
+              type="number" min={0} step="0.1"
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="Taux légal si vide"
+              value={settings.late_penalty_rate ?? ""}
+              onChange={e => handleChange("late_penalty_rate", parseFloat(e.target.value) || 0)}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Indemnité de recouvrement (€)</label>
+            <input
+              type="number" min={0}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              value={settings.recovery_fee ?? 40}
+              onChange={e => handleChange("recovery_fee", parseFloat(e.target.value) || 0)}
+            />
+            <p className="text-xs text-gray-400 mt-1">40 € est le minimum légal.</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Assurance professionnelle</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="AXA — contrat n° 1234"
+              value={settings.insurance_name ?? ""}
+              onChange={e => handleChange("insurance_name", e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">Obligatoire pour les artisans du bâtiment.</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Couverture géographique</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="France métropolitaine"
+              value={settings.insurance_coverage ?? ""}
+              onChange={e => handleChange("insurance_coverage", e.target.value)}
+            />
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <p className="text-sm font-semibold text-gray-700">Numérotation</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Préfixe des factures</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="FAC"
+              value={settings.prefix ?? "FAC"}
+              onChange={e => handleChange("prefix", e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">Ex : FAC-2026-0001</p>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Préfixe des avoirs</label>
+            <input
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+              placeholder="AV"
+              value={settings.credit_prefix ?? "AV"}
+              onChange={e => handleChange("credit_prefix", e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">Série distincte et continue : AV-2026-0001</p>
           </div>
         </div>
       </Card>

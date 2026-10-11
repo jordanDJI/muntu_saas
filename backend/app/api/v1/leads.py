@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from uuid import UUID
 from app.middleware.tenant import get_current_tenant
+from app.middleware.roles import require_crm_access
+from app.middleware.rate_limit import check_rate_async
 from app.core.supabase import get_supabase_admin
 from app.models.lead import LeadCreateIn, LeadUpdateIn, LeadOut
 from app.services.email import send_lead_notification, send_lead_acknowledgement, get_tenant_brand
@@ -50,8 +52,9 @@ async def list_leads(
 
 
 @router.post("/public/{tenant_slug}", status_code=status.HTTP_201_CREATED)
-async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_tasks: BackgroundTasks):
+async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_tasks: BackgroundTasks, request: Request):
     """Endpoint public — appelé par le formulaire du site vitrine."""
+    await check_rate_async(request, "lead_public", max_calls=5, window_seconds=300)  # 5 leads / IP / 5 min
     supabase = get_supabase_admin()
 
     tenant = supabase.table("tenant").select("id, name").eq("slug", tenant_slug).single().execute().data
@@ -140,7 +143,7 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
 
 
 @router.patch("/{lead_id}")
-async def update_lead(lead_id: UUID, body: LeadUpdateIn, tenant_id: str = Depends(get_current_tenant)):
+async def update_lead(lead_id: UUID, body: LeadUpdateIn, tenant_id: str = Depends(require_crm_access)):
     supabase = get_supabase_admin()
     updates = body.model_dump(exclude_none=True)
     if not updates:

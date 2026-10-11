@@ -10,7 +10,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
 from app.core.supabase import get_supabase_admin
-from app.middleware.tenant import get_current_tenant
+from app.middleware.roles import require_crm_access
 from app.services.subscription import get_tenant_plan
 
 router = APIRouter(prefix="/contacts", tags=["Attachments"])
@@ -47,7 +47,7 @@ def _assert_contact_belongs(sb, contact_id: str, tenant_id: str):
 @router.get("/{contact_id}/attachments")
 async def list_attachments(
     contact_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
     _assert_contact_belongs(sb, contact_id, tenant_id)
@@ -68,7 +68,7 @@ async def list_attachments(
 async def upload_attachment(
     contact_id: str,
     file: UploadFile = File(...),
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
     _assert_contact_belongs(sb, contact_id, tenant_id)
@@ -107,7 +107,11 @@ async def upload_attachment(
             path=storage_path,
             file=file_bytes,
             file_options={
-                "content-type": file.content_type or "application/octet-stream",
+                # Toujours stocké en octet-stream, quel que soit le type déclaré par
+                # l'appelant (non vérifié) : l'UI n'ouvre jamais ces fichiers inline,
+                # seulement en téléchargement — ça évite qu'un HTML/SVG uploadé
+                # s'exécute comme script si le lien signé est ouvert directement.
+                "content-type": "application/octet-stream",
                 "upsert": "false",
             },
         )
@@ -134,7 +138,7 @@ async def upload_attachment(
 async def delete_attachment(
     contact_id: str,
     attachment_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
     res = (
@@ -162,7 +166,7 @@ async def delete_attachment(
 async def upload_contact_photo(
     contact_id: str,
     file: UploadFile = File(...),
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """Upload/remplace la photo de profil d'un contact (bucket privé, URL signée)."""
     sb = get_supabase_admin()
@@ -216,7 +220,7 @@ async def upload_contact_photo(
 @router.delete("/{contact_id}/photo", status_code=204)
 async def delete_contact_photo(
     contact_id: str,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     sb = get_supabase_admin()
     res = (

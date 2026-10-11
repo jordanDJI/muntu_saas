@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from app.middleware.tenant import get_current_tenant
+from app.middleware.roles import require_calendar_access
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.calendar import AvailabilitySlotIn, BlockedPeriodIn, CalendarApptIn
 from app.services.lead import ensure_lead
@@ -30,7 +30,7 @@ def _ensure_calendar(sb, tenant_id: str) -> str:
 # ── Disponibilités ────────────────────────────────────────────────────────────
 
 @router.get("/availability")
-async def get_availability(tenant_id: str = Depends(get_current_tenant)):
+async def get_availability(tenant_id: str = Depends(require_calendar_access)):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)
     res = sb.table("availability_slot").select("*").eq("calendar_id", cal_id).order("day_of_week").order("start_time").execute()
@@ -38,7 +38,7 @@ async def get_availability(tenant_id: str = Depends(get_current_tenant)):
 
 
 @router.put("/availability")
-async def replace_availability(slots: list[AvailabilitySlotIn], tenant_id: str = Depends(get_current_tenant)):
+async def replace_availability(slots: list[AvailabilitySlotIn], tenant_id: str = Depends(require_calendar_access)):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)
 
@@ -66,7 +66,7 @@ async def replace_availability(slots: list[AvailabilitySlotIn], tenant_id: str =
 # ── Blocages ──────────────────────────────────────────────────────────────────
 
 @router.get("/blocked")
-async def get_blocked(tenant_id: str = Depends(get_current_tenant)):
+async def get_blocked(tenant_id: str = Depends(require_calendar_access)):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)
     now = datetime.now(timezone.utc).isoformat()
@@ -82,7 +82,7 @@ async def get_blocked(tenant_id: str = Depends(get_current_tenant)):
 
 
 @router.post("/blocked", status_code=201)
-async def create_blocked(body: BlockedPeriodIn, tenant_id: str = Depends(get_current_tenant)):
+async def create_blocked(body: BlockedPeriodIn, tenant_id: str = Depends(require_calendar_access)):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)
     row: dict = {
@@ -99,7 +99,7 @@ async def create_blocked(body: BlockedPeriodIn, tenant_id: str = Depends(get_cur
 
 
 @router.patch("/blocked/{period_id}")
-async def update_blocked(body: BlockedPeriodIn, period_id: UUID, tenant_id: str = Depends(get_current_tenant)):
+async def update_blocked(body: BlockedPeriodIn, period_id: UUID, tenant_id: str = Depends(require_calendar_access)):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)
     row: dict = {
@@ -117,7 +117,7 @@ async def update_blocked(body: BlockedPeriodIn, period_id: UUID, tenant_id: str 
 
 
 @router.delete("/blocked/{period_id}")
-async def delete_blocked(period_id: UUID, tenant_id: str = Depends(get_current_tenant)):
+async def delete_blocked(period_id: UUID, tenant_id: str = Depends(require_calendar_access)):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)
     sb.table("blocked_period").delete().eq("id", str(period_id)).eq("calendar_id", cal_id).execute()
@@ -127,7 +127,7 @@ async def delete_blocked(period_id: UUID, tenant_id: str = Depends(get_current_t
 # ── Contacts (recherche pour création inline) ─────────────────────────────────
 
 @router.get("/contacts")
-async def search_contacts(q: str = "", tenant_id: str = Depends(get_current_tenant)):
+async def search_contacts(q: str = "", tenant_id: str = Depends(require_calendar_access)):
     sb = get_supabase()
     query = sb.table("contact").select("id, first_name, last_name, email, phone").eq("tenant_id", tenant_id)
     if q:
@@ -138,12 +138,19 @@ async def search_contacts(q: str = "", tenant_id: str = Depends(get_current_tena
 # ── Rendez-vous (vue calendrier) ──────────────────────────────────────────────
 
 @router.post("/appointments", status_code=201)
-async def create_calendar_appointment(body: CalendarApptIn, tenant_id: str = Depends(get_current_tenant)):
+async def create_calendar_appointment(body: CalendarApptIn, tenant_id: str = Depends(require_calendar_access)):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)
 
     if body.contact_id:
         contact_id = str(body.contact_id)
+        owned = (
+            sb.table("contact").select("id").eq("id", contact_id)
+            .eq("tenant_id", tenant_id).execute().data
+        )
+        if not owned:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Contact introuvable")
     else:
         new_c = sb.table("contact").insert({
             "tenant_id": tenant_id,
@@ -174,7 +181,7 @@ async def create_calendar_appointment(body: CalendarApptIn, tenant_id: str = Dep
 async def get_calendar_appointments(
     start: Optional[str] = None,
     end: Optional[str] = None,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_calendar_access),
 ):
     sb = get_supabase()
     cal_id = _ensure_calendar(sb, tenant_id)

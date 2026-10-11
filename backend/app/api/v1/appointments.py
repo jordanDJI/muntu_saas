@@ -9,7 +9,7 @@ from app.models.appointment import AppointmentCreateIn, AppointmentUpdateIn, App
 from app.services.email import send_appointment_confirmation, send_appointment_cancellation, get_tenant_brand
 from app.services import push as push_svc
 from app.services.deposits import is_refundable, refund_appointment_deposit
-from app.middleware.roles import require_owner_or_admin
+from app.middleware.roles import require_owner_or_admin, require_calendar_access
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -46,13 +46,29 @@ async def list_appointments(
 async def create_appointment(
     body: AppointmentCreateIn,
     background_tasks: BackgroundTasks,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_calendar_access),
 ):
     supabase = get_supabase()
 
     calendar = supabase.table("calendar").select("id").eq("tenant_id", tenant_id).single().execute().data
     if not calendar:
         raise HTTPException(status_code=404, detail="Calendrier introuvable")
+
+    contact_rows = (
+        supabase.table("contact").select("first_name, last_name, email")
+        .eq("id", str(body.contact_id)).eq("tenant_id", tenant_id).execute().data
+    )
+    if not contact_rows:
+        raise HTTPException(status_code=404, detail="Contact introuvable")
+    contact = contact_rows[0]
+
+    if body.lead_id:
+        lead_check = (
+            supabase.table("lead").select("id").eq("id", str(body.lead_id))
+            .eq("tenant_id", tenant_id).execute().data
+        )
+        if not lead_check:
+            raise HTTPException(status_code=404, detail="Lead introuvable")
 
     appt_data = {
         "calendar_id": calendar["id"],
@@ -75,7 +91,6 @@ async def create_appointment(
     if body.lead_id:
         supabase.table("lead").update({"status": "scheduled"}).eq("id", str(body.lead_id)).execute()
 
-    contact = supabase.table("contact").select("first_name, last_name, email").eq("id", str(body.contact_id)).single().execute().data
     tenant = supabase.table("tenant").select("name, timezone").eq("id", tenant_id).single().execute().data
 
     if contact and contact.get("email") and tenant:
@@ -156,7 +171,7 @@ async def confirm_appointment(
     if appt["status"] == "cancelled":
         raise HTTPException(status_code=400, detail="Ce rendez-vous est déjà annulé")
 
-    result = supabase.table("appointment").update({"status": "confirmed"}).eq("id", str(appointment_id)).execute()
+    result = supabase.table("appointment").update({"status": "confirmed"}).eq("id", str(appointment_id)).eq("calendar_id", appt["calendar_id"]).execute()
     appt = result.data[0]
 
     supabase.table("lead").update({"status": "scheduled"}).eq("contact_id", appt["contact_id"]).eq("tenant_id", tenant_id).execute()
@@ -206,7 +221,7 @@ async def cancel_appointment(
 
     was_confirmed = appt["status"] == "confirmed"
     was_pending = appt["status"] == "pending"
-    result = supabase.table("appointment").update({"status": "cancelled"}).eq("id", str(appointment_id)).execute()
+    result = supabase.table("appointment").update({"status": "cancelled"}).eq("id", str(appointment_id)).eq("calendar_id", appt["calendar_id"]).execute()
     appt = result.data[0]
 
     supabase.table("lead").update({"status": "closed_lost"}).eq("contact_id", appt["contact_id"]).eq("tenant_id", tenant_id).execute()
@@ -333,12 +348,13 @@ async def update_appointment(
         updates["end_at"] = updates["end_at"].isoformat()
 
     # Vérifie que le RDV appartient bien au tenant avant de modifier
-    _get_tenant_appointment(supabase, appointment_id, tenant_id)
+    appt = _get_tenant_appointment(supabase, appointment_id, tenant_id)
 
     result = (
         supabase.table("appointment")
         .update(updates)
         .eq("id", str(appointment_id))
+        .eq("calendar_id", appt["calendar_id"])
         .execute()
     )
     if not result.data:

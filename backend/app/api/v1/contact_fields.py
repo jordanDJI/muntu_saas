@@ -20,6 +20,12 @@ router = APIRouter(prefix="/contact-fields", tags=["Contact Fields"])
 FIELD_TYPES = {"text", "phone", "email", "date", "number", "select"}
 LOCKED_FIELD_KEYS = {"first_name", "last_name", "email", "phone"}
 
+# Clés internes jamais déclarables comme champ (de base, custom ou réattaché) :
+# photo_path porte le chemin de stockage de la photo de profil (attachments.py),
+# jamais destiné à être lu/écrit comme un champ normal — l'exposer permettrait
+# de faire signer n'importe quel chemin du bucket par /contacts/{id} (IDOR).
+RESERVED_CUSTOM_FIELD_KEYS = {"photo_path"}
+
 # (field_key, label, field_type, storage_mode, options)
 DEFAULT_BASE_FIELDS: list[tuple] = [
     ("first_name", "Prénom", "text", "column", None),
@@ -112,6 +118,8 @@ def field_usage(sb, tenant_id: str, field_defs: list[dict]) -> tuple[dict, dict]
         custom = c.get("custom_fields") or {}
         for key, value in custom.items():
             if value in (None, "", [], {}):
+                continue
+            if key in RESERVED_CUSTOM_FIELD_KEYS:
                 continue
             target = usage if key in declared else orphans
             target[key] = target.get(key, 0) + 1
@@ -340,6 +348,8 @@ async def reattach_contact_field(
         raise HTTPException(400, f"Type invalide (attendu : {', '.join(sorted(FIELD_TYPES))})")
     if not body.label.strip():
         raise HTTPException(400, "Le libellé est obligatoire")
+    if body.field_key in RESERVED_CUSTOM_FIELD_KEYS:
+        raise HTTPException(400, "Cette clé est réservée et ne peut pas être utilisée.")
 
     sb = get_supabase_admin()
     field_defs = ensure_default_fields(sb, tenant_id)
