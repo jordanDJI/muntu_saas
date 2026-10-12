@@ -54,7 +54,7 @@ export default function PrivacyPage() {
         Politique de confidentialité
       </h1>
       <p style={{ ...P, marginBottom: "56px" }}>
-        Dernière mise à jour : 16 mai 2026 — Klientys SRL, Belgique
+        Dernière mise à jour : 12 octobre 2026 — ADUMIS, France
       </p>
 
       <div style={{ borderTop: "1px solid var(--l-border)", paddingTop: "48px" }}>
@@ -62,7 +62,7 @@ export default function PrivacyPage() {
         <div style={SECTION}>
           <h2 style={H2}>1. Qui sommes-nous ?</h2>
           <p style={P}>
-            Klientys (ci-après «&nbsp;nous&nbsp;») est une plateforme SaaS éditée par Klientys SRL, société de droit belge.
+            Klientys (ci-après «&nbsp;nous&nbsp;») est une plateforme SaaS éditée par ADUMIS (SIREN 131374936), établie en France.
             Elle permet aux indépendants et TPE (kinés, infirmiers, artisans, etc.) de créer leur site vitrine, gérer leurs
             rendez-vous et piloter leur relation client depuis un tableau de bord unique.
           </p>
@@ -152,8 +152,8 @@ export default function PrivacyPage() {
           </ul>
           <p style={P}>
             Pour exercer ces droits : <a href="mailto:support@klientys.co" style={{ color: "var(--l-teal-xl)" }}>support@klientys.co</a>.
-            Réponse sous 30 jours. En cas de litige, vous pouvez saisir l'
-            <a href="https://www.autoriteprotectiondonnees.be" target="_blank" rel="noreferrer" style={{ color: "var(--l-teal-xl)" }}>Autorité de Protection des Données</a> (Belgique).
+            Réponse sous 30 jours. En cas de litige, vous pouvez saisir la{" "}
+            <a href="https://www.cnil.fr" target="_blank" rel="noreferrer" style={{ color: "var(--l-teal-xl)" }}>CNIL</a> (France).
           </p>
         </div>
 

@@ -52,7 +52,7 @@ export default function CguPage() {
         Conditions Générales d'Utilisation
       </h1>
       <p style={{ ...P, marginBottom: "56px" }}>
-        Dernière mise à jour : 3 juillet 2026 — Klientys SRL, Belgique
+        Dernière mise à jour : 12 octobre 2026 — ADUMIS, France
       </p>
 
       <div style={{ borderTop: "1px solid var(--l-border)", paddingTop: "48px" }}>
@@ -61,11 +61,18 @@ export default function CguPage() {
           <h2 style={H2}>1. Objet</h2>
           <p style={P}>
             Les présentes Conditions Générales d'Utilisation (CGU) régissent l'accès et l'utilisation de la plateforme
-            Klientys, accessible à l'adresse <strong>klientys.co</strong>, éditée par Klientys SRL (Belgique).
+            Klientys, accessible à l'adresse <strong>klientys.co</strong>, éditée par ADUMIS (SIREN 131374936, France).
           </p>
           <p style={P}>
             En créant un compte, vous acceptez sans réserve les présentes CGU. Si vous n'acceptez pas ces conditions,
             vous ne devez pas utiliser la plateforme.
+          </p>
+          <p style={P}>
+            Lorsque vous traitez dans Klientys des données concernant vos propres clients, patients ou prospects,
+            vous en êtes le responsable de traitement et notre{" "}
+            <a href="/legal/dpa" style={{ color: "var(--l-teal-xl)" }}>accord de sous-traitance</a>{" "}
+            s'applique. Il fait partie intégrante du contrat et prévaut sur les présentes CGU pour tout ce qui
+            concerne les données à caractère personnel.
           </p>
         </div>
 
@@ -188,8 +195,8 @@ export default function CguPage() {
         <div style={SECTION}>
           <h2 style={H2}>11. Droit applicable et juridiction</h2>
           <p style={P}>
-            Les présentes CGU sont régies par le droit belge. Tout litige sera soumis à la juridiction compétente
-            du ressort du siège de Klientys SRL, sauf disposition impérative contraire applicable au consommateur.
+            Les présentes CGU sont régies par le droit français. Tout litige sera soumis à la juridiction compétente
+            du ressort de Marseille, sauf disposition impérative contraire applicable au consommateur.
           </p>
         </div>
 
@@ -205,7 +212,7 @@ export default function CguPage() {
         <div style={SECTION}>
           <h2 style={H2}>13. Accès administrateur pour support et maintenance</h2>
           <p style={P}>
-            Dans le cadre de ses obligations de support technique et de maintenance, Klientys SRL peut être amenée
+            Dans le cadre de ses obligations de support technique et de maintenance, ADUMIS peut être amenée
             à accéder à votre espace professionnel (tableau de bord, données CRM, configuration) sans nécessiter
             votre présence ou votre action. Cet accès est strictement encadré :
           </p>
@@ -222,7 +229,7 @@ export default function CguPage() {
             <a href="mailto:support@klientys.co" style={{ color: "var(--l-teal-xl)" }}>support@klientys.co</a>.
           </p>
           <p style={P}>
-            En acceptant les présentes CGU, vous autorisez Klientys SRL à exercer ce droit d'accès dans les conditions
+            En acceptant les présentes CGU, vous autorisez ADUMIS à exercer ce droit d'accès dans les conditions
             décrites ci-dessus.
           </p>
         </div>

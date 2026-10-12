@@ -405,7 +405,7 @@ def send_impersonation_notice(tenant_email: str, tenant_name: str, admin_email: 
         <a href="mailto:support@klientys.co" style="color:#2A8FA5;text-decoration:none">support@klientys.co</a>.
       </p>
     """
-    footer = '<p style="color:#5C7A8A;font-size:12px;margin:0">Klientys SRL — Ce message est généré automatiquement.</p>'
+    footer = '<p style="color:#5C7A8A;font-size:12px;margin:0">Klientys — Ce message est généré automatiquement.</p>'
     resend.Emails.send({
         "from": f"Klientys Sécurité <{settings.email_from}>",
         "to": [tenant_email],

@@ -51,9 +51,11 @@ export default function MentionsPage() {
         <div style={SECTION}>
           <h2 style={H2}>Éditeur du site</h2>
           <p style={P}>
-            <strong>Klientys SRL</strong><br />
-            Société à responsabilité limitée de droit belge<br />
-            Belgique<br />
+            <strong>ADUMIS</strong><br />
+            Jordan Djilla, entrepreneur individuel<br />
+            14 rue Villa Oddo, 13015 Marseille, France<br />
+            SIREN 131374936 — APE 6201Z<br />
+            TVA non applicable, article 293 B du CGI<br />
             E-mail : <a href="mailto:support@klientys.co" style={{ color: "var(--l-teal-xl)" }}>support@klientys.co</a>
           </p>
         </div>
@@ -61,7 +63,7 @@ export default function MentionsPage() {
         <div style={SECTION}>
           <h2 style={H2}>Directeur de la publication</h2>
           <p style={P}>
-            Le directeur de la publication est le représentant légal de Klientys SRL.
+            Le directeur de la publication est Jordan Djilla.
           </p>
         </div>
 
@@ -86,7 +88,7 @@ export default function MentionsPage() {
           <h2 style={H2}>Propriété intellectuelle</h2>
           <p style={P}>
             L'ensemble des éléments constituant le site klientys.co (textes, graphismes, logotype, icônes, code source)
-            sont la propriété exclusive de Klientys SRL ou font l'objet de licences d'utilisation accordées à Klientys SRL.
+            sont la propriété exclusive d'ADUMIS ou font l'objet de licences d'utilisation accordées à ADUMIS.
           </p>
           <p style={P}>
             Toute reproduction, représentation, modification ou exploitation non autorisée de tout ou partie de ces éléments
@@ -135,8 +137,8 @@ export default function MentionsPage() {
           <p style={P}>
             En cas de litige, vous pouvez contacter en premier lieu notre service client à{" "}
             <a href="mailto:support@klientys.co" style={{ color: "var(--l-teal-xl)" }}>support@klientys.co</a>.
-            En l'absence de résolution amiable, vous pouvez saisir le médiateur compétent selon la législation
-            belge applicable.
+            En l'absence de résolution amiable, le consommateur peut recourir gratuitement à un médiateur de la
+            consommation, conformément aux articles L612-1 et suivants du code de la consommation.
           </p>
         </div>
 

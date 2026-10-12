@@ -49,6 +49,8 @@ export default function MarketingFooter() {
             <h4>Légal</h4>
             <Link href="/legal/cgu">CGU</Link>
             <Link href="/legal/privacy">Confidentialité</Link>
+            <Link href="/legal/dpa">Sous-traitance (DPA)</Link>
+            <Link href="/legal/sous-traitants">Sous-traitants</Link>
             <Link href="/legal/mentions">Mentions légales</Link>
             <a href="mailto:support@klientys.co">support@klientys.co</a>
           </div>

@@ -62,7 +62,7 @@ Klientys permet à chaque professionnel indépendant de créer son site internet
 
 Tarif : dès 29,90 €/mois, essai gratuit 14 jours sans carte bancaire.
 
-Fondé en Belgique. Cible principale : France et Belgique.
+Édité par ADUMIS, structure française basée à Marseille. Cible principale : France et Belgique.
 
 ## Pages principales
 
