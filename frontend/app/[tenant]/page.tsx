@@ -112,7 +112,9 @@ export async function generateMetadata({
   return {
     title: titleTag,
     description: desc,
-    robots: { index: true, follow: true },
+    // noindex : le tenant porte les widgets sur son propre site, sans domaine
+    // personnalisé — ce site Klientys ne doit pas le concurrencer dans Google.
+    robots: site.noindex ? { index: false, follow: true } : { index: true, follow: true },
     alternates: { canonical },
     openGraph: {
       title: titleTag,

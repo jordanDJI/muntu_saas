@@ -74,7 +74,7 @@ export default function TenantDetailPage() {
   const router   = useRouter();
   const [userLevel, setUserLevel] = useState<"viewer"|"support"|"super_admin"|null>(null);
   const [data,   setData]   = useState<any>(null);
-  const [tab,    setTab]    = useState<"actions"|"overrides"|"log"|"design">("actions");
+  const [tab,    setTab]    = useState<"actions"|"overrides"|"log"|"design"|"integration">("actions");
   const [toast,  setToast]  = useState("");
   const [toastOk,setToastOk]= useState(true);
   const [error,  setError]  = useState("");
@@ -536,14 +536,14 @@ export default function TenantDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 p-1 rounded-lg w-fit" style={{ background: "rgba(170,189,216,0.04)" }}>
-        {(["actions","overrides","log","design"] as const).map((t) => (
+        {(["actions","overrides","log","design","integration"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className="px-3 py-1.5 text-xs rounded-md transition-colors capitalize"
             style={tab === t
               ? { background: "rgba(13,75,88,0.35)", color: "#7DD8E8" }
               : { color: K.muted }
             }>
-            {t === "log" ? "Log" : t === "overrides" ? "Feature overrides" : t === "design" ? "🎨 Design" : "Actions"}
+            {t === "log" ? "Log" : t === "overrides" ? "Feature overrides" : t === "design" ? "🎨 Design" : t === "integration" ? "🧩 Intégration" : "Actions"}
           </button>
         ))}
       </div>
@@ -712,7 +712,16 @@ export default function TenantDetailPage() {
       )}
 
       {tab === "design" && (
-        <DesignTab tenantId={id} tenantName={tenant.name} tenantSlug={tenant.slug} onImpersonate={impersonate} />
+        <GuideTab methods={DESIGN_METHODS} intro="Choisissez une méthode de refonte pour afficher le tutoriel pas-à-pas."
+          tenantName={tenant.name} tenantSlug={tenant.slug} onImpersonate={impersonate} />
+      )}
+
+      {tab === "integration" && <TenantIntegrations tenantId={id} />}
+
+      {tab === "integration" && (
+        <GuideTab methods={INTEGRATION_METHODS}
+          intro="Le tenant a déjà son propre site (ou un autre support) et veut y ajouter les widgets Klientys, ou le remplacer par un site Klientys. Les codes affichés sont déjà remplis avec son slug."
+          tenantName={tenant.name} tenantSlug={tenant.slug} onImpersonate={impersonate} />
       )}
     </div>
   );
@@ -754,19 +763,25 @@ function ActionBlock({ title, accent, children }: { title: string; accent: strin
   );
 }
 
-// ── DesignTab ──────────────────────────────────────────────────────────────────
+// ── Tutoriels support (onglets Design et Intégration) ─────────────────────────
 
-type DesignMethod = {
+// Dans detail, code et actionHref : {slug} et {origin} sont remplacés par le
+// slug du tenant et l'URL de l'app, pour que le support copie un code prêt.
+// {origin} vient de NEXT_PUBLIC_APP_URL et non de window.location.origin : ces
+// codes partent sur le site d'un client, ils doivent pointer vers la prod même
+// quand l'admin est ouvert en local, sur une preview Vercel ou sur www.
+const GUIDE_APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co").replace(/\/$/, "");
+type GuideMethod = {
   id: string;
   title: string;
   tagline: string;
   difficulty: "Facile" | "Intermédiaire" | "Avancé";
   time: string;
   icon: string;
-  steps: { label: string; detail: string; warning?: string; action?: "impersonate" | "link"; actionLabel?: string; actionHref?: string }[];
+  steps: { label: string; detail: string; code?: string; warning?: string; action?: "impersonate" | "link"; actionLabel?: string; actionHref?: string }[];
 };
 
-const DESIGN_METHODS: DesignMethod[] = [
+const DESIGN_METHODS: GuideMethod[] = [
   {
     id: "palette",
     title: "Changer la palette & la police",
@@ -845,28 +860,143 @@ const DESIGN_METHODS: DesignMethod[] = [
   },
 ];
 
+const INTEGRATION_METHODS: GuideMethod[] = [
+  {
+    id: "widgets",
+    title: "Intégrer les widgets sur un site existant",
+    tagline: "Chatbot, réservation et formulaire de contact sur le site du client (WordPress, Wix, HTML…).",
+    difficulty: "Intermédiaire",
+    time: "15–30 min",
+    icon: "🧩",
+    steps: [
+      { label: "Récupérer le code de la page", detail: "Demander au client le fichier HTML de la page (ou son URL) et l'outil utilisé : WordPress, Wix, Squarespace, HTML fait main… Chaque constructeur de site a un bloc « HTML personnalisé » ou « Code embed » : c'est là que vont les balises ci-dessous.", warning: "Certains constructeurs suppriment les balises <script> ou les attributs data-* à l'enregistrement. Toujours vérifier le code publié (clic droit → Afficher le code source), pas seulement celui qui a été collé." },
+      { label: "Créer l'intégration dans le dashboard du tenant", detail: "Dashboard → Intégrer sur votre site existant → « Nouvelle intégration ». Une intégration par support (son site, une page Notion, sa bio Instagram…), avec un nom parlant : les demandes et RDV sont comptés par intégration dans Paramètres → Mon site.\n\nChoisir le type :\n• Site web : le support accepte du HTML et du JavaScript (cas le plus courant).\n• Iframe : il accepte une iframe mais pas de script (Notion, Carrd). Pas de chatbot dans ce mode.\n• Lien : il n'accepte que des liens (Instagram, fiche Google, Linktree).\n\nLe dashboard génère ensuite les codes avec l'identifiant de l'intégration (data-saas-integration=\"int_…\") : toujours partir de ces codes, ne pas les réécrire à la main.", action: "impersonate", actionLabel: "Ouvrir le dashboard du tenant →", warning: "Un ancien code sans identifiant fonctionne encore : il est rattaché automatiquement à une intégration nommée d'après le domaine, renommable dans Mon site. Mais deux sites qui partagent le même code ne peuvent pas être mesurés séparément." },
+      { label: "Ajouter le loader, une seule fois", detail: "Juste avant </body>. Une seule fois par page, même avec plusieurs widgets.", code: `<script src="{origin}/embed.js" async></script>`, warning: "Toujours en https://. En http://, le navigateur bloque le script et les widgets sur un site HTTPS — et la page s'affiche normalement, sans aucune erreur visible pour le client." },
+      { label: "Placer les widgets", detail: "Le type s'écrit exactement chatbot, book ou contact : un type mal écrit (ex. « booking ») est ignoré sans erreur.\n\n• chatbot : bulle flottante en bas à droite, quel que soit l'emplacement du div. Le mettre avant </body>. Un seul par page : chaque div crée sa propre bulle.\n• book et contact : s'affichent exactement là où se trouve le div, sur toute la largeur de son conteneur.", code: `<!-- Forme attendue : les vrais codes, avec l'identifiant, sont dans le dashboard du tenant -->\n\n<!-- Réservation, là où elle doit apparaître -->\n<div data-saas-widget="book" data-saas-slug="{slug}" data-saas-integration="int_…"></div>\n\n<!-- Formulaire de contact, là où il doit apparaître -->\n<div data-saas-widget="contact" data-saas-slug="{slug}" data-saas-integration="int_…"></div>\n\n<!-- Chatbot, juste avant le loader -->\n<div data-saas-widget="chatbot" data-saas-slug="{slug}" data-saas-integration="int_…"></div>`, warning: "Ne pas poser book ou contact directement dans une grille à plusieurs colonnes : le widget devient une case étroite et le calendrier est écrasé. L'envelopper dans un conteneur pleine largeur." },
+      { label: "Ajuster la hauteur si le widget est coupé", detail: "book et contact ont une hauteur fixe (600 px et 480 px), sans barre de défilement : le site du client ne peut pas mesurer le contenu d'une iframe d'un autre domaine. Si le bas est coupé (bouton d'envoi invisible), forcer une hauteur dans le CSS du site client. Valeurs de départ, à ajuster à l'œil :", code: `[data-saas-widget="contact"] iframe { height: 680px !important; }\n[data-saas-widget="book"] iframe { height: 760px !important; }`, warning: "!important est indispensable : embed.js pose la hauteur en style inline. Vérifier aussi sur mobile, où les libellés passent sur deux lignes et demandent plus de hauteur." },
+      { label: "Régler la langue (site multilingue)", detail: "Sans attribut, les widgets sont en français. data-saas-lang accepte fr, en, de, nl ou auto. Avec auto, les widgets suivent l'attribut lang de <html> et se traduisent en direct quand le sélecteur de langue du site le modifie.", code: `<div data-saas-widget="contact" data-saas-slug="{slug}" data-saas-lang="auto"></div>`, warning: "auto ne fonctionne que si le sélecteur de langue du site modifie <html lang>. Le vérifier dans l'inspecteur (F12) en changeant de langue ; sinon, mettre une langue fixe. Les messages d'erreur du serveur et les emails de confirmation restent en français." },
+      { label: "Vérifier que le chatbot peut répondre", detail: "Le chatbot ne dépend pas de la publication du site Klientys, mais il s'appuie sur son contenu. Sur un support externe, il exige dans le site-builder :\n\n• un titre de site ;\n• une description ;\n• au moins une prestation ;\n• un téléphone ou un email de contact.\n\nS'il en manque un, la bulle n'apparaît pas du tout sur le site du client (plutôt qu'une bulle qui répond « erreur »). Le tenant voit ce qui manque dans Paramètres → Mon site et sur la page Intégrer.", warning: "Le site Klientys du tenant n'a pas besoin d'être publié. S'il le publie alors qu'une intégration est active et qu'aucun domaine personnalisé n'est connecté, il reste consultable mais n'est pas indexé par Google (noindex, hors sitemap) pour ne pas concurrencer le site du client." },
+      { label: "Traiter les anciens formulaires", detail: "Si la page contient déjà un formulaire (EmailJS, Formspree, plugin WordPress…), décider avec le client : le remplacer par le widget contact, ou le garder. Deux formulaires sur la même page, le visiteur ne sait pas lequel utiliser — et seul le widget alimente le CRM.", warning: "Tester l'ancien formulaire avant de le garder. Cas déjà rencontré : un formulaire qui affichait « Demande envoyée » sans rien envoyer (clés EmailJS jamais configurées). Toutes les demandes étaient perdues." },
+      { label: "Tester en conditions réelles", detail: "Sur le site publié du client : envoyer un message avec le widget contact et réserver un créneau test. Puis, dans le dashboard du tenant, vérifier que le message apparaît dans Leads (source « website ») et le RDV en attente dans l'agenda, et que l'intégration affiche son domaine et ses décomptes dans Paramètres → Mon site (aussi visible dans la liste en haut de cet onglet). Tester aussi sur mobile, et dans chaque langue si le site est multilingue. Annuler le RDV test à la fin.\n\nLe tenant n'est prévenu par email d'un nouveau message que si l'email de contact de son site est renseigné (site-builder, étape Contact).", warning: "Tester avec une adresse qui n'appartient pas à l'équipe du tenant : le serveur refuse les emails des membres (« Cette adresse email appartient à l'équipe du professionnel »).", action: "impersonate", actionLabel: "Ouvrir le dashboard du tenant →" },
+    ],
+  },
+  {
+    id: "migration",
+    title: "Remplacer le site intégré par un site Klientys",
+    tagline: "Le tenant abandonne son ancien site pour un site Klientys, sur le même domaine, sans coupure.",
+    difficulty: "Intermédiaire",
+    time: "1 h + propagation DNS",
+    icon: "🔁",
+    steps: [
+      { label: "Rien à migrer côté données", detail: "Les leads, RDV et contacts arrivés par les widgets sont déjà dans Klientys. Seuls les textes et visuels de l'ancien site sont à ressaisir dans le site-builder : il n'existe pas d'import." },
+      { label: "Construire le site en brouillon", detail: "Le tenant (ou le support en impersonation) remplit le site-builder pendant que l'ancien site tourne avec ses widgets. L'aperçu (?preview=1) permet de valider sans rien rendre public.", action: "impersonate", actionLabel: "Ouvrir le dashboard du tenant →" },
+      { label: "Publier", detail: "Le site devient accessible sur {origin}/{slug}. Tant que l'intégration de l'ancien site est active et que le domaine n'est pas connecté, il n'est pas indexé par Google — aucun doublon avec l'ancien site.", action: "link", actionLabel: "Voir l'aperçu →", actionHref: "/{slug}?preview=1" },
+      { label: "Connecter le domaine", detail: "Paramètres → Domaine → saisir le domaine de l'ancien site. Klientys détecte qu'il affiche les widgets et demande confirmation : le tenant clique « Connecter quand même ». Ses widgets restent actifs sur l'ancien site jusqu'à la bascule.\n\nEnregistrement DNS indiqué par l'écran :\n• sous-domaine (www.domaine.be) : CNAME vers cname.vercel-dns.com ;\n• domaine racine (domaine.be) : enregistrement A vers l'adresse affichée.", warning: "Ne modifier que cet enregistrement, jamais les enregistrements MX : le tenant perdrait ses emails." },
+      { label: "Bascule automatique", detail: "Quand le DNS est propagé et le certificat HTTPS émis, le domaine passe « actif » : le site Klientys est servi à la place de l'ancien, et les intégrations vues sur ce domaine sont désactivées automatiquement (statut « désactivée (domaine) »). L'indexation Google reprend sur le domaine du tenant.\n\nLa propagation prend de quelques minutes à 48 h. Une courte coupure est possible pendant l'émission du certificat." },
+      { label: "Après la bascule", detail: "• Vérifier le site sur le domaine, sur mobile, et refaire un message et une réservation de test.\n• Les anciennes adresses (/services.html, /contact.php…) mènent à une page introuvable : prévenir le tenant pour ses liens imprimés ou partagés.\n• Résilier l'ancien hébergement seulement une fois le domaine « actif » dans Klientys.", warning: "Une intégration sur un autre support (bio Instagram, autre site) n'est pas concernée par la bascule : elle reste active." },
+    ],
+  },
+  {
+    id: "diagnostic",
+    title: "Diagnostiquer « les widgets ne s'affichent pas »",
+    tagline: "Trouver la cause avec les outils du navigateur, sans accès au code du client.",
+    difficulty: "Facile",
+    time: "5–10 min",
+    icon: "🩺",
+    steps: [
+      { label: "Ouvrir le site du client avec les outils développeur", detail: "Ouvrir la page en navigation privée (pas de cache, pas d'extension), puis F12. Les causes ci-dessous ne se voient que là : la page elle-même s'affiche normalement." },
+      { label: "Le loader est-il chargé ?", detail: "Onglet Réseau (Network) → filtrer « embed.js » → recharger la page.\n\n• Absent : la balise <script> n'est pas dans la page publiée (jamais collée, ou supprimée par le constructeur de site).\n• Bloqué, « mixed content » : l'adresse est en http:// au lieu de https://.\n• 404 : l'adresse est mal recopiée.", code: `<script src="{origin}/embed.js" async></script>` },
+      { label: "Les widgets ont-ils été initialisés ?", detail: "Onglet Éléments (Elements) → Ctrl+F « data-saas-widget ». Un div pris en charge porte data-saas-init=\"1\" et contient une iframe (pour le chatbot, l'iframe est ajoutée à la fin de <body>).\n\n• Pas de data-saas-init : type mal écrit (seuls chatbot, book et contact sont reconnus) ou slug vide.\n• Deux bulles de chat : deux divs chatbot dans la page.\n• Le slug doit être exactement :", code: `data-saas-slug="{slug}"` },
+      { label: "L'iframe est-elle bloquée ?", detail: "Dans la console : « Refused to frame » ou « Content Security Policy » → le site du client interdit les iframes externes. Son hébergeur ou son développeur doit autoriser l'adresse ci-dessous dans sa politique de sécurité (directive frame-src).", code: `frame-src {origin};` },
+      { label: "Un widget a disparu, ou n'apparaît jamais", detail: "Regarder d'abord la liste des intégrations en haut de cet onglet.\n\n• Intégration « désactivée » : ses widgets sont masqués par le serveur, même si le code est toujours sur le site. C'est voulu. Le tenant la réactive dans Paramètres → Mon site.\n• « désactivée (domaine) » : le domaine personnalisé du tenant est passé actif sur Klientys, l'ancien site n'est plus servi. Normal après une migration.\n• Seul le chatbot manque : il manque un élément du site (titre, description, prestation, contact). Dans l'onglet Réseau, la requête /api/v1/integrations/public/…/ping renvoie chatbot_ready: false." },
+      { label: "Le chatbot s'affiche mais ne répond pas", detail: "Le visiteur voit seulement « Désolé, une erreur est survenue ». La vraie cause est dans l'onglet Réseau, sur la requête vers /api/v1/chatbot/ :\n\n• 503 « Chatbot désactivé par le professionnel » : l'agent vitrine est désactivé dans Agents IA.\n• 409 « Chatbot non configuré » : un élément requis a été supprimé du site depuis le chargement de la page.\n• 403 : l'intégration vient d'être désactivée.\n• Message de limite après 15 questions : comportement normal, limite par session.\n\nLa publication du site Klientys n'entre plus en jeu." },
+      { label: "« Domaine non détecté » sur une intégration", detail: "Le serveur n'a pas pu savoir sur quel site les widgets s'affichent. Cas habituels :\n\n• type Iframe sur un site dont la politique de confidentialité des liens (Referrer-Policy: no-referrer) empêche le navigateur de transmettre son adresse ;\n• type Lien : normal, un lien n'a pas de domaine.\n\nConséquence : les demandes sont bien comptées, mais la vérification de conflit avec un domaine personnalisé ne peut pas se faire pour cette intégration. Avec le type Site web (loader embed.js), le domaine est toujours détecté." },
+      { label: "Le formulaire affiche une erreur à l'envoi", detail: "• « Cette adresse email appartient à l'équipe du professionnel » : normal, le test a été fait avec l'email d'un membre du tenant. Tester avec une autre adresse.\n• Le message arrive dans Leads mais le tenant n'a pas reçu d'email : l'email de contact du site n'est pas renseigné.\n• Le bas du formulaire est coupé : voir l'étape « Ajuster la hauteur » du guide d'intégration." },
+    ],
+  },
+];
+
 const DIFF_STYLE: Record<string, { bg: string; color: string; border: string }> = {
   "Facile":         { bg: "rgba(74,202,122,0.1)",   color: "#4ACA7A", border: "rgba(74,202,122,0.25)"  },
   "Intermédiaire":  { bg: "rgba(221,170,64,0.1)",   color: "#DDAA40", border: "rgba(221,170,64,0.25)"  },
   "Avancé":         { bg: "rgba(224,96,96,0.1)",    color: "#E06060", border: "rgba(224,96,96,0.25)"   },
 };
 
-function DesignTab({ tenantId, tenantName, tenantSlug, onImpersonate }: {
-  tenantId: string; tenantName: string; tenantSlug: string; onImpersonate: () => void;
+// Intégrations déclarées ou détectées pour ce tenant — point de départ de tout
+// diagnostic : support concerné, domaine, dernière activité, statut.
+function TenantIntegrations({ tenantId }: { tenantId: string }) {
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    adminFetch<any[]>(`/api/v1/admin/tenants/${tenantId}/integrations`)
+      .then(setRows)
+      .catch((e: any) => { setRows([]); setErr(e?.message ?? "Erreur"); });
+  }, [tenantId]);
+
+  const ago = (iso: string | null) => {
+    if (!iso) return "jamais vue";
+    const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+    return d <= 0 ? "vue aujourd'hui" : `vue il y a ${d} j`;
+  };
+
+  return (
+    <div className="rounded-xl p-4 mb-4" style={{ background: K_card, border: `1px solid ${K_border}` }}>
+      <h3 className="text-xs font-medium uppercase tracking-wider mb-3" style={{ color: K_muted }}>Intégrations du tenant</h3>
+      {rows === null ? (
+        <p className="text-xs" style={{ color: K_muted }}>Chargement…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-xs" style={{ color: K_muted }}>{err || "Aucune intégration : le tenant n'a pas installé de widget sur un support externe, ou aucun visiteur ne l'a encore chargé."}</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(r => (
+            <div key={r.id} className="flex items-start justify-between gap-3 py-1.5" style={{ borderBottom: "1px solid rgba(170,189,216,0.05)" }}>
+              <div className="min-w-0">
+                <p className="text-xs font-medium" style={{ color: K_text }}>
+                  {r.name} <span style={{ color: K_muted }}>· {r.kind}{r.auto_created ? " · auto" : ""}</span>
+                </p>
+                <p className="text-xs" style={{ color: K_muted }}>
+                  {(r.domains ?? []).map((d: any) => d.domain).join(", ") || (r.kind === "link" ? "lien" : "domaine non détecté")}
+                  {" · "}{ago(r.last_seen_at)} · {r.leads_count} demandes · {r.appointments_count} RDV
+                </p>
+                <p className="text-xs font-mono" style={{ color: "rgba(170,189,216,0.4)" }}>{r.key}</p>
+              </div>
+              <span className="text-xs shrink-0" style={{ color: r.status === "active" ? "#4ACA7A" : K_muted }}>
+                {r.status === "active" ? "active" : r.disabled_reason === "custom_domain" ? "désactivée (domaine)" : "désactivée"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GuideTab({ methods, intro, tenantName, tenantSlug, onImpersonate }: {
+  methods: GuideMethod[]; intro: string; tenantName: string; tenantSlug: string; onImpersonate: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
-  const method = DESIGN_METHODS.find(m => m.id === selected) ?? null;
+  const [copied, setCopied] = useState<number | null>(null);
+  const method = methods.find(m => m.id === selected) ?? null;
 
-  const resolveHref = (href: string) => href.replace("{slug}", tenantSlug);
+  const fill = (text: string) =>
+    text.replaceAll("{slug}", tenantSlug).replaceAll("{origin}", GUIDE_APP_URL);
+
+  const copy = (i: number, text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(i);
+      setTimeout(() => setCopied(c => (c === i ? null : c)), 1500);
+    }).catch(() => {});
+  };
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: method ? "280px 1fr" : "1fr", gap: 16 }}>
       {/* Liste des méthodes */}
       <div className="space-y-2">
         <p className="text-xs mb-3" style={{ color: K_muted }}>
-          Choisissez une méthode de refonte pour afficher le tutoriel pas-à-pas.
+          {intro}
         </p>
-        {DESIGN_METHODS.map(m => {
+        {methods.map(m => {
           const diff = DIFF_STYLE[m.difficulty];
           const active = selected === m.id;
           return (
@@ -934,7 +1064,21 @@ function DesignTab({ tenantId, tenantName, tenantSlug, onImpersonate }: {
                 {/* Contenu */}
                 <div className="pb-5 flex-1 min-w-0">
                   <p className="text-sm font-semibold mb-1.5" style={{ color: K_text }}>{step.label}</p>
-                  <p className="text-xs leading-relaxed mb-2" style={{ color: K_muted, whiteSpace: "pre-wrap" }}>{step.detail}</p>
+                  <p className="text-xs leading-relaxed mb-2" style={{ color: K_muted, whiteSpace: "pre-wrap" }}>{fill(step.detail)}</p>
+
+                  {step.code && (
+                    <div className="relative mb-2">
+                      <pre className="text-xs rounded-lg px-3 py-2.5 pr-20 overflow-x-auto"
+                        style={{ background: "rgba(7,24,36,0.8)", border: `1px solid ${K_border}`, color: "#7DD8E8", fontFamily: "monospace", whiteSpace: "pre" }}>
+                        {fill(step.code)}
+                      </pre>
+                      <button onClick={() => copy(i, fill(step.code!))}
+                        className="absolute top-1.5 right-1.5 px-2 py-1 rounded text-xs"
+                        style={{ background: "rgba(13,75,88,0.35)", color: copied === i ? "#4ACA7A" : "#2A8FA5", border: "1px solid rgba(42,143,165,0.3)" }}>
+                        {copied === i ? "Copié ✓" : "Copier"}
+                      </button>
+                    </div>
+                  )}
 
                   {step.warning && (
                     <div className="flex items-start gap-2 px-3 py-2 rounded-lg mb-2"
@@ -953,7 +1097,7 @@ function DesignTab({ tenantId, tenantName, tenantSlug, onImpersonate }: {
                   )}
 
                   {step.action === "link" && step.actionHref && (
-                    <a href={resolveHref(step.actionHref)} target="_blank" rel="noreferrer"
+                    <a href={fill(step.actionHref)} target="_blank" rel="noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                       style={{ background: "rgba(13,75,88,0.2)", color: "#2A8FA5", border: "1px solid rgba(42,143,165,0.25)", textDecoration: "none" }}>
                       🔗 {step.actionLabel}

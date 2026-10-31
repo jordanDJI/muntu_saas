@@ -14,6 +14,7 @@ from app.middleware.rate_limit import check_rate_by_key
 from app.core.supabase import get_supabase_admin
 from app.core.config import settings
 from app.services import vercel_domains, ovh_domains
+from app.services import integrations as integration_svc
 from app.services.subscription import get_tenant_plan
 
 stripe.api_key = settings.stripe_secret_key
@@ -52,6 +53,9 @@ def _with_markup(price_ovh: float) -> float:
 
 class ConnectDomainIn(BaseModel):
     domain: str
+    # Le domaine porte des widgets Klientys (intégration active) : le tenant a
+    # confirmé qu'elles seront désactivées quand le domaine passera actif.
+    confirm_integration_conflict: bool = False
 
 class DomainPurchaseCheckoutIn(BaseModel):
     domain: str
@@ -91,17 +95,35 @@ async def connect_domain(body: ConnectDomainIn, tenant_id: str = Depends(get_cur
     if existing.data and existing.data[0]["tenant_id"] != tenant_id:
         raise HTTPException(status_code=409, detail="Ce domaine est déjà utilisé par un autre compte")
 
+    # Le domaine porte déjà les widgets Klientys sur l'ancien site du tenant :
+    # c'est une migration vers Klientys. Pas de refus (il perdrait ses widgets
+    # pendant la propagation DNS) mais une confirmation, puis désactivation
+    # automatique au passage du domaine en actif (poll_domain_status).
+    conflicts = integration_svc.active_conflicts(sb, tenant_id, domain)
+    if conflicts and not body.confirm_integration_conflict:
+        raise HTTPException(status_code=409, detail={
+            "code": "integration_conflict",
+            "message": "Ce domaine affiche déjà vos widgets Klientys.",
+            "integrations": conflicts,
+        })
+
     # Ajouter le domaine dans Vercel
     try:
         await vercel_domains.add_domain(domain)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Erreur Vercel : {str(e)}")
 
-    # Instructions DNS : CNAME pour les sous-domaines, sinon A record
+    # Instructions DNS : CNAME pour un sous-domaine, enregistrement A pour la
+    # racine — un CNAME sur `@` est refusé par la plupart des registraires.
     is_subdomain = domain.count(".") >= 2
-    dns_name = domain.split(".")[0] if is_subdomain else "@"
-    dns_type = "CNAME"
-    dns_value = "cname.vercel-dns.com"
+    if is_subdomain:
+        dns_name = domain.split(".")[0]
+        dns_type = "CNAME"
+        dns_value = "cname.vercel-dns.com"
+    else:
+        dns_name = "@"
+        dns_type = "A"
+        dns_value = await vercel_domains.get_apex_a_value(domain)
 
     sb.table("custom_domain").upsert(
         {
@@ -156,7 +178,14 @@ async def poll_domain_status(tenant_id: str = Depends(get_current_tenant)):
         sb.table("custom_domain").update(update).eq("tenant_id", tenant_id).execute()
         row = {**row, **update}
 
-    return {**row, "propagated": propagated, "ssl": ssl_active, "conflicts": conflicts}
+    # Le domaine sert désormais le site Klientys : les intégrations vues sur ce
+    # domaine (l'ancien site) n'ont plus lieu d'être. Idempotent.
+    disabled = []
+    if row["status"] == "active":
+        disabled = integration_svc.disable_for_domain(sb, tenant_id, domain)
+
+    return {**row, "propagated": propagated, "ssl": ssl_active, "conflicts": conflicts,
+            "disabled_integrations": disabled}
 
 
 @router.delete("/my")

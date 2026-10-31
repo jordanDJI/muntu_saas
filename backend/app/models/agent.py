@@ -110,6 +110,12 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     session_id: Optional[str] = None
+    # Langue du site hôte (widget embarqué, attribut data-saas-lang).
+    # Absente → langue par défaut du site du tenant.
+    lang: Optional[str] = None
+    # Widget embarqué : support d'origine (migration 080). Présent → le
+    # chatbot exige un site complet et refuse si l'intégration est désactivée.
+    integration_key: Optional[str] = None
 
 
 class ChatResponse(BaseModel):

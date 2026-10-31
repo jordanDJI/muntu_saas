@@ -1,6 +1,8 @@
 "use client";
 import { useState, use } from "react";
 import { sanitizePhoneInput } from "../../../../lib/phone";
+import { useEmbedLang, EMBED_T } from "../../i18n";
+import { useIntegration } from "../../useIntegration";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -8,6 +10,9 @@ const EMPTY_FORM = { first_name: "", last_name: "", email: "", phone: "", messag
 
 export default function ContactWidget({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const lang = useEmbedLang();
+  const t = EMBED_T[lang].contact;
+  const integration = useIntegration(slug, "contact");
   const [form, setForm] = useState(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
@@ -27,12 +32,12 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
       const res = await fetch(`${API_URL}/api/v1/booking/${slug}/book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, request_type: "contact", audience_type: isCompany ? "b2b" : "b2c" }),
+        body: JSON.stringify({ ...form, request_type: "contact", audience_type: isCompany ? "b2b" : "b2c", integration_key: integration.key }),
       });
-      if (!res.ok) { const e2 = await res.json().catch(() => ({})); throw new Error(e2.detail ?? "Erreur"); }
+      if (!res.ok) { const e2 = await res.json().catch(() => ({})); throw new Error(e2.detail ?? t.error); }
       setDone(true);
     } catch (err: any) {
-      setError(err.message ?? "Une erreur est survenue.");
+      setError(err.message ?? t.error);
     }
     setSubmitting(false);
   };
@@ -46,6 +51,15 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
     display: "flex", flexDirection: "column", gap: 5, fontSize: 14,
   };
 
+  if (integration.status === "disabled") return integration.standalone ? (
+    <div style={{
+      fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#fff", padding: 24, boxSizing: "border-box",
+      display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", color: "#6b7280", fontSize: 14,
+    }}>
+      {EMBED_T[lang].unavailable}
+    </div>
+  ) : null;
+
   if (done) return (
     <div style={{
       fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#fff",
@@ -53,8 +67,8 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
       padding: 24, textAlign: "center", gap: 14, boxSizing: "border-box",
     }}>
       <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#d1fae5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>✓</div>
-      <h2 style={{ margin: 0, fontSize: 18, color: "#111" }}>Message envoyé !</h2>
-      <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>Nous vous répondrons dans les plus brefs délais.</p>
+      <h2 style={{ margin: 0, fontSize: 18, color: "#111" }}>{t.doneTitle}</h2>
+      <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>{t.doneText}</p>
       <button
         onClick={() => { setDone(false); setForm(EMPTY_FORM); }}
         style={{
@@ -63,7 +77,7 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
           fontWeight: 600, fontSize: 14,
         }}
       >
-        Nouveau message
+        {t.again}
       </button>
     </div>
   );
@@ -76,46 +90,46 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
 
   return (
     <div style={{ fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#fff", padding: 20, boxSizing: "border-box" }}>
-      <h2 style={{ margin: "0 0 18px", fontSize: 17, color: "#111" }}>Nous contacter</h2>
+      <h2 style={{ margin: "0 0 18px", fontSize: 17, color: "#111" }}>{t.title}</h2>
       <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
         {/* Type toggle */}
         <div style={{ display: "flex", border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
           <button type="button" style={toggleStyle(!isCompany)} onClick={() => setForm((f) => ({ ...f, contact_type: "individual" }))}>
-            Particulier
+            {t.individual}
           </button>
           <button type="button" style={toggleStyle(isCompany)} onClick={() => setForm((f) => ({ ...f, contact_type: "company" }))}>
-            Entreprise
+            {t.company}
           </button>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <label style={labelStyle}>
-            <span style={{ color: "#374151", fontWeight: 500 }}>{isCompany ? "Nom de l'entreprise *" : "Prénom *"}</span>
+            <span style={{ color: "#374151", fontWeight: 500 }}>{isCompany ? t.companyName : t.firstName}</span>
             <input type="text" required value={form.first_name} onChange={set("first_name")} style={inputStyle} />
           </label>
           <label style={labelStyle}>
-            <span style={{ color: "#374151", fontWeight: 500 }}>{isCompany ? "Contact" : "Nom *"}</span>
+            <span style={{ color: "#374151", fontWeight: 500 }}>{isCompany ? t.contactPerson : t.lastName}</span>
             <input type="text" required={!isCompany} value={form.last_name} onChange={set("last_name")} style={inputStyle} />
           </label>
         </div>
 
         <label style={labelStyle}>
-          <span style={{ color: "#374151", fontWeight: 500 }}>Email *</span>
+          <span style={{ color: "#374151", fontWeight: 500 }}>{t.email}</span>
           <input type="email" required value={form.email} onChange={set("email")} style={inputStyle} />
         </label>
 
         <label style={labelStyle}>
-          <span style={{ color: "#374151", fontWeight: 500 }}>Téléphone</span>
+          <span style={{ color: "#374151", fontWeight: 500 }}>{t.phone}</span>
           <input type="tel" inputMode="tel" value={form.phone} onChange={setPhone} style={inputStyle} />
         </label>
 
         <label style={labelStyle}>
-          <span style={{ color: "#374151", fontWeight: 500 }}>Message *</span>
+          <span style={{ color: "#374151", fontWeight: 500 }}>{t.message}</span>
           <textarea
             required rows={4} value={form.message} onChange={set("message")}
             style={{ ...inputStyle, resize: "vertical" }}
-            placeholder="Comment pouvons-nous vous aider ?"
+            placeholder={t.placeholder}
           />
         </label>
 
@@ -132,7 +146,7 @@ export default function ContactWidget({ params }: { params: Promise<{ slug: stri
             fontWeight: 600, fontSize: 14, marginTop: 4,
           }}
         >
-          {submitting ? "Envoi en cours…" : "Envoyer le message"}
+          {submitting ? t.submitting : t.send}
         </button>
       </form>
     </div>

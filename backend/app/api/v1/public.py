@@ -6,6 +6,7 @@ Utilise la clé service-role côté backend — le frontend n'a pas besoin de SU
 from fastapi import APIRouter, HTTPException, Query, Request
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.middleware.rate_limit import check_rate
+from app.services import integrations as integration_svc
 
 router = APIRouter(prefix="/public", tags=["Public"])
 
@@ -27,11 +28,24 @@ async def get_published_slugs(request: Request):
     sb = get_supabase()
     rows = (
         sb.table("tenant")
-        .select("slug, site!inner(status)")
+        .select("id, slug, site!inner(status)")
         .eq("site.status", "published")
         .execute()
     )
-    slugs = [r["slug"] for r in rows.data if r.get("slug")]
+    # Hors sitemap : les sites dont le tenant porte les widgets sur son propre
+    # site sans domaine personnalisé (cf. integrations.should_noindex).
+    ids = [r["id"] for r in rows.data]
+    integrated = integration_svc.tenants_with_active_integration(sb, ids)
+    with_domain = {
+        d["tenant_id"] for d in (
+            sb.table("custom_domain").select("tenant_id").eq("status", "active").in_("tenant_id", list(integrated)).execute().data
+            if integrated else []
+        )
+    }
+    slugs = [
+        r["slug"] for r in rows.data
+        if r.get("slug") and not integration_svc.should_noindex(r["id"] in integrated, r["id"] in with_domain)
+    ]
     return {"slugs": slugs}
 
 
@@ -97,4 +111,8 @@ async def get_public_site(request: Request, slug: str, preview: bool = Query(Fal
     # Ne jamais exposer le secret PayPal dans l'API publique
     site_data.pop("paypal_client_secret", None)
 
-    return {**site_data, "tenant": {**tenant, "country": tenant_res.data[0].get("country", "FR"), "sector": tenant_res.data[0].get("sector", "other"), "custom_domain": custom_domain}}
+    noindex = integration_svc.should_noindex(
+        bool(integration_svc.tenants_with_active_integration(sb, [tenant["id"]])), bool(custom_domain),
+    )
+
+    return {**site_data, "noindex": noindex, "tenant": {**tenant, "country": tenant_res.data[0].get("country", "FR"), "sector": tenant_res.data[0].get("sector", "other"), "custom_domain": custom_domain}}

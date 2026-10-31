@@ -19,12 +19,22 @@ async def get_contacts_count(tenant_id: str = Depends(get_current_tenant)):
     quota = await get_contact_quota(tenant_id)
     tenant = supabase.table("tenant").select("contact_overage_since").eq("id", tenant_id).maybe_single().execute()
     overage_since = (tenant.data if tenant else None) or {}
+    stored_overage_since = overage_since.get("contact_overage_since")
+
+    # Auto-réparation : le job de nuit (update_contact_overage_status) peut rater
+    # une exécution ou planter silencieusement pour un tenant — sans ça, un tenant
+    # redescendu sous sa limite restait marqué "en dépassement" indéfiniment, avec
+    # un compteur de jours qui continue de courir alors que le compte réel est bon.
+    if stored_overage_since and not quota["unlimited"] and quota["current"] <= quota["max_contacts"]:
+        supabase.table("tenant").update({"contact_overage_since": None}).eq("id", tenant_id).execute()
+        stored_overage_since = None
+
     return {
         "count": quota["current"],
         "max_contacts": quota["max_contacts"],
         "ceiling": quota["ceiling"],
         "unlimited": quota["unlimited"],
-        "contact_overage_since": overage_since.get("contact_overage_since"),
+        "contact_overage_since": stored_overage_since,
     }
 
 

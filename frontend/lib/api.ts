@@ -344,8 +344,21 @@ export const api = {
 
   // Domaines personnalisés
   getDomain: () => apiFetch<any>("/api/v1/domains/my"),
-  connectDomain: (domain: string) =>
-    apiFetch<any>("/api/v1/domains/connect", { method: "POST", body: JSON.stringify({ domain }) }),
+  // confirmIntegrationConflict : le domaine porte des widgets Klientys actifs,
+  // le tenant accepte qu'ils soient désactivés quand le domaine passera actif.
+  connectDomain: (domain: string, confirmIntegrationConflict = false) =>
+    apiFetch<any>("/api/v1/domains/connect", {
+      method: "POST",
+      body: JSON.stringify({ domain, confirm_integration_conflict: confirmIntegrationConflict }),
+    }),
+
+  // Intégrations des widgets sur des supports externes
+  getIntegrations: () => apiFetch<any[]>("/api/v1/integrations/"),
+  createIntegration: (body: { name: string; kind: "website" | "iframe" | "link" }) =>
+    apiFetch<any>("/api/v1/integrations/", { method: "POST", body: JSON.stringify(body) }),
+  updateIntegration: (id: string, body: { name?: string; status?: "active" | "disabled" }) =>
+    apiFetch<any>(`/api/v1/integrations/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  getChatbotReadiness: () => apiFetch<{ ready: boolean; missing: string[] }>("/api/v1/integrations/chatbot-readiness"),
   pollDomainStatus: () => apiFetch<any>("/api/v1/domains/status"),
   deleteDomain: () => apiFetch<any>("/api/v1/domains/my", { method: "DELETE" }),
   searchDomains: (query: string) =>

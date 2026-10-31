@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from typing import Any, Dict, Optional
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import stripe as stripe_lib
 
 logger = logging.getLogger(__name__)
@@ -644,6 +644,16 @@ async def delete_flag(key: str, admin=Depends(get_current_admin)):
     get_supabase_admin().table("feature_flag").delete().eq("key", key).execute()
     _log(admin, "delete_feature_flag", payload={"key": key})
     return {"ok": True}
+
+
+# ─── Intégrations des widgets (lecture support) ───────────────────────────────
+
+@router.get("/tenants/{tenant_id}/integrations")
+async def get_tenant_integrations(tenant_id: str, admin=Depends(get_current_admin)):
+    """Intégrations du tenant avec domaines détectés et décomptes — diagnostic
+    support. Lecture seule : la désactivation reste une décision du tenant."""
+    from app.services import integrations as integration_svc
+    return integration_svc.list_with_stats(get_supabase_admin(), tenant_id)
 
 
 # ─── Overrides par tenant ─────────────────────────────────────────────────────
@@ -2291,6 +2301,21 @@ async def _revalidate_blog_change(path: str) -> None:
     await revalidate_frontend_path("/sitemap.xml")
 
 
+def _resolve_published_at(status: str, requested: Optional[str], current: Optional[str] = None) -> Optional[str]:
+    """
+    Date de publication d'un article : celle saisie, sinon celle déjà en base, sinon
+    aujourd'hui s'il est publié. Sans ce repli, un article publié sans date sortait en
+    tête du blog (ORDER BY published_at DESC place les NULL en premier) et sans
+    datePublished dans son JSON-LD — cas systématique des traductions et des
+    propositions de l'agent, créées sans date.
+    """
+    if requested:
+        return requested
+    if current:
+        return current
+    return date.today().isoformat() if status == "published" else None
+
+
 class BlogPostIn(BaseModel):
     slug:            str
     title:           str
@@ -2408,7 +2433,7 @@ async def admin_create_blog(body: BlogPostIn, admin=Depends(get_current_admin)):
         "body_html":       sanitize_blog_html(body.body_html),
         "reading_minutes": body.reading_minutes,
         "status":          body.status,
-        "published_at":    body.published_at,
+        "published_at":    _resolve_published_at(body.status, body.published_at),
         "lang":            lang,
     }).execute().data[0]
     _log(admin, "create_blog_post", payload={"slug": body.slug, "title": body.title, "lang": lang})
@@ -2424,6 +2449,14 @@ async def admin_update_blog(post_id: str, body: BlogPostIn, admin=Depends(get_cu
     from datetime import datetime as _dt
     lang = body.lang if body.lang in _BLOG_LANGS else "fr"
     sb = get_supabase_admin()
+    before = (
+        sb.table("blog_post").select("slug, lang, status, published_at, translation_group_id")
+        .eq("id", post_id).maybe_single().execute()
+    )
+    before = before.data if before else None
+    if not before:
+        raise HTTPException(404, "Article introuvable")
+
     row = sb.table("blog_post").update({
         "slug":            body.slug,
         "title":           body.title,
@@ -2433,7 +2466,7 @@ async def admin_update_blog(post_id: str, body: BlogPostIn, admin=Depends(get_cu
         "body_html":       sanitize_blog_html(body.body_html),
         "reading_minutes": body.reading_minutes,
         "status":          body.status,
-        "published_at":    body.published_at,
+        "published_at":    _resolve_published_at(body.status, body.published_at, before.get("published_at")),
         "lang":            lang,
         "updated_at":      _dt.utcnow().isoformat(),
     }).eq("id", post_id).execute().data
@@ -2442,6 +2475,25 @@ async def admin_update_blog(post_id: str, body: BlogPostIn, admin=Depends(get_cu
     _log(admin, "update_blog_post", payload={"id": post_id, "slug": body.slug, "lang": lang})
     path = _blog_path(lang, body.slug)
     await _revalidate_blog_change(path)
+
+    # L'ancienne URL d'un article publié disparaît s'il est dépublié ou si son slug
+    # (ou sa langue) change : sans revalidation elle restait servie depuis le cache
+    # jusqu'à 1 h, et Google la gardait indexée jusqu'à son prochain passage.
+    old_path = _blog_path(before.get("lang") or "fr", before["slug"])
+    if before.get("status") == "published" and (body.status != "published" or old_path != path):
+        await revalidate_frontend_path(old_path)
+        await notify_url_deleted(f"{settings.frontend_url}{old_path}")
+        # Les versions sœurs listent cette URL dans leurs balises hreflang.
+        if before.get("translation_group_id"):
+            siblings = (
+                sb.table("blog_post").select("lang, slug")
+                .eq("translation_group_id", before["translation_group_id"])
+                .neq("id", post_id)
+                .execute().data or []
+            )
+            for s in siblings:
+                await revalidate_frontend_path(_blog_path(s["lang"], s["slug"]))
+
     if body.status == "published":
         await notify_url_updated(f"{settings.frontend_url}{path}")
     return row[0]
@@ -2545,9 +2597,11 @@ async def translate_blog_post(post_id: str, body: TranslateIn, admin=Depends(get
     )
 
     created = []
+    failed = []
     for lang, result in zip(to_translate, results):
         if isinstance(result, Exception):
             logger.error("Échec traduction (%s) pour post %s: %s", lang, post_id, result)
+            failed.append(lang)
             continue
         translated = result
 
@@ -2583,8 +2637,14 @@ async def translate_blog_post(post_id: str, body: TranslateIn, admin=Depends(get
             await revalidate_frontend_path(_blog_path(s["lang"], s["slug"]))
         await revalidate_frontend_path("/sitemap.xml")
 
-    _log(admin, "translate_blog_post", payload={"source_id": post_id, "created": [r["lang"] for r in created], "skipped": skipped})
-    return {"created": created, "skipped": skipped}
+    _log(admin, "translate_blog_post", payload={
+        "source_id": post_id, "created": [r["lang"] for r in created], "skipped": skipped, "failed": failed,
+    })
+    # Tout a échoué : une erreur, pas un succès vide — l'interface affichait sinon
+    # « Déjà traduit dans toutes les langues ».
+    if failed and not created:
+        raise HTTPException(502, f"La traduction a échoué ({', '.join(l.upper() for l in failed)}). Réessayez.")
+    return {"created": created, "skipped": skipped, "failed": failed}
 
 
 class TestimonialIn(BaseModel):

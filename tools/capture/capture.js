@@ -40,6 +40,9 @@ const WANTED = argv.filter((a) => !a.startsWith("--"));
 // Date du creneau reserve, renseignee par l'etape `booking`,
 // utilisee par l'etape `agenda2` pour amener le calendrier sur la bonne semaine.
 let bookedDate = null;
+// Nombre de semaines d'avance choisi par l'etape `agenda`, pour que
+// `agenda-avant` et `agenda-apres` montrent bien la MEME vue.
+let agendaWeeks = null;
 
 // ── Utilitaires ───────────────────────────────────────────────────────────────
 
@@ -98,17 +101,40 @@ async function settle(page, extra = 500) {
   await sleep(extra);
 }
 
-/** Masque le mobilier d'interface qui n'a rien a faire dans une pub. */
+/**
+ * Masque le mobilier d'interface qui n'a rien a faire dans une pub.
+ *
+ * `hideTexts` existe parce que certains bandeaux — le rappel « Activez les
+ * notifications » par exemple — n'ont ni id ni attribut de donnees, seulement
+ * des classes Tailwind qu'un refactor changerait. On les retrouve par leur
+ * libelle et on masque leur ancetre `position: fixed`.
+ */
 async function hideChrome(page) {
   const sel = cfg.hideSelectors || [];
-  if (!sel.length) return;
-  await page.evaluate((list) => {
-    for (const s of list) {
-      document.querySelectorAll(s).forEach((el) => {
-        el.style.setProperty("display", "none", "important");
-      });
-    }
-  }, sel);
+  const texts = cfg.hideTexts || [];
+  if (!sel.length && !texts.length) return;
+  await page.evaluate(
+    ({ list, labels }) => {
+      const hide = (el) => el && el.style.setProperty("display", "none", "important");
+      for (const s of list) {
+        try {
+          document.querySelectorAll(s).forEach(hide);
+        } catch {}
+      }
+      for (const label of labels) {
+        for (const el of document.querySelectorAll("p, h1, h2, h3, span, div")) {
+          if (el.textContent.trim() !== label) continue;
+          let n = el;
+          while (n && n !== document.body && getComputedStyle(n).position !== "fixed") {
+            n = n.parentElement;
+          }
+          hide(n && n !== document.body ? n : el);
+          break;
+        }
+      }
+    },
+    { list: sel, labels: texts }
+  );
 }
 
 /**
@@ -148,7 +174,11 @@ async function shot(page, name, { el = null, fullPage = false } = {}) {
   fs.mkdirSync(OUT, { recursive: true });
   const file = path.join(OUT, `${name}.png`);
   const target = el || page;
-  await target.screenshot({ path: file, fullPage: el ? undefined : fullPage });
+  // captureBeyondViewport : sans lui, une capture d'element plus haut que la
+  // fenetre est tronquee en silence.
+  await target.screenshot(
+    el ? { path: file, captureBeyondViewport: true } : { path: file, fullPage: fullPage }
+  );
   const kb = Math.round(fs.statSync(file).size / 1024);
   log(`  ✓ ${name}.png  (${kb} ko)`);
 }
@@ -260,14 +290,23 @@ const STEPS = {
     await shot(page, "contacts");
   },
 
-  /** agenda-avant.png — l'etat AVANT la reservation */
+  /**
+   * agenda-avant.png — l'etat AVANT la reservation.
+   *
+   * On avance jusqu'a la semaine qui porte des rendez-vous, sinon la capture
+   * tombe sur la semaine courante, deja ecoulee et donc vide : la paire
+   * avant/apres ne montrerait pas la meme vue, et un agenda vide ne vend rien.
+   */
   async agenda(page) {
     await setDevice(page, "desktop");
     await go(page, "/dashboard/appointments");
     await waitDashboard(page);
     await page.waitForSelector("#appts-calendar", { timeout: 20000 });
     await selectAgendaView(page, "week");
-    await settle(page, 900);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    agendaWeeks = await gotoWeekOf(page, tomorrow);
+    await settle(page, 1200);
     await hideChrome(page);
     await shot(page, "agenda-avant");
   },
@@ -317,40 +356,76 @@ const STEPS = {
 
     // Bascule sur l'onglet reservation. « Envoyer un message » est un libelle
     // code en dur : c'est l'ancre la plus stable pour trouver le couple d'onglets.
-    const bookBtn = await findIn(page, () => {
-      const msg = Array.from(document.querySelectorAll("button")).find(
-        (b) => b.textContent.trim() === "Envoyer un message"
-      );
-      if (!msg || !msg.parentElement) return null;
-      return msg.parentElement.querySelectorAll("button")[1] || null;
-    });
-    if (!bookBtn) {
+    //
+    // Le bouton est present dans le HTML rendu par le serveur avant que React
+    // n'ait attache ses gestionnaires : un clic trop tot ne declenche rien et
+    // echoue en silence. On reessaie jusqu'a voir apparaitre le calendrier.
+    const findBookBtn = () =>
+      findIn(page, () => {
+        const msg = Array.from(document.querySelectorAll("button")).find(
+          (b) => b.textContent.trim() === "Envoyer un message"
+        );
+        if (!msg || !msg.parentElement) return null;
+        return msg.parentElement.querySelectorAll("button")[1] || null;
+      });
+
+    let switched = false;
+    for (let attempt = 0; attempt < 6 && !switched; attempt++) {
+      const btn = await findBookBtn();
+      if (!btn) {
+        throw new Error(
+          "Onglet de reservation introuvable dans la section #contact."
+        );
+      }
+      await btn.click();
+      switched = await page
+        .waitForSelector(".grid-cols-7 button", { timeout: 4000 })
+        .then(() => true)
+        .catch(() => false);
+    }
+    if (!switched) {
       throw new Error(
-        "Onglet de reservation introuvable. Le site n'a peut-etre pas de calendrier" +
-          " actif (verifie les disponibilites du tenant)."
+        "L'onglet « Réserver » ne repond pas : le calendrier n'apparait jamais." +
+          " Le site a-t-il un calendrier actif ?"
       );
     }
-    await bookBtn.click();
 
     // Choix du jour : le premier jour ouvrable, en avancant jusqu'a 3 mois.
+    // Les jours restent tous `disabled` tant que /booking/{slug}/available-days
+    // n'a pas repondu, d'ou l'attente active plutot qu'un sleep fixe.
+    const anyEnabled = () => {
+      for (const g of document.querySelectorAll(".grid-cols-7")) {
+        if (g.querySelector("button:not([disabled])")) return true;
+      }
+      return false;
+    };
     let day = null;
     for (let month = 0; month < 3 && !day; month++) {
-      await sleep(1600); // chargement de /booking/{slug}/available-days
-      day = await findIn(page, () => {
-        for (const g of document.querySelectorAll(".grid-cols-7")) {
-          const b = g.querySelector("button:not([disabled])");
-          if (b) return b;
-        }
-        return null;
-      });
-      if (!day && month < 2) {
-        const next = await findIn(page, () =>
-          Array.from(document.querySelectorAll("button")).find(
-            (b) => b.textContent.trim() === "▶"
-          ) || null
+      const found = await page
+        .waitForFunction(anyEnabled, { timeout: 8000 })
+        .then(() => true)
+        .catch(() => false);
+      if (found) {
+        day = await findIn(page, () => {
+          for (const g of document.querySelectorAll(".grid-cols-7")) {
+            const b = g.querySelector("button:not([disabled])");
+            if (b) return b;
+          }
+          return null;
+        });
+        break;
+      }
+      if (month < 2) {
+        const next = await findIn(
+          page,
+          () =>
+            Array.from(document.querySelectorAll("button")).find(
+              (b) => b.textContent.trim() === "▶"
+            ) || null
         );
         if (!next) break;
         await next.click();
+        await sleep(800);
       }
     }
     if (!day) {
@@ -359,18 +434,94 @@ const STEPS = {
           " /dashboard/appointments -> Disponibilites."
       );
     }
+    // On n'essaie pas le premier jour venu : une journee dont il ne reste que
+    // deux ou trois creneaux donne une grille maigre a l'image. On essaie les
+    // premiers jours ouverts et on retient celui qui en offre le plus.
+    const countSlots = () => document.querySelectorAll(".grid-cols-3 button").length;
+    const enabledDays = await page.evaluate(() => {
+      const out = [];
+      for (const g of document.querySelectorAll(".grid-cols-7")) {
+        g.querySelectorAll("button:not([disabled])").forEach((b) =>
+          out.push(parseInt(b.textContent.trim(), 10))
+        );
+      }
+      return out;
+    });
+
+    // Choisir un jour fait disparaitre le calendrier : le widget passe a
+    // l'etape creneaux. Pour en essayer un autre il faut repasser par « ← Date ».
+    const backToDate = async () => {
+      const clicked = await page.evaluate(() => {
+        // « ← Date » a l'etape creneau, « 1. Date » dans le fil d'ariane :
+        // le second existe a toutes les etapes, c'est le repli.
+        const all = Array.from(document.querySelectorAll("#rdv button"));
+        const b =
+          all.find((x) => x.textContent.trim() === "← Date") ||
+          all.find((x) => x.textContent.trim() === "1. Date");
+        if (!b) return false;
+        b.click();
+        return true;
+      });
+      if (!clicked) return false;
+      // Attendre que le calendrier soit la ne suffit pas : au retour il refait
+      // son appel a /available-days et tous les jours restent `disabled` le
+      // temps de la reponse. C'est un jour ACTIF qu'il faut attendre.
+      return page
+        .waitForFunction(
+          () => !!document.querySelector(".grid-cols-7 button:not([disabled])"),
+          { timeout: 10000 }
+        )
+        .then(() => true)
+        .catch(() => false);
+    };
+    const clickDay = (num) =>
+      page.evaluate((n) => {
+        for (const g of document.querySelectorAll(".grid-cols-7")) {
+          for (const b of g.querySelectorAll("button:not([disabled])")) {
+            if (parseInt(b.textContent.trim(), 10) === n) { b.click(); return true; }
+          }
+        }
+        return false;
+      }, num);
+
+    let best = null, lastTried = null;
+    for (const d of enabledDays.slice(0, 4)) {
+      if (lastTried !== null) {
+        const back = await backToDate();
+        if (!back) { log(`  ! retour au calendrier impossible, arret du sondage`); break; }
+      }
+      lastTried = d;
+      const ok = await clickDay(d);
+      if (!ok) { log(`  ! le ${d} n'est plus cliquable`); continue; }
+      await page
+        .waitForFunction(() => document.querySelectorAll(".grid-cols-3 button").length > 0, { timeout: 12000 })
+        .catch(() => {});
+      await sleep(500);
+      const n = await page.evaluate(countSlots);
+      log(`  · ${d} du mois : ${n} creneau(x) libre(s)`);
+      if (!best || n > best.n) best = { day: d, n: n };
+      if (n >= 9) break; // assez pour une grille pleine, inutile de chercher mieux
+    }
+    if (!best) throw new Error("Aucun jour n'a renvoye de creneau.");
+
+    if (best.day !== lastTried) {
+      await backToDate();
+      await clickDay(best.day);
+    }
     // seul le numero du jour est lisible sur le bouton ; le mois est deduit
     // plus bas par `agenda2` (jour anterieur a aujourd'hui => mois suivant).
-    bookedDate = { day: await day.evaluate((el) => parseInt(el.textContent.trim(), 10)) };
-    await day.click();
+    bookedDate = { day: best.day };
+    log(`  · jour retenu : ${best.day} (${best.n} creneaux)`);
 
     // Etape creneaux
     await page.waitForFunction(
       () => !!document.querySelector(".grid-cols-3 button"),
       { timeout: 20000 }
     );
-    await settle(page, 700);
-    let contact = await page.$("#contact");
+    await settle(page, 900);
+    // #rdv enveloppe le widget seul et survit aux quatre etapes du formulaire ;
+    // #contact engloberait toute la section et rendrait le widget minuscule a l'ecran.
+    let contact = await page.$("#rdv");
     await shot(page, "booking-creneau", { el: contact });
 
     // Etape formulaire
@@ -399,7 +550,7 @@ const STEPS = {
       if (!checked) await cb.click();
     }
     await settle(page, 400);
-    contact = await page.$("#contact");
+    contact = await page.$("#rdv");
     await shot(page, "booking-form", { el: contact });
 
     // Un acompte PayPal actif renvoie vers une 4e etape au lieu de confirmer.
@@ -424,7 +575,7 @@ const STEPS = {
       { timeout: 30000 }
     );
     await settle(page, 600);
-    contact = await page.$("#contact");
+    contact = await page.$("#rdv");
     await shot(page, "booking-confirme", { el: contact });
     log(`  · RDV en attente cree (jour ${bookedDate.day})`);
   },
@@ -437,21 +588,22 @@ const STEPS = {
     await page.waitForSelector("#appts-calendar", { timeout: 20000 });
     await selectAgendaView(page, "week");
 
-    // Amene le calendrier sur la semaine du creneau reserve, si on la connait.
+    // Meme semaine que `agenda-avant`, sinon la paire ne se superpose pas.
+    let target = new Date();
+    target.setDate(target.getDate() + 1);
     if (bookedDate && bookedDate.day) {
-      const target = new Date();
-      if (bookedDate.day < target.getDate()) target.setMonth(target.getMonth() + 1);
-      target.setDate(bookedDate.day);
-      const weeks = Math.round(
-        (startOfWeek(target) - startOfWeek(new Date())) / (7 * 864e5)
+      const d = new Date();
+      if (bookedDate.day < d.getDate()) d.setMonth(d.getMonth() + 1);
+      d.setDate(bookedDate.day);
+      target = d;
+    }
+    const weeks = await gotoWeekOf(page, target);
+    if (agendaWeeks !== null && weeks !== agendaWeeks) {
+      log(
+        `  ! agenda-avant montre la semaine +${agendaWeeks} et agenda-apres la +${weeks}.` +
+          `\n    Le creneau reserve tombe dans une autre semaine : la transition` +
+          ` avant/apres ne se superposera pas.`
       );
-      for (let i = 0; i < Math.max(0, Math.min(weeks, 10)); i++) {
-        await page.evaluate(() =>
-          document.querySelectorAll("#appts-nav button")[1].click()
-        );
-        await sleep(450);
-      }
-      if (weeks > 0) log(`  · calendrier avance de ${weeks} semaine(s)`);
     }
 
     await settle(page, 1200);
@@ -489,6 +641,22 @@ const ORDER = [
   "agenda2",
   "mobile",
 ];
+
+/**
+ * Avance la vue semaine jusqu'a celle qui contient `target`.
+ * `#appts-nav` contient les boutons dans l'ordre precedent / suivant / aujourd'hui.
+ * Renvoie le nombre de semaines parcourues.
+ */
+async function gotoWeekOf(page, target) {
+  const weeks = Math.round((startOfWeek(target) - startOfWeek(new Date())) / (7 * 864e5));
+  const steps = Math.max(0, Math.min(weeks, 10));
+  for (let i = 0; i < steps; i++) {
+    await page.evaluate(() => document.querySelectorAll("#appts-nav button")[1].click());
+    await sleep(450);
+  }
+  if (steps) log(`  · calendrier avance de ${steps} semaine(s)`);
+  return steps;
+}
 
 /** `#appts-view-toggle` contient les boutons dans l'ordre jour / semaine / mois. */
 async function selectAgendaView(page, view) {
@@ -534,15 +702,20 @@ async function selectAgendaView(page, view) {
   ]);
   // Consentement cookies pre-refuse : masque la banniere ET empeche GA4 /
   // Meta Pixel de se charger pendant les captures.
-  await page.evaluateOnNewDocument(() => {
+  //
+  // Deux cles distinctes : la landing utilise `klientys_cookie_consent`, mais
+  // chaque site tenant passe `consentKey={`${slug}_consent`}` — sans cette
+  // seconde cle la banniere reste affichee en bas a gauche des captures.
+  await page.evaluateOnNewDocument((slug) => {
     try {
       localStorage.setItem("klientys_cookie_consent", "refused");
+      localStorage.setItem(`${slug}_consent`, "refused");
       localStorage.setItem(
         "klientys_cookie_detail",
         JSON.stringify({ analytics: false, marketing: false })
       );
     } catch {}
-  });
+  }, cfg.tenantSlug);
 
   try {
     const needsAuth = steps.some((s) =>

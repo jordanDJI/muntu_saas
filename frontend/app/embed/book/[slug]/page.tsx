@@ -1,12 +1,11 @@
 "use client";
 import { useState, useEffect, use } from "react";
+import { useEmbedLang, EMBED_T, EMBED_LOCALE } from "../../i18n";
+import { useIntegration } from "../../useIntegration";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 type Step = "calendar" | "slots" | "form" | "done";
-
-const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-const DAYS_FR = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
 
 function daysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -19,6 +18,11 @@ function pad2(n: number) { return String(n).padStart(2, "0"); }
 
 export default function BookWidget({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const lang = useEmbedLang();
+  const t = EMBED_T[lang].book;
+  const unavailable = EMBED_T[lang].unavailable;
+  const locale = EMBED_LOCALE[lang];
+  const integration = useIntegration(slug, "book");
   const [step, setStep] = useState<Step>("calendar");
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -69,12 +73,13 @@ export default function BookWidget({ params }: { params: Promise<{ slug: string 
           scheduled_at: selectedSlot.start,
           slot_duration_min: selectedSlot.duration_min ?? 30,
           request_type: "appointment",
+          integration_key: integration.key,
         }),
       });
-      if (!res.ok) { const e2 = await res.json().catch(() => ({})); throw new Error(e2.detail ?? "Erreur"); }
+      if (!res.ok) { const e2 = await res.json().catch(() => ({})); throw new Error(e2.detail ?? t.error); }
       setStep("done");
     } catch (err: any) {
-      setError(err.message ?? "Une erreur est survenue.");
+      setError(err.message ?? t.error);
     }
     setSubmitting(false);
   };
@@ -93,13 +98,21 @@ export default function BookWidget({ params }: { params: Promise<{ slug: string 
     color: active ? "#fff" : "#374151", fontWeight: 600, fontSize: 13, transition: "all .15s",
   });
 
+  // Intégration désactivée : dans une iframe, embed.js masque déjà le cadre ;
+  // ouvert en lien direct, le visiteur doit comprendre pourquoi.
+  if (integration.status === "disabled") return integration.standalone ? (
+    <div style={{ ...base, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", color: "#6b7280", fontSize: 14 }}>
+      {unavailable}
+    </div>
+  ) : null;
+
   if (step === "done") return (
     <div style={{ ...base, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 12 }}>
       <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#d1fae5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>✓</div>
-      <h2 style={{ margin: 0, fontSize: 18, color: "#111" }}>Demande envoyée !</h2>
-      <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>Vous recevrez une confirmation par e-mail dès validation.</p>
+      <h2 style={{ margin: 0, fontSize: 18, color: "#111" }}>{t.doneTitle}</h2>
+      <p style={{ margin: 0, color: "#6b7280", fontSize: 14 }}>{t.doneText}</p>
       <button onClick={() => { setStep("calendar"); setSelectedSlot(null); }} style={{ ...btn(true), marginTop: 8 }}>
-        Nouveau rendez-vous
+        {t.again}
       </button>
     </div>
   );
@@ -122,11 +135,11 @@ export default function BookWidget({ params }: { params: Promise<{ slug: string 
         <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <button onClick={prevMonth} style={{ ...btn(false), padding: "6px 10px" }}>‹</button>
-            <span style={{ fontWeight: 600, fontSize: 15 }}>{MONTHS_FR[month]} {year}</span>
+            <span style={{ fontWeight: 600, fontSize: 15 }}>{t.months[month]} {year}</span>
             <button onClick={nextMonth} style={{ ...btn(false), padding: "6px 10px" }}>›</button>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 6 }}>
-            {DAYS_FR.map((d) => <div key={d} style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{d}</div>)}
+            {t.days.map((d) => <div key={d} style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{d}</div>)}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
             {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
@@ -153,9 +166,9 @@ export default function BookWidget({ params }: { params: Promise<{ slug: string 
               );
             })}
           </div>
-          {loadingDays && <p style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, marginTop: 10 }}>Chargement…</p>}
+          {loadingDays && <p style={{ textAlign: "center", color: "#9ca3af", fontSize: 12, marginTop: 10 }}>{t.loading}</p>}
           <p style={{ textAlign: "center", fontSize: 12, color: "#9ca3af", marginTop: 12 }}>
-            Les jours en violet ont des créneaux disponibles
+            {t.legend}
           </p>
         </div>
       )}
@@ -163,18 +176,18 @@ export default function BookWidget({ params }: { params: Promise<{ slug: string 
       {/* Slots */}
       {step === "slots" && (
         <div>
-          <button onClick={() => setStep("calendar")} style={{ ...btn(false), marginBottom: 14, fontSize: 12 }}>← Retour</button>
+          <button onClick={() => setStep("calendar")} style={{ ...btn(false), marginBottom: 14, fontSize: 12 }}>{t.back}</button>
           <p style={{ margin: "0 0 12px", fontWeight: 600, fontSize: 14 }}>
-            Créneaux disponibles — {selectedDate.split("-").reverse().join("/")}
+            {t.slotsFor} — {selectedDate.split("-").reverse().join("/")}
           </p>
           {loadingSlots ? (
-            <p style={{ color: "#9ca3af", textAlign: "center" }}>Chargement…</p>
+            <p style={{ color: "#9ca3af", textAlign: "center" }}>{t.loading}</p>
           ) : slots.length === 0 ? (
-            <p style={{ color: "#9ca3af", textAlign: "center", fontSize: 13 }}>Aucun créneau disponible ce jour.</p>
+            <p style={{ color: "#9ca3af", textAlign: "center", fontSize: 13 }}>{t.noSlots}</p>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
               {slots.map((slot, i) => {
-                const time = new Date(slot.start).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" });
+                const time = new Date(slot.start).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
                 return (
                   <button key={i} onClick={() => pickSlot(slot)} style={btn(false)}>
                     {time}
@@ -189,16 +202,16 @@ export default function BookWidget({ params }: { params: Promise<{ slug: string 
       {/* Form */}
       {step === "form" && (
         <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <button type="button" onClick={() => setStep("slots")} style={{ ...btn(false), fontSize: 12, alignSelf: "flex-start" }}>← Retour</button>
+          <button type="button" onClick={() => setStep("slots")} style={{ ...btn(false), fontSize: 12, alignSelf: "flex-start" }}>{t.back}</button>
           <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>
-            {selectedSlot && new Date(selectedSlot.start).toLocaleString("fr-BE", { dateStyle: "medium", timeStyle: "short" })}
+            {selectedSlot && new Date(selectedSlot.start).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" })}
           </p>
           {[
-            { key: "first_name", label: "Prénom *", type: "text" },
-            { key: "last_name", label: "Nom *", type: "text" },
-            { key: "email", label: "Email *", type: "email" },
-            { key: "phone", label: "Téléphone", type: "tel" },
-            { key: "message", label: "Note (optionnel)", type: "textarea" },
+            { key: "first_name", label: t.firstName, type: "text" },
+            { key: "last_name", label: t.lastName, type: "text" },
+            { key: "email", label: t.email, type: "email" },
+            { key: "phone", label: t.phone, type: "tel" },
+            { key: "message", label: t.note, type: "textarea" },
           ].map(({ key, label, type }) => (
             <label key={key} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
               <span style={{ color: "#374151", fontWeight: 500 }}>{label}</span>
@@ -214,7 +227,7 @@ export default function BookWidget({ params }: { params: Promise<{ slug: string 
           ))}
           {error && <p style={{ color: "#ef4444", fontSize: 12, margin: 0 }}>{error}</p>}
           <button type="submit" disabled={submitting} style={{ ...btn(true), padding: "12px", marginTop: 4 }}>
-            {submitting ? "Envoi en cours…" : "Confirmer le rendez-vous"}
+            {submitting ? t.submitting : t.confirm}
           </button>
         </form>
       )}

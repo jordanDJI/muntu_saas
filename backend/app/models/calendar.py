@@ -77,6 +77,7 @@ class PublicBookIn(BaseModel):
     party_size: int = Field(default=1, ge=1, le=500)  # nb de personnes (restaurant: table de 4)
     custom_answers: Optional[dict] = Field(default_factory=dict)  # { "q_id": "réponse" }
     consent_channels: list[str] = Field(default_factory=list)  # canaux RGPD acceptés (ex: ["email", "telephone"])
+    integration_key: Optional[str] = Field(default=None, max_length=40)  # widget embarqué : support d'origine (migration 080)
 
     @field_validator("email")
     @classmethod

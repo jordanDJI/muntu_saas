@@ -1,28 +1,35 @@
 {
   "appUrl": "http://localhost:3000",
   "apiUrl": "http://localhost:8000",
-
   "email": "demo@klientys.co",
   "password": "mot-de-passe-du-compte-demo",
   "tenantSlug": "cabinet-demo",
-
   "outDir": "../../ad/assets",
-
   "headless": true,
-  "desktop": { "width": 1440, "height": 900, "scale": 2 },
-  "mobile": { "width": 390, "height": 844, "scale": 3 },
-
+  "desktop": {
+    "width": 1440,
+    "height": 900,
+    "scale": 2
+  },
+  "mobile": {
+    "width": 390,
+    "height": 844,
+    "scale": 3
+  },
   "bookingContact": {
     "firstName": "Camille",
     "lastName": "Rousseau",
     "email": "camille.rousseau@example.com",
-    "phone": "0612345678",
-    "message": "Première séance, sur recommandation."
+    "phone": "+32470112233",
+    "message": "Je voudrais un essayage pour une jupe sur-mesure."
   },
-
   "hideSelectors": [
+    "nextjs-portal",
     "[data-name='onborda-card']",
     ".onborda-overlay",
     "#tour-help"
+  ],
+  "hideTexts": [
+    "Activez les notifications"
   ]
 }

@@ -49,6 +49,35 @@ async def add_domain(domain: str) -> dict:
         return r.json()
 
 
+# Repli si l'API ne renvoie pas de recommandation (non configurée, réponse
+# ancienne). Même valeur que celle posée sur les domaines achetés via OVH.
+APEX_A_FALLBACK = "216.198.79.1"
+
+
+async def get_apex_a_value(domain: str) -> str:
+    """IPv4 à mettre dans l'enregistrement A d'un domaine racine.
+
+    Un CNAME sur la racine (`@`) est refusé par la plupart des registraires
+    (OVH compris) : c'est ce que le code renvoyait avant, pour tous les
+    domaines.
+    """
+    if not settings.vercel_api_token:
+        return APEX_A_FALLBACK
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"{_VERCEL_API}/v6/domains/{domain}/config", headers=_headers())
+            r.raise_for_status()
+            data = r.json()
+        ranked = sorted(data.get("recommendedIPv4") or [], key=lambda x: x.get("rank", 99))
+        for entry in ranked:
+            values = entry.get("value") or []
+            if values:
+                return values[0]
+    except Exception:
+        pass
+    return APEX_A_FALLBACK
+
+
 async def get_domain_status(domain: str) -> dict:
     """Retourne le statut enrichi : verified, propagated, ssl, conflicts."""
     if not settings.vercel_api_token or not settings.vercel_project_id:

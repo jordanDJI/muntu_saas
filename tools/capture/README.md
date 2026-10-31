@@ -50,6 +50,47 @@ Elle réserve réellement un créneau : un `contact` et un `appointment` en stat
 **À ne lancer que sur un tenant de démo.** C'est ce qui rend la paire
 avant/après authentique — un agenda truqué se voit à l'image.
 
+## Remplir le tenant avant de capturer
+
+```bash
+node seed.js              # ~45 contacts + ~22 rendez-vous sur deux semaines
+node seed.js --count 60
+node seed.js --contacts-only
+```
+
+Le jeton vient de `frontend/.env.local` (`NEXT_PUBLIC_SUPABASE_URL` +
+`ANON_KEY`) et du couple email/mot de passe de `capture.config.json` : aucune
+clé de service n'est manipulée. Les contacts passent par
+`POST /contacts/import`, les rendez-vous par `POST /appointments/`.
+
+Deux points de conception :
+
+- **Les contacts qui reçoivent un rendez-vous sont créés sans email.**
+  `POST /appointments/` envoie une confirmation au contact ; vingt rendez-vous
+  sur des adresses fictives, c'est vingt rebonds durs chez Resend et une
+  réputation d'expéditeur abîmée. Sans email sur la fiche, l'envoi est sauté.
+- **Tous les rendez-vous créés ici sont `confirmed`** — l'API ne sait pas créer
+  un `pending`. La demande en attente, et sa bannière ambre, viennent de
+  l'étape `booking` de `capture.js`, qui passe par la vraie réservation
+  publique.
+
+Les créneaux ne sont pas devinés : le script lit
+`GET /booking/{slug}/slots` (endpoint public) jour par jour sur deux semaines.
+Les rendez-vous tombent donc dans les vraies plages d'ouverture, les créneaux
+déjà pris sont absents de la réponse et ne sont jamais réutilisés, et le
+`label` donne l'heure locale — l'invariant de stockage est respecté sans
+conversion de fuseau.
+
+Le jeu de données est déterministe (PRNG à graine fixe) : relancer le script
+réimporte les mêmes personnes, donc l'import les **enrichit** au lieu de les
+dupliquer. Les rendez-vous, eux, s'ajoutent — `--contacts-only` est plus sûr
+pour une relance.
+
+Les contacts sont européens (Belgique, France, Allemagne) avec des numéros
+E.164, parce que c'est la clientèle décrite par le site de démo. Si le tenant
+change, les tableaux `PLACES` et `NOTES` en haut de `seed.js` sont là pour être
+édités — ce texte s'affiche à l'écran dans la pub.
+
 ## Prérequis sur le tenant de démo
 
 - **Pas en `trial_expired`** — sinon un overlay plein écran masque tout le

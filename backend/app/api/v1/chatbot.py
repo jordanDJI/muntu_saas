@@ -9,6 +9,7 @@ import logging
 from fastapi import APIRouter, HTTPException, status
 from app.core.supabase import get_supabase_admin
 from app.models.agent import ChatRequest, ChatResponse
+from app.services import integrations as integration_svc
 from app.services.llm import chat_completion
 
 router = APIRouter(prefix="/chatbot", tags=["chatbot"])
@@ -43,6 +44,7 @@ _CHAT_I18N: dict[str, dict] = {
             "disponible sur cette page — nous vous répondrons rapidement."
         ),
         "absence": "Le professionnel est actuellement absent. Merci de réessayer ultérieurement ou de laisser un message via le formulaire de contact.",
+        "reply_lang": "Réponds dans la langue du visiteur ; s'il ne l'indique pas, réponds en français.",
     },
     "en": {
         "scope": (
@@ -68,6 +70,7 @@ _CHAT_I18N: dict[str, dict] = {
             "on this page — we will get back to you shortly."
         ),
         "absence": "The professional is currently unavailable. Please try again later or leave a message via the contact form.",
+        "reply_lang": "Reply in the visitor's language; if unclear, reply in English.",
     },
     "de": {
         "scope": (
@@ -93,6 +96,7 @@ _CHAT_I18N: dict[str, dict] = {
             "auf dieser Seite — wir melden uns schnellstmöglich."
         ),
         "absence": "Der Fachmann ist derzeit nicht verfügbar. Bitte versuchen Sie es später erneut oder hinterlassen Sie eine Nachricht über das Kontaktformular.",
+        "reply_lang": "Antworten Sie in der Sprache des Besuchers; im Zweifel auf Deutsch.",
     },
     "nl": {
         "scope": (
@@ -118,6 +122,7 @@ _CHAT_I18N: dict[str, dict] = {
             "op deze pagina gebruiken — we reageren zo snel mogelijk."
         ),
         "absence": "De professional is momenteel niet beschikbaar. Probeer het later opnieuw of laat een bericht achter via het contactformulier.",
+        "reply_lang": "Antwoord in de taal van de bezoeker; bij twijfel in het Nederlands.",
     },
 }
 
@@ -164,10 +169,26 @@ def _build_context_block(site: dict, tr: dict) -> str:
     return "\n".join(lines)
 
 
-def _build_system_prompt(tenant_slug: str, site: dict, config: dict | None) -> str:
+def _resolve_lang(site: dict, requested: str | None) -> tuple[str, bool]:
+    """Langue demandée par le widget si elle est supportée, sinon celle du site.
+
+    Le booléen indique une demande explicite : c'est seulement dans ce cas
+    qu'on ajoute la consigne de langue au prompt, pour ne pas modifier le
+    comportement du chatbot du site Klientys, qui n'envoie pas `lang`.
+    """
+    code = (requested or "").strip().lower()[:2]
+    if code in _CHAT_I18N:
+        return code, True
+    return site.get("default_language") or "fr", False
+
+
+def _build_system_prompt(tenant_slug: str, site: dict, config: dict | None, requested_lang: str | None = None) -> str:
     """Construit le prompt système à partir des données publiques du tenant."""
-    lang = site.get("default_language") or "fr"
+    lang, explicit = _resolve_lang(site, requested_lang)
     tr = _CHAT_I18N.get(lang, _CHAT_I18N["fr"])
+    # Un prompt personnalisé est souvent rédigé en français : sans consigne,
+    # le modèle répond en français à un visiteur d'une page néerlandophone.
+    reply_lang = f"\n\n{tr['reply_lang']}" if explicit else ""
 
     title = site.get("title", "…")
     description = site.get("description", "")
@@ -181,6 +202,7 @@ def _build_system_prompt(tenant_slug: str, site: dict, config: dict | None) -> s
             f"{tr['custom_header']}\n"
             f"{context_block}\n"
             f"{tr['end']}"
+            f"{reply_lang}"
         )
 
     intro = f"You are the virtual assistant of {title}."
@@ -193,28 +215,34 @@ def _build_system_prompt(tenant_slug: str, site: dict, config: dict | None) -> s
         f"{tr['auto_header']}\n"
         f"{context_block}\n"
         f"{tr['end']}"
+        f"{reply_lang}"
     )
 
 
-def _get_public_context(tenant_slug: str) -> tuple[dict, dict | None]:
-    """Charge les données publiques du tenant (site + config agent vitrine)."""
+def _get_public_context(tenant_slug: str) -> tuple[dict, dict, dict | None]:
+    """Charge les données publiques du tenant (tenant + site + config agent vitrine).
+
+    Le site n'a plus besoin d'être publié : un tenant qui intègre le chatbot sur
+    son propre site configure son site Klientys (prestations, contact…) pour
+    nourrir le chatbot sans vouloir le publier.
+    """
     sb = get_supabase_admin()
 
-    tenant_res = sb.table("tenant").select("id, name").eq("slug", tenant_slug).neq("is_active", False).single().execute()
-    if not tenant_res.data:
+    tenant_rows = sb.table("tenant").select("id, name").eq("slug", tenant_slug).neq("is_active", False).limit(1).execute().data
+    if not tenant_rows:
         raise HTTPException(status_code=404, detail="Tenant introuvable")
-    tenant = tenant_res.data
+    tenant = tenant_rows[0]
 
-    site_res = (
+    site_rows = (
         sb.table("site")
         .select("id, title, tagline, description, phone, email_contact, address, coverage_zones, default_language, absence_mode, service_offer(name, description, duration_min, price_eur)")
         .eq("tenant_id", tenant["id"])
-        .eq("status", "published")
-        .single()
+        .limit(1)
         .execute()
+        .data
     )
-    if not site_res.data:
-        raise HTTPException(status_code=404, detail="Site non publié")
+    if not site_rows:
+        raise HTTPException(status_code=404, detail="Site introuvable")
 
     config_res = (
         sb.table("agent_config")
@@ -225,15 +253,22 @@ def _get_public_context(tenant_slug: str) -> tuple[dict, dict | None]:
     )
     config = config_res.data[0] if config_res.data else None
 
-    return site_res.data, config
+    return tenant, site_rows[0], config
 
 
 @router.post("/{tenant_slug}", response_model=ChatResponse)
 async def chat(tenant_slug: str, body: ChatRequest) -> ChatResponse:
     session_id = body.session_id or str(uuid.uuid4())
 
-    site, config = _get_public_context(tenant_slug)
-    lang = site.get("default_language") or "fr"
+    tenant, site, config = _get_public_context(tenant_slug)
+    lang, _ = _resolve_lang(site, body.lang)
+
+    if body.integration_key:
+        # 403 si l'intégration est désactivée : le widget se masque déjà, mais
+        # une conversation ouverte ou un appel direct doit aussi être coupé.
+        integration_svc.integration_for_submission(get_supabase_admin(), tenant["id"], body.integration_key)
+        if integration_svc.chatbot_missing(site):
+            raise HTTPException(status_code=409, detail="Chatbot non configuré")
     tr = _CHAT_I18N.get(lang, _CHAT_I18N["fr"])
 
     # Rate limiting
@@ -247,7 +282,7 @@ async def chat(tenant_slug: str, body: ChatRequest) -> ChatResponse:
     if site.get("absence_mode"):
         return ChatResponse(reply=tr["absence"], session_id=session_id)
 
-    system_prompt = _build_system_prompt(tenant_slug, site, config)
+    system_prompt = _build_system_prompt(tenant_slug, site, config, body.lang)
     model = config.get("model", "gemini-2.5-flash") if config else "gemini-2.5-flash"
 
     messages = [{"role": m.role, "content": m.content} for m in body.messages]

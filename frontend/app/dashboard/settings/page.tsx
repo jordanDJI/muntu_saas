@@ -6,6 +6,7 @@ import { api, supabase } from "../../../lib/api";
 import { useLanguage, LANGUAGES } from "../../../contexts/LanguageContext";
 import { useSubscription } from "../../../contexts/SubscriptionContext";
 import DemandPotentialCard from "../analytics/DemandPotentialCard";
+import { IntegrationsPanel, ChatbotReadiness, useIntegrationsT, type Integration } from "../components/IntegrationsPanel";
 import metiers from "../../../data/metiers.json";
 import villes from "../../../data/villes.json";
 import dynamic from "next/dynamic";
@@ -330,6 +331,7 @@ function SectionSecurite() {
 
 function SectionSite() {
   const { t } = useLanguage();
+  const si = useIntegrationsT();
   const [site, setSite]                   = useState<any>(null);
   const [loading, setLoading]             = useState(true);
   const [saving, setSaving]               = useState(false);
@@ -342,9 +344,15 @@ function SectionSite() {
   const [publishMsg, setPublishMsg]       = useState("");
   const [tenantSlug, setTenantSlug]       = useState("");
   const [origin, setOrigin]               = useState("");
+  const [activeIntegrations, setActiveIntegrations] = useState(0);
+  const [hasActiveDomain, setHasActiveDomain] = useState(false);
+  const onIntegrationsLoaded = useCallback(
+    (rows: Integration[]) => setActiveIntegrations(rows.filter(r => r.status === "active").length), [],
+  );
 
   useEffect(() => {
     setOrigin(window.location.origin);
+    api.getDomain().then(d => setHasActiveDomain(d?.status === "active")).catch(() => {});
     api.getSites().then(sites => {
       const s = sites[0];
       if (s) { setSite(s); setTitle(s.title ?? ""); setAbsenceMode(s.absence_mode ?? false); setAbsenceMessage(s.absence_message ?? ""); }
@@ -432,6 +440,13 @@ function SectionSite() {
                   </span>
                 )}
               </div>
+              {/* Le slug reste visible même non publié : c'est lui qui figure
+                  dans le code des widgets intégrés sur un site externe. */}
+              {tenantSlug && site?.status !== "published" && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {si.slugLabel} <code className="text-gray-700">{tenantSlug}</code>
+                </p>
+              )}
               {tenantSlug && site?.status === "published" && (
                 <a href={`${origin}/${tenantSlug}`} target="_blank" rel="noreferrer"
                   className="text-xs text-primary-500 hover:underline flex items-center gap-1 mt-1">
@@ -453,6 +468,10 @@ function SectionSite() {
               </a>
             )}
           </div>
+
+          {site?.status === "published" && activeIntegrations > 0 && !hasActiveDomain && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{si.noindexNote}</p>
+          )}
 
           {/* Publier */}
           {site?.status !== "published" && (
@@ -499,6 +518,13 @@ function SectionSite() {
               {publishMsg}
             </p>
           )}
+        </div>
+      </Card>
+
+      <Card>
+        <div className="space-y-4">
+          <IntegrationsPanel onLoaded={onIntegrationsLoaded} />
+          {activeIntegrations > 0 && <ChatbotReadiness />}
         </div>
       </Card>
 
@@ -2889,6 +2915,10 @@ function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
   // Delete
   const [deleting, setDeleting]           = useState(false);
 
+  // Conflit avec une intégration active sur ce domaine (noms des intégrations)
+  const [integrationConflict, setIntegrationConflict] = useState<string[] | null>(null);
+  const si = useIntegrationsT();
+
   const loadData = useCallback(async () => {
     setLoadingInit(true);
     try {
@@ -2919,6 +2949,26 @@ function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
 
   const hasAccess = plan?.features?.custom_domain === true;
 
+  const connect = async (confirmConflict: boolean) => {
+    setConnectLoading(true); setConnectMsg("");
+    try {
+      const res = await api.connectDomain(connectInput.trim(), confirmConflict);
+      setDomainInfo(res);
+      setIntegrationConflict(null);
+      setConnectMsg("Domaine ajouté. Configurez le DNS ci-dessous.");
+    } catch (err: any) {
+      // Le domaine porte déjà des widgets Klientys : migration probable vers
+      // Klientys, on demande confirmation au lieu de refuser.
+      if (err?.status === 409 && err?.detail?.code === "integration_conflict") {
+        setIntegrationConflict((err.detail.integrations ?? []).map((i: any) => i.name));
+      } else {
+        setConnectMsg(`Erreur : ${err.message}`);
+      }
+    } finally {
+      setConnectLoading(false);
+    }
+  };
+
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleaned = connectInput.trim();
@@ -2927,16 +2977,7 @@ function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
       setConnectMsg("Erreur : entrez le domaine complet avec extension (ex: www.monsite.be)");
       return;
     }
-    setConnectLoading(true); setConnectMsg("");
-    try {
-      const res = await api.connectDomain(connectInput.trim());
-      setDomainInfo(res);
-      setConnectMsg("Domaine ajouté. Configurez le DNS ci-dessous.");
-    } catch (err: any) {
-      setConnectMsg(`Erreur : ${err.message}`);
-    } finally {
-      setConnectLoading(false);
-    }
+    await connect(false);
   };
 
   const handlePollStatus = async () => {
@@ -3208,6 +3249,22 @@ function SectionDomaine({ onNavigate }: { onNavigate: (s: Section) => void }) {
                   {connectLoading ? "Connexion…" : "Connecter"}
                 </button>
               </form>
+              {integrationConflict && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-amber-800">{si.conflictTitle}</p>
+                  <p className="text-xs text-amber-700">{si.conflictText(integrationConflict.join(", "))}</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => connect(true)} disabled={connectLoading}
+                      className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60">
+                      {si.conflictConfirm}
+                    </button>
+                    <button onClick={() => setIntegrationConflict(null)}
+                      className="px-3 py-1.5 rounded-lg text-sm border bg-white text-gray-600">
+                      {si.cancel}
+                    </button>
+                  </div>
+                </div>
+              )}
               {connectMsg && (
                 <p className={`text-sm ${connectMsg.startsWith("Erreur") ? "text-red-500" : "text-green-600"}`}>
                   {connectMsg}

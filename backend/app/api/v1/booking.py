@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.supabase import get_supabase_admin
 from app.middleware.rate_limit import check_rate, check_rate_async
 from app.models.calendar import PublicBookIn
+from app.services import integrations as integration_svc
 from app.services.lead import ensure_lead
 from app.services.paypal import (capture_order, create_order, get_deposit_config,
                                  get_order, refund_capture, refund_order)
@@ -541,6 +542,10 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
     if body.email and body.email.strip().lower() in _get_team_emails(sb, tenant["id"]):
         raise HTTPException(status_code=403, detail=_TEAM_EMAIL_ERROR)
 
+    # Widget embarqué : support d'origine. Lève 403 si l'intégration est
+    # désactivée — avant toute écriture, pour ne créer ni contact ni lead.
+    integration_id = integration_svc.integration_for_submission(sb, tenant["id"], body.integration_key)
+
     # Trouver ou créer le contact
     contact_res = (
         sb.table("contact")
@@ -578,6 +583,8 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
         }
         if body.message and body.message.strip():
             lead_row["notes"] = body.message.strip()
+        if integration_id:
+            lead_row["integration_id"] = integration_id
         lead = sb.table("lead").insert(lead_row).execute().data[0]
         contact_name = f"{body.first_name} {body.last_name}".strip()
         # Accusé de réception au visiteur
@@ -615,7 +622,8 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
         raise HTTPException(status_code=400, detail="scheduled_at requis pour un rendez-vous")
 
     ensure_lead(sb, tenant["id"], contact_id, "website", status="scheduled",
-                request_type="b2c_appointment", notes=body.message or None)
+                request_type="b2c_appointment", notes=body.message or None,
+                integration_id=integration_id)
 
     # Convertir l'heure UTC reçue du frontend en heure locale naive du tenant.
     # Les RDV créés depuis le dashboard sont déjà en heure locale naive (via toLocalISO()),
@@ -645,6 +653,8 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
         appt_row["notes"] = body.message.strip()
     if body.custom_answers:
         appt_row["custom_answers"] = body.custom_answers
+    if integration_id:
+        appt_row["integration_id"] = integration_id
 
     appt = sb.table("appointment").insert(appt_row).execute().data[0]
     touch_contact_interaction(contact_id)

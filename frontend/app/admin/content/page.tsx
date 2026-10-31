@@ -140,11 +140,13 @@ export default function ContentPage() {
   const translatePost = async (id: string) => {
     setBusy(true);
     try {
-      const res = await adminFetch<{ created: BlogPost[]; skipped: string[] }>(
+      const res = await adminFetch<{ created: BlogPost[]; skipped: string[]; failed?: string[] }>(
         `/api/v1/admin/content/blog/${id}/translate`, { method: "POST", body: JSON.stringify({}) }
       );
+      const failed = res.failed ?? [];
       if (res.created.length > 0) {
-        showToast(`Traduit en ${res.created.map((p) => p.lang?.toUpperCase()).join(", ")} ✓ (brouillons à valider)`);
+        const ok = `Traduit en ${res.created.map((p) => p.lang?.toUpperCase()).join(", ")} ✓ (brouillons à valider)`;
+        showToast(failed.length > 0 ? `${ok} — échec ${failed.map((l) => l.toUpperCase()).join(", ")}, relancez` : ok, failed.length === 0);
       } else {
         showToast("Déjà traduit dans toutes les langues disponibles");
       }

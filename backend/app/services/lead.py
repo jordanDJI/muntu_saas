@@ -6,6 +6,7 @@ def ensure_lead(
     status: str = "new",
     request_type: str = "b2c_appointment",
     notes: str | None = None,
+    integration_id: str | None = None,
 ) -> None:
     """Crée un lead pour chaque nouvelle demande/réservation de ce contact."""
     row = {
@@ -18,4 +19,6 @@ def ensure_lead(
     }
     if notes:
         row["notes"] = notes
+    if integration_id:
+        row["integration_id"] = integration_id
     sb.table("lead").insert(row).execute()

@@ -1,5 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, use } from "react";
+import { useEmbedLang, EMBED_T } from "../../i18n";
+import { useIntegration } from "../../useIntegration";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -11,6 +13,9 @@ function postResize(w: string, h: string, r: string) {
 
 export default function ChatbotWidget({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const lang = useEmbedLang();
+  const t = EMBED_T[lang].chat;
+  const integration = useIntegration(slug, "chatbot");
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -51,6 +56,8 @@ export default function ChatbotWidget({ params }: { params: Promise<{ slug: stri
       const body = {
         messages: history.map((m) => ({ role: m.role, content: m.text })),
         session_id: sessionId,
+        lang,
+        integration_key: integration.key,
       };
       const res = await fetch(`${API_URL}/api/v1/chatbot/${slug}`, {
         method: "POST",
@@ -59,10 +66,10 @@ export default function ChatbotWidget({ params }: { params: Promise<{ slug: stri
       });
       const data = await res.json();
       if (data.session_id) setSessionId(data.session_id);
-      setMessages((prev) => [...prev, { role: "assistant", text: data.reply ?? "Désolé, une erreur est survenue." }]);
+      setMessages((prev) => [...prev, { role: "assistant", text: data.reply ?? t.error }]);
       if (!open) setUnread((u) => u + 1);
     } catch {
-      setMessages((prev) => [...prev, { role: "assistant", text: "Désolé, je suis temporairement indisponible." }]);
+      setMessages((prev) => [...prev, { role: "assistant", text: t.unavailable }]);
     }
     setLoading(false);
   };
@@ -71,12 +78,16 @@ export default function ChatbotWidget({ params }: { params: Promise<{ slug: stri
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   };
 
+  // Rien tant que le serveur n'a pas confirmé : une bulle qui apparaît puis
+  // disparaît (intégration désactivée, site incomplet) serait pire qu'aucune.
+  if (integration.status !== "active") return null;
+
   // ── Closed bubble ──────────────────────────────────────────────────────────
   if (!open) {
     return (
       <button
         onClick={toggle}
-        aria-label="Ouvrir le chat"
+        aria-label={t.open}
         style={{
           position: "fixed", bottom: 0, right: 0,
           width: 60, height: 60, borderRadius: "50%",
@@ -132,10 +143,10 @@ export default function ChatbotWidget({ params }: { params: Promise<{ slug: stri
           </svg>
         </div>
         <div style={{ flex: 1 }}>
-          <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>Assistant IA</p>
-          <p style={{ margin: 0, fontSize: 11, opacity: .8 }}>En ligne · répond instantanément</p>
+          <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>{t.title}</p>
+          <p style={{ margin: 0, fontSize: 11, opacity: .8 }}>{t.status}</p>
         </div>
-        <button onClick={toggle} aria-label="Fermer" style={{
+        <button onClick={toggle} aria-label={t.close} style={{
           background: "none", border: "none", color: "#fff",
           cursor: "pointer", padding: 4, opacity: .8,
           display: "flex", alignItems: "center",
@@ -150,8 +161,8 @@ export default function ChatbotWidget({ params }: { params: Promise<{ slug: stri
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
         {messages.length === 0 && (
           <div style={{ textAlign: "center", color: "#9ca3af", fontSize: 13, marginTop: 40 }}>
-            <p style={{ margin: "0 0 6px" }}>👋 Bonjour !</p>
-            <p style={{ margin: 0 }}>Comment puis-je vous aider ?</p>
+            <p style={{ margin: "0 0 6px" }}>{t.hello}</p>
+            <p style={{ margin: 0 }}>{t.help}</p>
           </div>
         )}
         {messages.map((m, i) => (
@@ -195,7 +206,7 @@ export default function ChatbotWidget({ params }: { params: Promise<{ slug: stri
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKey}
-          placeholder="Votre message..."
+          placeholder={t.placeholder}
           disabled={loading}
           style={{
             flex: 1, border: "1px solid #e5e7eb", borderRadius: 24,
