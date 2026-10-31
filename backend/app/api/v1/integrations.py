@@ -14,6 +14,7 @@ from app.core.supabase import get_supabase_admin
 from app.middleware.rate_limit import check_rate
 from app.middleware.tenant import get_current_tenant
 from app.services import integrations as svc
+from app.services.paypal import parse_deposit_config
 
 router = APIRouter(prefix="/integrations", tags=["Integrations"])
 
@@ -41,6 +42,39 @@ def _site_for_chatbot(sb, tenant_id: str) -> dict | None:
         .eq("tenant_id", tenant_id).limit(1).execute().data
     )
     return rows[0] if rows else None
+
+
+def _form_config(sb, tenant: dict) -> dict:
+    """Configuration du formulaire du site, pour que les widgets book / contact
+    se comportent comme le formulaire du site Klientys : prestations, questions
+    personnalisées, acompte, couleur. Ne dépend pas de la publication.
+
+    L'acompte n'est exposé que s'il est réellement utilisable (mêmes règles que
+    le serveur) : sinon /book l'accepte sans paiement et le formulaire ne doit
+    pas proposer une étape PayPal vouée à l'échec. Jamais le secret PayPal.
+    """
+    rows = (
+        sb.table("site")
+        .select("site_style, paypal_client_secret, service_offer(id, name)")
+        .eq("tenant_id", tenant["id"]).limit(1).execute().data
+    )
+    site = rows[0] if rows else {}
+    style = site.get("site_style") or {}
+    deposit = parse_deposit_config(site)
+    return {
+        "offers": [{"id": o["id"], "name": o["name"]} for o in (site.get("service_offer") or []) if o.get("name")],
+        "booking_questions": style.get("booking_questions") or [],
+        "deposit": {
+            "enabled": True,
+            "amount": deposit["amount"],
+            "currency": deposit["currency"],
+            "paypal_client_id": deposit["client_id"],
+            "sandbox": deposit["sandbox"],
+        } if deposit else None,
+        "sector": tenant.get("sector") or "other",
+        "primary_color": style.get("primary_color") or "indigo",
+        "custom_color_hex": style.get("custom_color_hex"),
+    }
 
 
 @router.get("/")
@@ -101,13 +135,14 @@ async def ping(tenant_slug: str, body: PingIn, request: Request):
     """
     check_rate(request, "integration_ping", max_calls=120, window_seconds=60)
     sb = get_supabase_admin()
-    tenant = (
-        sb.table("tenant").select("id").eq("slug", tenant_slug).neq("is_active", False)
+    tenant_rows = (
+        sb.table("tenant").select("id, sector").eq("slug", tenant_slug).neq("is_active", False)
         .limit(1).execute().data
     )
-    if not tenant:
+    if not tenant_rows:
         raise HTTPException(status_code=404, detail="Tenant introuvable")
-    tenant_id = tenant[0]["id"]
+    tenant = tenant_rows[0]
+    tenant_id = tenant["id"]
 
     resolved = svc.resolve_for_widget(sb, tenant_id, body.integration, body.host)
     integ = resolved["integration"]
@@ -118,4 +153,6 @@ async def ping(tenant_slug: str, body: PingIn, request: Request):
     }
     if body.widget == "chatbot" and resolved["active"]:
         out["chatbot_ready"] = not svc.chatbot_missing(_site_for_chatbot(sb, tenant_id))
+    if body.widget in ("book", "contact") and resolved["active"]:
+        out["form"] = _form_config(sb, tenant)
     return out

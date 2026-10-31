@@ -17,6 +17,7 @@ class LeadCreateIn(BaseModel):
     source: str = "site_form"
     contact_type: str = "individual"  # individual | company
     consent_channels: list[str] = []  # canaux RGPD acceptés à la soumission du formulaire (ex: ["email", "telephone"])
+    integration_key: Optional[str] = None  # widget embarqué : support d'origine (migration 080)
 
     @field_validator("phone")
     @classmethod

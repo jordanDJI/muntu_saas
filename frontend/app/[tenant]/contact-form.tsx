@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { sanitizePhoneInput } from "../../lib/phone";
+import { FORM_T, FORM_LOCALE, type FormLang, type FormStrings } from "./contact-form-i18n";
 
 const _API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -20,9 +21,6 @@ type Slot = { start: string; end: string; label: string; spots_left?: number; ca
 type Mode = "contact" | "appointment";
 type BookingQuestion = { id: string; label: string; type: "text" | "textarea" | "select"; options?: string[]; required: boolean };
 type DepositCfg = { enabled: boolean; amount: number; currency: string; paypal_client_id: string; sandbox?: boolean };
-
-const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-const DAYS_FR = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
 
 function addDays(d: Date, n: number): Date {
   const r = new Date(d);
@@ -45,11 +43,13 @@ function MiniCalendar({
   onSelect,
   accentColor,
   tenantSlug,
+  t,
 }: {
   selected: Date | null;
   onSelect: (d: Date) => void;
   accentColor: string;
   tenantSlug: string;
+  t: FormStrings;
 }) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
   const today = new Date();
@@ -79,12 +79,12 @@ function MiniCalendar({
       <div className="flex items-center justify-between mb-2">
         <button onClick={prevMonth} className="p-1 rounded hover:bg-gray-100 text-gray-500 text-sm">◀</button>
         <span className="text-sm font-semibold text-gray-700">
-          {MONTHS_FR[month.getMonth()]} {month.getFullYear()}
+          {t.months[month.getMonth()]} {month.getFullYear()}
         </span>
         <button onClick={nextMonth} className="p-1 rounded hover:bg-gray-100 text-gray-500 text-sm">▶</button>
       </div>
       <div className="grid grid-cols-7 mb-1">
-        {DAYS_FR.map((d) => (
+        {t.days.map((d) => (
           <div key={d} className="text-center text-xs text-gray-400 font-medium py-0.5">{d}</div>
         ))}
       </div>
@@ -124,15 +124,17 @@ function SlotGrid({
   onSelect,
   accentColor,
   loading,
+  t,
 }: {
   slots: Slot[];
   selected: Slot | null;
   onSelect: (s: Slot) => void;
   accentColor: string;
   loading: boolean;
+  t: FormStrings;
 }) {
-  if (loading) return <p className="text-sm text-gray-400 text-center py-4">Chargement des créneaux…</p>;
-  if (slots.length === 0) return <p className="text-sm text-gray-400 text-center py-4">Aucun créneau disponible ce jour.</p>;
+  if (loading) return <p className="text-sm text-gray-400 text-center py-4">{t.loadingSlots}</p>;
+  if (slots.length === 0) return <p className="text-sm text-gray-400 text-center py-4">{t.noSlots}</p>;
   return (
     <div className="grid grid-cols-3 gap-2">
       {slots.map((s) => {
@@ -150,7 +152,7 @@ function SlotGrid({
           >
             <span>{s.label}</span>
             {s.spots_left !== undefined && s.capacity && s.capacity > 1 && (
-              <span className="text-xs opacity-70">{s.spots_left} pl.</span>
+              <span className="text-xs opacity-70">{s.spots_left} {t.spots}</span>
             )}
           </button>
         );
@@ -178,11 +180,13 @@ function ContactFields({
   onChange,
   offers,
   mode,
+  t,
 }: {
   fields: ContactFields;
   onChange: (f: Partial<ContactFields>) => void;
   offers: { id: string; name: string }[];
   mode: Mode;
+  t: FormStrings;
 }) {
   const isCompany = fields.contact_type === "company";
   return (
@@ -193,25 +197,25 @@ function ContactFields({
           onClick={() => onChange({ contact_type: "individual" })}
           className={`flex-1 py-2 font-medium transition-colors ${!isCompany ? "bg-gray-800 text-white" : "text-gray-600 hover:bg-gray-50"}`}
         >
-          Particulier
+          {t.individual}
         </button>
         <button type="button"
           onClick={() => onChange({ contact_type: "company" })}
           className={`flex-1 py-2 font-medium transition-colors ${isCompany ? "bg-gray-800 text-white" : "text-gray-600 hover:bg-gray-50"}`}
         >
-          Entreprise
+          {t.company}
         </button>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <input
-          placeholder={isCompany ? "Nom de l'entreprise *" : "Prénom *"}
+          placeholder={isCompany ? t.companyName : t.firstName}
           required
           value={fields.first_name}
           onChange={(e) => onChange({ first_name: e.target.value })}
           className="border rounded-lg px-3 py-2 text-sm w-full"
         />
         <input
-          placeholder={isCompany ? "Contact (prénom nom)" : "Nom *"}
+          placeholder={isCompany ? t.contactPerson : t.lastName}
           required={!isCompany}
           value={fields.last_name}
           onChange={(e) => onChange({ last_name: e.target.value })}
@@ -220,7 +224,7 @@ function ContactFields({
       </div>
       <input
         type="email"
-        placeholder="Email *"
+        placeholder={t.email}
         required
         value={fields.email}
         onChange={(e) => onChange({ email: e.target.value })}
@@ -229,7 +233,7 @@ function ContactFields({
       <input
         type="tel"
         inputMode="tel"
-        placeholder="Téléphone"
+        placeholder={t.phone}
         value={fields.phone}
         onChange={(e) => onChange({ phone: sanitizePhoneInput(e.target.value) })}
         className="border rounded-lg px-3 py-2 text-sm w-full"
@@ -240,14 +244,14 @@ function ContactFields({
           onChange={(e) => onChange({ service_offer_id: e.target.value })}
           className="border rounded-lg px-3 py-2 text-sm w-full text-gray-700"
         >
-          <option value="">Prestation (optionnel)</option>
+          <option value="">{t.serviceOptional}</option>
           {offers.map((o) => (
             <option key={o.id} value={o.id}>{o.name}</option>
           ))}
         </select>
       )}
       <textarea
-        placeholder={mode === "appointment" ? "Message / motif du rendez-vous (optionnel)" : "Objet de votre demande *"}
+        placeholder={mode === "appointment" ? t.apptMessage : t.contactMessage}
         required={mode === "contact"}
         rows={3}
         value={fields.message}
@@ -274,6 +278,10 @@ export default function ContactForm({
   vocab,
   bookingQuestions = [],
   depositConfig,
+  lang = "fr",
+  fixedMode,
+  integrationKey,
+  track: trackEnabled = true,
 }: {
   tenantSlug: string;
   accentColor?: string;
@@ -281,16 +289,26 @@ export default function ContactForm({
   vocab?: SectorVocabMini;
   bookingQuestions?: BookingQuestion[];
   depositConfig?: DepositCfg;
+  // Options des widgets embarqués (/embed/book, /embed/contact) — le site
+  // Klientys n'en passe aucune et garde son comportement.
+  lang?: FormLang;
+  fixedMode?: Mode;               // un seul mode, sans bascule message / RDV
+  integrationKey?: string | null; // support d'origine, joint à chaque envoi
+  track?: boolean;                // false : pas d'événement dans les analytics du site Klientys
 }) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-  const bookingCta = vocab?.booking_cta ?? "Prendre rendez-vous";
-  const partySizeLabel = vocab?.party_size_label ?? "Nombre de personnes";
+  const t = FORM_T[lang] ?? FORM_T.fr;
+  const locale = FORM_LOCALE[lang] ?? FORM_LOCALE.fr;
+  const bookingCta = vocab?.booking_cta ?? t.bookingCta;
+  const partySizeLabel = vocab?.party_size_label ?? t.partySize;
   const partySizeHint = vocab?.party_size_hint ?? null;
+  const track = (type: string, section?: string, data?: object) => { if (trackEnabled) _track(tenantSlug, type, section, data); };
+  const integration = integrationKey ? { integration_key: integrationKey } : {};
 
   const depositEnabled = depositConfig?.enabled && depositConfig.paypal_client_id;
   const hasQuestions   = bookingQuestions.length > 0;
 
-  const [mode, setMode] = useState<Mode>("contact");
+  const [mode, setMode] = useState<Mode>(fixedMode ?? "contact");
   const [step, setStep] = useState<"date" | "slot" | "form" | "payment">("date");
   const [partySize, setPartySize] = useState(1);
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
@@ -301,7 +319,7 @@ export default function ContactForm({
 
 
   useEffect(() => {
-    if (window.location.hash === "#rdv") {
+    if (!fixedMode && window.location.hash === "#rdv") {
       setMode("appointment");
     }
   }, []);
@@ -327,7 +345,7 @@ export default function ContactForm({
   const trackOpen = () => {
     if (openFired.current) return;
     openFired.current = true;
-    _track(tenantSlug, "form_open", "contact");
+    track("form_open", "contact");
   };
 
   const handleDateSelect = async (d: Date) => {
@@ -368,6 +386,7 @@ export default function ContactForm({
     party_size: partySize,
     custom_answers: customAnswers,
     consent_channels: consentChannels,
+    ...integration,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -377,7 +396,7 @@ export default function ContactForm({
     // Validate required questions
     for (const q of bookingQuestions) {
       if (q.required && !customAnswers[q.id]?.trim()) {
-        setError(`La question « ${q.label} » est obligatoire.`);
+        setError(t.requiredQuestion(q.label));
         return;
       }
     }
@@ -396,16 +415,17 @@ export default function ContactForm({
           request_type: "contact",
           contact_type: fields.contact_type,
           consent_channels: consentChannels,
+          ...integration,
         };
         const res = await fetch(`${apiUrl}/api/v1/leads/public/${tenantSlug}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail ?? "Erreur"); }
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail ?? t.error); }
         setSubmitted(true);
-        _track(tenantSlug, "form_submit", "contact", { mode });
-      } catch (err: any) { setError(err.message ?? "Une erreur est survenue"); }
+        track("form_submit", "contact", { mode });
+      } catch (err: any) { setError(err.message ?? t.error); }
       finally { setSubmitting(false); }
       return;
     }
@@ -428,10 +448,10 @@ export default function ContactForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail ?? "Erreur lors de l'envoi"); }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail ?? t.sendError); }
       setSubmitted(true);
-      _track(tenantSlug, "form_submit", "contact", { mode });
-    } catch (err: any) { setError(err.message ?? "Une erreur est survenue"); }
+      track("form_submit", "contact", { mode });
+    } catch (err: any) { setError(err.message ?? t.error); }
     finally { setSubmitting(false); }
   };
 
@@ -445,7 +465,7 @@ export default function ContactForm({
     console.log("[PayPal] step=payment | clientId=", clientId ? clientId.slice(0, 8) + "…" : "VIDE/MANQUANT");
 
     if (!clientId) {
-      setPaypalError("Client ID PayPal manquant. Vérifiez Formulaire → onglet Paiement.");
+      setPaypalError(t.paypalNoClientId);
       return;
     }
 
@@ -467,7 +487,7 @@ export default function ContactForm({
           });
           if (!r.ok) {
             const err = await r.json().catch(() => ({}));
-            throw new Error(err.detail ?? "Erreur création order PayPal");
+            throw new Error(err.detail ?? t.paypalOrderError);
           }
           return (await r.json()).order_id;
         },
@@ -480,14 +500,14 @@ export default function ContactForm({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(body),
             });
-            if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail ?? "Erreur paiement"); }
+            if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail ?? t.paymentError); }
             setSubmitted(true);
-            _track(tenantSlug, "form_submit", "contact", { mode: "appointment", deposit: "paid" });
-          } catch (e: any) { setPaypalError(e.message ?? "Paiement non complété."); }
+            track("form_submit", "contact", { mode: "appointment", deposit: "paid" });
+          } catch (e: any) { setPaypalError(e.message ?? t.paymentIncomplete); }
           finally { setSubmitting(false); }
         },
-        onError: (err: any) => { console.error("[PayPal] button error:", err); setPaypalError("Une erreur PayPal est survenue."); },
-        onCancel: () => setPaypalError("Paiement annulé."),
+        onError: (err: any) => { console.error("[PayPal] button error:", err); setPaypalError(t.paypalError); },
+        onCancel: () => setPaypalError(t.paymentCancelled),
       }).render("#paypal-buttons");
     };
 
@@ -503,7 +523,7 @@ export default function ContactForm({
     if (existing) {
       console.log("[PayPal] script déjà dans le DOM, attente du load…");
       existing.addEventListener("load", renderButtons);
-      existing.addEventListener("error", () => setPaypalError("Impossible de charger PayPal."));
+      existing.addEventListener("error", () => setPaypalError(t.paypalLoadError));
       return;
     }
 
@@ -516,7 +536,7 @@ export default function ContactForm({
     const sdkHost = depositConfig?.sandbox ? "https://www.sandbox.paypal.com" : "https://www.paypal.com";
     script.src = `${sdkHost}/sdk/js?client-id=${clientId}&currency=${currency}&intent=capture`;
     script.onload = () => { console.log("[PayPal] SDK chargé !"); renderButtons(); };
-    script.onerror = () => setPaypalError("Impossible de charger le module de paiement PayPal.");
+    script.onerror = () => setPaypalError(t.paypalModuleError);
     document.head.appendChild(script);
   }, [step]);
 
@@ -525,56 +545,59 @@ export default function ContactForm({
       <div className="text-center py-8">
         <div className="text-4xl mb-3">✓</div>
         <p className="font-semibold text-lg" style={{ color: accentColor }}>
-          {mode === "appointment" ? `${bookingCta} — Demande reçue !` : "Message envoyé !"}
+          {mode === "appointment" ? t.apptDone(bookingCta) : t.msgDone}
         </p>
         <p className="text-gray-500 mt-2 text-sm">
           {mode === "appointment"
             ? showPartySize
-              ? `Votre réservation pour ${partySize} personne(s) a bien été transmise. Vous recevrez une confirmation par email.`
-              : "Vous recevrez une confirmation par email avec les détails."
-            : "Nous vous recontacterons très prochainement."}
+              ? t.partyDone(partySize)
+              : t.apptDoneText
+            : t.msgDoneText}
         </p>
       </div>
     );
   }
 
-  const totalSteps = 3 + (depositEnabled ? 1 : 0);
-  const stepNum = step === "date" ? 1 : step === "slot" ? 2 : step === "form" ? 3 : 4;
+  const consentBlock = (
+    <div className="space-y-1.5 pt-1">
+      <p className="text-xs text-gray-500">{t.consent}</p>
+      {[["email", t.consentEmail], ["telephone", t.consentPhone]].map(([key, label]) => (
+        <label key={key} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input type="checkbox" checked={consentChannels.includes(key)} onChange={() => toggleConsent(key)}
+            className="rounded accent-current" style={{ accentColor }} />
+          {label}
+        </label>
+      ))}
+    </div>
+  );
 
   return (
     <div className="space-y-5">
-      {/* Toggle mode */}
-      <div className="flex rounded-xl border overflow-hidden">
-        <button
-          onClick={() => { setMode("contact"); setStep("date"); trackOpen(); }}
-          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mode === "contact" ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
-          style={mode === "contact" ? { backgroundColor: accentColor } : {}}
-        >
-          Envoyer un message
-        </button>
-        <button
-          onClick={() => { setMode("appointment"); setStep("date"); trackOpen(); }}
-          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mode === "appointment" ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
-          style={mode === "appointment" ? { backgroundColor: accentColor } : {}}
-        >
-          {bookingCta}
-        </button>
-      </div>
+      {/* Toggle mode — absent quand le widget impose un mode */}
+      {!fixedMode && (
+        <div className="flex rounded-xl border overflow-hidden">
+          <button
+            onClick={() => { setMode("contact"); setStep("date"); trackOpen(); }}
+            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mode === "contact" ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
+            style={mode === "contact" ? { backgroundColor: accentColor } : {}}
+          >
+            {t.sendMessage}
+          </button>
+          <button
+            onClick={() => { setMode("appointment"); setStep("date"); trackOpen(); }}
+            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${mode === "appointment" ? "text-white" : "text-gray-600 hover:bg-gray-50"}`}
+            style={mode === "appointment" ? { backgroundColor: accentColor } : {}}
+          >
+            {bookingCta}
+          </button>
+        </div>
+      )}
 
       {/* Mode contact simple */}
       {mode === "contact" && (
         <form onSubmit={handleSubmit} onFocus={trackOpen} data-track-form="contact" className="space-y-3">
-          <ContactFields fields={fields} onChange={(f) => setFields((p) => ({ ...p, ...f }))} offers={[]} mode="contact" />
-          <div className="space-y-1.5 pt-1">
-            <p className="text-xs text-gray-500">J'accepte d'être recontacté(e) par :</p>
-            {[["email", "Email"], ["telephone", "Téléphone"]].map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-                <input type="checkbox" checked={consentChannels.includes(key)} onChange={() => toggleConsent(key)}
-                  className="rounded accent-current" style={{ accentColor }} />
-                {label}
-              </label>
-            ))}
-          </div>
+          <ContactFields fields={fields} onChange={(f) => setFields((p) => ({ ...p, ...f }))} offers={[]} mode="contact" t={t} />
+          {consentBlock}
           {error && <p className="text-red-500 text-sm">{error}</p>}
           <button
             type="submit"
@@ -582,7 +605,7 @@ export default function ContactForm({
             className="w-full text-white py-3 rounded-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
             style={{ backgroundColor: accentColor }}
           >
-            {submitting ? "Envoi…" : "Envoyer ma demande"}
+            {submitting ? t.sending : t.sendRequest}
           </button>
         </form>
       )}
@@ -595,26 +618,26 @@ export default function ContactForm({
             <button onClick={() => setStep("date")}
               className={`font-medium ${step === "date" ? "text-gray-900" : "hover:underline"}`}
               style={step === "date" ? { color: accentColor } : {}}>
-              1. Date
+              {t.stepDate}
             </button>
             <span>›</span>
             <button onClick={() => (step === "form" || step === "payment") ? setStep("slot") : undefined}
               className={`font-medium ${step === "slot" ? "text-gray-900" : (step === "form" || step === "payment") ? "hover:underline" : "cursor-default"}`}
               style={step === "slot" ? { color: accentColor } : {}}>
-              2. Créneau
+              {t.stepSlot}
             </button>
             <span>›</span>
             <button onClick={() => step === "payment" ? setStep("form") : undefined}
               className={`font-medium ${step === "form" ? "text-gray-900" : step === "payment" ? "hover:underline" : "cursor-default"}`}
               style={step === "form" ? { color: accentColor } : {}}>
-              3. Coordonnées
+              {t.stepForm}
             </button>
             {depositEnabled && (
               <>
                 <span>›</span>
                 <span className={`font-medium ${step === "payment" ? "text-gray-900" : "cursor-default"}`}
                   style={step === "payment" ? { color: accentColor } : {}}>
-                  4. Paiement
+                  {t.stepPay}
                 </span>
               </>
             )}
@@ -646,8 +669,8 @@ export default function ContactForm({
           {/* Étape 1 — Calendrier */}
           {step === "date" && (
             <div>
-              <p className="text-sm text-gray-600 mb-3">Choisissez une date :</p>
-              <MiniCalendar selected={selectedDate} onSelect={handleDateSelect} accentColor={accentColor} tenantSlug={tenantSlug} />
+              <p className="text-sm text-gray-600 mb-3">{t.chooseDate}</p>
+              <MiniCalendar selected={selectedDate} onSelect={handleDateSelect} accentColor={accentColor} tenantSlug={tenantSlug} t={t} />
             </div>
           )}
 
@@ -655,9 +678,9 @@ export default function ContactForm({
           {step === "slot" && selectedDate && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <button onClick={() => setStep("date")} className="text-xs text-gray-400 hover:text-gray-600">← Date</button>
+                <button onClick={() => setStep("date")} className="text-xs text-gray-400 hover:text-gray-600">{t.backDate}</button>
                 <p className="text-sm font-medium text-gray-700">
-                  {selectedDate.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
+                  {selectedDate.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
                 </p>
               </div>
               <SlotGrid
@@ -666,6 +689,7 @@ export default function ContactForm({
                 onSelect={handleSlotSelect}
                 accentColor={accentColor}
                 loading={slotsLoading}
+                t={t}
               />
             </div>
           )}
@@ -674,10 +698,10 @@ export default function ContactForm({
           {step === "form" && selectedSlot && (
             <form onSubmit={handleSubmit} onFocus={trackOpen} data-track-form="appointment" className="space-y-3">
               <div className="flex items-center gap-2 mb-1">
-                <button type="button" onClick={() => setStep("slot")} className="text-xs text-gray-400 hover:text-gray-600">← Créneaux</button>
+                <button type="button" onClick={() => setStep("slot")} className="text-xs text-gray-400 hover:text-gray-600">{t.backSlots}</button>
                 <p className="text-sm font-medium text-gray-700">
-                  {selectedDate?.toLocaleDateString("fr-BE", { weekday: "long", day: "numeric", month: "long" })}
-                  {" à "}
+                  {selectedDate?.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
+                  {t.at}
                   <span style={{ color: accentColor }}>{selectedSlot.label}</span>
                 </p>
               </div>
@@ -686,12 +710,13 @@ export default function ContactForm({
                 onChange={(f) => setFields((p) => ({ ...p, ...f }))}
                 offers={offers}
                 mode="appointment"
+                t={t}
               />
 
               {/* Questions personnalisées */}
               {hasQuestions && (
                 <div className="space-y-3 pt-2 border-t">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quelques questions</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.questions}</p>
                   {bookingQuestions.map(q => (
                     <div key={q.id}>
                       <label className="block text-sm text-gray-700 mb-1">
@@ -712,7 +737,7 @@ export default function ContactForm({
                           className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
                           required={q.required}
                         >
-                          <option value="">Sélectionnez…</option>
+                          <option value="">{t.select}</option>
                           {(q.options ?? []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
                         </select>
                       ) : (
@@ -729,16 +754,7 @@ export default function ContactForm({
                 </div>
               )}
 
-              <div className="space-y-1.5 pt-1">
-                <p className="text-xs text-gray-500">J'accepte d'être recontacté(e) par :</p>
-                {[["email", "Email"], ["telephone", "Téléphone"]].map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-                    <input type="checkbox" checked={consentChannels.includes(key)} onChange={() => toggleConsent(key)}
-                      className="rounded accent-current" style={{ accentColor }} />
-                    {label}
-                  </label>
-                ))}
-              </div>
+              {consentBlock}
 
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <button
@@ -748,10 +764,10 @@ export default function ContactForm({
                 style={{ backgroundColor: accentColor }}
               >
                 {submitting
-                  ? "Confirmation…"
+                  ? t.confirming
                   : depositEnabled
-                  ? "Continuer vers le paiement →"
-                  : "Confirmer le rendez-vous"}
+                  ? t.toPayment
+                  : t.confirm}
               </button>
             </form>
           )}
@@ -761,20 +777,20 @@ export default function ContactForm({
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-1">
                 <button type="button" onClick={() => { setStep("form"); paypalRendered.current = false; }}
-                  className="text-xs text-gray-400 hover:text-gray-600">← Coordonnées</button>
+                  className="text-xs text-gray-400 hover:text-gray-600">{t.backForm}</button>
               </div>
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
-                <p className="text-sm font-semibold text-gray-800">Acompte requis</p>
+                <p className="text-sm font-semibold text-gray-800">{t.depositRequired}</p>
                 <p className="text-2xl font-bold mt-1" style={{ color: accentColor }}>
                   {depositConfig.amount} {depositConfig.currency}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">Requis pour confirmer votre réservation</p>
+                <p className="text-xs text-gray-500 mt-1">{t.depositNote}</p>
               </div>
               {paypalError && <p className="text-red-500 text-sm text-center">{paypalError}</p>}
-              {submitting && <p className="text-sm text-gray-500 text-center">Validation du paiement…</p>}
+              {submitting && <p className="text-sm text-gray-500 text-center">{t.validatingPayment}</p>}
               <div id="paypal-buttons" />
               {!paypalReady && !paypalError && (
-                <p className="text-xs text-gray-400 text-center animate-pulse">Chargement de PayPal…</p>
+                <p className="text-xs text-gray-400 text-center animate-pulse">{t.loadingPaypal}</p>
               )}
             </div>
           )}

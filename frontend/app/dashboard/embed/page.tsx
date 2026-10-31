@@ -189,7 +189,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
               <CopyBlock label={t.emb_code_label} code={bookSnippet} id="book-code" {...copy} />
               <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700">
                 <p className="font-medium mb-1">Conseil d&apos;intégration</p>
-                <p>Placez le widget dans un conteneur pleine largeur, pas dans une case de grille étroite. Sa hauteur est fixe (600 px) : si le bas est coupé, forcez une hauteur plus grande dans le CSS de votre site.</p>
+                <p>Placez le widget dans un conteneur pleine largeur, pas dans une case de grille étroite. Sa hauteur est fixe (720 px) : si vous avez beaucoup de questions personnalisées et que le bas est coupé, forcez une hauteur plus grande dans le CSS de votre site.</p>
               </div>
             </div>
           </WidgetCard></div>
@@ -204,7 +204,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             Pour les outils qui acceptent une iframe mais pas de script (Notion, Carrd…). Le chatbot flottant n&apos;est pas disponible dans ce mode : il a besoin du chargeur <code>embed.js</code>.
           </div>
           <WidgetCard number={1} title={t.emb_booking_title} subtitle={t.emb_booking_desc}>
-            <CopyBlock label={t.emb_code_label} code={iframeSnippet("book", 680)} id="book-iframe" {...copy} />
+            <CopyBlock label={t.emb_code_label} code={iframeSnippet("book", 720)} id="book-iframe" {...copy} />
           </WidgetCard>
           <WidgetCard number={2} title={t.emb_contact_title} subtitle={t.emb_contact_desc}>
             <CopyBlock label={t.emb_code_label} code={iframeSnippet("contact", 620)} id="contact-iframe" {...copy} />

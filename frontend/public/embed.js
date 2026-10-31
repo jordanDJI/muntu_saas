@@ -37,8 +37,10 @@
 
   var WIDGETS = {
     chatbot: { path: "/embed/chatbot/", defaultW: "60px", defaultH: "60px", fixed: true },
-    book:    { path: "/embed/book/",    defaultW: "100%",  defaultH: "600px", fixed: false },
-    contact: { path: "/embed/contact/", defaultW: "100%",  defaultH: "480px", fixed: false },
+    // Hauteurs du formulaire du site Klientys (consentement RGPD, questions
+    // personnalisées, acompte) — plus haut que les anciens widgets simplifiés.
+    book:    { path: "/embed/book/",    defaultW: "100%",  defaultH: "720px", fixed: false },
+    contact: { path: "/embed/contact/", defaultW: "100%",  defaultH: "620px", fixed: false },
   };
 
   var LANGS = ["fr", "en", "de", "nl"];

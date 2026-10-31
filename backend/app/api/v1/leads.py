@@ -9,6 +9,7 @@ from app.services.email import send_lead_notification, send_lead_acknowledgement
 from app.api.v1.booking import _get_team_emails, _TEAM_EMAIL_ERROR
 from app.services.retention import CONSENT_CHANNELS, record_consent, touch_contact_interaction
 from app.services.contact_limits import get_contact_quota
+from app.services import integrations as integration_svc
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
@@ -76,6 +77,9 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
     if body.email and str(body.email).strip().lower() in _get_team_emails(supabase, tenant_id):
         raise HTTPException(status_code=403, detail=_TEAM_EMAIL_ERROR)
 
+    # Widget embarqué : support d'origine — 403 si l'intégration est désactivée
+    integration_id = integration_svc.integration_for_submission(supabase, tenant_id, body.integration_key)
+
     # Chercher un contact existant par email pour éviter les doublons
     email_val = str(body.email).strip().lower() if body.email else None
     existing = None
@@ -117,6 +121,8 @@ async def create_lead_public(tenant_slug: str, body: LeadCreateIn, background_ta
         lead_data["pipeline_stage_id"] = stage["id"]
     if body.service_offer_id:
         lead_data["service_offer_id"] = str(body.service_offer_id)
+    if integration_id:
+        lead_data["integration_id"] = integration_id
 
     try:
         lead = supabase.table("lead").insert(lead_data).execute().data[0]

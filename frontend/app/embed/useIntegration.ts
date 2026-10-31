@@ -3,6 +3,17 @@ import { useEffect, useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// Configuration du formulaire du site (prestations, questions, acompte,
+// couleur), renvoyée par le ping pour les widgets book / contact.
+export type FormConfig = {
+  offers: { id: string; name: string }[];
+  booking_questions: any[];
+  deposit: { enabled: boolean; amount: number; currency: string; paypal_client_id: string; sandbox?: boolean } | null;
+  sector: string;
+  primary_color: string;
+  custom_color_hex: string | null;
+};
+
 export type IntegrationState = {
   // loading : ping en cours · active : affichage normal · disabled : intégration
   // désactivée par le tenant · not_ready : chatbot sans les éléments requis
@@ -11,6 +22,7 @@ export type IntegrationState = {
   key: string | null;
   // true : page ouverte directement (type « lien »), pas dans une iframe
   standalone: boolean;
+  form: FormConfig | null;
 };
 
 function hostFromReferrer(): string | null {
@@ -25,7 +37,7 @@ function hostFromReferrer(): string | null {
 // peut s'afficher. Dans une iframe, un widget refusé demande à embed.js de le
 // masquer, pour ne laisser ni cadre vide ni bulle en erreur chez le client.
 export function useIntegration(slug: string, widget: "chatbot" | "book" | "contact"): IntegrationState {
-  const [state, setState] = useState<IntegrationState>({ status: "loading", key: null, standalone: false });
+  const [state, setState] = useState<IntegrationState>({ status: "loading", key: null, standalone: false, form: null });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -44,14 +56,15 @@ export function useIntegration(slug: string, widget: "chatbot" | "book" | "conta
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (cancelled) return;
-        // Ping en échec (réseau, backend à froid) : on affiche quand même.
-        // Les envois restent contrôlés côté serveur.
-        if (!d) { setState({ status: "active", key: keyParam, standalone }); return; }
+        // Ping en échec (réseau, backend à froid) : on affiche quand même,
+        // sans questions ni acompte. Les envois restent contrôlés côté serveur
+        // — un acompte exigé est refusé par /book (402), jamais contourné.
+        if (!d) { setState({ status: "active", key: keyParam, standalone, form: null }); return; }
         const status = !d.active ? "disabled" : (widget === "chatbot" && d.chatbot_ready === false) ? "not_ready" : "active";
-        setState({ status, key: d.integration ?? null, standalone });
+        setState({ status, key: d.integration ?? null, standalone, form: d.form ?? null });
         if (status !== "active" && !standalone) window.parent.postMessage({ type: "saas-widget-hide" }, "*");
       })
-      .catch(() => { if (!cancelled) setState({ status: "active", key: keyParam, standalone }); });
+      .catch(() => { if (!cancelled) setState({ status: "active", key: keyParam, standalone, form: null }); });
 
     return () => { cancelled = true; };
   }, [slug, widget]);

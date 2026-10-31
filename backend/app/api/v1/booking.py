@@ -546,6 +546,16 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
     # désactivée — avant toute écriture, pour ne créer ni contact ni lead.
     integration_id = integration_svc.integration_for_submission(sb, tenant["id"], body.integration_key)
 
+    # Acompte exigé : un RDV ne passe que par /paypal-capture, qui encaisse
+    # avant de créer. Sans ce contrôle, l'acompte n'était imposé que par le
+    # formulaire du site — un appel direct ou le widget embarqué réservait
+    # sans payer. Avant toute écriture, pour ne créer ni contact ni lead.
+    if body.request_type == "appointment" and get_deposit_config(sb, tenant["id"]) is not None:
+        raise HTTPException(
+            status_code=402,
+            detail="Un acompte est requis pour réserver ce rendez-vous. Merci de passer par l'étape de paiement.",
+        )
+
     # Trouver ou créer le contact
     contact_res = (
         sb.table("contact")
@@ -860,6 +870,10 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
 
     cfg = _deposit_or_400(sb, tenant["id"])
 
+    # Widget embarqué : avant l'encaissement, pour ne jamais faire payer un
+    # visiteur sur une intégration désactivée.
+    integration_id = integration_svc.integration_for_submission(sb, tenant["id"], body.integration_key)
+
     if not body.scheduled_at:
         raise HTTPException(status_code=400, detail="scheduled_at requis")
 
@@ -930,7 +944,8 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
                 record_consent(tenant["id"], contact_id, channel, granted=True, source="public_form")
 
         ensure_lead(sb, tenant["id"], contact_id, "website", status="scheduled",
-                    request_type="b2c_appointment", notes=body.message or None)
+                    request_type="b2c_appointment", notes=body.message or None,
+                    integration_id=integration_id)
 
         appt_row: dict = {
             "calendar_id": cal_id,
@@ -952,6 +967,8 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
             appt_row["notes"] = body.message.strip()
         if body.custom_answers:
             appt_row["custom_answers"] = body.custom_answers
+        if integration_id:
+            appt_row["integration_id"] = integration_id
 
         appt = sb.table("appointment").insert(appt_row).execute().data[0]
     except Exception as exc:
