@@ -1,0 +1,384 @@
+﻿id;niveau;epic;titre;type;statut;priorite;us_liees;persona;reference;fichier
+EP-01;Epic;EP-01;Authentification, inscription & onboarding;;;;;;;epics/EP-01-auth-onboarding.md
+US-01.01;User story;EP-01;S'inscrire par email;;✅ Livré;;;Pro;;epics/EP-01-auth-onboarding.md
+US-01.02;User story;EP-01;Se connecter avec Google;;✅ Livré;;;Pro;;epics/EP-01-auth-onboarding.md
+US-01.03;User story;EP-01;Se connecter avec LinkedIn ou Facebook;;🟡 Partiel;;;Pro;;epics/EP-01-auth-onboarding.md
+US-01.04;User story;EP-01;Réinitialiser mon mot de passe;;✅ Livré;;;Pro;;epics/EP-01-auth-onboarding.md
+US-01.05;User story;EP-01;Créer mon espace professionnel (onboarding);;✅ Livré;;;Pro;;epics/EP-01-auth-onboarding.md
+US-01.06;User story;EP-01;Protéger l'accès au dashboard et à l'admin;;✅ Livré;;;Pro, Opérateur;;epics/EP-01-auth-onboarding.md
+US-01.07;User story;EP-01;Être guidé par des visites interactives;;✅ Livré;;;Pro;;epics/EP-01-auth-onboarding.md
+US-01.08;User story;EP-01;Suivre la complétion de mon profil;;✅ Livré;;;Pro;;epics/EP-01-auth-onboarding.md
+US-01.09;User story;EP-01;Sécuriser mon compte par un second facteur;;✅ Livré;;;Pro;;epics/EP-01-auth-onboarding.md
+KLT-0101;Ticket;EP-01;Boucle de redirection entre /login et /dashboard;Bug;✅ Terminé;P0;US-01.06;;7b87d70`, `22f4619` (2026-05-16);epics/EP-01-auth-onboarding.md
+KLT-0102;Ticket;EP-01;Chargement infini de l'onboarding en production;Bug;✅ Terminé;P0;US-01.05;;a5091aa` (2026-05-16);epics/EP-01-auth-onboarding.md
+KLT-0103;Ticket;EP-01;Onboarding cassé après connexion Google;Bug;✅ Terminé;P0;US-01.02;;a5091aa`, `bdc2297` (2026-05-16);epics/EP-01-auth-onboarding.md
+KLT-0104;Ticket;EP-01;Série de corrections OAuth Google;Bug;✅ Terminé;P1;US-01.02;;f22e8d1` → `e290a74` (6 commits, 2026-05-27);epics/EP-01-auth-onboarding.md
+KLT-0105;Ticket;EP-01;Faux « pas d'espace » au démarrage à froid du backend;Bug;✅ Terminé;P1;US-01.05;;0f6e6fd` (2026-06-04);epics/EP-01-auth-onboarding.md
+KLT-0106;Ticket;EP-01;Re-vérification du tenant dans l'onboarding;Amélioration;✅ Terminé;P1;US-01.05;;0f6e6fd` (2026-06-04);epics/EP-01-auth-onboarding.md
+KLT-0107;Ticket;EP-01;Le lien de confirmation d'email ne menait nulle part;Bug;✅ Terminé;P0;US-01.01;;2766dac` (2026-05-16);epics/EP-01-auth-onboarding.md
+KLT-0108;Ticket;EP-01;Mot de passe oublié non fonctionnel;Bug;✅ Terminé;P1;US-01.04;;56fb165` → `7eaae70` (4 commits, 2026-06-09);epics/EP-01-auth-onboarding.md
+KLT-0109;Ticket;EP-01;Le paramètre ?redirect= était ignoré après connexion;Bug;✅ Terminé;P2;US-01.06;;9b6ccb8` (2026-05-26);epics/EP-01-auth-onboarding.md
+KLT-0110;Ticket;EP-01;Carte d'onboarding mal positionnée ou hors écran;Bug;✅ Terminé;P3;US-01.07;;d382514`, `ffb475e`, `d6715e4` (2026-05-11);epics/EP-01-auth-onboarding.md
+KLT-0111;Ticket;EP-01;Comptes support envoyés vers l'onboarding;Bug;✅ Terminé;P2;US-01.06;;CLAUDE.md (section callback);epics/EP-01-auth-onboarding.md
+KLT-0120;Ticket;EP-01;Ajouter l'authentification à deux facteurs;Sécurité;✅ Terminé;P2;US-01.09;;non commité (2026-11-03);epics/EP-01-auth-onboarding.md
+KLT-0121;Ticket;EP-01;Activer la connexion Facebook après validation Meta;Amélioration;⬜ À faire;P3;US-01.03;;d9e5303;epics/EP-01-auth-onboarding.md
+EP-02;Epic;EP-02;Multi-tenant, équipe & permissions;;;;;;;epics/EP-02-multitenant-equipe.md
+US-02.01;User story;EP-02;Garantir l'isolation des données entre espaces;;✅ Livré;;;Pro;;epics/EP-02-multitenant-equipe.md
+US-02.02;User story;EP-02;Inviter un membre dans mon espace;;✅ Livré;;;Owner, Admin;;epics/EP-02-multitenant-equipe.md
+US-02.03;User story;EP-02;Rejoindre un espace sur invitation;;✅ Livré;;;Membre invité;;epics/EP-02-multitenant-equipe.md
+US-02.04;User story;EP-02;Limiter les accès d'un membre;;✅ Livré;;;Owner, Admin;;epics/EP-02-multitenant-equipe.md
+US-02.05;User story;EP-02;Gérer les membres existants;;✅ Livré;;;Owner, Admin;;epics/EP-02-multitenant-equipe.md
+US-02.06;User story;EP-02;Gérer plusieurs espaces avec un seul compte;;✅ Livré;;;Pro multi-activités;;epics/EP-02-multitenant-equipe.md
+US-02.07;User story;EP-02;Espace secrétaire multi-agendas;;✅ Livré;;;Secrétaire;;epics/EP-02-multitenant-equipe.md
+US-02.08;User story;EP-02;Disposer d'une clé API pour mon espace;;✅ Livré;;;Owner;;epics/EP-02-multitenant-equipe.md
+KLT-0201;Ticket;EP-02;Un tenant pouvait créer un RDV sur le contact d'un autre tenant (IDOR);Sécurité;✅ Terminé;P0;US-02.01;;5571b58` (2026-10-11);epics/EP-02-multitenant-equipe.md
+KLT-0202;Ticket;EP-02;Fuite de données contact d'un autre tenant dans une facture;Sécurité;✅ Terminé;P0;US-02.01;;5571b58` (2026-10-11);epics/EP-02-multitenant-equipe.md
+KLT-0203;Ticket;EP-02;Retrait d'un tag sans contrôle de tenant;Sécurité;✅ Terminé;P1;US-02.01;;5571b58` (2026-10-11);epics/EP-02-multitenant-equipe.md
+KLT-0204;Ticket;EP-02;Écritures reposant sur un contrôle de propriété séparé;Dette technique;✅ Terminé;P2;US-02.01;;5571b58` (2026-10-11);epics/EP-02-multitenant-equipe.md
+KLT-0205;Ticket;EP-02;N'importe quel membre pouvait agir sur la facturation;Sécurité;✅ Terminé;P0;US-02.04;;7efba30` (2026-10-04);epics/EP-02-multitenant-equipe.md
+KLT-0206;Ticket;EP-02;Policies RLS `FOR ALL` sans `WITH CHECK`;Sécurité;✅ Terminé;P0;US-02.01;;7efba30`, migration `071_lock_billing_rls.sql;epics/EP-02-multitenant-equipe.md
+KLT-0207;Ticket;EP-02;Repli `app_metadata.tenant_id` sans vérification de membership;Sécurité;✅ Terminé;P1;US-02.05;;7efba30;epics/EP-02-multitenant-equipe.md
+KLT-0208;Ticket;EP-02;Permissions CRM et agenda appliquées côté serveur;Sécurité;✅ Terminé;P1;US-02.04;;5571b58` (2026-10-11);epics/EP-02-multitenant-equipe.md
+KLT-0209;Ticket;EP-02;Plafonds du plan non appliqués (membres, espaces);Bug;✅ Terminé;P1;US-02.02, US-02.06;;6373abd` (2026-10-02);epics/EP-02-multitenant-equipe.md
+KLT-0210;Ticket;EP-02;Tables sans RLS;Sécurité;✅ Terminé;P1;US-02.01;;e4d7f2b`, migration `026_rls_missing_tables.sql` (2026-05-27);epics/EP-02-multitenant-equipe.md
+KLT-0211;Ticket;EP-02;Slug du tenant introuvable à cause de la RLS;Bug;✅ Terminé;P1;US-02.01;;6ae048b` (2026-05-09);epics/EP-02-multitenant-equipe.md
+KLT-0220;Ticket;EP-02;Permissions site, analytics et agents non vérifiées côté serveur;Sécurité;✅ Terminé;P1;US-02.04;;non commité (2026-11-03);epics/EP-02-multitenant-equipe.md
+KLT-0221;Ticket;EP-02;Un membre retiré garde l'accès via le repli `app_metadata.tenant_id`;Sécurité;✅ Terminé;P1;US-02.05;;non commité (2026-11-03);epics/EP-02-multitenant-equipe.md
+EP-03;Epic;EP-03;Site vitrine public & site-builder;;;;;;;epics/EP-03-site-vitrine.md
+US-03.01;User story;EP-03;Construire mon site avec un assistant pas à pas;;✅ Livré;;;Pro;;epics/EP-03-site-vitrine.md
+US-03.02;User story;EP-03;Démarrer avec un site pré-rempli pour mon métier;;✅ Livré;;;Pro;;epics/EP-03-site-vitrine.md
+US-03.03;User story;EP-03;Prévisualiser mon brouillon;;✅ Livré;;;Pro;;epics/EP-03-site-vitrine.md
+US-03.04;User story;EP-03;Publier et dépublier mon site;;✅ Livré;;;Pro;;epics/EP-03-site-vitrine.md
+US-03.05;User story;EP-03;Montrer mon travail dans une galerie photos;;✅ Livré;;;Pro, Visiteur;;epics/EP-03-site-vitrine.md
+US-03.06;User story;EP-03;Présenter mes prestations avec plusieurs photos;;✅ Livré;;;Pro, Visiteur;;epics/EP-03-site-vitrine.md
+US-03.07;User story;EP-03;Adapter le site à mon secteur (horaires, menu, catégories);;✅ Livré;;;Pro (restaurant, commerce…);;epics/EP-03-site-vitrine.md
+US-03.08;User story;EP-03;Disposer de pages légales sans effort;;✅ Livré;;;Pro;;epics/EP-03-site-vitrine.md
+US-03.09;User story;EP-03;Être bien référencé;;✅ Livré;;;Pro;;epics/EP-03-site-vitrine.md
+US-03.10;User story;EP-03;Personnaliser finement le design (Business);;✅ Livré;;;Pro Business;;epics/EP-03-site-vitrine.md
+US-03.11;User story;EP-03;Brancher mes outils de mesure;;✅ Livré;;;Pro;;epics/EP-03-site-vitrine.md
+US-03.12;User story;EP-03;Recevoir les messages de mes visiteurs;;✅ Livré;;;Visiteur, Pro;;epics/EP-03-site-vitrine.md
+KLT-0301;Ticket;EP-03;Site public inaccessible après publication;Bug;✅ Terminé;P0;US-03.04;;a90eec1` (2026-05-07);epics/EP-03-site-vitrine.md
+KLT-0302;Ticket;EP-03;Site public dépendant de la clé service role côté frontend;Sécurité;✅ Terminé;P1;US-03.04;;228ab1c` (2026-05-09);epics/EP-03-site-vitrine.md
+KLT-0303;Ticket;EP-03;Perte de l'adresse détaillée à l'enregistrement du site;Bug;✅ Terminé;P1;US-03.01;;12f7d86` (2026-05-26);epics/EP-03-site-vitrine.md
+KLT-0304;Ticket;EP-03;Tous les endpoints /sites/* en erreur si google-auth absent;Bug;✅ Terminé;P0;US-03.04;;9b6ccb8` (2026-05-26);epics/EP-03-site-vitrine.md
+KLT-0305;Ticket;EP-03;Adresse consolidée sans le pays;Bug;✅ Terminé;P3;US-03.01;;9b6ccb8;epics/EP-03-site-vitrine.md
+KLT-0306;Ticket;EP-03;Carte de publication peu claire, erreurs génériques;Amélioration;✅ Terminé;P2;US-03.04;;9b6ccb8;epics/EP-03-site-vitrine.md
+KLT-0307;Ticket;EP-03;Publication depuis la prévisualisation sans session;Bug;✅ Terminé;P2;US-03.03;;9b6ccb8;epics/EP-03-site-vitrine.md
+KLT-0308;Ticket;EP-03;Identifiant Meta Pixel mal pris en compte;Bug;✅ Terminé;P2;US-03.11;;6179620` → `e28b4ab`, `6950371` (2026-05-18 → 21);epics/EP-03-site-vitrine.md
+KLT-0309;Ticket;EP-03;Refonte premium du site public;Amélioration;✅ Terminé;P2;US-03.08;;12f7d86` (2026-05-26);epics/EP-03-site-vitrine.md
+KLT-0310;Ticket;EP-03;Photo de contact réduisant la largeur du formulaire;Bug;✅ Terminé;P3;US-03.12;;15e7945` (2026-05-27);epics/EP-03-site-vitrine.md
+KLT-0312;Ticket;EP-03;URL Supabase visible dans l'interface photo;Amélioration;✅ Terminé;P3;US-03.05;;4f49f5b` (2026-06-15);epics/EP-03-site-vitrine.md
+KLT-0313;Ticket;EP-03;Méthode `unpublishSite` absente du client API;Bug;✅ Terminé;P1;US-03.04;;c37a3ae` (2026-04-20);epics/EP-03-site-vitrine.md
+KLT-0314;Ticket;EP-03;Message du visiteur non sauvegardé ni affiché;Bug;✅ Terminé;P1;US-03.12;;058adc7`, `15f1ad5` (2026-05-25);epics/EP-03-site-vitrine.md
+EP-04;Epic;EP-04;Agenda & réservation en ligne;;;;;;;epics/EP-04-agenda-reservation.md
+US-04.01;User story;EP-04;Définir mes disponibilités;;✅ Livré;;;Pro;;epics/EP-04-agenda-reservation.md
+US-04.02;User story;EP-04;Bloquer des périodes (congés, fermeture);;✅ Livré;;;Pro;;epics/EP-04-agenda-reservation.md
+US-04.03;User story;EP-04;Consulter mon agenda;;✅ Livré;;;Pro;;epics/EP-04-agenda-reservation.md
+US-04.04;User story;EP-04;Créer et modifier un RDV depuis l'agenda;;✅ Livré;;;Pro;;epics/EP-04-agenda-reservation.md
+US-04.05;User story;EP-04;Réserver un créneau en ligne;;✅ Livré;;;Client final;;epics/EP-04-agenda-reservation.md
+US-04.06;User story;EP-04;Réserver pour plusieurs personnes (capacité 1:N);;✅ Livré;;;Client final, Pro (restaurant, cours collectifs);;epics/EP-04-agenda-reservation.md
+US-04.07;User story;EP-04;Poser mes propres questions au formulaire de réservation;;✅ Livré;;;Pro;;epics/EP-04-agenda-reservation.md
+US-04.08;User story;EP-04;Confirmer, refuser ou annuler un RDV;;✅ Livré;;;Pro, Client final;;epics/EP-04-agenda-reservation.md
+US-04.09;User story;EP-04;Rappeler le RDV au client;;✅ Livré;;;Client final;;epics/EP-04-agenda-reservation.md
+KLT-0401;Ticket;EP-04;RDV décalés selon le fuseau horaire;Bug;✅ Terminé;P0;US-04.05;;20cceff` (2026-06-14);epics/EP-04-agenda-reservation.md
+KLT-0402;Ticket;EP-04;Créneaux complets proposés au public;Bug;✅ Terminé;P1;US-04.06;;20cceff;epics/EP-04-agenda-reservation.md
+KLT-0403;Ticket;EP-04;Contrôle de capacité faussé par les dates naïves;Bug;✅ Terminé;P1;US-04.06;;20cceff;epics/EP-04-agenda-reservation.md
+KLT-0404;Ticket;EP-04;Réservation possible hors horaires, sur une période bloquée ou dans le passé;Bug;✅ Terminé;P0;US-04.05;;7efba30` (2026-10-04);epics/EP-04-agenda-reservation.md
+KLT-0405;Ticket;EP-04;Capacité lue sur le maximum de la journée;Bug;✅ Terminé;P2;US-04.06;;7efba30;epics/EP-04-agenda-reservation.md
+KLT-0406;Ticket;EP-04;Heures des rendez-vous incorrectes;Bug;✅ Terminé;P1;US-04.05;;ef7dcc2` (2026-05-18);epics/EP-04-agenda-reservation.md
+KLT-0407;Ticket;EP-04;Crash au démarrage : import `BaseModel` manquant dans booking.py;Bug;✅ Terminé;P0;US-04.05;;f6606cf` (2026-07-04);epics/EP-04-agenda-reservation.md
+KLT-0408;Ticket;EP-04;`t is not a function` dans le panneau Formulaire;Bug;✅ Terminé;P1;US-04.07;;f6606cf;epics/EP-04-agenda-reservation.md
+KLT-0409;Ticket;EP-04;Le curseur sautait dans le champ des options d'une question;Bug;✅ Terminé;P3;US-04.07;;f6606cf;epics/EP-04-agenda-reservation.md
+KLT-0410;Ticket;EP-04;Taille des réponses au formulaire non bornée;Sécurité;✅ Terminé;P2;US-04.07;;5571b58` (2026-10-11);epics/EP-04-agenda-reservation.md
+KLT-0411;Ticket;EP-04;Calendrier vide à la création d'un espace;Amélioration;✅ Terminé;P2;US-04.01;;15e7945` (2026-05-27);epics/EP-04-agenda-reservation.md
+KLT-0420;Ticket;EP-04;Messages d'erreur de réservation toujours en français;Amélioration;✅ Terminé;P2;US-04.06;;non commité (2026-11-03);epics/EP-04-agenda-reservation.md
+EP-05;Epic;EP-05;Acompte PayPal à la réservation;;;;;;;epics/EP-05-acompte-paypal.md
+US-05.01;User story;EP-05;Configurer un acompte;;✅ Livré;;;Pro (owner/admin);;epics/EP-05-acompte-paypal.md
+US-05.02;User story;EP-05;Payer l'acompte en réservant sur le site;;✅ Livré;;;Client final;;epics/EP-05-acompte-paypal.md
+US-05.03;User story;EP-05;Payer l'acompte d'une réservation faite via Telegram;;✅ Livré;;;Client final;;epics/EP-05-acompte-paypal.md
+US-05.04;User story;EP-05;Rembourser un acompte;;✅ Livré;;;Pro, Client final;;epics/EP-05-acompte-paypal.md
+US-05.05;User story;EP-05;Ne pas perdre un paiement si le client ferme l'onglet;;✅ Livré;;;Client final;;epics/EP-05-acompte-paypal.md
+US-05.06;User story;EP-05;Libérer les créneaux réservés mais jamais payés;;✅ Livré;;;Pro, Client final;;epics/EP-05-acompte-paypal.md
+US-05.07;User story;EP-05;Tracer les incidents de paiement;;✅ Livré;;;Opérateur Klientys;;epics/EP-05-acompte-paypal.md
+KLT-0501;Ticket;EP-05;L'acompte pouvait être fixé à 0,01 € par le client;Sécurité;✅ Terminé;P0;US-05.02;;7efba30` (2026-10-04);epics/EP-05-acompte-paypal.md
+KLT-0502;Ticket;EP-05;Montant capturé non vérifié;Sécurité;✅ Terminé;P0;US-05.02, US-05.07;;7efba30;epics/EP-05-acompte-paypal.md
+KLT-0503;Ticket;EP-05;Réservation sans acompte par appel direct ou widget;Sécurité;✅ Terminé;P0;US-05.02;;0e5935b` (2026-11-01);epics/EP-05-acompte-paypal.md
+KLT-0504;Ticket;EP-05;Aucun remboursement possible;Amélioration;✅ Terminé;P0;US-05.04;;7efba30;epics/EP-05-acompte-paypal.md
+KLT-0505;Ticket;EP-05;Les créneaux non payés restaient bloqués à vie;Bug;✅ Terminé;P1;US-05.06;;7efba30;epics/EP-05-acompte-paypal.md
+KLT-0506;Ticket;EP-05;Retour PayPal non vérifié;Sécurité;✅ Terminé;P1;US-05.03;;7efba30;epics/EP-05-acompte-paypal.md
+KLT-0507;Ticket;EP-05;Appels PayPal bloquants dans des handlers async;Dette technique;✅ Terminé;P2;US-05.02;;7efba30;epics/EP-05-acompte-paypal.md
+KLT-0508;Ticket;EP-05;SDK PayPal chargé de façon non fiable;Bug;✅ Terminé;P1;US-05.02;;f6606cf` (2026-07-04);epics/EP-05-acompte-paypal.md
+KLT-0509;Ticket;EP-05;Mode sandbox incohérent entre création et capture;Bug;✅ Terminé;P1;US-05.02;;f6606cf;epics/EP-05-acompte-paypal.md
+KLT-0510;Ticket;EP-05;Page /paypal-return en erreur au build;Bug;✅ Terminé;P1;US-05.03;;91a64f9` (2026-07-04);epics/EP-05-acompte-paypal.md
+KLT-0511;Ticket;EP-05;Un même order PayPal pouvait financer deux RDV;Sécurité;✅ Terminé;P1;US-05.02;;migration `072_payment_traceability.sql;epics/EP-05-acompte-paypal.md
+KLT-0512;Ticket;EP-05;Un membre pouvait remplacer les identifiants PayPal;Sécurité;✅ Terminé;P0;US-05.01;;7efba30` — voir KLT-0205;epics/EP-05-acompte-paypal.md
+KLT-0520;Ticket;EP-05;Tests d'intégration sur le sandbox PayPal;Qualité;🟡 Partiel;P1;US-05.02, US-05.04, US-05.05;;non commité (2026-11-03);epics/EP-05-acompte-paypal.md
+KLT-0521;Ticket;EP-05;Valider le paiement PayPal dans l'iframe d'un site client;Qualité;🟡 Partiel;P1;US-05.02;;non commité (2026-11-03);epics/EP-05-acompte-paypal.md
+EP-06;Epic;EP-06;CRM : contacts, leads, relances;;;;;;;epics/EP-06-crm.md
+US-06.01;User story;EP-06;Retrouver mes contacts;;✅ Livré;;;Pro;;epics/EP-06-crm.md
+US-06.02;User story;EP-06;Consulter et enrichir une fiche contact;;✅ Livré;;;Pro;;epics/EP-06-crm.md
+US-06.03;User story;EP-06;Configurer les champs de ma fiche contact;;✅ Livré;;;Pro;;epics/EP-06-crm.md
+US-06.04;User story;EP-06;Supprimer un champ sans perdre de données par accident;;✅ Livré;;;Pro;;epics/EP-06-crm.md
+US-06.05;User story;EP-06;Importer mes contacts depuis un fichier;;✅ Livré;;;Pro;;epics/EP-06-crm.md
+US-06.06;User story;EP-06;Exporter mes contacts;;✅ Livré;;;Pro;;epics/EP-06-crm.md
+US-06.07;User story;EP-06;Garder une base propre;;✅ Livré;;;Pro;;epics/EP-06-crm.md
+US-06.08;User story;EP-06;Suivre mes demandes entrantes (leads);;✅ Livré;;;Pro;;epics/EP-06-crm.md
+US-06.09;User story;EP-06;Programmer des relances;;✅ Livré;;;Pro;;epics/EP-06-crm.md
+US-06.10;User story;EP-06;Classer mes contacts par tags;;✅ Livré;;;Pro;;epics/EP-06-crm.md
+US-06.11;User story;EP-06;Respecter les limites de mon plan sans blocage brutal;;✅ Livré;;;Pro, Opérateur;;epics/EP-06-crm.md
+KLT-0601;Ticket;EP-06;Réimporter un fichier enrichi ne mettait rien à jour;Bug;✅ Terminé;P1;US-06.05;;83d039c` (2026-10-05);epics/EP-06-crm.md
+KLT-0602;Ticket;EP-06;Deux membres d'un même foyer fusionnés à l'import;Bug;✅ Terminé;P1;US-06.05;;83d039c;epics/EP-06-crm.md
+KLT-0603;Ticket;EP-06;Une ligne sans champ custom faisait échouer tout l'import;Bug;✅ Terminé;P0;US-06.05;;83d039c;epics/EP-06-crm.md
+KLT-0604;Ticket;EP-06;Les lignes sans email étaient réinsérées à chaque import;Bug;✅ Terminé;P1;US-06.05;;83d039c;epics/EP-06-crm.md
+KLT-0605;Ticket;EP-06;Import de 5 000 lignes : 6 000 allers-retours séquentiels;Performance;✅ Terminé;P1;US-06.05;;83d039c;epics/EP-06-crm.md
+KLT-0606;Ticket;EP-06;Un appel Auth par membre à chaque réservation publique;Performance;✅ Terminé;P2;US-06.08;;83d039c;epics/EP-06-crm.md
+KLT-0607;Ticket;EP-06;Supprimer un champ laissait ses données dans l'export RGPD;Bug;✅ Terminé;P1;US-06.04;;83d039c;epics/EP-06-crm.md
+KLT-0608;Ticket;EP-06;Les notes internes avaient disparu de la fiche;Bug;✅ Terminé;P2;US-06.02;;83d039c;epics/EP-06-crm.md
+KLT-0609;Ticket;EP-06;Les erreurs 409 structurées arrivaient sans leur contenu;Bug;✅ Terminé;P2;US-06.04;;83d039c;epics/EP-06-crm.md
+KLT-0610;Ticket;EP-06;Import en erreur sur les lignes à un seul identifiant;Bug;✅ Terminé;P1;US-06.05;;6373abd`, migration `067;epics/EP-06-crm.md
+KLT-0611;Ticket;EP-06;Contournement du quota par imports simultanés;Sécurité;✅ Terminé;P1;US-06.05;;5571b58`, migration `078;epics/EP-06-crm.md
+KLT-0612;Ticket;EP-06;Taille d'import non bornée;Sécurité;✅ Terminé;P2;US-06.05;;5571b58;epics/EP-06-crm.md
+KLT-0613;Ticket;EP-06;Une pièce jointe HTML/SVG pouvait s'exécuter;Sécurité;✅ Terminé;P1;US-06.02;;5571b58;epics/EP-06-crm.md
+KLT-0614;Ticket;EP-06;Erreurs 500 au lieu de 404 sur les ressources absentes;Bug;✅ Terminé;P2;US-06.02;;834bfeb` (2026-09-25);epics/EP-06-crm.md
+KLT-0615;Ticket;EP-06;Obtenir l'URL signée de la photo d'un autre tenant;Sécurité;✅ Terminé;P0;US-06.02;;5571b58;epics/EP-06-crm.md
+KLT-0616;Ticket;EP-06;Zéros de tête perdus dans les numéros de téléphone;Bug;✅ Terminé;P2;US-06.02;;834bfeb;epics/EP-06-crm.md
+KLT-0617;Ticket;EP-06;Exports anglais (LinkedIn « First Name ») non reconnus;Amélioration;✅ Terminé;P3;US-06.05;;6373abd;epics/EP-06-crm.md
+KLT-0618;Ticket;EP-06;Limites de contacts du plan purement décoratives;Bug;✅ Terminé;P1;US-06.11;;6373abd` (2026-10-02), migration `070;epics/EP-06-crm.md
+KLT-0619;Ticket;EP-06;Anciennes demandes absentes de la liste des leads;Bug;✅ Terminé;P2;US-06.08;;migration `016_backfill_leads.sql;epics/EP-06-crm.md
+KLT-0620;Ticket;EP-06;Vocabulaire sectoriel uniquement en français;Amélioration;✅ Terminé;P2;US-06.01;;20cceff` (2026-06-14);epics/EP-06-crm.md
+KLT-0630;Ticket;EP-06;Prévenir la perte des zéros de tête dans les fichiers préparés sous Excel;Amélioration;✅ Terminé;P2;US-06.05;;non commité (2026-11-03);epics/EP-06-crm.md
+KLT-0631;Ticket;EP-06;Calcul de l'usage des champs par agrégation SQL;Performance;✅ Terminé;P3;US-06.04;;non commité (2026-11-03);epics/EP-06-crm.md
+KLT-0632;Ticket;EP-06;Décomptes d'usage des champs faux au-delà de 1 000 contacts;Bug;✅ Terminé;P1;US-06.04;;non commité (2026-11-03);epics/EP-06-crm.md
+EP-07;Epic;EP-07;Communication : emails, campagnes, notifications;;;;;;;epics/EP-07-communication.md
+US-07.01;User story;EP-07;Recevoir les emails transactionnels;;✅ Livré;;;Pro, Client final;;epics/EP-07-communication.md
+US-07.02;User story;EP-07;Être accompagné pendant l'essai;;✅ Livré;;;Pro;;epics/EP-07-communication.md
+US-07.03;User story;EP-07;Envoyer une campagne à mes clients;;✅ Livré;;;Pro (feature `campaigns`, Pro+);;epics/EP-07-communication.md
+US-07.04;User story;EP-07;Mesurer l'impact de mes campagnes;;✅ Livré;;;Pro;;epics/EP-07-communication.md
+US-07.05;User story;EP-07;Permettre à mes clients de se désabonner;;✅ Livré;;;Client final;;epics/EP-07-communication.md
+US-07.06;User story;EP-07;Recevoir des notifications push;;✅ Livré;;;Pro, Client final;;epics/EP-07-communication.md
+US-07.07;User story;EP-07;Recevoir les annonces de Klientys dans mon dashboard;;✅ Livré;;;Pro;;epics/EP-07-communication.md
+US-07.08;User story;EP-07;Recevoir un rapport mensuel;;✅ Livré;;;Pro;;epics/EP-07-communication.md
+KLT-0701;Ticket;EP-07;Lien de désabonnement pointant vers le mauvais domaine;Bug;✅ Terminé;P1;US-07.05;;1a6625a` (2026-07-20);epics/EP-07-communication.md
+KLT-0702;Ticket;EP-07;Le bouton d'activation des notifications ne faisait rien;Bug;✅ Terminé;P2;US-07.06;;d6c0a9b` (2026-07-20);epics/EP-07-communication.md
+KLT-0703;Ticket;EP-07;Erreurs push silencieuses (VAPID non configuré);Bug;✅ Terminé;P2;US-07.06;;d6c0a9b;epics/EP-07-communication.md
+KLT-0704;Ticket;EP-07;Redirection de clic limitée aux URLs web;Sécurité;✅ Terminé;P2;US-07.04;;64ab655` (2026-07-20);epics/EP-07-communication.md
+KLT-0720;Ticket;EP-07;Emails aux clients finaux uniquement en français;Amélioration;✅ Terminé;P2;US-07.01;;non commité (2026-11-03);epics/EP-07-communication.md
+KLT-0721;Ticket;EP-07;Dates des emails clients dépendantes de la locale du serveur;Bug;✅ Terminé;P2;US-07.01;;non commité (2026-11-03);epics/EP-07-communication.md
+EP-08;Epic;EP-08;Agents IA;;;;;;;epics/EP-08-agents-ia.md
+US-08.01;User story;EP-08;Répondre automatiquement aux visiteurs du site;;✅ Livré;;;Visiteur, Pro;;epics/EP-08-agents-ia.md
+US-08.02;User story;EP-08;Prendre des RDV par WhatsApp et Telegram;;✅ Livré;;;Client final, Pro;;epics/EP-08-agents-ia.md
+US-08.03;User story;EP-08;Qualifier une demande de devis en conversation;;✅ Livré;;;Client final (artisans);;epics/EP-08-agents-ia.md
+US-08.04;User story;EP-08;Nourrir l'agent avec mes documents (RAG);;✅ Livré;;;Pro;;epics/EP-08-agents-ia.md
+US-08.05;User story;EP-08;Suivre mes clients après le RDV;;✅ Livré;;;Pro, Client final;;epics/EP-08-agents-ia.md
+US-08.06;User story;EP-08;Avoir un assistant personnel sur Telegram;;✅ Livré;;;Pro;;epics/EP-08-agents-ia.md
+US-08.07;User story;EP-08;Extraire les informations d'un document (OCR);;✅ Livré;;;Pro (santé);;epics/EP-08-agents-ia.md
+US-08.08;User story;EP-08;Configurer mes agents;;✅ Livré;;;Pro;;epics/EP-08-agents-ia.md
+KLT-0801;Ticket;EP-08;Webhook Telegram acceptant les appels sans jeton secret;Sécurité;✅ Terminé;P0;US-08.02;;5571b58` (2026-10-11);epics/EP-08-agents-ia.md
+KLT-0802;Ticket;EP-08;Signature WhatsApp acceptée si le secret n'est pas configuré;Sécurité;✅ Terminé;P0;US-08.02;;5571b58;epics/EP-08-agents-ia.md
+KLT-0803;Ticket;EP-08;Résumé IA des réservations Telegram perdu silencieusement;Bug;✅ Terminé;P1;US-08.02;;7efba30`, migration `074;epics/EP-08-agents-ia.md
+KLT-0804;Ticket;EP-08;Bot Telegram ne répondant pas;Bug;✅ Terminé;P1;US-08.02;;1c2d362`, `4de97ab` (2026-05-04);epics/EP-08-agents-ia.md
+KLT-0805;Ticket;EP-08;Page Agents IA inutilisable sur mobile;Bug;✅ Terminé;P2;US-08.08;;951d5cc` (2026-05-11);epics/EP-08-agents-ia.md
+KLT-0806;Ticket;EP-08;Le chatbot répondait en français à un visiteur étranger;Bug;✅ Terminé;P2;US-08.01;;e625116` (2026-10-31);epics/EP-08-agents-ia.md
+KLT-0807;Ticket;EP-08;Chatbot indisponible tant que le site Klientys n'est pas publié;Amélioration;✅ Terminé;P2;US-08.01;;e625116;epics/EP-08-agents-ia.md
+KLT-0820;Ticket;EP-08;Résumés OCR (données de santé) stockés en clair;Sécurité;✅ Terminé;P0;US-08.07;;non commité (2026-11-03);epics/EP-08-agents-ia.md
+KLT-0821;Ticket;EP-08;Jeton du bot Telegram exposé dans l'URL du webhook;Sécurité;✅ Terminé;P2;US-08.02;;non commité (2026-11-03);epics/EP-08-agents-ia.md
+KLT-0822;Ticket;EP-08;Suivre la consommation IA par tenant;Amélioration;✅ Terminé;P3;US-08.01, US-08.02;;non commité (2026-11-03);epics/EP-08-agents-ia.md
+KLT-0823;Ticket;EP-08;Notification Telegram du pro jamais envoyée pour une réservation Telegram;Bug;✅ Terminé;P1;US-08.02;;non commité (2026-11-03), `webhook.py` (`_do_notify_pending`);epics/EP-08-agents-ia.md
+EP-09;Epic;EP-09;Analytics & potentiel de demande locale;;;;;;;epics/EP-09-analytics.md
+US-09.01;User story;EP-09;Mesurer le comportement des visiteurs de mon site;;✅ Livré;;;Pro;;epics/EP-09-analytics.md
+US-09.02;User story;EP-09;Consulter mon tableau de bord analytics;;✅ Livré;;;Pro (feature `analytics`);;epics/EP-09-analytics.md
+US-09.03;User story;EP-09;Estimer la demande autour de moi;;✅ Livré;;;Pro;;epics/EP-09-analytics.md
+US-09.04;User story;EP-09;Visualiser la demande sur une carte;;✅ Livré;;;Pro;;epics/EP-09-analytics.md
+US-09.05;User story;EP-09;Voir mes données Google Analytics dans Klientys;;✅ Livré;;;Pro;;epics/EP-09-analytics.md
+US-09.06;User story;EP-09;Télécharger un rapport PDF;;✅ Livré;;;Pro;;epics/EP-09-analytics.md
+US-09.07;User story;EP-09;Choisir les indicateurs de mon dashboard;;✅ Livré;;;Pro;;epics/EP-09-analytics.md
+KLT-0901;Ticket;EP-09;Taux de conversion RDV supérieur à 100 %;Bug;✅ Terminé;P2;US-09.02;;0acc9ac` (2026-05-07);epics/EP-09-analytics.md
+KLT-0902;Ticket;EP-09;Zones de demande vides;Bug;✅ Terminé;P1;US-09.03;;9b6ccb8`, `1364cc2` (2026-05-26);epics/EP-09-analytics.md
+KLT-0903;Ticket;EP-09;Infobulle d'aide inaccessible sur mobile;Bug;✅ Terminé;P3;US-09.03;;a24f6d9` (2026-07-27);epics/EP-09-analytics.md
+KLT-0904;Ticket;EP-09;Erreur analytics avant création de la table d'événements;Bug;✅ Terminé;P2;US-09.02;;7620f8e` (2026-05-07);epics/EP-09-analytics.md
+KLT-0905;Ticket;EP-09;Table `site_event` jamais migrée;Dette technique;✅ Terminé;P1;US-09.01;;migration `074_schema_reconciliation.sql;epics/EP-09-analytics.md
+KLT-0921;Ticket;EP-09;Fiabilité et observabilité de Google Trends;Dette technique;✅ Terminé;P2;US-09.03;;non commité (2026-11-03);epics/EP-09-analytics.md
+EP-10;Epic;EP-10;Abonnements, essai & monétisation;;;;;;;epics/EP-10-abonnements.md
+US-10.01;User story;EP-10;Essayer Klientys gratuitement 14 jours;;✅ Livré;;;Pro;;epics/EP-10-abonnements.md
+US-10.02;User story;EP-10;Souscrire un plan;;✅ Livré;;;Owner, Admin;;epics/EP-10-abonnements.md
+US-10.03;User story;EP-10;Gérer mon abonnement;;✅ Livré;;;Owner, Admin;;epics/EP-10-abonnements.md
+US-10.04;User story;EP-10;Accéder aux fonctionnalités de mon plan, et à elles seules;;✅ Livré;;;Pro;;epics/EP-10-abonnements.md
+US-10.05;User story;EP-10;Garder l'accès pendant un incident de paiement;;✅ Livré;;;Pro;;epics/EP-10-abonnements.md
+US-10.06;User story;EP-10;Être facturé une seule fois par paiement réel;;✅ Livré;;;Pro, Opérateur;;epics/EP-10-abonnements.md
+US-10.07;User story;EP-10;Ajouter l'option domaine personnalisé;;✅ Livré;;;Owner;;epics/EP-10-abonnements.md
+US-10.08;User story;EP-10;Offrir une fonctionnalité à un tenant (opérateur);;✅ Livré;;;Opérateur;;epics/EP-10-abonnements.md
+US-10.09;User story;EP-10;Lire un MRR juste;;✅ Livré;;;Opérateur;;epics/EP-10-abonnements.md
+KLT-1001;Ticket;EP-10;Parcours de souscription incomplet;Bug;✅ Terminé;P0;US-10.02;;cced619` (2026-05-15);epics/EP-10-abonnements.md
+KLT-1002;Ticket;EP-10;Exceptions Stripe non interceptées au checkout;Bug;✅ Terminé;P1;US-10.02;;dc1382f` (2026-05-15);epics/EP-10-abonnements.md
+KLT-1003;Ticket;EP-10;Bouton « Choisir » masqué pendant l'essai;Bug;✅ Terminé;P0;US-10.02;;155be89` (2026-06-14);epics/EP-10-abonnements.md
+KLT-1004;Ticket;EP-10;Fin de période d'essai mal gérée;Bug;✅ Terminé;P1;US-10.01;;c1fe36d` (2026-05-17);epics/EP-10-abonnements.md
+KLT-1005;Ticket;EP-10;Clients payants moins bien servis que la grille tarifaire;Bug;✅ Terminé;P0;US-10.04;;7efba30` (2026-10-04);epics/EP-10-abonnements.md
+KLT-1006;Ticket;EP-10;Webhooks Stripe rejoués à chaque relivraison;Bug;✅ Terminé;P0;US-10.06;;7efba30`, migration `072;epics/EP-10-abonnements.md
+KLT-1007;Ticket;EP-10;Achat de domaine OVH déclenché avant l'encaissement;Sécurité;✅ Terminé;P0;US-10.06;;7efba30;epics/EP-10-abonnements.md
+KLT-1008;Ticket;EP-10;Statut d'abonnement écrit « active » en dur;Bug;✅ Terminé;P1;US-10.06;;7efba30;epics/EP-10-abonnements.md
+KLT-1009;Ticket;EP-10;Option domaine active à vie après résiliation;Bug;✅ Terminé;P1;US-10.07;;7efba30`, migration `072;epics/EP-10-abonnements.md
+KLT-1010;Ticket;EP-10;Double abonnement facturé en silence;Bug;✅ Terminé;P0;US-10.02;;7efba30;epics/EP-10-abonnements.md
+KLT-1011;Ticket;EP-10;Accès coupé au premier échec de prélèvement;Amélioration;✅ Terminé;P1;US-10.05;;7efba30;epics/EP-10-abonnements.md
+KLT-1012;Ticket;EP-10;Deux MRR divergents dans l'admin;Bug;✅ Terminé;P2;US-10.09;;migration `073_single_plan_price.sql;epics/EP-10-abonnements.md
+KLT-1013;Ticket;EP-10;Redirection Stripe vers n'importe quelle URL;Sécurité;✅ Terminé;P1;US-10.02;;7efba30;epics/EP-10-abonnements.md
+KLT-1014;Ticket;EP-10;Portail de facturation en erreur 500 sans abonnement;Bug;✅ Terminé;P2;US-10.03;;0f6e6fd` (2026-06-04);epics/EP-10-abonnements.md
+KLT-1020;Ticket;EP-10;Tests d'intégration sur le mode test Stripe;Qualité;🟡 Partiel;P1;US-10.06;;non commité (2026-11-03);epics/EP-10-abonnements.md
+EP-11;Epic;EP-11;Facturation électronique;;;;;;;epics/EP-11-facturation.md
+US-11.01;User story;EP-11;Paramétrer ma facturation;;✅ Livré;;;Pro;;epics/EP-11-facturation.md
+US-11.02;User story;EP-11;Créer une facture;;✅ Livré;;;Pro;;epics/EP-11-facturation.md
+US-11.03;User story;EP-11;Émettre une facture conforme (France);;✅ Livré;;;Pro (FR);;epics/EP-11-facturation.md
+US-11.04;User story;EP-11;Envoyer la facture et suivre son paiement;;✅ Livré;;;Pro, Client du pro;;epics/EP-11-facturation.md
+US-11.05;User story;EP-11;Corriger une facture envoyée par un avoir;;✅ Livré;;;Pro;;epics/EP-11-facturation.md
+US-11.06;User story;EP-11;Émettre et transmettre des factures électroniques conformes aux normes françaises;;🟡 Partiel;;;Pro (FR);;epics/EP-11-facturation.md
+KLT-1101;Ticket;EP-11;Factures d'exonérés déclarées en autoliquidation;Bug;✅ Terminé;P0;US-11.03;;migration `077`, `invoice_legal.py;epics/EP-11-facturation.md
+KLT-1102;Ticket;EP-11;Aucune mention obligatoire française;Bug;✅ Terminé;P0;US-11.03;;migration `077;epics/EP-11-facturation.md
+KLT-1103;Ticket;EP-11;Pays et identifiant légal absents de l'UBL;Bug;✅ Terminé;P0;US-11.04;;migration `077;epics/EP-11-facturation.md
+KLT-1104;Ticket;EP-11;Date d'échéance fausse, parfois antérieure à la facture;Bug;✅ Terminé;P1;US-11.02;;migration `077;epics/EP-11-facturation.md
+KLT-1105;Ticket;EP-11;Numérotation exposée à une course;Bug;✅ Terminé;P1;US-11.02;;migration `077;epics/EP-11-facturation.md
+KLT-1106;Ticket;EP-11;Une facture envoyée pouvait être annulée;Bug;✅ Terminé;P0;US-11.05;;migration `077;epics/EP-11-facturation.md
+KLT-1107;Ticket;EP-11;Champs notes et conditions absents du type Invoice;Bug;✅ Terminé;P2;US-11.02;;b186aa9` (2026-07-03);epics/EP-11-facturation.md
+KLT-1120;Ticket;EP-11;Générer des factures au format Factur-X;Conformité;🟡 Partiel;P1;US-11.06;;non commité (2026-11-03);epics/EP-11-facturation.md
+KLT-1121;Ticket;EP-11;Adossement à une PDP et e-reporting (France, échéance 1er septembre 2027);Conformité;⬜ À faire;P1;US-11.06;;CLAUDE.md « Facturation : conformité française »;epics/EP-11-facturation.md
+KLT-1122;Ticket;EP-11;Facture électronique : normes françaises à la place de Peppol (Belgique);Conformité;✅ Terminé;P0;US-11.06;;non commité (2026-11-03);epics/EP-11-facturation.md
+EP-12;Epic;EP-12;Domaines personnalisés;;;;;;;epics/EP-12-domaines.md
+US-12.01;User story;EP-12;Connecter un domaine que je possède déjà;;✅ Livré;;;Pro;;epics/EP-12-domaines.md
+US-12.02;User story;EP-12;Suivre la vérification DNS;;✅ Livré;;;Pro;;epics/EP-12-domaines.md
+US-12.03;User story;EP-12;Acheter un domaine sans quitter Klientys;;✅ Livré;;;Owner, Admin;;epics/EP-12-domaines.md
+US-12.04;User story;EP-12;Déconnecter mon domaine;;✅ Livré;;;Pro, Opérateur;;epics/EP-12-domaines.md
+US-12.05;User story;EP-12;Afficher le bon site sur un domaine personnalisé;;✅ Livré;;;Visiteur;;epics/EP-12-domaines.md
+KLT-1201;Ticket;EP-12;CNAME sur la racine refusé par les registraires;Bug;✅ Terminé;P1;US-12.01;;e625116` (2026-10-31);epics/EP-12-domaines.md
+KLT-1202;Ticket;EP-12;Domaine personnalisé non fonctionnel;Bug;✅ Terminé;P1;US-12.01;;6339605`, `3ee9575` (2026-05-18);epics/EP-12-domaines.md
+KLT-1203;Ticket;EP-12;Échec OVH après paiement : client débité sans domaine;Bug;✅ Terminé;P0;US-12.03;;7efba30` (2026-10-04);epics/EP-12-domaines.md
+KLT-1204;Ticket;EP-12;Résolution de domaine sans limitation de débit;Sécurité;✅ Terminé;P2;US-12.05;;5571b58` (2026-10-11);epics/EP-12-domaines.md
+KLT-1220;Ticket;EP-12;Empêcher qu'un environnement local modifie le projet Vercel de production;Qualité;✅ Terminé;P2;US-12.01;;non commité (2026-11-03);epics/EP-12-domaines.md
+EP-13;Epic;EP-13;Widgets & intégrations externes;;;;;;;epics/EP-13-widgets-integrations.md
+US-13.01;User story;EP-13;Intégrer les widgets Klientys sur mon site;;✅ Livré;;;Pro (feature `embed_widget`, Pro+);;epics/EP-13-widgets-integrations.md
+US-13.02;User story;EP-13;Retrouver exactement le formulaire de mon site dans les widgets;;✅ Livré;;;Visiteur, Pro;;epics/EP-13-widgets-integrations.md
+US-13.03;User story;EP-13;Nommer mes supports et savoir ce que chacun rapporte;;✅ Livré;;;Pro;;epics/EP-13-widgets-integrations.md
+US-13.04;User story;EP-13;Couper les widgets d'un support;;✅ Livré;;;Pro;;epics/EP-13-widgets-integrations.md
+US-13.05;User story;EP-13;Afficher les widgets dans la langue de mon site;;✅ Livré;;;Visiteur;;epics/EP-13-widgets-integrations.md
+US-13.06;User story;EP-13;Ne pas pénaliser mon référencement;;✅ Livré;;;Pro;;epics/EP-13-widgets-integrations.md
+US-13.07;User story;EP-13;Aider un pro à intégrer ses widgets (support);;✅ Livré;;;Opérateur;;epics/EP-13-widgets-integrations.md
+KLT-1301;Ticket;EP-13;Widget embarqué non fonctionnel;Bug;✅ Terminé;P1;US-13.01;;de2313d` (2026-05-05);epics/EP-13-widgets-integrations.md
+KLT-1302;Ticket;EP-13;Type de widget « booking » ignoré sans erreur;Documentation;✅ Terminé;P3;US-13.01;;CLAUDE.md « Embed & widgets »;epics/EP-13-widgets-integrations.md
+KLT-1303;Ticket;EP-13;Page Embed : requête Supabase directe sans filtre tenant;Sécurité;✅ Terminé;P1;US-13.01;;9b6ccb8` (2026-05-26);epics/EP-13-widgets-integrations.md
+KLT-1304;Ticket;EP-13;Widgets réduits à une copie simplifiée du formulaire;Amélioration;✅ Terminé;P1;US-13.02;;0e5935b` (2026-11-01);epics/EP-13-widgets-integrations.md
+KLT-1305;Ticket;EP-13;Intégrations nommées et désactivation côté serveur;Amélioration;✅ Terminé;P1;US-13.03, US-13.04;;e625116` (2026-10-31), migration `080;epics/EP-13-widgets-integrations.md
+KLT-1322;Ticket;EP-13;Domaine non détecté pour les iframes en `no-referrer`;Amélioration;✅ Terminé;P3;US-13.03;;non commité (2026-11-03);epics/EP-13-widgets-integrations.md
+EP-14;Epic;EP-14;Annuaire public;;;;;;;epics/EP-14-annuaire.md
+US-14.01;User story;EP-14;Apparaître dans l'annuaire;;✅ Livré;;;Pro;;epics/EP-14-annuaire.md
+US-14.02;User story;EP-14;Parcourir l'annuaire par métier;;✅ Livré;;;Visiteur;;epics/EP-14-annuaire.md
+US-14.03;User story;EP-14;Trouver les pros d'un métier dans une ville;;✅ Livré;;;Visiteur;;epics/EP-14-annuaire.md
+US-14.04;User story;EP-14;Voir tous les pros d'une ville;;✅ Livré;;;Visiteur;;epics/EP-14-annuaire.md
+US-14.05;User story;EP-14;Consulter la fiche d'un pro;;✅ Livré;;;Visiteur;;epics/EP-14-annuaire.md
+US-14.06;User story;EP-14;Faire entrer les métiers de la communauté dans l'annuaire;;✅ Livré;;;Opérateur, Pro;;epics/EP-14-annuaire.md
+KLT-1401;Ticket;EP-14;Fiches introuvables à cause de la casse des zones;Bug;✅ Terminé;P1;US-14.01;;a864dbb` (2026-05-28), `6e089ef;epics/EP-14-annuaire.md
+KLT-1402;Ticket;EP-14;Jointure `!inner` renvoyant une liste vide;Bug;✅ Terminé;P1;US-14.03;;a864dbb;epics/EP-14-annuaire.md
+KLT-1403;Ticket;EP-14;Résultats vides mis en cache avant l'opt-in;Bug;✅ Terminé;P2;US-14.03;;a864dbb;epics/EP-14-annuaire.md
+KLT-1404;Ticket;EP-14;`villePrep` non défini dans `generateMetadata`;Bug;✅ Terminé;P1;US-14.03;;c76925c` (2026-05-27);epics/EP-14-annuaire.md
+KLT-1405;Ticket;EP-14;404 sur les villes absentes de villes.json;Bug;✅ Terminé;P2;US-14.03;;e4d7f2b`, `12febca` (2026-05-27);epics/EP-14-annuaire.md
+KLT-1406;Ticket;EP-14;Annuaire hors charte graphique;Amélioration;✅ Terminé;P3;US-14.02;;e4d7f2b;epics/EP-14-annuaire.md
+KLT-1408;Ticket;EP-14;Recherche par ville impossible sans métier;Amélioration;✅ Terminé;P2;US-14.04;;a864dbb;epics/EP-14-annuaire.md
+KLT-1420;Ticket;EP-14;Injection de script via le JSON-LD de l'annuaire (XSS);Sécurité;✅ Terminé;P0;US-14.03, US-14.05;;non commité (2026-11-03);epics/EP-14-annuaire.md
+KLT-1421;Ticket;EP-14;Métiers « autre » non promus invisibles dans l'annuaire;Amélioration;✅ Terminé;P3;US-14.06;;non commité (2026-11-03);epics/EP-14-annuaire.md
+KLT-1422;Ticket;EP-14;Note agrégée calculée sur les témoignages saisis par le pro;SEO;✅ Terminé;P2;US-14.05;;non commité (2026-11-03);epics/EP-14-annuaire.md
+EP-15;Epic;EP-15;Site marketing, blog & SEO;;;;;;;epics/EP-15-marketing-blog-seo.md
+US-15.01;User story;EP-15;Comprendre l'offre et démarrer un essai depuis la landing;;✅ Livré;;;Prospect;;epics/EP-15-marketing-blog-seo.md
+US-15.02;User story;EP-15;Lire le blog dans ma langue;;✅ Livré;;;Prospect;;epics/EP-15-marketing-blog-seo.md
+US-15.03;User story;EP-15;Gérer les articles et témoignages (opérateur);;✅ Livré;;;Opérateur;;epics/EP-15-marketing-blog-seo.md
+US-15.04;User story;EP-15;Proposer des articles automatiquement (agent de contenu);;✅ Livré;;;Agent automatisé, Opérateur;;epics/EP-15-marketing-blog-seo.md
+US-15.05;User story;EP-15;Traduire un article publié;;✅ Livré;;;Opérateur;;epics/EP-15-marketing-blog-seo.md
+US-15.06;User story;EP-15;Être indexé vite et proprement;;✅ Livré;;;Opérateur;;epics/EP-15-marketing-blog-seo.md
+US-15.07;User story;EP-15;Trouver une page dédiée à mon métier;;✅ Livré;;;Prospect;;epics/EP-15-marketing-blog-seo.md
+US-15.08;User story;EP-15;Consulter les documents légaux;;✅ Livré;;;Prospect, Pro;;epics/EP-15-marketing-blog-seo.md
+US-15.09;User story;EP-15;Partager les articles sur la page LinkedIn de Klientys;;⬜ À faire;;;Opérateur;;epics/EP-15-marketing-blog-seo.md
+KLT-1501;Ticket;EP-15;Slug avec année et chiffres codés en dur;Amélioration;✅ Terminé;P2;US-15.01;;a07a49d` (2026-06-01);epics/EP-15-marketing-blog-seo.md
+KLT-1502;Ticket;EP-15;Sitemap incomplet;Bug;✅ Terminé;P2;US-15.06;;0965479` (2026-05-27), `e4d7f2b;epics/EP-15-marketing-blog-seo.md
+KLT-1503;Ticket;EP-15;XSS stockée dans les articles de blog;Sécurité;✅ Terminé;P0;US-15.03;;5571b58` (2026-10-11);epics/EP-15-marketing-blog-seo.md
+KLT-1504;Ticket;EP-15;Secret de l'agent de contenu comparé en temps non constant;Sécurité;✅ Terminé;P2;US-15.04;;5571b58;epics/EP-15-marketing-blog-seo.md
+KLT-1505;Ticket;EP-15;Articles sans date affichés en tête du blog;Bug;✅ Terminé;P2;US-15.03;;_resolve_published_at;epics/EP-15-marketing-blog-seo.md
+KLT-1506;Ticket;EP-15;« Article introuvable » servi jusqu'à 1 h après publication;Bug;✅ Terminé;P2;US-15.06;;app/api/revalidate/route.ts;epics/EP-15-marketing-blog-seo.md
+KLT-1507;Ticket;EP-15;Ancienne URL laissée indexée après dépublication ou changement de slug;Bug;✅ Terminé;P2;US-15.06;;admin.py` (content);epics/EP-15-marketing-blog-seo.md
+KLT-1508;Ticket;EP-15;Tables de contenu sans RLS;Sécurité;✅ Terminé;P1;US-15.03;;migration `079_content_rls.sql;epics/EP-15-marketing-blog-seo.md
+KLT-1509;Ticket;EP-15;Identité de l'éditeur inexacte;Conformité;✅ Terminé;P1;US-15.08;;60fb34b` (2026-10-13);epics/EP-15-marketing-blog-seo.md
+KLT-1510;Ticket;EP-15;Décalage de mise en page (CLS) dû au logo;Performance;✅ Terminé;P3;US-15.01;;e4d7f2b;epics/EP-15-marketing-blog-seo.md
+KLT-1511;Ticket;EP-15;FAQ qui se refermait toute seule;Bug;✅ Terminé;P3;US-15.01;;CLAUDE.md « Landing page »;epics/EP-15-marketing-blog-seo.md
+KLT-1512;Ticket;EP-15;Agent de contenu planifié : mise au point;Amélioration;✅ Terminé;P2;US-15.04;;c70dc25` → `bb336d5` (5 commits, 2026-08-12 → 13);epics/EP-15-marketing-blog-seo.md
+KLT-1520;Ticket;EP-15;Pages de liste du blog par langue;Amélioration;✅ Terminé;P2;US-15.02;;non commité (2026-11-03);epics/EP-15-marketing-blog-seo.md
+KLT-1521;Ticket;EP-15;Publication des articles sur la page LinkedIn;Amélioration;⬜ À faire;P3;US-15.09;;mémoire projet « Partage blog → page LinkedIn »;epics/EP-15-marketing-blog-seo.md
+KLT-1523;Ticket;EP-15;Supprimer l'article statique « …-2025 » devenu inaccessible;Dette technique;✅ Terminé;P3;US-15.01;;non commité (2026-11-03);epics/EP-15-marketing-blog-seo.md
+EP-16;Epic;EP-16;Panel admin opérateur;;;;;;;epics/EP-16-admin-operateur.md
+US-16.01;User story;EP-16;Suivre les indicateurs du SaaS;;✅ Livré;;;Opérateur;;epics/EP-16-admin-operateur.md
+US-16.02;User story;EP-16;Retrouver un tenant;;✅ Livré;;;Opérateur, Support;;epics/EP-16-admin-operateur.md
+US-16.03;User story;EP-16;Créer un tenant manuellement;;✅ Livré;;;Opérateur;;epics/EP-16-admin-operateur.md
+US-16.04;User story;EP-16;Agir sur un compte client;;✅ Livré;;;Opérateur, Support;;epics/EP-16-admin-operateur.md
+US-16.05;User story;EP-16;Se connecter en tant que client;;✅ Livré;;;Support;;epics/EP-16-admin-operateur.md
+US-16.06;User story;EP-16;Gérer les features et la configuration système;;✅ Livré;;;Opérateur;;epics/EP-16-admin-operateur.md
+US-16.07;User story;EP-16;Tracer toutes les actions admin;;✅ Livré;;;Opérateur;;epics/EP-16-admin-operateur.md
+US-16.08;User story;EP-16;Suivre les paiements Stripe;;✅ Livré;;;Opérateur;;epics/EP-16-admin-operateur.md
+US-16.09;User story;EP-16;Mesurer l'audience de klientys.co;;✅ Livré;;;Opérateur;;epics/EP-16-admin-operateur.md
+US-16.10;User story;EP-16;Superviser les campagnes et les demandes de service;;✅ Livré;;;Opérateur;;epics/EP-16-admin-operateur.md
+KLT-1601;Ticket;EP-16;Suppression de tenant impossible (clé étrangère du log);Bug;✅ Terminé;P1;US-16.04, US-16.07;;20cceff` (2026-06-14);epics/EP-16-admin-operateur.md
+KLT-1602;Ticket;EP-16;Endpoints admin des demandes de logo sans authentification;Sécurité;✅ Terminé;P0;US-16.10;;7efba30` (2026-10-04);epics/EP-16-admin-operateur.md
+KLT-1603;Ticket;EP-16;Signaler les dépassements de contacts dans l'admin;Amélioration;✅ Terminé;P2;US-16.02;;6373abd` (2026-10-02);epics/EP-16-admin-operateur.md
+KLT-1604;Ticket;EP-16;Rapports GA4 trop nombreux et lents;Performance;✅ Terminé;P3;US-16.09;;aa59f5e` (2026-07-27);epics/EP-16-admin-operateur.md
+KLT-1620;Ticket;EP-16;Encadrer l'impersonation;Sécurité;✅ Terminé;P2;US-16.05;;non commité (2026-11-03);epics/EP-16-admin-operateur.md
+EP-17;Epic;EP-17;Support client & services additionnels;;;;;;;epics/EP-17-support-services.md
+US-17.01;User story;EP-17;Contacter le support depuis mon dashboard;;✅ Livré;;;Pro;;epics/EP-17-support-services.md
+US-17.02;User story;EP-17;Savoir qu'une réponse m'attend;;✅ Livré;;;Pro, Agent support;;epics/EP-17-support-services.md
+US-17.03;User story;EP-17;Demander un design sur mesure;;✅ Livré;;;Pro (Business : 1 site inclus);;epics/EP-17-support-services.md
+US-17.04;User story;EP-17;Faire créer mon logo;;✅ Livré;;;Pro (owner/admin);;epics/EP-17-support-services.md
+KLT-1701;Ticket;EP-17;« Failed to fetch » à l'envoi d'une réponse support;Bug;✅ Terminé;P1;US-17.01;;5844897` (2026-07-20);epics/EP-17-support-services.md
+KLT-1702;Ticket;EP-17;Exception sur un ticket inexistant;Bug;✅ Terminé;P2;US-17.01;;5844897;epics/EP-17-support-services.md
+KLT-1703;Ticket;EP-17;Messagerie support : corrections diverses;Bug;✅ Terminé;P2;US-17.01;;b282195`, `4c2b3ab` (2026-07-20);epics/EP-17-support-services.md
+KLT-1720;Ticket;EP-17;Remplacer le polling du support par du temps réel;Performance;🟡 Partiel;P3;US-17.02;;non commité (2026-11-03);epics/EP-17-support-services.md
+EP-18;Epic;EP-18;RGPD, sécurité & conformité;;;;;;;epics/EP-18-rgpd-securite.md
+US-18.01;User story;EP-18;Choisir les cookies que j'accepte;;✅ Livré;;;Visiteur;;epics/EP-18-rgpd-securite.md
+US-18.02;User story;EP-18;Exporter mes données;;✅ Livré;;;Pro, Client final;;epics/EP-18-rgpd-securite.md
+US-18.03;User story;EP-18;Faire effacer les données d'un client;;✅ Livré;;;Pro, Client final;;epics/EP-18-rgpd-securite.md
+US-18.04;User story;EP-18;Purger automatiquement les contacts inactifs;;✅ Livré;;;Pro;;epics/EP-18-rgpd-securite.md
+US-18.05;User story;EP-18;Prouver le consentement de mes contacts;;✅ Livré;;;Pro;;epics/EP-18-rgpd-securite.md
+US-18.06;User story;EP-18;Tracer les accès et modifications;;✅ Livré;;;Pro;;epics/EP-18-rgpd-securite.md
+US-18.07;User story;EP-18;Disposer des documents contractuels RGPD;;✅ Livré;;;Pro (B2B);;epics/EP-18-rgpd-securite.md
+US-18.08;User story;EP-18;Protéger les endpoints publics contre les abus;;✅ Livré;;;Opérateur;;epics/EP-18-rgpd-securite.md
+US-18.09;User story;EP-18;Protéger les secrets et données sensibles au repos;;✅ Livré;;;Pro, Opérateur;;epics/EP-18-rgpd-securite.md
+US-18.10;User story;EP-18;Héberger les données de santé de façon conforme;;⬜ À faire;;;Pro (santé, France);;epics/EP-18-rgpd-securite.md
+KLT-1801;Ticket;EP-18;Données personnelles reconstituables après un effacement;Conformité;✅ Terminé;P0;US-18.03;;5571b58` (2026-10-11);epics/EP-18-rgpd-securite.md
+KLT-1802;Ticket;EP-18;Limitation de débit contournable ou partagée;Sécurité;✅ Terminé;P1;US-18.08;;7efba30` (2026-10-04), `5571b58` (2026-10-11);epics/EP-18-rgpd-securite.md
+KLT-1803;Ticket;EP-18;Endpoints publics sans limitation;Sécurité;✅ Terminé;P1;US-18.08;;5571b58;epics/EP-18-rgpd-securite.md
+KLT-1804;Ticket;EP-18;Compteurs remis à zéro à chaque déploiement;Amélioration;✅ Terminé;P2;US-18.08;;7efba30;epics/EP-18-rgpd-securite.md
+KLT-1805;Ticket;EP-18;Bannière cookies réaffichée et scripts chargés sans choix;Conformité;✅ Terminé;P1;US-18.01;;12febca` (2026-05-27), `0f6e6fd` (2026-06-04);epics/EP-18-rgpd-securite.md
+KLT-1806;Ticket;EP-18;Messages d'erreur exposant l'URL du backend;Sécurité;✅ Terminé;P3;US-18.08;;0f6e6fd;epics/EP-18-rgpd-securite.md
+KLT-1820;Ticket;EP-18;Chiffrer les secrets des tenants en base;Sécurité;✅ Terminé;P1;US-18.09;;non commité (2026-11-03);epics/EP-18-rgpd-securite.md
+KLT-1822;Ticket;EP-18;Décider de l'hébergement des données de santé (HDS);Conformité;⬜ À faire;P1;US-18.10;;mémoire projet « Dossier commercial Eukalypton » (décision HDS ouverte);epics/EP-18-rgpd-securite.md
+KLT-1823;Ticket;EP-18;Traceurs de Klientys chargés sans consentement, y compris sur les sites des tenants;Conformité;✅ Terminé;P0;US-18.01;;non commité (2026-11-03), `components/KlientysTracking.tsx;epics/EP-18-rgpd-securite.md
+KLT-1824;Ticket;EP-18;Choix de cookies d'un site tenant écrasant celui du site Klientys;Bug;✅ Terminé;P2;US-18.01;;non commité (2026-11-03), `components/CookieBanner.tsx;epics/EP-18-rgpd-securite.md
+EP-19;Epic;EP-19;Plateforme, qualité & documentation;;;;;;;epics/EP-19-plateforme-qualite.md
+US-19.01;User story;EP-19;Déployer le backend et le frontend en continu;;✅ Livré;;;Développeur;;epics/EP-19-plateforme-qualite.md
+US-19.02;User story;EP-19;Faire évoluer le schéma de façon reproductible;;🟡 Partiel;;;Développeur;;epics/EP-19-plateforme-qualite.md
+US-19.03;User story;EP-19;Utiliser Klientys dans ma langue;;✅ Livré;;;Pro;;epics/EP-19-plateforme-qualite.md
+US-19.04;User story;EP-19;Exécuter les tâches planifiées de façon fiable;;✅ Livré;;;Opérateur;;epics/EP-19-plateforme-qualite.md
+US-19.05;User story;EP-19;Être averti des régressions avant la production;;✅ Livré;;;Développeur;;epics/EP-19-plateforme-qualite.md
+US-19.06;User story;EP-19;Diagnostiquer une erreur de production;;✅ Livré;;;Développeur;;epics/EP-19-plateforme-qualite.md
+US-19.07;User story;EP-19;Comprendre le projet en lisant sa documentation;;✅ Livré;;;Développeur;;epics/EP-19-plateforme-qualite.md
+KLT-1901;Ticket;EP-19;Backend non démarré sur Railway (port);Bug;✅ Terminé;P0;US-19.01;;34ef6af`, `b919668`, `1b7747f` (2026-04-23);epics/EP-19-plateforme-qualite.md
+KLT-1902;Ticket;EP-19;Build Vercel cassé par les alias `@/`;Bug;✅ Terminé;P0;US-19.01;;23001f3`, `bbbbd3e` (2026-04-19);epics/EP-19-plateforme-qualite.md
+KLT-1903;Ticket;EP-19;`lib/i18n.ts` exclu du dépôt par le .gitignore;Bug;✅ Terminé;P0;US-19.01;;1673e7b`, `c4a5713` (2026-05-07);epics/EP-19-plateforme-qualite.md
+KLT-1904;Ticket;EP-19;Dépendances implicites manquantes au build;Bug;✅ Terminé;P1;US-19.01;;ef1be26` (2026-05-11), `951c2f4`, `b5d758e`, `c37a3ae;epics/EP-19-plateforme-qualite.md
+KLT-1905;Ticket;EP-19;Génération PDF impossible en production;Bug;✅ Terminé;P1;US-19.01;;f33d46d`, `44a9728` (2026-06-15);epics/EP-19-plateforme-qualite.md
+KLT-1906;Ticket;EP-19;Base de production et migrations divergentes;Dette technique;✅ Terminé;P1;US-19.02;;migrations `074`, `075;epics/EP-19-plateforme-qualite.md
+KLT-1907;Ticket;EP-19;Environnement virtuel Python versionné;Dette technique;✅ Terminé;P2;US-19.01;;8d9a71c`, `2badfb0` (2026-04-17);epics/EP-19-plateforme-qualite.md
+KLT-1908;Ticket;EP-19;Rechargements en boucle du serveur de développement;Amélioration;✅ Terminé;P3;US-19.01;;CLAUDE.md « Commandes utiles »;epics/EP-19-plateforme-qualite.md
+KLT-1920;Ticket;EP-19;Mettre en place une intégration continue;Qualité;✅ Terminé;P1;US-19.05;;non commité (2026-11-03);epics/EP-19-plateforme-qualite.md
+KLT-1921;Ticket;EP-19;Script `lint` inopérant avec Next.js 16;Qualité;✅ Terminé;P2;US-19.05;;non commité (2026-11-03);epics/EP-19-plateforme-qualite.md
+KLT-1922;Ticket;EP-19;Générer le baseline exact du schéma de production;Dette technique;🟡 Partiel;P1;US-19.02;;non commité (2026-11-03);epics/EP-19-plateforme-qualite.md
+KLT-1923;Ticket;EP-19;Tâches planifiées exécutées en double avec plusieurs instances;Dette technique;✅ Terminé;P2;US-19.04;;non commité (2026-11-03);epics/EP-19-plateforme-qualite.md
+KLT-1924;Ticket;EP-19;Erreurs avalées et `.single()` qui lèvent des exceptions;Dette technique;✅ Terminé;P2;US-19.06;;non commité (2026-11-03);epics/EP-19-plateforme-qualite.md
+KLT-1925;Ticket;EP-19;Découper les fichiers géants;Dette technique;⬜ À faire;P3;US-19.07;;"frontend/app/dashboard/settings/page.tsx` (4 150 lignes), `site-builder/page.tsx` (2 083), `appointments/page.tsx` (1 620), `contacts/[id]/page.tsx` (1 340), `dashboard/layout.tsx` (1 263), `lib/i18n.ts` (5 851) ; `backend/app/api/v1/admin.py` (2 917), `webhook.py` (1 854), `booking.py` (1 322)";epics/EP-19-plateforme-qualite.md
+KLT-1926;Ticket;EP-19;Réduire les `any` TypeScript;Dette technique;⬜ À faire;P3;US-19.05;;280 occurrences de `: any` dans `frontend/app`, `components`, `lib;epics/EP-19-plateforme-qualite.md
+KLT-1927;Ticket;EP-19;Fichiers parasites et numéros de migration en double;Dette technique;✅ Terminé;P3;US-19.02;;non commité (2026-11-03);epics/EP-19-plateforme-qualite.md
+KLT-1928;Ticket;EP-19;Mettre à jour CLAUDE.md et la mémoire projet;Documentation;✅ Terminé;P2;US-19.07;;non commité (2026-11-03);epics/EP-19-plateforme-qualite.md
+KLT-1929;Ticket;EP-19;Tests frontend des parcours critiques;Qualité;✅ Terminé;P3;US-19.05;;non commité (2026-11-03);epics/EP-19-plateforme-qualite.md
+KLT-1930;Ticket;EP-19;Point-in-time recovery Supabase;Infrastructure;⬜ À faire;P2;US-19.02;;mémoire projet (« PITR non souscrit : perte maximale de 24 h de saisie, assumée »);epics/EP-19-plateforme-qualite.md
+KLT-1931;Ticket;EP-19;Remontée des erreurs du frontend;Qualité;✅ Terminé;P3;US-19.06;;non commité (2026-11-03);epics/EP-19-plateforme-qualite.md
+KLT-1932;Ticket;EP-19;Optimiseur d'images ouvert à tous les domaines;Sécurité;✅ Terminé;P3;US-19.01;;non commité (2026-11-03);epics/EP-19-plateforme-qualite.md

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import metiers from "../../../../data/metiers.json";
 import villes from "../../../../data/villes.json";
+import { serializeJsonLd } from "../../../../lib/jsonLd";
 
 export const revalidate = 86400;
 
@@ -117,9 +118,9 @@ export default async function ProgrammaticPage({
 
   return (
     <main className="min-h-screen">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(faqSchema) }} />
 
       {/* Breadcrumb */}
       <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "24px 24px 0", fontSize: "13px", color: "var(--l-text-3)", display: "flex", gap: "8px", flexWrap: "wrap" }}>

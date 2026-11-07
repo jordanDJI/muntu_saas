@@ -8,9 +8,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.services.telegram import stored_bot_token
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant
 from app.middleware.roles import require_crm_access
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/reminders", tags=["Reminders"])
 
@@ -271,15 +275,15 @@ async def send_reminder_email(
             .limit(1)
             .execute()
         ).data
-        bot_token = (agent_cfg[0].get("telegram_bot_token") if agent_cfg else None) or ""
+        bot_token = stored_bot_token(agent_cfg[0]) if agent_cfg else ""
         if bot_token:
             from app.services.telegram import send_message as tg_send
             note_text = (opts.message_override or "").strip() or (row.get("note") or "").strip()
             tg_text = f"📨 {tenant.get('name', '')}" + (f"\n\n{note_text}" if note_text else "")
             try:
                 await asyncio.to_thread(tg_send, bot_token, telegram_chat_id, tg_text)
-            except Exception:
-                pass
+            except Exception as exc_ignored:
+                logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     now = datetime.now(timezone.utc).isoformat()
     sb.table("contact_reminder").update({"sent_at": now}).eq("id", reminder_id).eq("tenant_id", tenant_id).execute()

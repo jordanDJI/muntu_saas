@@ -1,7 +1,9 @@
 """
 Republie le webhook Telegram (avec secret_token) pour tous les tenants ayant un
 bot configuré — à lancer une fois après le déploiement du fix webhook.py qui
-rejette désormais les updates sans secret_token.
+rejette désormais les updates sans secret_token, puis après la migration 081 :
+le webhook passe de /webhook/telegram/{jeton} à /webhook/telegram/w/{identifiant},
+pour que le jeton du bot n'apparaisse plus dans les logs d'accès.
 
 Les bots enregistrés avant l'introduction du secret_token sur Telegram (côté
 serveurs Telegram, pas en base) ne le renvoient pas forcément : ce script force
@@ -14,6 +16,7 @@ Usage (depuis backend/, avec les mêmes variables d'env que le backend en prod
 """
 import hashlib
 import hmac
+import secrets
 import sys
 from pathlib import Path
 
@@ -21,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.config import settings
 from app.core.supabase import get_supabase_admin
-from app.services.telegram import register_webhook, get_bot_info
+from app.services.telegram import register_webhook, get_bot_info, stored_bot_token
 
 
 def main() -> None:
@@ -32,7 +35,7 @@ def main() -> None:
     sb = get_supabase_admin()
     rows = (
         sb.table("agent_config")
-        .select("tenant_id, telegram_bot_token, tenant(name, slug)")
+        .select("id, tenant_id, telegram_bot_token, telegram_webhook_id, tenant(name, slug)")
         .eq("agent_type", "support_client")
         .not_.is_("telegram_bot_token", "null")
         .neq("telegram_bot_token", "")
@@ -48,11 +51,15 @@ def main() -> None:
 
     for row in rows:
         tenant = row.get("tenant") or {}
-        bot_token = row["telegram_bot_token"]
+        bot_token = stored_bot_token(row)
         name = tenant.get("name", "?")
         slug = tenant.get("slug", "?")
 
-        webhook_url = f"{settings.app_url}/api/v1/webhook/telegram/{bot_token}"
+        webhook_id = row.get("telegram_webhook_id")
+        if not webhook_id:
+            webhook_id = secrets.token_urlsafe(24)
+            sb.table("agent_config").update({"telegram_webhook_id": webhook_id}).eq("id", row["id"]).execute()
+        webhook_url = f"{settings.app_url}/api/v1/webhook/telegram/w/{webhook_id}"
         webhook_secret = hmac.new(
             secret_key.encode(), bot_token.encode(), hashlib.sha256
         ).hexdigest()[:64]

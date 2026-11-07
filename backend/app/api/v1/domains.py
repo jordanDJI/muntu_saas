@@ -16,6 +16,9 @@ from app.core.config import settings
 from app.services import vercel_domains, ovh_domains
 from app.services import integrations as integration_svc
 from app.services.subscription import get_tenant_plan
+import logging
+
+logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.stripe_secret_key
 router = APIRouter(prefix="/domains", tags=["Domains"])
@@ -201,16 +204,16 @@ async def delete_domain(tenant_id: str = Depends(get_current_tenant)):
     # Retirer de Vercel
     try:
         await vercel_domains.remove_domain(domain)
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     # Nettoyer les DNS OVH si domaine acheté via la plateforme
     # (sans supprimer le domaine OVH — il appartient au tenant)
     if row.get("source") == "ovh_purchased":
         try:
             await ovh_domains.remove_dns_records(domain)
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     sb.table("custom_domain").delete().eq("tenant_id", tenant_id).execute()
     return {"deleted": True}

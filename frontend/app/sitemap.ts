@@ -101,6 +101,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly" as const,
       priority: 0.75,
     })),
+    // Listes par langue (/blog/en…), seulement si la langue a au moins un article publié
+    ...Array.from(new Set(dbBlogPosts.map((a) => a.lang).filter((l) => l !== "fr"))).map((l) => ({
+      url: `${APP_URL}/blog/${l}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
   ];
 
   // Sites publiés des tenants

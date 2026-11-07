@@ -5,6 +5,8 @@ import metiers from "../../../../data/metiers.json";
 import villes from "../../../../data/villes.json";
 import MarketingNav from "../../../../components/MarketingNav";
 import MarketingFooter from "../../../../components/MarketingFooter";
+import { serializeJsonLd } from "../../../../lib/jsonLd";
+import { isOptimizableImage } from "../../../../lib/imageHost";
 
 export const revalidate = 3600;
 
@@ -121,8 +123,8 @@ export default async function AnnuaireVillePage({
   return (
     <main className="min-h-screen bg-[#F4F8FA]">
       <MarketingNav />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
 
       {/* Breadcrumb */}
       <div className="max-w-5xl mx-auto px-6 pt-28 text-sm text-gray-500 flex gap-2">
@@ -173,7 +175,7 @@ export default async function AnnuaireVillePage({
                 <div className="flex items-start gap-3 mb-3">
                   {l.profile_photo_url ? (
                     <Image
-                      src={l.profile_photo_url}
+                      src={l.profile_photo_url} unoptimized={!isOptimizableImage(l.profile_photo_url)}
                       alt={l.display_name}
                       width={48}
                       height={48}
@@ -224,7 +226,7 @@ export default async function AnnuaireVillePage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "FAQPage",
             mainEntity: [

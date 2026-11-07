@@ -1,4 +1,5 @@
 from fastapi import Depends, HTTPException, status
+from app.core.config import settings
 from app.middleware.tenant import get_current_user
 
 # Niveaux d'accès (valeur croissante = plus de droits)
@@ -29,6 +30,11 @@ def require_level(min_level: str):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Accès insuffisant pour cette opération.",
+            )
+        if settings.admin_require_mfa and user.get("aal") != "aal2":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Double authentification requise pour le panel admin.",
             )
         return {**user, "_level": level}
 

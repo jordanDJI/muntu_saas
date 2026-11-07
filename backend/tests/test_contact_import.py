@@ -202,5 +202,31 @@ class TestRapprochement(unittest.TestCase):
         self.assertEqual(len(found), 2)
 
 
+
+
+class RestoreLeadingZeroTest(unittest.TestCase):
+    """KLT-0630 — numéros dont Excel a retiré le 0 initial."""
+
+    def test_france_nine_digits(self):
+        from app.services.phone import restore_leading_zero
+        self.assertEqual(restore_leading_zero("612000002", "FR"), ("0612000002", True))
+
+    def test_belgium_landline_and_mobile(self):
+        from app.services.phone import restore_leading_zero
+        self.assertEqual(restore_leading_zero("21234567", "BE"), ("021234567", True))
+        self.assertEqual(restore_leading_zero("470123456", "BE"), ("0470123456", True))
+
+    def test_untouched_cases(self):
+        from app.services.phone import restore_leading_zero
+        for value, country in [
+            ("0612000002", "FR"),      # déjà correct
+            ("+33612000002", "FR"),    # international
+            ("33612000002", "FR"),     # indicatif sans +, longueur différente
+            ("612000002", "DE"),       # autre pays : on ne devine pas
+            ("512345678", "BE"),       # 9 chiffres ne commençant pas par 4
+            ("", "FR"), (None, "FR"),
+        ]:
+            self.assertEqual(restore_leading_zero(value, country), (value, False), (value, country))
+
 if __name__ == "__main__":
     unittest.main()

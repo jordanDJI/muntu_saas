@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, status
 from app.core.supabase import get_supabase_admin
 from app.models.agent import ChatRequest, ChatResponse
 from app.services import integrations as integration_svc
-from app.services.llm import chat_completion
+from app.services.llm import chat_completion, set_ai_context
 
 router = APIRouter(prefix="/chatbot", tags=["chatbot"])
 logger = logging.getLogger(__name__)
@@ -232,6 +232,7 @@ def _get_public_context(tenant_slug: str) -> tuple[dict, dict, dict | None]:
     if not tenant_rows:
         raise HTTPException(status_code=404, detail="Tenant introuvable")
     tenant = tenant_rows[0]
+    set_ai_context(tenant["id"], "chatbot")
 
     site_rows = (
         sb.table("site")

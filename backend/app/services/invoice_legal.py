@@ -138,6 +138,42 @@ def build_legal_mentions(settings: dict) -> dict:
     }
 
 
+def penalty_notes(mentions: dict, country: str = "FR") -> list[tuple[str, str]]:
+    """
+    Mentions de retard de paiement, chacune avec son code de note (BT-21).
+
+    La facture électronique française attend ces mentions dans des notes
+    typées : PMD (pénalités de retard), PMT (indemnité forfaitaire de
+    recouvrement), AAB (escompte). Le PDF imprime les mêmes textes.
+    """
+    if (country or "").upper() != "FR":
+        return []
+
+    m = mentions or {}
+    out: list[tuple[str, str]] = []
+
+    rate = m.get("late_penalty_rate")
+    if rate:
+        out.append(("PMD",
+            f"En cas de retard de paiement, application d'une pénalité au taux "
+            f"annuel de {_fmt_rate(rate)} %."
+        ))
+    else:
+        out.append(("PMD", _DEFAULT_PENALTY_WORDING))
+
+    fee = m.get("recovery_fee")
+    fee = DEFAULT_RECOVERY_FEE if fee in (None, "") else fee
+    out.append(("PMT",
+        f"Indemnité forfaitaire pour frais de recouvrement en cas de retard : "
+        f"{_fmt_amount(fee)} € (art. L441-10 du code de commerce)."
+    ))
+
+    if m.get("no_discount", True):
+        out.append(("AAB", "Pas d'escompte pour paiement anticipé."))
+
+    return out
+
+
 def penalty_mentions(mentions: dict, country: str = "FR") -> list[str]:
     """
     Mentions de retard de paiement à imprimer.
@@ -145,33 +181,7 @@ def penalty_mentions(mentions: dict, country: str = "FR") -> list[str]:
     Obligatoires entre professionnels en France. Elles restent pertinentes
     ailleurs, mais seul le droit français est traité ici.
     """
-    if (country or "").upper() != "FR":
-        return []
-
-    m = mentions or {}
-    out: list[str] = []
-
-    rate = m.get("late_penalty_rate")
-    if rate:
-        out.append(
-            f"En cas de retard de paiement, application d'une pénalité au taux "
-            f"annuel de {_fmt_rate(rate)} %."
-        )
-    else:
-        out.append(_DEFAULT_PENALTY_WORDING)
-
-    fee = m.get("recovery_fee")
-    fee = DEFAULT_RECOVERY_FEE if fee in (None, "") else fee
-    out.append(
-        f"Indemnité forfaitaire pour frais de recouvrement en cas de retard : "
-        f"{_fmt_amount(fee)} € (art. L441-10 du code de commerce)."
-    )
-
-    if m.get("no_discount", True):
-        out.append("Pas d'escompte pour paiement anticipé.")
-
-    return out
-
+    return [text for _, text in penalty_notes(mentions, country)]
 
 def issuer_identity_line(invoice: dict, mentions: dict) -> str:
     """Ligne d'identification de l'émetteur : forme juridique, capital, RCS, SIREN."""

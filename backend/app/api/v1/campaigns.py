@@ -16,7 +16,10 @@ from app.core.config import settings as cfg
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant
 from app.services.email import send_campaign_email, get_tenant_brand
-from app.services.telegram import send_message as tg_send
+from app.services.telegram import send_message as tg_send, stored_bot_token
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/campaigns", tags=["Campaigns"])
 
@@ -119,8 +122,8 @@ async def track_open(t: str = Query(...)):
             camp = sb.table("email_campaign").select("open_count").eq("id", row["campaign_id"]).single().execute().data
             if camp:
                 sb.table("email_campaign").update({"open_count": camp["open_count"] + 1}).eq("id", row["campaign_id"]).execute()
-    except Exception:
-        pass  # Jamais lever d'erreur sur un pixel — l'email client ne doit pas voir d'échec
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée (Jamais lever d'erreur sur un pixel — l'email client ne doit pas voir d'échec) : %s", exc_ignored, exc_info=True)
     return Response(content=_TRACKING_PIXEL, media_type="image/gif",
                     headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"})
 
@@ -145,8 +148,8 @@ async def track_click(t: str = Query(...), url: str = Query(...)):
             camp = sb.table("email_campaign").select("click_count").eq("id", row["campaign_id"]).single().execute().data
             if camp:
                 sb.table("email_campaign").update({"click_count": camp["click_count"] + 1}).eq("id", row["campaign_id"]).execute()
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
     return RedirectResponse(url=decoded, status_code=302)
 
 
@@ -256,7 +259,7 @@ async def send_campaign(
         .limit(1)
         .execute()
     ).data
-    bot_token = (agent_cfg[0].get("telegram_bot_token") if agent_cfg else None) or ""
+    bot_token = stored_bot_token(agent_cfg[0]) if agent_cfg else ""
 
     contacts = _get_segment_contacts(sb, tenant_id, body.segment, body.tag_id)
     if not contacts:
@@ -337,8 +340,8 @@ async def send_campaign(
             try:
                 tg_text = f"📨 {sender_name}\n\n{personalized_body}"
                 await asyncio.to_thread(tg_send, bot_token, telegram_chat_id, tg_text)
-            except Exception:
-                pass
+            except Exception as exc_ignored:
+                logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     # Mettre à jour les compteurs finaux
     final_status = "sent" if failed_count == 0 else ("failed" if sent_count == 0 else "partial")

@@ -399,18 +399,19 @@ def _build_html(invoice: dict, lines: list[dict], settings: dict) -> str:
 
 # ── API publique ──────────────────────────────────────────────────────────────
 
-def generate_invoice_pdf(invoice: dict, lines: list[dict], settings: dict) -> bytes:
+def generate_invoice_pdf(invoice: dict, lines: list[dict], settings: dict, pdf_a3: bool = False) -> bytes:
     """
     Génère le PDF d'une facture (A4, branding Klientys + tenant).
     invoice  : dict avec les champs de la table invoice
     lines    : liste des invoice_line
     settings : invoice_settings du tenant
+    pdf_a3   : produire un PDF/A-3b (support exigé par Factur-X) — WeasyPrint uniquement
     """
     html = _build_html(invoice, lines, settings)
 
     if _WP is not None:
         buf = io.BytesIO()
-        _WP(string=html).write_pdf(buf)
+        _WP(string=html).write_pdf(buf, pdf_variant="pdf/a-3b" if pdf_a3 else None)
         return buf.getvalue()
 
     if _PISA is not None:
@@ -424,3 +425,34 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], settings: dict) -> by
         "Aucun moteur PDF disponible. "
         "Exécutez : pip install weasyprint xhtml2pdf"
     )
+
+
+def generate_facturx_pdf(invoice: dict, lines: list[dict], pdf_settings: dict, cii_xml: bytes) -> bytes:
+    """
+    Facture Factur-X (profil EN 16931) : PDF/A-3 avec le XML CII en pièce jointe
+    `factur-x.xml` et les métadonnées XMP attendues (KLT-1120).
+
+    Le XML est validé contre le XSD officiel avant intégration. En cas d'échec,
+    on renvoie le PDF simple plutôt que de bloquer l'envoi : l'erreur est
+    journalisée (et remonte à Sentry) pour être corrigée.
+
+    Sous Windows (xhtml2pdf, environnement de dev), le support n'est pas un vrai
+    PDF/A : le fichier contient le XML mais n'est pas conforme. La production
+    tourne sous Linux avec WeasyPrint.
+    """
+    pdf = generate_invoice_pdf(invoice, lines, pdf_settings, pdf_a3=True)
+    try:
+        import facturx
+        return facturx.generate_from_binary(
+            pdf, cii_xml, flavor="factur-x", level="en16931", check_xsd=True, lang="fr-FR",
+            pdf_metadata={
+                "author": invoice.get("tenant_name") or "",
+                "title": f"Facture {invoice.get('number') or ''}".strip(),
+                "subject": "Factur-X",
+                "keywords": "Factur-X, facture",
+            },
+        )
+    except Exception as exc:
+        _log.error("Factur-X non généré pour la facture %s, PDF simple envoyé : %s",
+                   invoice.get("number"), exc, exc_info=True)
+        return pdf

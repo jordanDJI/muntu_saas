@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from uuid import UUID
+from app.services.telegram import stored_bot_token
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.core.config import settings
@@ -10,6 +11,9 @@ from app.services.email import send_appointment_confirmation, send_appointment_c
 from app.services import push as push_svc
 from app.services.deposits import is_refundable, refund_appointment_deposit
 from app.middleware.roles import require_owner_or_admin, require_calendar_access
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -151,9 +155,9 @@ def _notify_tenant_whatsapp(tenant_id: str, contact_name: str, scheduled_at: str
         send_text(cfg["whatsapp_number"], msg)
 
     # Telegram
-    if cfg.get("telegram_bot_token") and cfg.get("telegram_notify_chat_id"):
+    if stored_bot_token(cfg) and cfg.get("telegram_notify_chat_id"):
         from app.services.telegram import send_message
-        send_message(cfg["telegram_bot_token"], cfg["telegram_notify_chat_id"], msg)
+        send_message(stored_bot_token(cfg), cfg["telegram_notify_chat_id"], msg)
 
 
 @router.post("/{appointment_id}/confirm", response_model=AppointmentOut)
@@ -307,8 +311,8 @@ def _safe_push(coro) -> None:
     """Lance une coroutine push en fire-and-forget (swallow exceptions)."""
     try:
         asyncio.create_task(coro)
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
 
 def _get_tenant_appointment(supabase, appointment_id: UUID, tenant_id: str) -> dict:

@@ -72,6 +72,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         "email": payload.get("email"),
         "app_metadata": payload.get("app_metadata", {}),
         "user_metadata": payload.get("user_metadata", {}),
+        # Niveau d'authentification Supabase : "aal2" après saisie du code TOTP
+        "aal": payload.get("aal", "aal1"),
     }
 
 
@@ -94,13 +96,25 @@ async def get_current_tenant(request: Request, user: dict = Depends(get_current_
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à ce tenant")
         return header_tenant_id
 
-    # Fallback 1: JWT app_metadata (set at onboarding)
+    sb = get_supabase_admin()
+
+    # Fallback 1: JWT app_metadata (set at onboarding) — à condition que la
+    # membership existe encore. Le retrait d'un membre ne vide pas son
+    # app_metadata : sans cette requête, il gardait l'accès en omettant le header.
     jwt_tenant_id = user.get("app_metadata", {}).get("tenant_id")
     if jwt_tenant_id:
-        return jwt_tenant_id
+        res = (
+            sb.table("membership")
+            .select("id")
+            .eq("tenant_id", jwt_tenant_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return jwt_tenant_id
 
     # Fallback 2: first membership row in DB
-    sb = get_supabase_admin()
     res = (
         sb.table("membership")
         .select("tenant_id")

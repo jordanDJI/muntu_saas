@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import ArticleLayout from "../../../components/ArticleLayout";
+import { serializeJsonLd } from "../../../lib/jsonLd";
+import BlogLangIndex, { INDEX_T, type IndexLang } from "./BlogLangIndex";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
@@ -11,13 +13,40 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
 const TRANSLATABLE_LANGS = ["en", "de", "nl"] as const;
 type Lang = "fr" | "en" | "de" | "nl";
 
+/** /blog/en, /blog/de, /blog/nl : liste des articles publiés dans cette langue. */
+function parseLangIndex(parts: string[]): IndexLang | null {
+  return parts.length === 1 && (TRANSLATABLE_LANGS as readonly string[]).includes(parts[0])
+    ? (parts[0] as IndexLang)
+    : null;
+}
+
+async function getPostsForLang(lang: IndexLang) {
+  try {
+    const res = await fetch(`${API}/api/v1/public/blog?lang=${lang}`, { next: { revalidate: 300 } });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+
+function langIndexMetadata(lang: IndexLang): Metadata {
+  const t = INDEX_T[lang];
+  const languages: Record<string, string> = { fr: `${APP_URL}/blog`, "x-default": `${APP_URL}/blog` };
+  for (const l of TRANSLATABLE_LANGS) languages[l] = `${APP_URL}/blog/${l}`;
+  return {
+    title: t.title,
+    description: t.description,
+    alternates: { canonical: `${APP_URL}/blog/${lang}`, languages },
+    openGraph: { title: t.title, description: t.description, url: `${APP_URL}/blog/${lang}`, type: "website", siteName: "Klientys", locale: lang },
+  };
+}
+
 function parseSlugParts(parts: string[]): { lang: Lang; slug: string } | null {
   if (parts.length === 1) {
     const [first] = parts;
-    if ((TRANSLATABLE_LANGS as readonly string[]).includes(first)) {
-      // /blog/en, /blog/de, /blog/nl — page de listing par langue, pas gérée par cette route
-      return null;
-    }
+    // /blog/en, /blog/de, /blog/nl : liste par langue (parseLangIndex), pas un article
+    if ((TRANSLATABLE_LANGS as readonly string[]).includes(first)) return null;
     return { lang: "fr", slug: first };
   }
   if (parts.length === 2) {
@@ -69,6 +98,8 @@ async function getTranslations(slug: string, lang: Lang): Promise<Record<string,
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string[] }> }): Promise<Metadata> {
   const { slug: slugParts } = await params;
+  const indexLang = parseLangIndex(slugParts ?? []);
+  if (indexLang) return langIndexMetadata(indexLang);
   const parsed = parseSlugParts(slugParts ?? []);
   if (!parsed) return { title: "Article introuvable | Klientys" };
   const { lang, slug } = parsed;
@@ -114,6 +145,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function DynamicArticle({ params }: { params: Promise<{ slug: string[] }> }) {
   const { slug: slugParts } = await params;
+  const indexLang = parseLangIndex(slugParts ?? []);
+  if (indexLang) return <BlogLangIndex lang={indexLang} posts={await getPostsForLang(indexLang)} />;
   const parsed = parseSlugParts(slugParts ?? []);
   if (!parsed) notFound();
   const { lang, slug } = parsed;
@@ -148,7 +181,7 @@ export default async function DynamicArticle({ params }: { params: Promise<{ slu
   return (
     <>
       {jsonLd.map((schema, i) => (
-        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }} />
       ))}
       <ArticleLayout
         breadcrumbLabel={post.title}
@@ -157,7 +190,7 @@ export default async function DynamicArticle({ params }: { params: Promise<{ slu
         publishedAt={post.published_at ?? ""}
         title={post.title}
         description={post.description ?? ""}
-        relatedLinks={[{ href: "/blog", label: "← Retour au blog" }]}
+        relatedLinks={[{ href: lang === "fr" ? "/blog" : `/blog/${lang}`, label: "← Blog" }]}
         languages={languageOptions}
       >
         {post.body_html ? (

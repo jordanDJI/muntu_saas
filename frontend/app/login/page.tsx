@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { supabase, api } from "../../lib/api";
 import { useLanguage, LangSelector } from "../../contexts/LanguageContext";
+import { mfaUrl, needsMfaChallenge } from "../../lib/mfa";
 
 const LOCKOUT_KEY = "klientys_login_lockout";
 const MAX_ATTEMPTS = 5;
@@ -26,6 +27,7 @@ export default function LoginPage() {
     : "/dashboard";
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [linkedInLoading, setLinkedInLoading] = useState(false);
   const [facebookLoading, setFacebookLoading] = useState(false);
   const [lockedMins, setLockedMins] = useState(0);
@@ -89,6 +91,10 @@ export default function LoginPage() {
       } else {
         setLockout({ attempts: 0, until: 0 });
         api.logActivity({ action: "Connexion", detail: "Via email/mot de passe" }).catch(() => {});
+        if (await needsMfaChallenge()) {
+          window.location.replace(mfaUrl(redirectAfterLogin));
+          return;
+        }
         window.location.replace(redirectAfterLogin);
       }
     } catch (err: any) {
@@ -111,6 +117,17 @@ export default function LoginPage() {
     } else {
       setForgotSent(true);
     }
+  };
+
+  const handleGoogle = async () => {
+    setGoogleLoading(true);
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: "openid email profile",
+      },
+    });
   };
 
   const handleLinkedIn = async () => {
@@ -342,11 +359,36 @@ export default function LoginPage() {
               </p>
             </div>
 
+            {/* OAuth — Google */}
+            <button
+              type="button"
+              onClick={handleGoogle}
+              disabled={googleLoading || linkedInLoading || loading}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
+                padding: "11px 16px", borderRadius: "10px", marginBottom: "10px",
+                border: "1px solid rgba(170,189,216,.18)",
+                background: "rgba(255,255,255,.05)", color: "var(--l-text)",
+                fontSize: "14px", fontWeight: 500, cursor: googleLoading ? "wait" : "pointer",
+                opacity: googleLoading ? 0.6 : 1, transition: "background .2s, border-color .2s",
+              }}
+              onMouseEnter={(e) => !googleLoading && ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,.09)")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,.05)")}
+            >
+              <svg width="18" height="18" viewBox="0 0 48 48">
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.16C6.51 42.62 14.62 48 24 48z"/>
+                <path fill="#FBBC05" d="M10.53 28.59c-.5-1.45-.78-3-.78-4.59s.27-3.14.78-4.59l-7.98-6.16C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.75l7.97-6.16z"/>
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.97 6.16C12.43 13.72 17.74 9.5 24 9.5z"/>
+              </svg>
+              {googleLoading ? "…" : t.login_google}
+            </button>
+
             {/* OAuth — LinkedIn */}
             <button
               type="button"
               onClick={handleLinkedIn}
-              disabled={linkedInLoading || loading}
+              disabled={linkedInLoading || googleLoading || loading}
               style={{
                 width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px",
                 padding: "11px 16px", borderRadius: "10px",

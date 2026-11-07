@@ -4,6 +4,8 @@
 
 export type FormLang = "fr" | "en" | "de" | "nl";
 
+type ErrParams = { day?: number; max?: number };
+
 export const FORM_LOCALE: Record<FormLang, string> = { fr: "fr-BE", en: "en-GB", de: "de-DE", nl: "nl-BE" };
 
 export const FORM_T = {
@@ -32,6 +34,27 @@ export const FORM_T = {
     paypalNoClientId: "Client ID PayPal manquant. Vérifiez Formulaire → onglet Paiement.",
     paypalOrderError: "Erreur lors de la création du paiement PayPal",
     paymentError: "Erreur de paiement",
+    // Erreurs renvoyées par le backend (champ `code`, booking.BookingError).
+    // `day` suit Python : 0 = lundi.
+    weekdays: ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"],
+    serverErrors: {
+      slot_invalid: () => "Créneau invalide.",
+      slot_past: () => "Ce créneau est déjà passé. Veuillez choisir un autre horaire.",
+      day_closed: (p: ErrParams, d: string) => `Le professionnel ne prend pas de rendez-vous le ${d}.`,
+      outside_hours: () => "Ce créneau est en dehors des horaires d'ouverture. Veuillez choisir un autre horaire.",
+      party_too_large: (p: ErrParams, d: string) => `Le nombre de personnes maximum par réservation du ${d} pour cette période est de ${p.max} personne(s).`,
+      slot_blocked: () => "Le professionnel est indisponible sur ce créneau. Veuillez choisir un autre horaire.",
+      slot_taken: () => "Ce créneau vient d'être réservé. Veuillez choisir un autre horaire.",
+      slot_full: () => "Ce créneau est complet. Veuillez choisir un autre horaire.",
+      team_email: () => "Cette adresse email appartient à l'équipe du professionnel. Contactez-le directement pour toute question interne.",
+      deposit_required: () => "Un acompte est requis pour réserver ce rendez-vous. Merci de passer par l'étape de paiement.",
+      deposit_unavailable: () => "L'acompte en ligne n'est pas disponible pour ce professionnel.",
+      paypal_order_failed: () => "Erreur PayPal lors de la création du paiement.",
+      payment_incomplete: () => "Paiement PayPal non complété. Veuillez réessayer.",
+      deposit_mismatch: () => "Le montant de l'acompte ne correspond pas. Le paiement a été remboursé.",
+      booking_failed_refunded: () => "Votre acompte a été remboursé, la réservation n'a pas pu être enregistrée. Veuillez réessayer.",
+      booking_failed_contact: () => "La réservation n'a pas pu être enregistrée. Le professionnel a été alerté et vous recontactera au sujet de votre acompte.",
+    } as Record<string, (p: ErrParams, d: string) => string>,
     paymentIncomplete: "Paiement non complété.",
     paypalError: "Une erreur PayPal est survenue.",
     paymentCancelled: "Paiement annulé.",
@@ -92,6 +115,25 @@ export const FORM_T = {
     paypalNoClientId: "PayPal client ID missing. Check Form → Payment tab.",
     paypalOrderError: "Error while creating the PayPal payment",
     paymentError: "Payment error",
+    weekdays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+    serverErrors: {
+      slot_invalid: () => "Invalid time slot.",
+      slot_past: () => "This time slot has already passed. Please choose another time.",
+      day_closed: (p: ErrParams, d: string) => `This professional does not take appointments on ${d}.`,
+      outside_hours: () => "This time slot is outside opening hours. Please choose another time.",
+      party_too_large: (p: ErrParams, d: string) => `The maximum number of people per booking on ${d} for this period is ${p.max}.`,
+      slot_blocked: () => "The professional is unavailable at this time. Please choose another time.",
+      slot_taken: () => "This time slot has just been booked. Please choose another time.",
+      slot_full: () => "This time slot is full. Please choose another time.",
+      team_email: () => "This email address belongs to the professional's team. Please contact them directly for internal matters.",
+      deposit_required: () => "A deposit is required to book this appointment. Please go through the payment step.",
+      deposit_unavailable: () => "Online deposit is not available for this professional.",
+      paypal_order_failed: () => "PayPal error while creating the payment.",
+      payment_incomplete: () => "PayPal payment not completed. Please try again.",
+      deposit_mismatch: () => "The deposit amount does not match. The payment has been refunded.",
+      booking_failed_refunded: () => "Your deposit has been refunded, but the booking could not be saved. Please try again.",
+      booking_failed_contact: () => "The booking could not be saved. The professional has been alerted and will contact you about your deposit.",
+    } as Record<string, (p: ErrParams, d: string) => string>,
     paymentIncomplete: "Payment not completed.",
     paypalError: "A PayPal error occurred.",
     paymentCancelled: "Payment cancelled.",
@@ -152,6 +194,25 @@ export const FORM_T = {
     paypalNoClientId: "PayPal-Client-ID fehlt. Prüfen Sie Formular → Reiter Zahlung.",
     paypalOrderError: "Fehler beim Erstellen der PayPal-Zahlung",
     paymentError: "Zahlungsfehler",
+    weekdays: ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"],
+    serverErrors: {
+      slot_invalid: () => "Ungültiger Termin.",
+      slot_past: () => "Dieser Termin liegt bereits in der Vergangenheit. Bitte wählen Sie eine andere Uhrzeit.",
+      day_closed: (p: ErrParams, d: string) => `Am ${d} werden keine Termine angeboten.`,
+      outside_hours: () => "Dieser Termin liegt außerhalb der Öffnungszeiten. Bitte wählen Sie eine andere Uhrzeit.",
+      party_too_large: (p: ErrParams, d: string) => `Die maximale Personenzahl pro Buchung am ${d} beträgt in diesem Zeitraum ${p.max}.`,
+      slot_blocked: () => "Zu diesem Zeitpunkt ist niemand verfügbar. Bitte wählen Sie eine andere Uhrzeit.",
+      slot_taken: () => "Dieser Termin wurde soeben gebucht. Bitte wählen Sie eine andere Uhrzeit.",
+      slot_full: () => "Dieser Termin ist ausgebucht. Bitte wählen Sie eine andere Uhrzeit.",
+      team_email: () => "Diese E-Mail-Adresse gehört zum Team. Bitte wenden Sie sich für interne Fragen direkt an den Anbieter.",
+      deposit_required: () => "Für diesen Termin ist eine Anzahlung erforderlich. Bitte gehen Sie zum Zahlungsschritt.",
+      deposit_unavailable: () => "Die Online-Anzahlung ist für diesen Anbieter nicht verfügbar.",
+      paypal_order_failed: () => "PayPal-Fehler beim Erstellen der Zahlung.",
+      payment_incomplete: () => "PayPal-Zahlung nicht abgeschlossen. Bitte versuchen Sie es erneut.",
+      deposit_mismatch: () => "Der Anzahlungsbetrag stimmt nicht. Die Zahlung wurde erstattet.",
+      booking_failed_refunded: () => "Ihre Anzahlung wurde erstattet, die Buchung konnte jedoch nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+      booking_failed_contact: () => "Die Buchung konnte nicht gespeichert werden. Der Anbieter wurde benachrichtigt und meldet sich wegen Ihrer Anzahlung.",
+    } as Record<string, (p: ErrParams, d: string) => string>,
     paymentIncomplete: "Zahlung nicht abgeschlossen.",
     paypalError: "Ein PayPal-Fehler ist aufgetreten.",
     paymentCancelled: "Zahlung abgebrochen.",
@@ -212,6 +273,25 @@ export const FORM_T = {
     paypalNoClientId: "PayPal-client-ID ontbreekt. Controleer Formulier → tabblad Betaling.",
     paypalOrderError: "Fout bij het aanmaken van de PayPal-betaling",
     paymentError: "Betalingsfout",
+    weekdays: ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"],
+    serverErrors: {
+      slot_invalid: () => "Ongeldig tijdslot.",
+      slot_past: () => "Dit tijdslot is al voorbij. Kies een ander tijdstip.",
+      day_closed: (p: ErrParams, d: string) => `Er worden geen afspraken genomen op ${d}.`,
+      outside_hours: () => "Dit tijdslot valt buiten de openingsuren. Kies een ander tijdstip.",
+      party_too_large: (p: ErrParams, d: string) => `Het maximale aantal personen per reservering op ${d} is voor deze periode ${p.max}.`,
+      slot_blocked: () => "Op dit tijdstip is men niet beschikbaar. Kies een ander tijdstip.",
+      slot_taken: () => "Dit tijdslot is net gereserveerd. Kies een ander tijdstip.",
+      slot_full: () => "Dit tijdslot is volzet. Kies een ander tijdstip.",
+      team_email: () => "Dit e-mailadres hoort bij het team. Neem voor interne vragen rechtstreeks contact op.",
+      deposit_required: () => "Voor deze afspraak is een voorschot vereist. Ga verder naar de betaalstap.",
+      deposit_unavailable: () => "Online voorschot is niet beschikbaar voor deze professional.",
+      paypal_order_failed: () => "PayPal-fout bij het aanmaken van de betaling.",
+      payment_incomplete: () => "PayPal-betaling niet voltooid. Probeer het opnieuw.",
+      deposit_mismatch: () => "Het bedrag van het voorschot klopt niet. De betaling is terugbetaald.",
+      booking_failed_refunded: () => "Uw voorschot is terugbetaald, maar de reservering kon niet worden opgeslagen. Probeer het opnieuw.",
+      booking_failed_contact: () => "De reservering kon niet worden opgeslagen. De professional is verwittigd en neemt contact met u op over uw voorschot.",
+    } as Record<string, (p: ErrParams, d: string) => string>,
     paymentIncomplete: "Betaling niet voltooid.",
     paypalError: "Er is een PayPal-fout opgetreden.",
     paymentCancelled: "Betaling geannuleerd.",
@@ -250,3 +330,17 @@ export const FORM_T = {
 };
 
 export type FormStrings = (typeof FORM_T)["fr"];
+
+/**
+ * Message d'erreur à afficher pour une réponse d'échec du backend : traduit si
+ * la réponse porte un `code` connu, sinon le `detail` (français), sinon `fallback`.
+ */
+export function serverErrorMessage(t: FormStrings, body: any, fallback: string): string {
+  const fn = body?.code ? t.serverErrors[body.code] : undefined;
+  if (fn) {
+    const params: ErrParams = body.params ?? {};
+    const day = typeof params.day === "number" ? t.weekdays[params.day] ?? "" : "";
+    return fn(params, day);
+  }
+  return typeof body?.detail === "string" ? body.detail : fallback;
+}

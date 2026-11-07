@@ -7,6 +7,9 @@ from app.middleware.roles import require_calendar_access
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.calendar import AvailabilitySlotIn, BlockedPeriodIn, CalendarApptIn
 from app.services.lead import ensure_lead
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
 
@@ -219,7 +222,7 @@ async def get_calendar_appointments(
                 dt = datetime.fromisoformat(str(val).replace("Z", "+00:00"))
                 if dt.tzinfo is not None:
                     appt[field] = dt.astimezone(tz).strftime("%Y-%m-%dT%H:%M:%S")
-            except Exception:
-                pass
+            except Exception as exc_ignored:
+                logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     return data

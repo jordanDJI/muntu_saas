@@ -96,8 +96,8 @@ def _search_sync(query: str) -> list[dict]:
             if cart_id:
                 try:
                     client.delete(f"/order/cart/{cart_id}")
-                except Exception:
-                    pass
+                except Exception as exc_ignored:
+                    logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     return results
 
@@ -137,8 +137,8 @@ def _get_price_sync(domain: str) -> float:
         if cart_id:
             try:
                 client.delete(f"/order/cart/{cart_id}")
-            except Exception:
-                pass
+            except Exception as exc_ignored:
+                logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
 
 async def get_domain_price(domain: str) -> float:
@@ -178,6 +178,10 @@ def _purchase_sync(domain: str) -> dict:
 
 
 async def purchase_domain(domain: str) -> dict:
+    from app.services.vercel_domains import live_domain_ops_allowed
+    if not live_domain_ops_allowed():
+        # Pas de simulation : un achat simulé laisserait croire qu'un domaine a été payé.
+        raise RuntimeError(f"Achat de domaine désactivé hors production (app_env={settings.app_env})")
     if not _is_configured():
         raise RuntimeError("OVH API non configurée")
     return await asyncio.get_event_loop().run_in_executor(None, _purchase_sync, domain)
@@ -224,6 +228,10 @@ def _configure_dns_sync(domain: str) -> None:
 
 
 async def configure_dns(domain: str) -> None:
+    from app.services.vercel_domains import live_domain_ops_allowed
+    if not live_domain_ops_allowed():
+        logger.warning("configure_dns(%s) simulé (app_env=%s)", domain, settings.app_env)
+        return
     if not _is_configured():
         return
     await asyncio.get_event_loop().run_in_executor(None, _configure_dns_sync, domain)
@@ -251,8 +259,8 @@ def _remove_dns_sync(domain: str) -> None:
 
                 if is_vercel_cname or is_vercel_a:
                     client.delete(f"/domain/zone/{apex}/record/{record_id}")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("OVH remove_dns: enregistrement %s de %s ignoré : %s", record_id, apex, exc)
         client.post(f"/domain/zone/{apex}/refresh")
     except Exception as e:
         logger.warning("OVH remove_dns error for %s: %s", domain, e)
@@ -260,6 +268,10 @@ def _remove_dns_sync(domain: str) -> None:
 
 async def remove_dns_records(domain: str) -> None:
     """Nettoie les enregistrements DNS Vercel sans supprimer le domaine OVH."""
+    from app.services.vercel_domains import live_domain_ops_allowed
+    if not live_domain_ops_allowed():
+        logger.warning("remove_dns_records(%s) simulé (app_env=%s)", domain, settings.app_env)
+        return
     if not _is_configured():
         return
     await asyncio.get_event_loop().run_in_executor(None, _remove_dns_sync, domain)

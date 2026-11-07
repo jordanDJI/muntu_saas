@@ -22,7 +22,7 @@ from app.api.v1.attachments import PHOTO_BUCKET, _signed_url_bucket
 from app.api.v1.contact_fields import ensure_default_fields, RESERVED_CUSTOM_FIELD_KEYS
 from app.middleware.roles import require_crm_access
 from app.services.activity import log_activity
-from app.services.phone import clean_phone, is_valid_phone, validate_phone_field
+from app.services.phone import clean_phone, is_valid_phone, restore_leading_zero, validate_phone_field
 from app.services.contact_limits import get_contact_quota
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
@@ -165,13 +165,23 @@ def _csv_row_to_contact_fields(row: dict, field_defs: list[dict]) -> dict:
     }
 
 
-def _rows_to_xlsx_bytes(header: list[str], rows: list[list]) -> bytes:
+def _phone_column_indexes(field_defs: list[dict]) -> set[int]:
+    return {i for i, f in enumerate(_enabled_fields(field_defs)) if f["field_type"] == "phone"}
+
+
+def _rows_to_xlsx_bytes(header: list[str], rows: list[list], text_columns: set[int] = frozenset()) -> bytes:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Contacts"
     ws.append(header)
     for row in rows:
         ws.append(row)
+    # Colonnes téléphone au format Texte : sinon Excel transforme « 0612000002 »
+    # en nombre au premier enregistrement et le 0 initial disparaît.
+    # Les lignes vides du modèle sont formatées aussi, pour celles que le tenant ajoutera.
+    for idx in text_columns:
+        for r in range(2, max(len(rows), 1000) + 2):
+            ws.cell(row=r, column=idx + 1).number_format = "@"
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
@@ -282,7 +292,7 @@ async def export_contacts_csv(
 
     if format == "xlsx":
         return Response(
-            content=_rows_to_xlsx_bytes(header, rows),
+            content=_rows_to_xlsx_bytes(header, rows, _phone_column_indexes(field_defs)),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": "attachment; filename=contacts.xlsx"},
         )
@@ -323,7 +333,7 @@ async def download_import_template(
 
     if format == "xlsx":
         return Response(
-            content=_rows_to_xlsx_bytes(header, [example]),
+            content=_rows_to_xlsx_bytes(header, [example], _phone_column_indexes(field_defs)),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": "attachment; filename=modele_contacts.xlsx"},
         )
@@ -1045,6 +1055,10 @@ async def _run_import_job(job_id: str, tenant_id: str, filename: str, content: b
             )
 
         field_defs = ensure_default_fields(sb, tenant_id)
+        phone_defs = [f for f in field_defs if f["field_type"] == "phone"]
+        country_row = sb.table("tenant").select("country").eq("id", tenant_id).limit(1).execute().data
+        country = (country_row[0].get("country") if country_row else None) or "BE"
+        zeros_restored = 0
 
         existing = (
             sb.table("contact")
@@ -1075,6 +1089,14 @@ async def _run_import_job(job_id: str, tenant_id: str, filename: str, content: b
 
         for row in rows:
             fields = _csv_row_to_contact_fields(row, field_defs)
+
+            # Numéros dont Excel a retiré le 0 initial (FR / BE uniquement).
+            for f in phone_defs:
+                key = f["field_key"]
+                holder = fields if f["storage_mode"] == "column" else (fields.get("custom_fields") or {})
+                if holder.get(key):
+                    holder[key], fixed = restore_leading_zero(holder[key], country)
+                    zeros_restored += fixed
 
             if not any(fields.get(k) for k in ("first_name", "last_name", "email", "phone")):
                 skipped += 1
@@ -1165,6 +1187,12 @@ async def _run_import_job(job_id: str, tenant_id: str, filename: str, content: b
                 f"{ambiguous} ligne(s) correspondent à plusieurs contacts existants et n'ont pas "
                 "été traitées. Fusionnez les doublons concernés, puis réimportez."
             )
+        if zeros_restored:
+            zero_notice = (
+                f"{zeros_restored} numéro(s) avaient perdu leur 0 initial (fichier enregistré "
+                "depuis Excel) : il a été rétabli."
+            )
+            notice = f"{notice} {zero_notice}" if notice else zero_notice
 
         sb.table("contact_import_job").update({
             "status": "done",

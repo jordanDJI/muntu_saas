@@ -11,6 +11,9 @@ from app.middleware.tenant import get_current_tenant, get_current_user
 from app.services.activity import log_activity
 from app.services.retention import CONSENT_CHANNELS, anonymize_contact, record_consent
 from app.services.email import send_deletion_request_notice
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["GDPR"])
 
@@ -89,8 +92,8 @@ async def request_contact_deletion(
 
     try:
         send_deletion_request_notice(sb, tenant_id, contact)
-    except Exception:
-        pass  # la demande reste tracée même si l'email de notification échoue
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée (la demande reste tracée même si l'email de notification échoue) : %s", exc_ignored, exc_info=True)
 
     return {"status": "requested"}
 

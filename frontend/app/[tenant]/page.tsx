@@ -13,6 +13,8 @@ import TrackingScripts from "../../components/TrackingScripts";
 import GallerySection from "../../components/GallerySection";
 import ServiceSection from "./service-section";
 import { resolveSiteColors } from "./site-colors";
+import { serializeJsonLd } from "../../lib/jsonLd";
+import { isOptimizableImage } from "../../lib/imageHost";
 
 const FONT_FAMILY: Record<string, string> = {
   modern: "system-ui, -apple-system, sans-serif",
@@ -234,7 +236,7 @@ export default async function TenantSitePage({
           );
           if (photoUrls.hero) return (
             <>
-              <Image src={photoUrls.hero} alt="" fill className="object-cover object-center" priority sizes="100vw" />
+              <Image src={photoUrls.hero} unoptimized={!isOptimizableImage(photoUrls.hero)} alt="" fill className="object-cover object-center" priority sizes="100vw" />
               <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${colors.hero}e6 0%, ${colors.accent}bb 100%)` }} />
             </>
           );
@@ -317,7 +319,7 @@ export default async function TenantSitePage({
                           </div>
                     ) : (
                       <>
-                        <Image src={photoUrls.about} alt={`${site.title} — présentation`} width={600} height={420} className="w-full h-72 sm:h-96 object-cover rounded-3xl shadow-xl" />
+                        <Image src={photoUrls.about} unoptimized={!isOptimizableImage(photoUrls.about)} alt={`${site.title} — présentation`} width={600} height={420} className="w-full h-72 sm:h-96 object-cover rounded-3xl shadow-xl" />
                         <div className="absolute -bottom-4 -right-4 w-24 h-24 rounded-2xl opacity-30 -z-10" style={{ backgroundColor: colors.accent }} />
                       </>
                     )}
@@ -368,7 +370,7 @@ export default async function TenantSitePage({
             );
             if (photoUrls.services) return (
               <>
-                <Image src={photoUrls.services} alt="" fill className="object-cover object-center" sizes="100vw" />
+                <Image src={photoUrls.services} unoptimized={!isOptimizableImage(photoUrls.services)} alt="" fill className="object-cover object-center" sizes="100vw" />
                 <div className="absolute inset-0 bg-white/85 backdrop-blur-sm" />
               </>
             );
@@ -505,7 +507,7 @@ export default async function TenantSitePage({
                       <iframe src={vid.embedUrl} allow="fullscreen" allowFullScreen className="absolute inset-0 w-full h-full" />
                     </div>;
                 if (photoUrls.contact) return (
-                  <Image src={photoUrls.contact} alt={`Contacter ${site.title}`} width={600} height={360} className="w-full h-56 object-cover rounded-3xl shadow-lg mb-2" />
+                  <Image src={photoUrls.contact} unoptimized={!isOptimizableImage(photoUrls.contact)} alt={`Contacter ${site.title}`} width={600} height={360} className="w-full h-56 object-cover rounded-3xl shadow-lg mb-2" />
                 );
                 return null;
               })()}
@@ -680,7 +682,7 @@ export default async function TenantSitePage({
           <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{
-              __html: JSON.stringify({
+              __html: serializeJsonLd({
                 "@context": "https://schema.org",
                 "@type": schemaType,
                 name: site.title,
@@ -708,21 +710,8 @@ export default async function TenantSitePage({
                 ...(zones.length > 0 && {
                   areaServed: zones.map((z: string) => ({ "@type": "City", name: z })),
                 }),
-                ...(testimonials.length > 0 && {
-                  aggregateRating: {
-                    "@type": "AggregateRating",
-                    ratingValue: (testimonials.reduce((s: number, t: any) => s + (t.rating ?? 5), 0) / testimonials.length).toFixed(1),
-                    reviewCount: testimonials.length,
-                    bestRating: "5",
-                    worstRating: "1",
-                  },
-                  review: testimonials.map((t: any) => ({
-                    "@type": "Review",
-                    reviewRating: { "@type": "Rating", ratingValue: String(t.rating ?? 5), bestRating: "5" },
-                    author: { "@type": "Person", name: t.author_name },
-                    reviewBody: t.content,
-                  })),
-                }),
+                // Pas d'aggregateRating ni de review : les témoignages sont saisis
+                // par le pro, et Google sanctionne les avis auto-attribués.
                 ...(site.service_offer?.length > 0 && {
                   hasOfferCatalog: {
                     "@type": "OfferCatalog",

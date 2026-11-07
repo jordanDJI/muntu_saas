@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../lib/api";
+import { setVisibleInterval } from "../../lib/visibleInterval";
+import { mfaUrl, needsMfaChallenge } from "../../lib/mfa";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -171,6 +173,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.replace("/dashboard");
         return;
       }
+      if (await needsMfaChallenge()) {
+        window.location.replace(mfaUrl("/admin"));
+        return;
+      }
       setUserLevel(level);
       setReady(true);
 
@@ -215,8 +221,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         } catch { /* non bloquant */ }
       };
       refreshSupport();
-      const iv = setInterval(refreshSupport, 30_000);
-      return () => clearInterval(iv);
+      const stopPolling = setVisibleInterval(refreshSupport, 30_000);
+      return stopPolling;
     });
   }, [router]);
 

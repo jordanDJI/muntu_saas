@@ -1,5 +1,14 @@
+import logging
+
 import httpx
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def live_domain_ops_allowed() -> bool:
+    """Les écritures sur les domaines ne partent vers Vercel / OVH qu'en production."""
+    return settings.app_env == "production" or settings.allow_live_domains
 
 _VERCEL_API = "https://api.vercel.com"
 
@@ -37,6 +46,9 @@ def _parse_status(data: dict) -> dict:
 
 
 async def add_domain(domain: str) -> dict:
+    if not live_domain_ops_allowed():
+        logger.warning("add_domain(%s) simulé (app_env=%s)", domain, settings.app_env)
+        return {"name": domain, "verified": False, "simulated": True}
     if not settings.vercel_api_token or not settings.vercel_project_id:
         raise RuntimeError("Vercel API non configurée (VERCEL_API_TOKEN / VERCEL_PROJECT_ID manquants)")
     async with httpx.AsyncClient(timeout=15) as client:
@@ -73,8 +85,8 @@ async def get_apex_a_value(domain: str) -> str:
             values = entry.get("value") or []
             if values:
                 return values[0]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Recommandation IPv4 Vercel indisponible pour %s, repli %s : %s", domain, APEX_A_FALLBACK, exc)
     return APEX_A_FALLBACK
 
 
@@ -96,6 +108,9 @@ async def get_domain_status(domain: str) -> dict:
 
 
 async def remove_domain(domain: str) -> None:
+    if not live_domain_ops_allowed():
+        logger.warning("remove_domain(%s) simulé (app_env=%s)", domain, settings.app_env)
+        return
     if not settings.vercel_api_token or not settings.vercel_project_id:
         return
     async with httpx.AsyncClient(timeout=15) as client:

@@ -73,8 +73,8 @@ async def list_members(tenant_id: str = Depends(get_current_tenant)):
                 email = resp.user.email or ""
                 first_name = meta.get("first_name", "")
                 last_name = meta.get("last_name", "")
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
         members.append({
             "id": m["id"],
             "user_id": m["user_id"],

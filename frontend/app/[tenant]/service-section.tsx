@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
+import { isOptimizableImage } from "../../lib/imageHost";
 
 type Colors = { accent: string; light: string; hero: string };
 
@@ -21,7 +22,7 @@ function OfferCard({ offer, colors, onClick }: { offer: any; colors: Colors; onC
     >
       {photos.length > 0 ? (
         <div className="relative">
-          <Image src={photos[0]} alt={offer.name} width={400} height={160} className="w-full h-40 object-cover" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" />
+          <Image src={photos[0]} unoptimized={!isOptimizableImage(photos[0])} alt={offer.name} width={400} height={160} className="w-full h-40 object-cover" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw" />
           {photos.length > 1 && (
             <span className="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] px-1.5 py-0.5 rounded-full">
               {photos.length} photos
@@ -107,7 +108,7 @@ function ServiceModal({
         {photos.length > 0 && (
           <div className="relative bg-gray-100 flex-shrink-0">
             <Image
-              src={photos[idx]}
+              src={photos[idx]} unoptimized={!isOptimizableImage(photos[idx])}
               alt={`${offer.name} — photo ${idx + 1}`}
               width={700}
               height={400}

@@ -2,11 +2,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/api";
+import { SUPPORT_SESSION_KEY } from "../../../components/SupportSessionBanner";
 
 export default function ImpersonateRelayPage() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
   const [otp,   setOtp]   = useState<string | null>(null);
+  const [supportAgent, setSupportAgent] = useState("support");
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
   const [done,    setDone]    = useState(false);
@@ -19,6 +21,7 @@ export default function ImpersonateRelayPage() {
     if (!e || !o) { setError("Lien invalide ou incomplet."); return; }
     setEmail(decodeURIComponent(e));
     setOtp(decodeURIComponent(o));
+    setSupportAgent(decodeURIComponent(params.get("support") || "support"));
   }, []);
 
   const connect = async () => {
@@ -37,6 +40,11 @@ export default function ImpersonateRelayPage() {
       setLoading(false);
       return;
     }
+    // Marque cet onglet (et lui seul) comme session support : le dashboard
+    // affiche un bandeau tant qu'elle dure.
+    try {
+      sessionStorage.setItem(SUPPORT_SESSION_KEY, JSON.stringify({ agent: supportAgent, since: new Date().toISOString() }));
+    } catch { /* stockage indisponible : la session reste utilisable */ }
     setDone(true);
     router.replace("/dashboard");
   };

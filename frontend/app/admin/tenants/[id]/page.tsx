@@ -127,10 +127,14 @@ export default function TenantDetailPage() {
   };
 
   const impersonate = async () => {
+    // Motif obligatoire : journalisé et montré au tenant dans son dashboard
+    const reason = window.prompt("Motif de l'accès à l'espace du client (visible par lui) :")?.trim();
+    if (!reason) return;
+    if (reason.length < 5) { showToast("Motif trop court (5 caractères minimum)", false); return; }
     setBusy(true);
     try {
-      const r = await adminFetch<{ email: string; otp: string }>(`/api/v1/admin/tenants/${id}/impersonate`, { method: "POST", body: JSON.stringify({}) });
-      const relayUrl = `${window.location.origin}/auth/impersonate#email=${encodeURIComponent(r.email)}&otp=${encodeURIComponent(r.otp)}`;
+      const r = await adminFetch<{ email: string; otp: string; admin_email: string }>(`/api/v1/admin/tenants/${id}/impersonate`, { method: "POST", body: JSON.stringify({ reason }) });
+      const relayUrl = `${window.location.origin}/auth/impersonate#email=${encodeURIComponent(r.email)}&otp=${encodeURIComponent(r.otp)}&support=${encodeURIComponent(r.admin_email || "support")}`;
       setImpersonateLink(relayUrl);
       setLinkCopied(false);
     } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
@@ -230,7 +234,7 @@ export default function TenantDetailPage() {
     </div>
   );
 
-  const { tenant, owner, subscription, site, domain, counts, profile, trial_reminders_sent, overrides, action_log } = data;
+  const { tenant, owner, subscription, site, domain, counts, profile, trial_reminders_sent, overrides, action_log, ai_usage_30d } = data;
   const st = tenant.computed_status;
   const badge = STATUS_BADGE[st] ?? STATUS_BADGE.suspended;
 
@@ -344,6 +348,14 @@ export default function TenantDetailPage() {
             <Row label="Pièces jointes" value={String(counts.attachments ?? 0)} />
             <Row label="Site"           value={site ? `${site.title ?? "Sans titre"} (${site.status})` : "Aucun"} />
             <Row label="Domaine"        value={domain ? `${domain.domain} (${domain.status})` : "Aucun"} />
+          </InfoCard>
+
+          <InfoCard title="IA — 30 derniers jours">
+            <Row label="Appels"  value={String(ai_usage_30d?.calls ?? 0)} />
+            <Row label="Tokens"  value={((ai_usage_30d?.input_tokens ?? 0) + (ai_usage_30d?.output_tokens ?? 0)).toLocaleString("fr-BE")} />
+            {Object.entries(ai_usage_30d?.by_feature ?? {}).map(([feature, u]: [string, any]) => (
+              <Row key={feature} label={AI_FEATURE_LABELS[feature] ?? feature} value={`${u.calls} appels · ${u.tokens.toLocaleString("fr-BE")} tokens`} />
+            ))}
           </InfoCard>
 
           <InfoCard title="Profil &amp; onboarding">
@@ -733,6 +745,10 @@ const K_card   = "#0D1B25";
 const K_border = "rgba(170,189,216,0.10)";
 const K_muted  = "#8BA5B0";
 const K_text   = "#EEF2F5";
+
+const AI_FEATURE_LABELS: Record<string, string> = {
+  chatbot: "Chatbot vitrine", agent_support: "Agent WhatsApp / Telegram", assistant: "Assistant", synthesis: "Synthèses", other: "Autre",
+};
 
 function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (

@@ -5,6 +5,9 @@ All pytrends calls are synchronous — wrapped in asyncio.to_thread.
 import asyncio
 import httpx
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 _semaphore = asyncio.Semaphore(3)  # max 3 appels Google Trends simultanés
 
@@ -27,8 +30,8 @@ def get_sector_keywords() -> dict[str, list[str]]:
         row = get_supabase_admin().table("system_config").select("value").eq("key", "sector_keywords").limit(1).execute().data
         if row and isinstance(row[0]["value"], dict):
             return {**SECTOR_KEYWORDS, **row[0]["value"]}
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
     return SECTOR_KEYWORDS
 
 TIMEFRAMES: dict[str, str] = {
@@ -50,8 +53,8 @@ async def _geocode(name: str, country_code: str) -> Optional[tuple[float, float]
             data = r.json()
             if data:
                 return float(data[0]["lat"]), float(data[0]["lon"])
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
     return None
 
 
@@ -61,6 +64,9 @@ def _run_pytrends(keywords: list[str], geo: str, timeframe: str, zones: list[str
         "zone_scores": {},
         "related_queries": [],
         "aggregate_score": 0,
+        # True quand Google n'a pas répondu (429, changement d'API non officielle) :
+        # les zéros ne sont alors pas une mesure, et ne doivent pas être mis en cache.
+        "degraded": False,
     }
     try:
         from pytrends.request import TrendReq
@@ -89,8 +95,8 @@ def _run_pytrends(keywords: list[str], geo: str, timeframe: str, zones: list[str
                 top_df = related[kw[0]].get("top")
                 if top_df is not None and not top_df.empty:
                     result["related_queries"] = top_df["query"].head(6).tolist()
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Google Trends : requêtes associées indisponibles (%s) : %s", geo, exc_ignored)
 
         # ── Zone scores via interest_by_region ────────────────────────────────
         if zones:
@@ -105,11 +111,12 @@ def _run_pytrends(keywords: list[str], geo: str, timeframe: str, zones: list[str
                         ]
                         if matches:
                             result["zone_scores"][zone] = int(ibr_col[matches[0]])
-            except Exception:
-                pass
+            except Exception as exc_ignored:
+                logger.warning("Google Trends : scores par zone indisponibles (%s) : %s", geo, exc_ignored)
 
-    except Exception:
-        pass
+    except Exception as exc:
+        result["degraded"] = True
+        logger.warning("Google Trends indisponible (mots-clés=%s, geo=%s) : %s", keywords[:1], geo, exc, exc_info=True)
 
     return result
 
@@ -162,4 +169,5 @@ async def get_demand_data(
         "aggregate_score": trends["aggregate_score"],
         "related_queries": trends["related_queries"],
         "interest_over_time": trends["interest_over_time"],
+        "degraded": trends["degraded"],
     }

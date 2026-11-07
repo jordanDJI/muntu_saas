@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ArticleLayout from "../../../components/ArticleLayout";
+import { serializeJsonLd } from "../../../lib/jsonLd";
 
 export const revalidate = 86400; // ISR — revalide chaque jour, l'année se met à jour sans redéploiement
 
@@ -38,7 +39,7 @@ export default function Article() {
   return (
     <>
       {jsonLd.map((schema, i) => (
-        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }} />
       ))}
       <ArticleLayout
         breadcrumbLabel="Coût site internet indépendant"

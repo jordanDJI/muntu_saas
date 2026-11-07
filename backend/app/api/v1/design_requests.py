@@ -6,6 +6,9 @@ from app.middleware.roles import require_owner_or_admin
 from app.middleware.tenant import get_current_tenant
 from app.services import email as email_svc
 from app.services.subscription import get_tenant_plan
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/design-requests", tags=["Design Requests"])
 
@@ -59,8 +62,8 @@ async def create_design_request(
             message=body.message,
             request_id=row.data[0]["id"],
         )
-    except Exception:
-        pass  # non bloquant
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée (non bloquant) : %s", exc_ignored, exc_info=True)
 
     return row.data[0]
 

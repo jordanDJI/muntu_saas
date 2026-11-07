@@ -12,7 +12,9 @@ import { SubscriptionProvider, useSubscription } from "../../contexts/Subscripti
 import type { FeatureKey } from "../../contexts/SubscriptionContext";
 import { COUNTRIES } from "../../lib/countries";
 import OnboardingCard from "../../components/OnboardingCard";
+import SupportSessionBanner from "../../components/SupportSessionBanner";
 import { ALL_TOURS, TOUR_MENU, PAGE_TOUR } from "./onboarding/tours";
+import { isSupportSession, mfaUrl, needsMfaChallenge } from "../../lib/mfa";
 
 // Page cible de chaque tour (vide = nav toujours visible, pas de redirect)
 const TOUR_PAGE: Record<string, string> = {
@@ -925,6 +927,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           window.location.replace("/admin");
           return;
         }
+        // Double authentification enrôlée mais code pas encore saisi (connexion
+        // Google, lien magique…). Pas pour une session support ouverte depuis l'admin.
+        if (!isSupportSession() && await needsMfaChallenge()) {
+          window.location.replace(mfaUrl(window.location.pathname));
+          return;
+        }
         const prefs = session.user.user_metadata?.ui_prefs ?? {};
         setDarkMode(prefs.darkMode ?? false);
 
@@ -1248,6 +1256,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Contenu — offset pour la navbar */}
       <div className="pt-14">
+        <SupportSessionBanner />
         <TrialBanner />
         <ContactLimitBanner />
         <RemindersBanner />

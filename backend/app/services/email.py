@@ -2,6 +2,9 @@ import resend
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from app.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 resend.api_key = settings.resend_api_key
 
@@ -20,8 +23,8 @@ def get_tenant_brand(sb, tenant_id: str) -> dict:
                 "logo_url": style.get("logo_url", ""),
                 "logo_option": style.get("logo_option", "text_only"),
             }
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
     return {"primary_color": "", "logo_url": "", "logo_option": "text_only"}
 
 
@@ -70,6 +73,168 @@ def _fmt_dt(iso_str: str, tz_name: str = "UTC") -> str:
         return dt.astimezone(tz).strftime("%A %d/%m/%Y à %H:%M")
     except Exception:
         return iso_str
+
+
+# ── Emails au client final : langue et dates ──────────────────────────────────
+# La langue vient de appointment.lang (posée à la réservation par le site ou le
+# widget, migration 083). Absente → français, comme avant.
+
+_CLIENT_LANGS = ("fr", "en", "de", "nl")
+_WEEKDAYS = {
+    "fr": ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"],
+    "en": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+    "de": ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"],
+    "nl": ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"],
+}
+_MONTHS = {
+    "fr": ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
+    "en": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    "de": ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+    "nl": ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"],
+}
+_DATE_PATTERN = {
+    "fr": "{wd} {d} {m} {y} à {hm}",
+    "en": "{wd} {d} {m} {y} at {hm}",
+    "de": "{wd}, {d}. {m} {y} um {hm}",
+    "nl": "{wd} {d} {m} {y} om {hm}",
+}
+
+
+def _client_lang(lang) -> str:
+    lang = (lang or "").lower()[:2]
+    return lang if lang in _CLIENT_LANGS else "fr"
+
+
+def _fmt_dt_lang(iso_str: str, tz_name: str = "UTC", lang: str = "fr") -> str:
+    """Date d'un RDV pour un email client, sans dépendre de la locale système.
+
+    Une date naïve est déjà en heure locale du tenant (invariant de stockage) :
+    elle n'est pas convertie. Une date avec fuseau (anciens RDV) est ramenée
+    dans le fuseau du tenant.
+    """
+    try:
+        dt = datetime.fromisoformat(str(iso_str).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return str(iso_str or "—")
+    if dt.tzinfo is not None:
+        try:
+            tz = ZoneInfo(tz_name)
+        except (ZoneInfoNotFoundError, KeyError):
+            tz = ZoneInfo("UTC")
+        dt = dt.astimezone(tz)
+    lang = _client_lang(lang)
+    return _DATE_PATTERN[lang].format(
+        wd=_WEEKDAYS[lang][dt.weekday()], d=dt.day, m=_MONTHS[lang][dt.month - 1],
+        y=dt.year, hm=dt.strftime("%H:%M"),
+    )
+
+
+_CLIENT_T = {
+    "fr": {
+        "with": "Avec", "group": "Réservation pour <strong>{n} personnes</strong>.",
+        "group_concerned": "Réservation concernée : <strong>{n} personnes</strong>.",
+        "confirmed_title": "Rendez-vous confirmé !",
+        "confirmed_hello": "Bonjour <strong>{name}</strong>, votre rendez-vous est confirmé.",
+        "confirmed_note": "Vous recevrez un rappel 24 h avant votre rendez-vous.<br>En cas d'empêchement, merci de nous prévenir dès que possible.",
+        "confirmed_subject": "Rendez-vous confirmé — {tenant}",
+        "refused_subject": "Votre demande de rendez-vous — {tenant}",
+        "refused_title": "Demande non confirmée",
+        "refused_body": "Bonjour <strong>{name}</strong>,<br><br>Votre demande de rendez-vous avec <strong>{tenant}</strong> pour le <strong>{date}</strong> n'a malheureusement pas pu être acceptée.",
+        "refused_note": "Vous pouvez choisir un autre créneau directement en ligne.",
+        "refused_cta": "Choisir un autre créneau →",
+        "cancel_subject": "Annulation de votre rendez-vous — {tenant}",
+        "cancel_title": "Rendez-vous annulé",
+        "cancel_body": "Bonjour <strong>{name}</strong>,<br><br>Votre rendez-vous avec <strong>{tenant}</strong> prévu le <strong>{date}</strong> a été annulé.",
+        "cancel_note": "N'hésitez pas à reprendre contact pour convenir d'une nouvelle date.",
+        "cancel_cta": "Reprendre rendez-vous →",
+        "received_subject": "{tenant} — Votre demande de rendez-vous a été reçue",
+        "received_title": "Demande reçue !",
+        "received_hello": "Bonjour <strong>{name}</strong>, votre demande a bien été enregistrée.",
+        "received_note": "Le professionnel va examiner votre demande et vous enverra une confirmation par email.<br>Si vous ne pouvez finalement pas vous déplacer, merci de nous le signaler dès que possible.",
+        "reminder_subject": "Rappel — votre rendez-vous demain avec {tenant}",
+        "reminder_title": "Rappel de rendez-vous",
+        "reminder_hello": "Bonjour <strong>{name}</strong>, votre rendez-vous est demain !",
+        "reminder_note": "En cas d'empêchement, merci de nous prévenir dès que possible.",
+    },
+    "en": {
+        "with": "With", "group": "Booking for <strong>{n} people</strong>.",
+        "group_concerned": "Booking concerned: <strong>{n} people</strong>.",
+        "confirmed_title": "Appointment confirmed!",
+        "confirmed_hello": "Hello <strong>{name}</strong>, your appointment is confirmed.",
+        "confirmed_note": "You will receive a reminder 24 hours before your appointment.<br>If you can no longer make it, please let us know as soon as possible.",
+        "confirmed_subject": "Appointment confirmed — {tenant}",
+        "refused_subject": "Your appointment request — {tenant}",
+        "refused_title": "Request not confirmed",
+        "refused_body": "Hello <strong>{name}</strong>,<br><br>Unfortunately, your appointment request with <strong>{tenant}</strong> for <strong>{date}</strong> could not be accepted.",
+        "refused_note": "You can choose another time slot online.",
+        "refused_cta": "Choose another time slot →",
+        "cancel_subject": "Your appointment has been cancelled — {tenant}",
+        "cancel_title": "Appointment cancelled",
+        "cancel_body": "Hello <strong>{name}</strong>,<br><br>Your appointment with <strong>{tenant}</strong> scheduled for <strong>{date}</strong> has been cancelled.",
+        "cancel_note": "Feel free to get back in touch to arrange a new date.",
+        "cancel_cta": "Book again →",
+        "received_subject": "{tenant} — Your appointment request has been received",
+        "received_title": "Request received!",
+        "received_hello": "Hello <strong>{name}</strong>, your request has been recorded.",
+        "received_note": "The professional will review your request and send you a confirmation by email.<br>If you can no longer make it, please let us know as soon as possible.",
+        "reminder_subject": "Reminder — your appointment tomorrow with {tenant}",
+        "reminder_title": "Appointment reminder",
+        "reminder_hello": "Hello <strong>{name}</strong>, your appointment is tomorrow!",
+        "reminder_note": "If you can no longer make it, please let us know as soon as possible.",
+    },
+    "de": {
+        "with": "Bei", "group": "Reservierung für <strong>{n} Personen</strong>.",
+        "group_concerned": "Betroffene Reservierung: <strong>{n} Personen</strong>.",
+        "confirmed_title": "Termin bestätigt!",
+        "confirmed_hello": "Guten Tag <strong>{name}</strong>, Ihr Termin ist bestätigt.",
+        "confirmed_note": "Sie erhalten 24 Stunden vor Ihrem Termin eine Erinnerung.<br>Falls Sie verhindert sind, geben Sie uns bitte so bald wie möglich Bescheid.",
+        "confirmed_subject": "Termin bestätigt — {tenant}",
+        "refused_subject": "Ihre Terminanfrage — {tenant}",
+        "refused_title": "Anfrage nicht bestätigt",
+        "refused_body": "Guten Tag <strong>{name}</strong>,<br><br>Ihre Terminanfrage bei <strong>{tenant}</strong> für <strong>{date}</strong> konnte leider nicht angenommen werden.",
+        "refused_note": "Sie können online einen anderen Termin wählen.",
+        "refused_cta": "Anderen Termin wählen →",
+        "cancel_subject": "Absage Ihres Termins — {tenant}",
+        "cancel_title": "Termin abgesagt",
+        "cancel_body": "Guten Tag <strong>{name}</strong>,<br><br>Ihr Termin bei <strong>{tenant}</strong> am <strong>{date}</strong> wurde abgesagt.",
+        "cancel_note": "Melden Sie sich gerne, um einen neuen Termin zu vereinbaren.",
+        "cancel_cta": "Neuen Termin buchen →",
+        "received_subject": "{tenant} — Ihre Terminanfrage ist eingegangen",
+        "received_title": "Anfrage erhalten!",
+        "received_hello": "Guten Tag <strong>{name}</strong>, Ihre Anfrage wurde gespeichert.",
+        "received_note": "Ihre Anfrage wird geprüft, Sie erhalten eine Bestätigung per E-Mail.<br>Falls Sie verhindert sind, geben Sie uns bitte so bald wie möglich Bescheid.",
+        "reminder_subject": "Erinnerung — Ihr Termin morgen bei {tenant}",
+        "reminder_title": "Terminerinnerung",
+        "reminder_hello": "Guten Tag <strong>{name}</strong>, Ihr Termin ist morgen!",
+        "reminder_note": "Falls Sie verhindert sind, geben Sie uns bitte so bald wie möglich Bescheid.",
+    },
+    "nl": {
+        "with": "Bij", "group": "Reservering voor <strong>{n} personen</strong>.",
+        "group_concerned": "Betrokken reservering: <strong>{n} personen</strong>.",
+        "confirmed_title": "Afspraak bevestigd!",
+        "confirmed_hello": "Hallo <strong>{name}</strong>, uw afspraak is bevestigd.",
+        "confirmed_note": "U ontvangt 24 uur voor uw afspraak een herinnering.<br>Kunt u toch niet komen, laat het ons dan zo snel mogelijk weten.",
+        "confirmed_subject": "Afspraak bevestigd — {tenant}",
+        "refused_subject": "Uw afspraakaanvraag — {tenant}",
+        "refused_title": "Aanvraag niet bevestigd",
+        "refused_body": "Hallo <strong>{name}</strong>,<br><br>Uw afspraakaanvraag bij <strong>{tenant}</strong> voor <strong>{date}</strong> kon helaas niet worden aanvaard.",
+        "refused_note": "U kunt online een ander tijdslot kiezen.",
+        "refused_cta": "Ander tijdslot kiezen →",
+        "cancel_subject": "Annulering van uw afspraak — {tenant}",
+        "cancel_title": "Afspraak geannuleerd",
+        "cancel_body": "Hallo <strong>{name}</strong>,<br><br>Uw afspraak bij <strong>{tenant}</strong> op <strong>{date}</strong> is geannuleerd.",
+        "cancel_note": "Neem gerust opnieuw contact op om een nieuwe datum af te spreken.",
+        "cancel_cta": "Opnieuw een afspraak maken →",
+        "received_subject": "{tenant} — Uw afspraakaanvraag is ontvangen",
+        "received_title": "Aanvraag ontvangen!",
+        "received_hello": "Hallo <strong>{name}</strong>, uw aanvraag is geregistreerd.",
+        "received_note": "De professional bekijkt uw aanvraag en stuurt u een bevestiging per e-mail.<br>Kunt u toch niet komen, laat het ons dan zo snel mogelijk weten.",
+        "reminder_subject": "Herinnering — uw afspraak morgen bij {tenant}",
+        "reminder_title": "Herinnering afspraak",
+        "reminder_hello": "Hallo <strong>{name}</strong>, uw afspraak is morgen!",
+        "reminder_note": "Kunt u toch niet komen, laat het ons dan zo snel mogelijk weten.",
+    },
+}
 
 
 def send_lead_notification(tenant_email: str, lead: dict, contact: dict) -> None:
@@ -178,31 +343,32 @@ def send_appointment_pending_tenant(
 
 
 def send_appointment_confirmation(contact_email: str, contact_name: str, appointment: dict, tenant_name: str, tz_name: str = "UTC", primary_color: str = "", logo_url: str = "", logo_option: str = "text_only") -> None:
-    date_str = _fmt_dt(appointment.get("scheduled_at", ""), tz_name)
+    lang = _client_lang(appointment.get("lang"))
+    t = _CLIENT_T[lang]
+    date_str = _fmt_dt_lang(appointment.get("scheduled_at", ""), tz_name, lang)
     party_size = appointment.get("party_size", 1)
-    group_line = f'<p style="color:#374151;font-size:14px;margin:0 0 12px">Réservation pour <strong>{party_size} personnes</strong>.</p>' if party_size > 1 else ""
+    group_line = f'<p style="color:#374151;font-size:14px;margin:0 0 12px">{t["group"].format(n=party_size)}</p>' if party_size > 1 else ""
     body = f"""
       <div style="text-align:center;margin-bottom:24px">
         <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#e6f9f0;line-height:52px;font-size:24px">✓</div>
       </div>
-      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">Rendez-vous confirmé !</h2>
+      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">{t["confirmed_title"]}</h2>
       <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 20px;text-align:center">
-        Bonjour <strong>{contact_name}</strong>, votre rendez-vous est confirmé.
+        {t["confirmed_hello"].format(name=contact_name)}
       </p>
       <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px 20px;margin-bottom:20px">
-        <p style="color:#374151;font-size:13px;margin:0 0 6px"><strong>Avec</strong> : {tenant_name}</p>
+        <p style="color:#374151;font-size:13px;margin:0 0 6px"><strong>{t["with"]}</strong> : {tenant_name}</p>
         <p style="color:#0D4B58;font-size:15px;font-weight:700;margin:0"><strong>{date_str}</strong></p>
       </div>
       {group_line}
-      <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">Vous recevrez un rappel 24 h avant votre rendez-vous.<br>En cas d'empêchement, merci de nous prévenir dès que possible.</p>
+      <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">{t["confirmed_note"]}</p>
     """
     resend.Emails.send({
         "from": f"{tenant_name} <{settings.email_from}>",
         "to": [contact_email],
-        "subject": f"Rendez-vous confirmé — {tenant_name}",
+        "subject": t["confirmed_subject"].format(tenant=tenant_name),
         "html": _tenant_email_wrapper(tenant_name, body, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option),
     })
-
 
 def send_appointment_cancellation(
     contact_email: str,
@@ -221,41 +387,43 @@ def send_appointment_cancellation(
     - was_pending=True : le professionnel n'a pas validé la demande → propose de rechoisir
     - was_pending=False : RDV confirmé annulé → propose de recontacter
     """
-    date_str = _fmt_dt(appointment.get("scheduled_at", ""), tz_name)
-
+    lang = _client_lang(appointment.get("lang"))
+    t = _CLIENT_T[lang]
+    date_str = _fmt_dt_lang(appointment.get("scheduled_at", ""), tz_name, lang)
     party_size = appointment.get("party_size", 1)
-    group_line = f"<p>Réservation concernée : <strong>{party_size} personnes</strong>.</p>" if party_size > 1 else ""
+    group_line = (
+        f'<p style="color:#374151;font-size:14px;margin:0 0 4px">{t["group_concerned"].format(n=party_size)}</p>'
+        if party_size > 1 else ""
+    )
 
     if was_pending:
-        subject = f"Votre demande de rendez-vous — {tenant_name}"
-        cta = f'<div style="text-align:center;margin-top:20px"><a href="{booking_url}" style="{_BTN}">Choisir un autre créneau →</a></div>' if booking_url else ""
+        subject = t["refused_subject"].format(tenant=tenant_name)
+        cta = f'<div style="text-align:center;margin-top:20px"><a href="{booking_url}" style="{_BTN}">{t["refused_cta"]}</a></div>' if booking_url else ""
         body = f"""
           <div style="text-align:center;margin-bottom:20px">
             <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#fff3cd;line-height:52px;font-size:24px">⚠</div>
           </div>
-          <h2 style="color:#111827;font-size:18px;font-weight:700;margin:0 0 12px;text-align:center">Demande non confirmée</h2>
+          <h2 style="color:#111827;font-size:18px;font-weight:700;margin:0 0 12px;text-align:center">{t["refused_title"]}</h2>
           <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 16px">
-            Bonjour <strong>{contact_name}</strong>,<br><br>
-            Votre demande de rendez-vous avec <strong>{tenant_name}</strong> pour le <strong>{date_str}</strong>
-            n'a malheureusement pas pu être acceptée.
+            {t["refused_body"].format(name=contact_name, tenant=tenant_name, date=date_str)}
           </p>
-          {f'<p style="color:#374151;font-size:14px;margin:0 0 4px">Réservation concernée : <strong>{party_size} personnes</strong>.</p>' if party_size > 1 else ""}
-          <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0 0 4px">Vous pouvez choisir un autre créneau directement en ligne.</p>
+          {group_line}
+          <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0 0 4px">{t["refused_note"]}</p>
           {cta}
         """
     else:
-        subject = f"Annulation de votre rendez-vous — {tenant_name}"
-        cta = f'<div style="text-align:center;margin-top:20px"><a href="{booking_url}" style="{_BTN}">Reprendre rendez-vous →</a></div>' if booking_url else ""
+        subject = t["cancel_subject"].format(tenant=tenant_name)
+        cta = f'<div style="text-align:center;margin-top:20px"><a href="{booking_url}" style="{_BTN}">{t["cancel_cta"]}</a></div>' if booking_url else ""
         body = f"""
           <div style="text-align:center;margin-bottom:20px">
             <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#fee2e2;line-height:52px;font-size:24px">✕</div>
           </div>
-          <h2 style="color:#111827;font-size:18px;font-weight:700;margin:0 0 12px;text-align:center">Rendez-vous annulé</h2>
+          <h2 style="color:#111827;font-size:18px;font-weight:700;margin:0 0 12px;text-align:center">{t["cancel_title"]}</h2>
           <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 16px">
-            Bonjour <strong>{contact_name}</strong>,<br><br>
-            Votre rendez-vous avec <strong>{tenant_name}</strong> prévu le <strong>{date_str}</strong> a été annulé.
+            {t["cancel_body"].format(name=contact_name, tenant=tenant_name, date=date_str)}
           </p>
-          <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">N'hésitez pas à reprendre contact pour convenir d'une nouvelle date.</p>
+          {group_line}
+          <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">{t["cancel_note"]}</p>
           {cta}
         """
 
@@ -265,7 +433,6 @@ def send_appointment_cancellation(
         "subject": subject,
         "html": _tenant_email_wrapper(tenant_name, body, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option),
     })
-
 
 def send_team_invite(email: str, tenant_name: str, invite_url: str, role: str) -> None:
     role_labels = {
@@ -579,31 +746,29 @@ def send_booking_request_received(
     logo_option: str = "text_only",
 ) -> None:
     """Accuse de réception au client après une demande de rendez-vous (statut pending)."""
-    date_str = _fmt_dt(appointment.get("scheduled_at", ""), tz_name)
+    lang = _client_lang(appointment.get("lang"))
+    t = _CLIENT_T[lang]
+    date_str = _fmt_dt_lang(appointment.get("scheduled_at", ""), tz_name, lang)
     body = f"""
       <div style="text-align:center;margin-bottom:20px">
         <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#e6f9f0;line-height:52px;font-size:24px">✓</div>
       </div>
-      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">Demande reçue !</h2>
+      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">{t["received_title"]}</h2>
       <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 20px;text-align:center">
-        Bonjour <strong>{contact_name}</strong>, votre demande a bien été enregistrée.
+        {t["received_hello"].format(name=contact_name)}
       </p>
       <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:16px 20px;margin-bottom:20px">
-        <p style="color:#374151;font-size:13px;margin:0 0 6px"><strong>Avec</strong> : {tenant_name}</p>
+        <p style="color:#374151;font-size:13px;margin:0 0 6px"><strong>{t["with"]}</strong> : {tenant_name}</p>
         <p style="color:#0D4B58;font-size:15px;font-weight:700;margin:0">{date_str}</p>
       </div>
-      <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">
-        Le professionnel va examiner votre demande et vous enverra une confirmation par email.<br>
-        Si vous ne pouvez finalement pas vous déplacer, merci de nous le signaler dès que possible.
-      </p>
+      <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">{t["received_note"]}</p>
     """
     resend.Emails.send({
         "from": f"{tenant_name} <{settings.email_from}>",
         "to": [contact_email],
-        "subject": f"{tenant_name} — Votre demande de rendez-vous a été reçue",
+        "subject": t["received_subject"].format(tenant=tenant_name),
         "html": _tenant_email_wrapper(tenant_name, body, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option),
     })
-
 
 def send_appointment_reminder(
     contact_email: str,
@@ -613,34 +778,31 @@ def send_appointment_reminder(
     primary_color: str = "",
     logo_url: str = "",
     logo_option: str = "text_only",
+    tz_name: str = "UTC",
 ) -> None:
-    from datetime import datetime
-    try:
-        dt = datetime.fromisoformat(appointment.get("scheduled_at", "").replace("Z", "+00:00"))
-        date_str = dt.strftime("%A %d/%m/%Y à %H:%M")
-    except Exception:
-        date_str = appointment.get("scheduled_at", "—")
+    lang = _client_lang(appointment.get("lang"))
+    t = _CLIENT_T[lang]
+    date_str = _fmt_dt_lang(appointment.get("scheduled_at", ""), tz_name, lang)
     body = f"""
       <div style="text-align:center;margin-bottom:20px">
         <div style="display:inline-block;width:52px;height:52px;border-radius:50%;background:#fef3c7;line-height:52px;font-size:24px">🔔</div>
       </div>
-      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">Rappel de rendez-vous</h2>
+      <h2 style="color:#111827;font-size:20px;font-weight:700;margin:0 0 8px;text-align:center">{t["reminder_title"]}</h2>
       <p style="color:#374151;font-size:14px;line-height:1.65;margin:0 0 20px;text-align:center">
-        Bonjour <strong>{contact_name}</strong>, votre rendez-vous est demain !
+        {t["reminder_hello"].format(name=contact_name)}
       </p>
       <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px 20px;margin-bottom:16px">
-        <p style="color:#374151;font-size:13px;margin:0 0 6px"><strong>Avec</strong> : {tenant_name}</p>
+        <p style="color:#374151;font-size:13px;margin:0 0 6px"><strong>{t["with"]}</strong> : {tenant_name}</p>
         <p style="color:#92400e;font-size:15px;font-weight:700;margin:0">{date_str}</p>
       </div>
-      <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">En cas d'empêchement, merci de nous prévenir dès que possible.</p>
+      <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0">{t["reminder_note"]}</p>
     """
     resend.Emails.send({
         "from": f"{tenant_name} <{settings.email_from}>",
         "to": [contact_email],
-        "subject": f"Rappel — votre rendez-vous demain avec {tenant_name}",
+        "subject": t["reminder_subject"].format(tenant=tenant_name),
         "html": _tenant_email_wrapper(tenant_name, body, primary_color=primary_color, logo_url=logo_url, logo_option=logo_option),
     })
-
 
 def send_reactivation_relance(email: str, tenant_name: str, tenant_slug: str, dashboard_url: str, site_url: str) -> None:
     """Email de réengagement envoyé au propriétaire d'un tenant inactif depuis 30+ jours."""
@@ -2174,8 +2336,8 @@ async def send_support_email_to_admin(
             </div>
             """,
         })
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
 
 async def send_support_reply_to_tenant(
@@ -2213,5 +2375,5 @@ async def send_support_reply_to_tenant(
             </div>
             """,
         })
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)

@@ -24,10 +24,16 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import io, httpx, hmac, hashlib, json, base64
+from app.middleware.roles import require_analytics_access
+from app.core.crypto import decrypt, encrypt
 from app.middleware.tenant import get_current_tenant
 from app.middleware.rate_limit import check_rate
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.core.config import settings
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -105,14 +111,14 @@ async def _do_track(body: EventIn):
             "section": body.section,
             "data": safe_data,
         }).execute()
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
 
 # ── Authenticated summary ─────────────────────────────────────────────────────
 
 @router.get("/summary")
-async def get_summary(days: int = 30, tenant_id: str = Depends(get_current_tenant)):
+async def get_summary(days: int = 30, tenant_id: str = Depends(require_analytics_access)):
     sb = get_supabase()
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
@@ -196,8 +202,8 @@ async def get_summary(days: int = 30, tenant_id: str = Depends(get_current_tenan
             elif t == "form_submit":
                 form_submits += 1
         unique_sessions = len(sessions)
-    except Exception:
-        pass  # table not yet created — degrade gracefully
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée (table not yet created — degrade gracefully) : %s", exc_ignored, exc_info=True)
 
     # ── Conversion rates ──────────────────────────────────────────────────────
     # Sessions → leads (acquisition rate)
@@ -287,8 +293,8 @@ async def _build_summary(sb, tenant_id: str, since: str, until: Optional[str] = 
                 action = (ev.get("data") or {}).get("action", "autre")
                 cta_clicks[action] = cta_clicks.get(action, 0) + 1
         unique_sessions = len(sessions)
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     confirmed_appts = sum(1 for a in appts if a.get("status") == "confirmed")
     conv_appt = round(min(confirmed_appts / len(leads) * 100, 100.0), 1) if leads else None
@@ -318,7 +324,7 @@ async def _build_summary(sb, tenant_id: str, since: str, until: Optional[str] = 
 async def download_analytics_report(
     days: int = Query(30, ge=1, le=365),
     month: Optional[str] = Query(None, description="YYYY-MM — si fourni, ignore days"),
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_analytics_access),
 ):
     """Génère et retourne le rapport analytics en PDF."""
     from app.services.pdf import generate_report_pdf
@@ -387,24 +393,23 @@ async def get_roi_potential(
     sb = get_supabase()
 
     # ── Cache lookup ──────────────────────────────────────────────────────────
-    if not force:
-        try:
-            cached = (
-                sb.table("tenant_roi_cache")
-                .select("data, computed_at")
-                .eq("tenant_id", tenant_id)
-                .eq("period", period)
-                .single()
-                .execute()
-            )
-            if cached.data:
-                computed_at = datetime.fromisoformat(
-                    cached.data["computed_at"].replace("Z", "+00:00")
-                )
-                if datetime.now(timezone.utc) - computed_at < _CACHE_TTL:
-                    return {**cached.data["data"], "cached_at": cached.data["computed_at"]}
-        except Exception:
-            pass
+    cached_row = None
+    try:
+        cached_row = (
+            sb.table("tenant_roi_cache")
+            .select("data, computed_at")
+            .eq("tenant_id", tenant_id)
+            .eq("period", period)
+            .limit(1)
+            .execute()
+        ).data
+        cached_row = cached_row[0] if cached_row else None
+    except Exception as exc:
+        logger.warning("roi-potential: lecture du cache impossible (tenant %s) : %s", tenant_id, exc)
+    if cached_row and not force:
+        computed_at = datetime.fromisoformat(cached_row["computed_at"].replace("Z", "+00:00"))
+        if datetime.now(timezone.utc) - computed_at < _CACHE_TTL:
+            return {**cached_row["data"], "cached_at": cached_row["computed_at"]}
 
     # ── Tenant info ───────────────────────────────────────────────────────────
     tenant_row = (
@@ -440,6 +445,13 @@ async def get_roi_potential(
     data = await get_demand_data(sector, country, zones, period, offer_names, custom_keywords)
     data["period"] = period
 
+    # Google n'a pas répondu : ne pas figer des zéros pour 24 h. On sert le
+    # dernier résultat valide s'il existe, marqué comme dégradé.
+    if data.get("degraded"):
+        if cached_row:
+            return {**cached_row["data"], "cached_at": cached_row["computed_at"], "degraded": True}
+        return {**data, "cached_at": None}
+
     # ── Store cache ───────────────────────────────────────────────────────────
     now_iso = datetime.now(timezone.utc).isoformat()
     try:
@@ -447,8 +459,8 @@ async def get_roi_potential(
             {"tenant_id": tenant_id, "period": period, "data": data, "computed_at": now_iso},
             on_conflict="tenant_id,period",
         ).execute()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("roi-potential: écriture du cache impossible (tenant %s) : %s", tenant_id, exc)
 
     return {**data, "cached_at": now_iso}
 
@@ -487,7 +499,7 @@ async def get_trend_keywords(tenant_id: str = Depends(get_current_tenant)):
 @router.patch("/trend-keywords")
 async def update_trend_keywords(
     body: TrendKeywordsIn,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_analytics_access),
 ):
     """Sauvegarde les mots-clés custom et invalide le cache ROI."""
     sb  = get_supabase()
@@ -527,7 +539,7 @@ def _verify_state(state: str) -> str:
 
 
 @router.get("/google/auth-url")
-async def get_google_auth_url(tenant_id: str = Depends(get_current_tenant)):
+async def get_google_auth_url(tenant_id: str = Depends(require_analytics_access)):
     from urllib.parse import urlencode
     params = {
         "client_id": settings.google_client_id,
@@ -571,8 +583,8 @@ async def google_oauth_callback(
     sb.table("google_analytics_connection").upsert(
         {
             "tenant_id": tenant_id,
-            "access_token": tokens.get("access_token"),
-            "refresh_token": tokens.get("refresh_token"),
+            "access_token": encrypt(tokens.get("access_token")),
+            "refresh_token": encrypt(tokens.get("refresh_token")),
         },
         on_conflict="tenant_id",
     ).execute()
@@ -595,21 +607,21 @@ class GoogleConfigIn(BaseModel):
 async def connect_google_analytics(body: GoogleConnectIn, tenant_id: str = Depends(get_current_tenant)):
     sb = get_supabase()
     sb.table("google_analytics_connection").upsert(
-        {"tenant_id": tenant_id, "access_token": body.access_token, "refresh_token": body.refresh_token},
+        {"tenant_id": tenant_id, "access_token": encrypt(body.access_token), "refresh_token": encrypt(body.refresh_token)},
         on_conflict="tenant_id",
     ).execute()
     return {"status": "connected"}
 
 
 @router.get("/google/properties")
-async def list_google_properties(tenant_id: str = Depends(get_current_tenant)):
+async def list_google_properties(tenant_id: str = Depends(require_analytics_access)):
     """Liste les propriétés GA4 accessibles avec le compte connecté."""
     sb = get_supabase()
     row = sb.table("google_analytics_connection").select("access_token, refresh_token").eq("tenant_id", tenant_id).maybe_single().execute()
     if not row.data or not row.data.get("access_token"):
         raise HTTPException(status_code=404, detail="Compte Google non connecté")
 
-    access_token = row.data["access_token"]
+    access_token = decrypt(row.data["access_token"])
 
     async with httpx.AsyncClient() as client:
         resp = await client.get(
@@ -621,12 +633,12 @@ async def list_google_properties(tenant_id: str = Depends(get_current_tenant)):
             refresh_resp = await client.post("https://oauth2.googleapis.com/token", data={
                 "client_id": settings.google_client_id,
                 "client_secret": settings.google_client_secret,
-                "refresh_token": row.data["refresh_token"],
+                "refresh_token": decrypt(row.data["refresh_token"]),
                 "grant_type": "refresh_token",
             })
             if refresh_resp.status_code == 200:
                 new_token = refresh_resp.json().get("access_token")
-                sb.table("google_analytics_connection").update({"access_token": new_token}).eq("tenant_id", tenant_id).execute()
+                sb.table("google_analytics_connection").update({"access_token": encrypt(new_token)}).eq("tenant_id", tenant_id).execute()
                 resp = await client.get(
                     "https://analyticsadmin.googleapis.com/v1beta/accountSummaries",
                     headers={"Authorization": f"Bearer {new_token}"},
@@ -649,7 +661,7 @@ async def list_google_properties(tenant_id: str = Depends(get_current_tenant)):
 
 
 @router.get("/google/status")
-async def google_analytics_status(tenant_id: str = Depends(get_current_tenant)):
+async def google_analytics_status(tenant_id: str = Depends(require_analytics_access)):
     sb = get_supabase()
     row = sb.table("google_analytics_connection").select("ga4_property_id, connected_at").eq("tenant_id", tenant_id).maybe_single().execute()
     if not row.data:
@@ -663,7 +675,7 @@ async def google_analytics_status(tenant_id: str = Depends(get_current_tenant)):
 
 
 @router.patch("/google/configure")
-async def configure_google_analytics(body: GoogleConfigIn, tenant_id: str = Depends(get_current_tenant)):
+async def configure_google_analytics(body: GoogleConfigIn, tenant_id: str = Depends(require_analytics_access)):
     sb = get_supabase()
     sb.table("google_analytics_connection").upsert(
         {"tenant_id": tenant_id, "ga4_property_id": body.ga4_property_id},
@@ -673,13 +685,13 @@ async def configure_google_analytics(body: GoogleConfigIn, tenant_id: str = Depe
 
 
 @router.get("/google/data")
-async def get_google_analytics_data(days: int = 30, tenant_id: str = Depends(get_current_tenant)):
+async def get_google_analytics_data(days: int = 30, tenant_id: str = Depends(require_analytics_access)):
     sb = get_supabase()
     row = sb.table("google_analytics_connection").select("access_token, ga4_property_id").eq("tenant_id", tenant_id).maybe_single().execute()
     if not row.data or not row.data.get("ga4_property_id"):
         raise HTTPException(status_code=404, detail="Google Analytics non configuré")
 
-    access_token = row.data["access_token"]
+    access_token = decrypt(row.data["access_token"])
     property_id = row.data["ga4_property_id"]
 
     async with httpx.AsyncClient() as client:

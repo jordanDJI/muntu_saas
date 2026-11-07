@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ArticleLayout from "../../../components/ArticleLayout";
+import { serializeJsonLd } from "../../../lib/jsonLd";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
 const SLUG = "doctolib-vs-klientys-kine-infirmier";
@@ -25,7 +26,7 @@ export default function Article() {
   return (
     <>
       {jsonLd.map((schema, i) => (
-        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+        <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }} />
       ))}
       <ArticleLayout
         breadcrumbLabel="Doctolib vs Klientys"
@@ -35,7 +36,7 @@ export default function Article() {
         title={TITLE}
         description={DESCRIPTION}
         relatedLinks={[
-          { href: "/blog/cout-site-internet-independant-2025", label: "Combien coûte vraiment un site internet en 2025 ?" },
+          { href: "/blog/cout-site-internet-independant", label: "Combien coûte vraiment un site internet pour un indépendant ?" },
           { href: "/blog/remplir-agenda-en-ligne-sans-plateforme", label: "Agenda en ligne sans Habitatpresto ni Superprof" },
           { href: "/site-internet-pour/kinesitherapeute", label: "Site internet pour kinésithérapeute" },
           { href: "/blog", label: "← Retour au blog" },

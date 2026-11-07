@@ -257,13 +257,13 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
                     # 2. DNS automatique dans la zone OVH
                     try:
                         await ovh_domains.configure_dns(domain)
-                    except Exception:
-                        pass
+                    except Exception as exc_ignored:
+                        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
                     # 3. Ajouter dans Vercel
                     try:
                         await vd.add_domain(domain)
-                    except Exception:
-                        pass
+                    except Exception as exc_ignored:
+                        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
                     # 4. Enregistrer en base
                     sb.table("custom_domain").upsert({
                         "tenant_id": tenant_id,
@@ -290,8 +290,8 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
                 from app.services import vercel_domains as vd
                 try:
                     await vd.add_domain(domain_row.data[0]["domain"])
-                except Exception:
-                    pass
+                except Exception as exc_ignored:
+                    logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
         elif event_type == "logo_request":
             # ── Paiement logo confirmé ──

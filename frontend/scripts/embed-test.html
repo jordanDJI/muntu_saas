@@ -1,0 +1,43 @@
+<!doctype html>
+<!--
+  Page hôte de test des widgets Klientys (KLT-0521) : simule le site d'un client
+  sur une AUTRE origine que l'application, pour tester le paiement PayPal dans
+  l'iframe (popups, cookies tiers, Safari ITP).
+
+  1. Remplacer SLUG par le slug d'un tenant de recette dont l'acompte est en mode sandbox.
+  2. Servir ce dossier sur un autre port :   cd frontend/scripts && python -m http.server 5500
+  3. Ouvrir http://127.0.0.1:5500/embed-test.html  (127.0.0.1 n'est pas ignoré par
+     le ping des intégrations, contrairement à localhost)
+  4. Réserver avec un compte acheteur sandbox, sur Chrome, Firefox, Safari, iOS, Android.
+
+  APP_URL pointe vers l'application à tester (prod ou preview Vercel, en HTTPS).
+-->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Test widgets Klientys</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px 16px; background: #f6f7f9; color: #1f2933; }
+    section { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 24px; }
+    h2 { font-size: 16px; margin: 0 0 12px; }
+  </style>
+</head>
+<body>
+  <h1>Site client fictif</h1>
+  <p>Cette page n'est pas servie par Klientys : les widgets s'y chargent comme chez un vrai client.</p>
+
+  <section>
+    <h2>Widget réservation (avec acompte)</h2>
+    <div data-saas-widget="book" data-saas-slug="SLUG" data-saas-lang="auto"></div>
+  </section>
+
+  <section>
+    <h2>Iframe directe (type « iframe »)</h2>
+    <iframe src="APP_URL/embed/book/SLUG" width="100%" height="720" style="border:0" title="Réservation"></iframe>
+  </section>
+
+  <div data-saas-widget="chatbot" data-saas-slug="SLUG"></div>
+  <script src="APP_URL/embed.js" async></script>
+</body>
+</html>

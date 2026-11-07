@@ -6,6 +6,7 @@ Tous les autres champs — de base (is_base=true, prédéfinis par Klientys) ou 
 le tenant) — sont désactivables ET supprimables ; is_base ne sert plus qu'à l'affichage
 ("de base" dans l'UI), pas à restreindre la suppression.
 """
+import logging
 import uuid
 from typing import Optional
 
@@ -14,6 +15,8 @@ from pydantic import BaseModel
 
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/contact-fields", tags=["Contact Fields"])
 
@@ -100,6 +103,31 @@ def _contacts_for_usage(sb, tenant_id: str, field_defs: list[dict]) -> list[dict
     ).data or []
 
 
+def _field_usage_sql(sb, tenant_id: str, field_defs: list[dict], declared: set) -> tuple[dict, dict]:
+    """Même résultat que field_usage, calculé par la base (migration 084)."""
+    usage: dict[str, int] = {}
+    orphans: dict[str, int] = {}
+    rows = sb.rpc("contact_custom_field_usage", {"p_tenant": tenant_id}).execute().data or []
+    for r in rows:
+        key = r["field_key"]
+        if key in RESERVED_CUSTOM_FIELD_KEYS:
+            continue
+        (usage if key in declared else orphans)[key] = int(r["n"])
+    for f in field_defs:
+        if f["storage_mode"] != "column":
+            continue
+        key = f["field_key"]
+        res = (
+            sb.table("contact").select("id", count="exact").limit(1)
+            .eq("tenant_id", tenant_id).is_("deleted_at", "null")
+            .not_.is_(key, "null").neq(key, "")
+            .execute()
+        )
+        if res.count:
+            usage[key] = res.count
+    return usage, orphans
+
+
 def field_usage(sb, tenant_id: str, field_defs: list[dict]) -> tuple[dict, dict]:
     """
     Renvoie (usage, orphelins) :
@@ -113,6 +141,12 @@ def field_usage(sb, tenant_id: str, field_defs: list[dict]) -> tuple[dict, dict]
     declared = {f["field_key"] for f in field_defs}
     usage: dict[str, int] = {}
     orphans: dict[str, int] = {}
+
+    try:
+        return _field_usage_sql(sb, tenant_id, field_defs, declared)
+    except Exception as exc:
+        # Migration 084 non appliquée : ancien calcul (exact jusqu'à 1 000 contacts).
+        logger.warning("contact_custom_field_usage indisponible, calcul en Python : %s", exc)
 
     for c in _contacts_for_usage(sb, tenant_id, field_defs):
         custom = c.get("custom_fields") or {}

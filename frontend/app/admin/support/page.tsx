@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { supabase } from "../../../lib/api";
+import { setVisibleInterval } from "../../../lib/visibleInterval";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -82,13 +83,13 @@ function TicketsTab({ initialTicketId }: { initialTicketId: string | null }) {
   // Poll ticket list every 20s — silently merge to preserve selection
   useEffect(() => {
     loadTickets();
-    const iv = setInterval(async () => {
+    const stopPolling = setVisibleInterval(async () => {
       try {
         const data = await fetchTickets(filterRef.current !== "all" ? filterRef.current : undefined);
         setTickets(data);
       } catch {}
     }, 20_000);
-    return () => clearInterval(iv);
+    return stopPolling;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -104,7 +105,7 @@ function TicketsTab({ initialTicketId }: { initialTicketId: string | null }) {
   useEffect(() => {
     if (!selected?.id) return;
     const id = selected.id;
-    const iv = setInterval(async () => {
+    const stopPolling = setVisibleInterval(async () => {
       try {
         const full = await adminFetch<any>(`/api/v1/admin/support/tickets/${id}`);
         const next: any[] = full.messages || [];
@@ -120,7 +121,7 @@ function TicketsTab({ initialTicketId }: { initialTicketId: string | null }) {
         }
       } catch {}
     }, 10_000);
-    return () => clearInterval(iv);
+    return stopPolling;
   }, [selected?.id]);
 
   const sendReply = async () => {

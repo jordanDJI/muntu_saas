@@ -101,3 +101,7 @@ ad/
 .backups
 # Jeux d'essai et plan de recette — locaux, non versionnés
 docs/recette/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/

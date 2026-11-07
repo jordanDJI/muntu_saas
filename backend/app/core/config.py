@@ -30,6 +30,18 @@ class Settings(BaseSettings):
     frontend_url_prod: str = ""
     secret_key: str
 
+    # Chiffrement applicatif des secrets tenant et des données de santé (core/crypto.py).
+    # Clé Fernet : python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # Rotation : mettre l'ancienne clé dans DATA_ENCRYPTION_KEY_PREVIOUS, la nouvelle dans
+    # DATA_ENCRYPTION_KEY, puis relancer scripts/encrypt_existing_secrets.py.
+    data_encryption_key: str = ""
+    data_encryption_key_previous: str = ""
+
+    # Exige la double authentification (session aal2) sur /api/v1/admin/*.
+    # À activer APRÈS avoir enrôlé un facteur sur chaque compte admin/support
+    # (Paramètres → Sécurité), sinon l'accès au panel est perdu.
+    admin_require_mfa: bool = False
+
     # Agents IA — Gemini
     gemini_api_key: str = ""
     agent_link_secret: str = ""          # clé HMAC pour signer les tokens JWT agent_link
@@ -47,6 +59,11 @@ class Settings(BaseSettings):
     dialog360_api_key: str = ""          # clé API 360dialog (D360-API-KEY)
     dialog360_webhook_secret: str = ""   # secret HMAC pour vérifier les webhooks
     dialog360_verify_token: str = ""     # token de vérification webhook Meta
+
+    # Hors production, les appels qui modifient les domaines (Vercel, OVH) sont
+    # simulés : avec les tokens de prod dans un .env local, un test ajoutait ou
+    # retirait des domaines du vrai projet Vercel. ALLOW_LIVE_DOMAINS=true lève la garde.
+    allow_live_domains: bool = False
 
     # Domaines personnalisés — Vercel
     vercel_api_token: str = ""

@@ -5,7 +5,7 @@ Routes auth      : GET|POST|PATCH|DELETE /directory/my-listing
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin as get_supabase
@@ -27,6 +27,22 @@ class ListingUpsertIn(BaseModel):
     primary_zone:     str
     profile_photo_url: Optional[str] = None
     accepts_booking:  bool = True
+
+    # Ces champs courts sont publiés dans le JSON-LD de klientys.co/annuaire :
+    # le frontend les échappe (lib/jsonLd.ts), on refuse aussi le balisage ici.
+    @field_validator("metier_label", "display_name", "tagline", "primary_zone")
+    @classmethod
+    def _no_markup(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and ("<" in v or ">" in v):
+            raise ValueError("Les caractères < et > ne sont pas autorisés")
+        return v
+
+    @field_validator("zones")
+    @classmethod
+    def _no_markup_zones(cls, v: list[str]) -> list[str]:
+        if any("<" in z or ">" in z for z in v):
+            raise ValueError("Les caractères < et > ne sont pas autorisés")
+        return v
 
 
 # ── Endpoints publics ──────────────────────────────────────────────────────────

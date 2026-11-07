@@ -182,6 +182,9 @@ export default function DemandPotentialCard() {
 
       {!loading && !error && data && (
         <>
+          {data.degraded && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{t.dem_degraded}</p>
+          )}
           {/* Score agrégé */}
           <div className="flex items-center gap-4 p-3 bg-primary-50 rounded-xl">
             <div className="text-3xl font-bold text-primary-700 w-12 text-center">{agg}</div>

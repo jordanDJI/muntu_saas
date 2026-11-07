@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+from app.services.telegram import stored_bot_token
 from app.core.config import settings
 from app.core.supabase import get_supabase_admin
 from app.middleware.rate_limit import check_rate, check_rate_async
@@ -371,10 +372,22 @@ def _get_team_emails(sb, tenant_id: str) -> set[str]:
             u = sb.auth.admin.get_user_by_id(uid)
             if u and u.user and u.user.email:
                 emails.add(u.user.email.strip().lower())
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     return emails
+
+
+class BookingError(HTTPException):
+    """Erreur montrée au visiteur. `detail` reste le message français (lu tel
+    quel par l'agent Telegram et les anciens widgets) ; `code` et `params`
+    permettent au formulaire de le traduire (main.py ajoute les deux champs à
+    la réponse JSON)."""
+
+    def __init__(self, status_code: int, code: str, detail: str, **params):
+        super().__init__(status_code=status_code, detail=detail)
+        self.code = code
+        self.params = params
 
 
 _TEAM_EMAIL_ERROR = (
@@ -428,11 +441,10 @@ def _assert_slot_bookable(sb, tenant: dict, cal_id: str, start_local: datetime,
     end_utc = end_local.replace(tzinfo=tz).astimezone(timezone.utc)
 
     if end_utc <= start_utc:
-        raise HTTPException(status_code=400, detail="Créneau invalide.")
+        raise BookingError(400, "slot_invalid", "Créneau invalide.")
 
     if start_utc <= datetime.now(timezone.utc):
-        raise HTTPException(status_code=400,
-                            detail="Ce créneau est déjà passé. Veuillez choisir un autre horaire.")
+        raise BookingError(400, "slot_past", "Ce créneau est déjà passé. Veuillez choisir un autre horaire.")
 
     day_of_week = start_local.weekday()
     day_label = _DAYS_FR.get(day_of_week, "")
@@ -447,8 +459,9 @@ def _assert_slot_bookable(sb, tenant: dict, cal_id: str, start_local: datetime,
     )
     windows = avail_res.data or []
     if not windows:
-        raise HTTPException(status_code=400,
-                            detail=f"Le professionnel ne prend pas de rendez-vous le {day_label.lower()}.")
+        raise BookingError(400, "day_closed",
+                           f"Le professionnel ne prend pas de rendez-vous le {day_label.lower()}.",
+                           day=day_of_week)
 
     # Le créneau demandé doit tenir entièrement dans une plage d'ouverture.
     # On lit capacité et taille de groupe sur CETTE plage, et non en prenant
@@ -468,19 +481,20 @@ def _assert_slot_bookable(sb, tenant: dict, cal_id: str, start_local: datetime,
             break
 
     if containing is None:
-        raise HTTPException(status_code=400,
-                            detail="Ce créneau est en dehors des horaires d'ouverture. "
-                                   "Veuillez choisir un autre horaire.")
+        raise BookingError(400, "outside_hours",
+                           "Ce créneau est en dehors des horaires d'ouverture. "
+                           "Veuillez choisir un autre horaire.")
 
     capacity = max(1, int(containing.get("capacity") or 1))
     max_party_size = max(1, int(containing.get("max_party_size") or 1))
 
     # Message conservé à l'identique : il est documenté dans CLAUDE.md.
     if party_size > max_party_size:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Le nombre de personnes maximum par réservation des {day_label} "
-                   f"pour cette période est de {max_party_size} personne(s).",
+        raise BookingError(
+            400, "party_too_large",
+            f"Le nombre de personnes maximum par réservation des {day_label} "
+            f"pour cette période est de {max_party_size} personne(s).",
+            day=day_of_week, max=max_party_size,
         )
 
     blocked_res = (
@@ -502,9 +516,9 @@ def _assert_slot_bookable(sb, tenant: dict, cal_id: str, start_local: datetime,
         if be.tzinfo is None:
             be = be.replace(tzinfo=timezone.utc)
         if bs < end_utc and start_utc < be:
-            raise HTTPException(status_code=409,
-                                detail="Le professionnel est indisponible sur ce créneau. "
-                                       "Veuillez choisir un autre horaire.")
+            raise BookingError(409, "slot_blocked",
+                               "Le professionnel est indisponible sur ce créneau. "
+                               "Veuillez choisir un autre horaire.")
 
     existing = (
         sb.table("appointment")
@@ -523,12 +537,9 @@ def _assert_slot_bookable(sb, tenant: dict, cal_id: str, start_local: datetime,
         booked_count += 1
 
     if booked_count >= capacity:
-        raise HTTPException(
-            status_code=409,
-            detail=("Ce créneau vient d'être réservé. Veuillez choisir un autre horaire."
-                    if capacity == 1
-                    else "Ce créneau est complet. Veuillez choisir un autre horaire."),
-        )
+        if capacity == 1:
+            raise BookingError(409, "slot_taken", "Ce créneau vient d'être réservé. Veuillez choisir un autre horaire.")
+        raise BookingError(409, "slot_full", "Ce créneau est complet. Veuillez choisir un autre horaire.")
 
 
 
@@ -540,7 +551,7 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
 
     # Bloquer les emails de l'équipe
     if body.email and body.email.strip().lower() in _get_team_emails(sb, tenant["id"]):
-        raise HTTPException(status_code=403, detail=_TEAM_EMAIL_ERROR)
+        raise BookingError(403, "team_email", _TEAM_EMAIL_ERROR)
 
     # Widget embarqué : support d'origine. Lève 403 si l'intégration est
     # désactivée — avant toute écriture, pour ne créer ni contact ni lead.
@@ -551,9 +562,9 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
     # formulaire du site — un appel direct ou le widget embarqué réservait
     # sans payer. Avant toute écriture, pour ne créer ni contact ni lead.
     if body.request_type == "appointment" and get_deposit_config(sb, tenant["id"]) is not None:
-        raise HTTPException(
-            status_code=402,
-            detail="Un acompte est requis pour réserver ce rendez-vous. Merci de passer par l'étape de paiement.",
+        raise BookingError(
+            402, "deposit_required",
+            "Un acompte est requis pour réserver ce rendez-vous. Merci de passer par l'étape de paiement.",
         )
 
     # Trouver ou créer le contact
@@ -665,6 +676,8 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
         appt_row["custom_answers"] = body.custom_answers
     if integration_id:
         appt_row["integration_id"] = integration_id
+    if body.lang:
+        appt_row["lang"] = body.lang
 
     appt = sb.table("appointment").insert(appt_row).execute().data[0]
     touch_contact_interaction(contact_id)
@@ -692,8 +705,8 @@ async def book_appointment(tenant_slug: str, body: PublicBookIn, request: Reques
                 url=f"{settings.frontend_url_prod or settings.frontend_url}/dashboard/appointments",
             )
         )
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     return {"type": "appointment", "id": appt["id"]}
 
@@ -781,9 +794,9 @@ def _notify_tenant_pending(sb, tenant_id: str, first_name: str, last_name: str,
         from app.services.whatsapp import send_text
         send_text(cfg["whatsapp_number"], msg)
 
-    if cfg.get("telegram_bot_token") and cfg.get("telegram_notify_chat_id"):
+    if stored_bot_token(cfg) and cfg.get("telegram_notify_chat_id"):
         from app.services.telegram import send_message
-        send_message(cfg["telegram_bot_token"], cfg["telegram_notify_chat_id"], msg)
+        send_message(stored_bot_token(cfg), cfg["telegram_notify_chat_id"], msg)
 
 
 # ── Acompte PayPal ────────────────────────────────────────────────────────────
@@ -809,10 +822,7 @@ def _deposit_or_400(sb, tenant_id: str) -> dict:
     """Config d'acompte du tenant, ou 400 si l'acompte n'est pas utilisable."""
     cfg = get_deposit_config(sb, tenant_id)
     if cfg is None:
-        raise HTTPException(
-            status_code=400,
-            detail="L'acompte en ligne n'est pas disponible pour ce professionnel.",
-        )
+        raise BookingError(400, "deposit_unavailable", "L'acompte en ligne n'est pas disponible pour ce professionnel.")
     return cfg
 
 
@@ -842,7 +852,7 @@ async def create_paypal_order(tenant_slug: str, body: _PaypalOrderIn, request: R
         )
     except Exception as exc:
         logger.error("PayPal create_order tenant %s : %s", tenant["id"], exc)
-        raise HTTPException(status_code=502, detail="Erreur PayPal lors de la création de l'order.")
+        raise BookingError(502, "paypal_order_failed", "Erreur PayPal lors de la création de l'order.")
 
     # Montant renvoyé pour affichage uniquement — le backend ne le relit jamais
     # depuis le client.
@@ -866,7 +876,7 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
 
     # Bloquer les emails de l'équipe
     if body.email and body.email.strip().lower() in _get_team_emails(sb, tenant["id"]):
-        raise HTTPException(status_code=403, detail=_TEAM_EMAIL_ERROR)
+        raise BookingError(403, "team_email", _TEAM_EMAIL_ERROR)
 
     cfg = _deposit_or_400(sb, tenant["id"])
 
@@ -894,7 +904,7 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
         )
     except Exception as exc:
         logger.error("PayPal capture_order %s tenant %s : %s", body.paypal_order_id, tenant["id"], exc)
-        raise HTTPException(status_code=402, detail="Paiement PayPal non complété. Veuillez réessayer.")
+        raise BookingError(402, "payment_incomplete", "Paiement PayPal non complété. Veuillez réessayer.")
 
     # 3. Le montant capturé doit correspondre à l'acompte configuré. Un order
     #    créé hors de notre endpoint pourrait sinon financer la réservation à
@@ -912,10 +922,7 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
             kind="deposit_amount_mismatch",
             detail=f"capture {captured} {payment['currency']} au lieu de {expected} {cfg['currency']}",
         )
-        raise HTTPException(
-            status_code=402,
-            detail="Le montant de l'acompte ne correspond pas. Le paiement a été remboursé.",
-        )
+        raise BookingError(402, "deposit_mismatch", "Le montant de l'acompte ne correspond pas. Le paiement a été remboursé.")
 
     # 4. Créer contact + lead + RDV. Toute erreur ici déclenche un remboursement.
     try:
@@ -969,6 +976,8 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
             appt_row["custom_answers"] = body.custom_answers
         if integration_id:
             appt_row["integration_id"] = integration_id
+        if body.lang:
+            appt_row["lang"] = body.lang
 
         appt = sb.table("appointment").insert(appt_row).execute().data[0]
     except Exception as exc:
@@ -978,12 +987,13 @@ async def capture_paypal_and_book(tenant_slug: str, body: _PaypalCaptureIn, requ
             sb, tenant["id"], cfg, payment, body.paypal_order_id,
             kind="deposit_booking_failed", detail=str(exc)[:500],
         )
-        raise HTTPException(
-            status_code=500,
-            detail=("Votre acompte a été remboursé, la réservation n'a pas pu être enregistrée. "
-                    "Veuillez réessayer." if refunded else
-                    "La réservation n'a pas pu être enregistrée. Notre équipe a été alertée et "
-                    "vous recontactera au sujet de votre acompte."),
+        raise BookingError(
+            500,
+            "booking_failed_refunded" if refunded else "booking_failed_contact",
+            ("Votre acompte a été remboursé, la réservation n'a pas pu être enregistrée. "
+             "Veuillez réessayer." if refunded else
+             "La réservation n'a pas pu être enregistrée. Notre équipe a été alertée et "
+             "vous recontactera au sujet de votre acompte."),
         )
 
     touch_contact_interaction(contact_id)
@@ -1083,9 +1093,9 @@ def _notify_tenant_deposit_paid(sb, tenant_id: str, appointment_id: str, deposit
         f"RDV en attente de confirmation.\n"
         f"Dites 'confirme {first_name}' pour valider."
     )
-    if cfg.get("telegram_bot_token") and cfg.get("telegram_notify_chat_id"):
+    if stored_bot_token(cfg) and cfg.get("telegram_notify_chat_id"):
         from app.services.telegram import send_message
-        send_message(cfg["telegram_bot_token"], cfg["telegram_notify_chat_id"], msg)
+        send_message(stored_bot_token(cfg), cfg["telegram_notify_chat_id"], msg)
     if cfg.get("whatsapp_number"):
         from app.services.whatsapp import send_text
         send_text(cfg["whatsapp_number"], msg)

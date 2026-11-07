@@ -19,16 +19,16 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.supabase import get_supabase_admin
-from app.middleware.tenant import get_current_tenant
+from app.middleware.roles import require_agents_access
 from app.models.agent import AssistantChatRequest, AssistantChatResponse
-from app.services.llm import smart_chat_completion
+from app.services.llm import set_ai_context, smart_chat_completion
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 logger = logging.getLogger(__name__)
 
 
 @router.get("/history")
-async def get_history(tenant_id: str = Depends(get_current_tenant)):
+async def get_history(tenant_id: str = Depends(require_agents_access)):
     """Retourne la conversation assistant_tenant la plus récente avec ses messages."""
     sb = get_supabase_admin()
     conv = (
@@ -51,8 +51,9 @@ async def get_history(tenant_id: str = Depends(get_current_tenant)):
 @router.post("/chat", response_model=AssistantChatResponse)
 async def assistant_chat(
     body: AssistantChatRequest,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_agents_access),
 ):
+    set_ai_context(tenant_id, "assistant")
     sb = get_supabase_admin()
 
     # Vérifier que l'agent 3 est actif
@@ -502,7 +503,7 @@ def _build_system_prompt(sb, tenant_id: str, config: dict) -> str:
         lines.append(f"- {tr['pageviews_label']} : {pageviews}")
         lines.append(f"- {tr['sessions_label']} : {unique_sessions}")
         lines.append(f"- {tr['form_submits_label']} : {form_submits}")
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     return "\n".join(lines)

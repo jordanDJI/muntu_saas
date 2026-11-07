@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.urls import allowed_origins
 from app.services.scheduler import start_scheduler, stop_scheduler
-from app.api.v1 import sites, leads, appointments, subscriptions, onboarding, auth, chatbot, agents, calendar, booking, webhook, assistant, members, uploads, analytics, public, tenants, users, domains, directory, admin, design_requests, logo_requests, contacts, tags, reminders, campaigns, attachments, profile, secretary, invoices, content, support, push_notifications, gdpr, contact_fields, integrations
+from app.api.v1 import sites, leads, appointments, subscriptions, onboarding, auth, chatbot, agents, calendar, booking, webhook, assistant, members, uploads, analytics, public, tenants, users, domains, directory, admin, design_requests, logo_requests, contacts, tags, reminders, campaigns, attachments, profile, secretary, invoices, content, support, push_notifications, gdpr, contact_fields, integrations, client_errors
 
 if settings.sentry_dsn:
     import sentry_sdk
@@ -14,6 +15,12 @@ if settings.sentry_dsn:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.app_env == "production" and not settings.data_encryption_key:
+        # core/crypto.encrypt refuse alors toute écriture de secret (PayPal, Google, Telegram, OCR).
+        import logging
+        logging.getLogger(__name__).error(
+            "DATA_ENCRYPTION_KEY absente en production : l'enregistrement des secrets tenant échouera"
+        )
     start_scheduler()
     yield
     stop_scheduler()
@@ -26,6 +33,18 @@ app = FastAPI(
     redoc_url=None if settings.app_env == "production" else "/redoc",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(booking.BookingError)
+async def _booking_error_handler(request: Request, exc: "booking.BookingError"):
+    # `detail` reste le message français ; `code` et `params` servent au
+    # formulaire de réservation à traduire l'erreur (contact-form-i18n.ts).
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "code": exc.code, "params": exc.params},
+        headers=getattr(exc, "headers", None),
+    )
+
 
 # Liste centralisée dans app/core/urls.py — partagée avec la validation des
 # URLs de redirection des sessions Stripe Checkout.
@@ -66,6 +85,7 @@ app.include_router(members.router, prefix="/api/v1")
 app.include_router(uploads.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(public.router, prefix="/api/v1")
+app.include_router(client_errors.router, prefix="/api/v1")
 app.include_router(tenants.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(domains.router, prefix="/api/v1")

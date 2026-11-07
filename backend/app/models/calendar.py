@@ -78,6 +78,7 @@ class PublicBookIn(BaseModel):
     custom_answers: Optional[dict] = Field(default_factory=dict)  # { "q_id": "réponse" }
     consent_channels: list[str] = Field(default_factory=list)  # canaux RGPD acceptés (ex: ["email", "telephone"])
     integration_key: Optional[str] = Field(default=None, max_length=40)  # widget embarqué : support d'origine (migration 080)
+    lang: Optional[Literal["fr", "en", "de", "nl"]] = None  # langue des emails envoyés au client (migration 083)
 
     @field_validator("email")
     @classmethod

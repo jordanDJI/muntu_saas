@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { sanitizePhoneInput } from "../../lib/phone";
-import { FORM_T, FORM_LOCALE, type FormLang, type FormStrings } from "./contact-form-i18n";
+import { FORM_T, FORM_LOCALE, serverErrorMessage, type FormLang, type FormStrings } from "./contact-form-i18n";
 
 const _API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -386,6 +386,7 @@ export default function ContactForm({
     party_size: partySize,
     custom_answers: customAnswers,
     consent_channels: consentChannels,
+    lang,
     ...integration,
   });
 
@@ -422,7 +423,7 @@ export default function ContactForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail ?? t.error); }
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(serverErrorMessage(t, err, t.error)); }
         setSubmitted(true);
         track("form_submit", "contact", { mode });
       } catch (err: any) { setError(err.message ?? t.error); }
@@ -448,7 +449,7 @@ export default function ContactForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail ?? t.sendError); }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(serverErrorMessage(t, err, t.sendError)); }
       setSubmitted(true);
       track("form_submit", "contact", { mode });
     } catch (err: any) { setError(err.message ?? t.error); }
@@ -487,7 +488,7 @@ export default function ContactForm({
           });
           if (!r.ok) {
             const err = await r.json().catch(() => ({}));
-            throw new Error(err.detail ?? t.paypalOrderError);
+            throw new Error(serverErrorMessage(t, err, t.paypalOrderError));
           }
           return (await r.json()).order_id;
         },
@@ -500,7 +501,7 @@ export default function ContactForm({
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(body),
             });
-            if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail ?? t.paymentError); }
+            if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(serverErrorMessage(t, e, t.paymentError)); }
             setSubmitted(true);
             track("form_submit", "contact", { mode: "appointment", deposit: "paid" });
           } catch (e: any) { setPaypalError(e.message ?? t.paymentIncomplete); }

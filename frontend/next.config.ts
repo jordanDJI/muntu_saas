@@ -12,7 +12,14 @@ const nextConfig: NextConfig = {
   },
   compress: true,
   images: {
-    remotePatterns: [{ protocol: "https", hostname: "**" }],
+    // Optimiseur limité au stockage Supabase et à klientys.co : avec "**", n'importe
+    // qui pouvait faire redimensionner des images tierces par klientys.co. Les URL
+    // libres des tenants passent en `unoptimized` (lib/imageHost.ts).
+    remotePatterns: [
+      { protocol: "https", hostname: "**.supabase.co" },
+      { protocol: "https", hostname: "klientys.co" },
+      { protocol: "https", hostname: "**.klientys.co" },
+    ],
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 86400,
   },

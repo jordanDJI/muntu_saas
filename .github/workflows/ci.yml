@@ -1,0 +1,80 @@
+name: CI
+
+# Bloque avant déploiement ce qui est déjà arrivé en production : un import
+# manquant qui empêche l'API de démarrer (KLT-0407), un fichier absent du dépôt
+# qui casse le build Vercel (KLT-1903), une régression des règles de paiement.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Valeurs factices : les tests ne touchent aucune base (fonctions pures).
+      SUPABASE_URL: https://ci.supabase.co
+      SUPABASE_ANON_KEY: ci
+      SUPABASE_SERVICE_ROLE_KEY: ci
+      RESEND_API_KEY: ci
+      EMAIL_FROM: ci@klientys.co
+      STRIPE_SECRET_KEY: sk_test_ci
+      STRIPE_WEBHOOK_SECRET: whsec_ci
+      SECRET_KEY: ci
+      GEMINI_API_KEY: ci
+      AGENT_LINK_SECRET: ci
+      APP_URL: https://api.klientys.co
+      FRONTEND_URL: https://klientys.co
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # même version que le Dockerfile
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Dépendances système (WeasyPrint)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0
+      - run: pip install -r requirements.txt
+      - name: L'application démarre (imports)
+        run: python -c "import app.main"
+      - name: Aucun nom indéfini
+        # Un import manquant à l'intérieur d'une fonction ne casse pas le
+        # démarrage : il lève NameError seulement à l'exécution (la notification
+        # Telegram des réservations a échoué ainsi en silence).
+        run: |
+          pip install pyflakes
+          if python -m pyflakes app | grep "undefined name"; then exit 1; fi
+      - name: Tests unitaires
+        run: python -m unittest discover -s tests -v
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://ci.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:9
+      NEXT_PUBLIC_APP_URL: https://klientys.co
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Build (inclut la vérification TypeScript)
+        run: npm run build

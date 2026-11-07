@@ -5,6 +5,9 @@ from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant, get_current_user
 from app.services.activity import log_activity
 from app.services.email import send_password_changed
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -40,8 +43,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             mem = sb.table("membership").select("tenant_id").eq("user_id", user_id).limit(1).execute()
             if mem.data:
                 log_activity(mem.data[0]["tenant_id"], user_id, "Connexion", "Via email/mot de passe")
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
         return token_out
     except HTTPException:
         raise
@@ -94,8 +97,8 @@ async def ensure_profile(user: dict = Depends(get_current_user)):
                 parts = full_name.strip().split(" ", 1)
                 first_name = parts[0] if parts else ""
                 last_name = parts[1] if len(parts) > 1 else ""
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     sb.table("app_user").upsert(
         {"id": user_id, "email": email, "first_name": first_name, "last_name": last_name},
@@ -147,6 +150,6 @@ async def notify_password_changed(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Email introuvable dans le token")
     try:
         send_password_changed(email)
-    except Exception:
-        pass  # non bloquant — la page redirige quoi qu'il arrive
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée (non bloquant — la page redirige quoi qu'il arrive) : %s", exc_ignored, exc_info=True)
     return {"ok": True}

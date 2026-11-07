@@ -40,6 +40,7 @@ const STR = {
     stale: `Plus vue depuis ${STALE_DAYS} jours : le code a peut-être été retiré.`,
     multi: (n: number) => `Utilisée sur ${n} domaines : créez une intégration par site pour mesurer séparément.`,
     noDomain: "Domaine non détecté",
+    noDomainHidden: "Domaine non communiqué par le site hôte (politique de confidentialité du navigateur) — le widget fonctionne.",
     disable: "Désactiver", enable: "Réactiver", rename: "Renommer", save: "Enregistrer", cancel: "Annuler",
     confirmDisable: "Les widgets de ce support seront masqués, même si le code reste installé. Vous pourrez les réactiver.",
     confirmDisableLink: "Ce lien cessera de fonctionner : les visiteurs verront « service indisponible ». Vous pourrez le réactiver.",
@@ -72,6 +73,7 @@ const STR = {
     stale: `Not seen for ${STALE_DAYS} days: the code may have been removed.`,
     multi: (n: number) => `Used on ${n} domains: create one integration per site to measure them separately.`,
     noDomain: "Domain not detected",
+    noDomainHidden: "Domain not shared by the host site (browser privacy policy) — the widget works.",
     disable: "Disable", enable: "Re-enable", rename: "Rename", save: "Save", cancel: "Cancel",
     confirmDisable: "The widgets on this platform will be hidden, even if the code stays installed. You can re-enable them.",
     confirmDisableLink: "This link will stop working: visitors will see “service unavailable”. You can re-enable it.",
@@ -104,6 +106,7 @@ const STR = {
     stale: `Seit ${STALE_DAYS} Tagen nicht gesehen: Der Code wurde vielleicht entfernt.`,
     multi: (n: number) => `Auf ${n} Domains verwendet: Erstellen Sie eine Integration pro Website, um sie getrennt zu messen.`,
     noDomain: "Domain nicht erkannt",
+    noDomainHidden: "Domain von der einbettenden Website nicht übermittelt (Datenschutzrichtlinie des Browsers) — das Widget funktioniert.",
     disable: "Deaktivieren", enable: "Reaktivieren", rename: "Umbenennen", save: "Speichern", cancel: "Abbrechen",
     confirmDisable: "Die Widgets dieser Plattform werden ausgeblendet, auch wenn der Code installiert bleibt. Sie können sie reaktivieren.",
     confirmDisableLink: "Dieser Link funktioniert nicht mehr: Besucher sehen „Dienst nicht verfügbar“. Sie können ihn reaktivieren.",
@@ -136,6 +139,7 @@ const STR = {
     stale: `Al ${STALE_DAYS} dagen niet gezien: de code is mogelijk verwijderd.`,
     multi: (n: number) => `Gebruikt op ${n} domeinen: maak één integratie per site om ze apart te meten.`,
     noDomain: "Domein niet gedetecteerd",
+    noDomainHidden: "Domein niet doorgegeven door de hostsite (privacybeleid van de browser) — de widget werkt.",
     disable: "Deactiveren", enable: "Heractiveren", rename: "Hernoemen", save: "Opslaan", cancel: "Annuleren",
     confirmDisable: "De widgets op dit platform worden verborgen, ook als de code geïnstalleerd blijft. U kunt ze heractiveren.",
     confirmDisableLink: "Deze link werkt niet meer: bezoekers zien „dienst niet beschikbaar”. U kunt hem heractiveren.",
@@ -292,7 +296,10 @@ export function IntegrationsPanel({ showCreate = false, selectedId, onSelect, on
                     </p>
                     {integ.kind !== "link" && (
                       <p className="text-xs text-gray-400 truncate">
-                        {integ.domains.length ? integ.domains.map(d => d.domain).join(", ") : s.noDomain}
+                        {integ.domains.length
+                          ? integ.domains.map(d => d.domain).join(", ")
+                          // Vue sans domaine : la page hôte n'envoie pas de referrer (iframe en no-referrer)
+                          : integ.kind === "iframe" && seenDays !== null ? s.noDomainHidden : s.noDomain}
                       </p>
                     )}
                     {integ.domains.length > 1 && <p className="text-xs text-amber-600">{s.multi(integ.domains.length)}</p>}

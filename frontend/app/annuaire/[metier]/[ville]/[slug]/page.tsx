@@ -6,6 +6,8 @@ import metiers from "../../../../../data/metiers.json";
 import villes from "../../../../../data/villes.json";
 import MarketingNav from "../../../../../components/MarketingNav";
 import MarketingFooter from "../../../../../components/MarketingFooter";
+import { serializeJsonLd } from "../../../../../lib/jsonLd";
+import { isOptimizableImage } from "../../../../../lib/imageHost";
 
 export const revalidate = 3600;
 
@@ -105,21 +107,15 @@ export default async function FicheProPage({
     ...(site?.phone && { telephone: site.phone }),
     ...(site?.email_contact && { email: site.email_contact }),
     areaServed: listing.zones?.map((z: string) => ({ "@type": "City", name: z })),
-    ...(testimonials.length > 0 && {
-      aggregateRating: {
-        "@type": "AggregateRating",
-        ratingValue: (testimonials.reduce((s: number, t: any) => s + (t.rating ?? 5), 0) / testimonials.length).toFixed(1),
-        reviewCount: testimonials.length,
-        bestRating: "5",
-      },
-    }),
+    // Pas d'aggregateRating : les témoignages sont saisis par le pro lui-même,
+    // et Google sanctionne les notes auto-attribuées d'un LocalBusiness.
   };
 
   return (
     <main className="min-h-screen bg-[#F4F8FA]">
       <MarketingNav />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
 
       {/* Breadcrumb */}
       <div className="max-w-4xl mx-auto px-6 pt-28 text-sm text-gray-500 flex flex-wrap gap-2">
@@ -138,7 +134,7 @@ export default async function FicheProPage({
           <div className="flex items-start gap-5 mb-6">
             {listing.profile_photo_url ? (
               <Image
-                src={listing.profile_photo_url}
+                src={listing.profile_photo_url} unoptimized={!isOptimizableImage(listing.profile_photo_url)}
                 alt={listing.display_name}
                 width={80}
                 height={80}

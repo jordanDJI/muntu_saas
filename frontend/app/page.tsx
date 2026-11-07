@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../lib/api";
 import { LangSelector, useLanguage } from "../contexts/LanguageContext";
 import CookieBanner from "../components/CookieBanner";
+import { serializeJsonLd } from "../lib/jsonLd";
 
 const FAQ_KEYS = [
   ["lp_faq1_q", "lp_faq1_a"],
@@ -608,7 +609,7 @@ export default function LandingPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "FAQPage",
             mainEntity: [

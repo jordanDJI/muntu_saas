@@ -15,7 +15,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.core.supabase import get_supabase_admin
 from app.middleware.tenant import get_current_tenant
-from app.services.invoice_pdf import generate_invoice_pdf
+from app.services.invoice_cii import generate_invoice_cii
+from app.services.invoice_pdf import generate_facturx_pdf
 from app.services.invoice_ubl import generate_invoice_ubl
 from app.services.invoice_legal import (
     VAT_REGIMES,
@@ -310,8 +311,8 @@ def _enrich_settings_with_brand(sb, settings: dict, tenant_id: str) -> dict:
                 "_logo_url": logo_url if logo_opt not in ("text_only", "") else "",
                 "_logo_option": logo_opt,
             }
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        _log.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
     return settings
 
 
@@ -343,11 +344,12 @@ def _with_credit_reference(sb, invoice: dict) -> dict:
 
 
 def _build_and_generate(sb, invoice: dict, settings: dict, tenant_id: str = "") -> tuple[bytes, bytes]:
-    """Génère PDF + UBL pour une facture. Retourne (pdf_bytes, ubl_bytes)."""
+    """Génère la facture Factur-X (PDF + XML CII intégré) et l'UBL.
+    Retourne (pdf_bytes, ubl_bytes)."""
     lines = _get_lines(sb, invoice["id"])
     invoice = _with_credit_reference(sb, invoice)
     rich = _enrich_settings_with_brand(sb, settings, tenant_id or invoice.get("tenant_id", ""))
-    pdf = generate_invoice_pdf(invoice, lines, rich)
+    pdf = generate_facturx_pdf(invoice, lines, rich, generate_invoice_cii(invoice, lines, settings))
     ubl = generate_invoice_ubl(invoice, lines, settings)
     return pdf, ubl
 
@@ -395,10 +397,14 @@ async def check_invoice_compliance(tenant_id: str = Depends(get_current_tenant))
     # service_date et client sont propres à chaque facture : on les neutralise
     # pour ne rapporter ici que ce qui relève des paramètres.
     probe = {**snap, "service_date": "probe", "tax_rate": 1}
-    missing = issuer_issues(probe, snap.get("tenant_country") or "")
+    country = (snap.get("tenant_country") or "").upper()
+    missing = issuer_issues(probe, country)
     return {
-        "country": snap.get("tenant_country") or "",
-        "compliant": not missing,
+        "country": country,
+        # Le module suit les normes françaises uniquement (KLT-1122). Hors de
+        # France, rien n'est vérifié : ne pas annoncer une facture « conforme ».
+        "checked": country == "FR",
+        "compliant": country == "FR" and not missing,
         "missing": missing,
     }
 

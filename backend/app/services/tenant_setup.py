@@ -1,5 +1,8 @@
 from uuid import uuid4
 from app.core.supabase import get_supabase_admin
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 async def provision_tenant(tenant_id: str, user_id: str, tenant_name: str) -> None:
@@ -45,5 +48,5 @@ async def provision_tenant(tenant_id: str, user_id: str, tenant_name: str) -> No
     try:
         api_key = f"sk_{uuid4().hex}"
         sb.table("tenant").update({"api_key": api_key}).eq("id", tenant_id).execute()
-    except Exception:
-        pass  # migration 020 may not be applied yet
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée (migration 020 may not be applied yet) : %s", exc_ignored, exc_info=True)

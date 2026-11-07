@@ -108,6 +108,10 @@ def anonymize_contact(contact_id: str, tenant_id: str | None = None) -> None:
     if tenant_id:
         _redact_import_job_changes(sb, tenant_id, contact_id)
 
+    # Résumés OCR (ordonnances, comptes rendus) : données de santé rattachées à la
+    # personne, sans valeur une fois le contact anonymisé — supprimés, pas vidés.
+    sb.table("ocr_summary").delete().eq("contact_id", contact_id).execute()
+
 
 def _has_blocking_relations(sb, contact_id: str) -> bool:
     """RDV futur ou facture impayée → on ne purge pas (garde-fou légal/pratique)."""
@@ -135,8 +139,8 @@ def _has_blocking_relations(sb, contact_id: str) -> bool:
         ).data
         if unpaid_invoice:
             return True
-    except Exception:
-        pass  # table invoice peut ne pas exister selon l'environnement
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée (table invoice peut ne pas exister selon l'environnement) : %s", exc_ignored, exc_info=True)
 
     return False
 

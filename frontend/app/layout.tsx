@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import Script from "next/script";
+import KlientysTracking from "../components/KlientysTracking";
+import ErrorReporter from "../components/ErrorReporter";
 import "./globals.css";
 import { LanguageProvider } from "../contexts/LanguageContext";
 import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
+import { serializeJsonLd } from "../lib/jsonLd";
 
 const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
@@ -77,26 +79,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="text-gray-900 antialiased">
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(orgJsonLd) }}
         />
-        {/* GA4 Klientys */}
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-C04SHMVM34" strategy="afterInteractive" />
-        <Script id="ga4-klientys" strategy="afterInteractive">{`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', 'G-C04SHMVM34');
-        `}</Script>
-
-        {/* Meta Pixel */}
-        <Script id="meta-pixel" strategy="afterInteractive">{`
-          !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-          n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-          n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-          t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-          document,'script','https://connect.facebook.net/en_US/fbevents.js');
-          fbq('init','26855191664139076');fbq('track','PageView');
-        `}</Script>
+        {/* GA4 + Meta Pixel de Klientys : site marketing uniquement, après consentement */}
+        <KlientysTracking />
+        <ErrorReporter />
         <LanguageProvider>{children}</LanguageProvider>
       </body>
     </html>

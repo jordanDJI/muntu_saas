@@ -12,6 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from app.core.supabase import get_supabase_admin
 from app.middleware.roles import require_crm_access
 from app.services.subscription import get_tenant_plan
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/contacts", tags=["Attachments"])
 
@@ -156,8 +159,8 @@ async def delete_attachment(
 
     try:
         sb.storage.from_(BUCKET).remove([row["storage_path"]])
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     sb.table("contact_attachment").delete().eq("id", attachment_id).eq("tenant_id", tenant_id).execute()
 
@@ -211,8 +214,8 @@ async def upload_contact_photo(
     if old_path:
         try:
             sb.storage.from_(PHOTO_BUCKET).remove([old_path])
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     return {"photo_path": storage_path, "signed_url": _signed_url_bucket(sb, PHOTO_BUCKET, storage_path)}
 
@@ -242,5 +245,5 @@ async def delete_contact_photo(
     if old_path:
         try:
             sb.storage.from_(PHOTO_BUCKET).remove([old_path])
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)

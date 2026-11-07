@@ -17,6 +17,8 @@ from typing import Any
 
 import httpx
 
+from app.core.crypto import decrypt
+
 logger = logging.getLogger(__name__)
 
 _PAYPAL_LIVE = "https://api-m.paypal.com"
@@ -85,7 +87,7 @@ def parse_deposit_config(site_row: dict) -> dict | None:
         return None
 
     client_id = (deposit.get("paypal_client_id") or "").strip()
-    client_secret = (site_row.get("paypal_client_secret") or "").strip()
+    client_secret = (decrypt(site_row.get("paypal_client_secret")) or "").strip()
     if not client_id or not client_secret:
         return None
 

@@ -1,11 +1,29 @@
 """Client Telegram Bot API — envoi de messages, téléchargement de fichiers, enregistrement webhook."""
 import logging
+from typing import Optional
 
 import requests
+
+from app.core.crypto import decrypt, encrypt, lookup_hash
 
 logger = logging.getLogger(__name__)
 
 _BASE = "https://api.telegram.org"
+
+
+def stored_bot_token(cfg: Optional[dict]) -> str:
+    """Jeton du bot en clair depuis une ligne agent_config (chiffré en base)."""
+    if not cfg:
+        return ""
+    return decrypt(cfg.get("telegram_bot_token")) or ""
+
+
+def bot_token_columns(token: Optional[str]) -> dict:
+    """Colonnes à écrire dans agent_config pour un jeton saisi par le tenant."""
+    token = (token or "").strip()
+    if not token:
+        return {"telegram_bot_token": None, "telegram_bot_token_hash": None}
+    return {"telegram_bot_token": encrypt(token), "telegram_bot_token_hash": lookup_hash(token)}
 
 
 def send_message(bot_token: str, chat_id: int, text: str) -> bool:

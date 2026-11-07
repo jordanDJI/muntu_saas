@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from uuid import UUID
-from app.middleware.roles import require_owner_or_admin
+from app.middleware.roles import require_owner_or_admin, require_site_builder_access
 from app.middleware.tenant import get_current_tenant, get_current_user
+from app.core.crypto import encrypt
 from app.core.supabase import get_supabase_admin as get_supabase
 from app.models.site import SiteCreateIn, SiteUpdateIn, SiteOut, ServiceOfferIn, TestimonialIn
 from app.services.activity import log_activity
@@ -19,7 +20,7 @@ async def list_sites(tenant_id: str = Depends(get_current_tenant)):
 
 
 @router.post("/", response_model=SiteOut, status_code=status.HTTP_201_CREATED)
-async def create_site(body: SiteCreateIn, tenant_id: str = Depends(get_current_tenant)):
+async def create_site(body: SiteCreateIn, tenant_id: str = Depends(require_site_builder_access)):
     sb = get_supabase()
     site_data = {
         "tenant_id": tenant_id,
@@ -47,7 +48,7 @@ async def create_site(body: SiteCreateIn, tenant_id: str = Depends(get_current_t
 
 
 @router.patch("/{site_id}", response_model=SiteOut)
-async def update_site(site_id: UUID, body: SiteUpdateIn, tenant_id: str = Depends(get_current_tenant)):
+async def update_site(site_id: UUID, body: SiteUpdateIn, tenant_id: str = Depends(require_site_builder_access)):
     sb = get_supabase()
     updates = body.model_dump(exclude_none=True)
     if not updates:
@@ -59,7 +60,7 @@ async def update_site(site_id: UUID, body: SiteUpdateIn, tenant_id: str = Depend
 
 
 @router.post("/{site_id}/publish")
-async def publish_site(site_id: UUID, tenant_id: str = Depends(get_current_tenant), user: dict = Depends(get_current_user)):
+async def publish_site(site_id: UUID, tenant_id: str = Depends(require_site_builder_access), user: dict = Depends(get_current_user)):
     sb = get_supabase()
     result = sb.table("site").update({"status": "published"}).eq("id", str(site_id)).eq("tenant_id", tenant_id).execute()
     if not result.data:
@@ -74,7 +75,7 @@ async def publish_site(site_id: UUID, tenant_id: str = Depends(get_current_tenan
 
 
 @router.post("/{site_id}/unpublish")
-async def unpublish_site(site_id: UUID, tenant_id: str = Depends(get_current_tenant), user: dict = Depends(get_current_user)):
+async def unpublish_site(site_id: UUID, tenant_id: str = Depends(require_site_builder_access), user: dict = Depends(get_current_user)):
     sb = get_supabase()
     result = sb.table("site").update({"status": "draft"}).eq("id", str(site_id)).eq("tenant_id", tenant_id).execute()
     if not result.data:
@@ -143,7 +144,7 @@ async def get_offers(site_id: UUID, tenant_id: str = Depends(get_current_tenant)
 
 
 @router.put("/{site_id}/offers")
-async def replace_offers(site_id: UUID, offers: list[ServiceOfferIn], tenant_id: str = Depends(get_current_tenant)):
+async def replace_offers(site_id: UUID, offers: list[ServiceOfferIn], tenant_id: str = Depends(require_site_builder_access)):
     sb = get_supabase()
     _assert_owner(sb, str(site_id), tenant_id)
 
@@ -170,14 +171,14 @@ async def replace_offers(site_id: UUID, offers: list[ServiceOfferIn], tenant_id:
 # ── Testimonials ──────────────────────────────────────────────────────────────
 
 @router.get("/{site_id}/testimonials")
-async def get_testimonials(site_id: UUID, tenant_id: str = Depends(get_current_tenant)):
+async def get_testimonials(site_id: UUID, tenant_id: str = Depends(require_site_builder_access)):
     sb = get_supabase()
     _assert_owner(sb, str(site_id), tenant_id)
     return sb.table("testimonial").select("*").eq("site_id", str(site_id)).execute().data
 
 
 @router.put("/{site_id}/testimonials")
-async def replace_testimonials(site_id: UUID, testimonials: list[TestimonialIn], tenant_id: str = Depends(get_current_tenant)):
+async def replace_testimonials(site_id: UUID, testimonials: list[TestimonialIn], tenant_id: str = Depends(require_site_builder_access)):
     sb = get_supabase()
     _assert_owner(sb, str(site_id), tenant_id)
     sb.table("testimonial").delete().eq("site_id", str(site_id)).execute()
@@ -245,7 +246,7 @@ async def update_booking_config(site_id: UUID, body: BookingConfigIn, tenant_id:
         updates["site_style"] = current_style
 
     if body.paypal_client_secret is not None:
-        updates["paypal_client_secret"] = body.paypal_client_secret or None
+        updates["paypal_client_secret"] = encrypt(body.paypal_client_secret) or None
 
     if not updates:
         raise HTTPException(status_code=400, detail="Aucune donnée à mettre à jour")

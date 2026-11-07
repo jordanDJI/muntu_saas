@@ -10,6 +10,9 @@ import { IntegrationsPanel, ChatbotReadiness, useIntegrationsT, type Integration
 import metiers from "../../../data/metiers.json";
 import villes from "../../../data/villes.json";
 import dynamic from "next/dynamic";
+import { isOptimizableImage } from "../../../lib/imageHost";
+import { setVisibleInterval } from "../../../lib/visibleInterval";
+import MfaSettingsCard from "../../../components/MfaSettingsCard";
 const DesignRequestModal = dynamic(() => import("../../../components/DesignRequestModal"), { ssr: false });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -161,7 +164,7 @@ function SectionProfil() {
             {/* Avatar avec overlay upload */}
             <div className="relative w-16 h-16 shrink-0 group">
               {avatarUrl ? (
-                <Image src={avatarUrl} alt={name || "Avatar"} width={64} height={64}
+                <Image src={avatarUrl} unoptimized={!isOptimizableImage(avatarUrl)} alt={name || "Avatar"} width={64} height={64}
                   className="w-16 h-16 rounded-full object-cover border-2 border-primary-100" />
               ) : (
                 <div className="w-16 h-16 rounded-full bg-primary-100 flex items-center justify-center text-2xl font-bold text-primary-600">
@@ -284,6 +287,7 @@ function SectionSecurite() {
   return (
     <>
       <SectionTitle title={t.sett_sec_title} subtitle={t.sett_sec_subtitle} />
+      <MfaSettingsCard />
       <Card>
         <h3 className="font-semibold text-gray-700 text-sm">{t.sett_sec_change_pass}</h3>
         {isOAuth ? (
@@ -2346,7 +2350,7 @@ function SectionFacturation() {
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
   const [err, setErr]           = useState("");
-  const [compliance, setCompliance] = useState<{ country: string; compliant: boolean; missing: string[] } | null>(null);
+  const [compliance, setCompliance] = useState<{ country: string; checked: boolean; compliant: boolean; missing: string[] } | null>(null);
 
   function refreshCompliance() {
     api.getInvoiceCompliance().then(setCompliance).catch(() => setCompliance(null));
@@ -2380,7 +2384,16 @@ function SectionFacturation() {
     <>
       <SectionTitle title={t.sett_fact_title} subtitle={t.sett_fact_subtitle} />
 
-      {compliance && !compliance.compliant && (
+      {compliance && compliance.checked === false && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+          <p className="text-xs text-gray-600">
+            La facturation Klientys suit les normes françaises (mentions obligatoires, TVA, facture
+            électronique). Votre entreprise est déclarée hors de France ({compliance.country || "pays non renseigné"}) :
+            vérifiez avec votre comptable les obligations de votre pays.
+          </p>
+        </div>
+      )}
+      {compliance && compliance.checked !== false && !compliance.compliant && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
           <p className="text-sm font-semibold text-amber-900">
             Vos factures ne sont pas encore conformes
@@ -3429,6 +3442,7 @@ function SectionAnnuaire() {
   const [metierSlug, setMetierSlug]       = useState("");
   const [customMetierLabel, setCustomMetierLabel] = useState("");
   const [communityMetiers, setCommunityMetiers] = useState<{ slug: string; label: string }[]>([]);
+  const [promotedSlugs, setPromotedSlugs] = useState<Set<string>>(new Set());
   const [displayName, setDisplayName]     = useState("");
   const [tagline, setTagline]             = useState("");
   const [zones, setZones]                 = useState<string[]>([]);
@@ -3442,7 +3456,9 @@ function SectionAnnuaire() {
     Promise.all([
       api.getDirectoryListing().catch(() => null),
       api.getDirectoryMetiers().catch(() => [] as { slug: string; label: string }[]),
-    ]).then(([data, community]) => {
+      api.getPromotedMetiers().catch(() => [] as any[]),
+    ]).then(([data, community, promoted]) => {
+      setPromotedSlugs(new Set((promoted ?? []).map((m: { slug: string }) => m.slug)));
       const communityList = (community ?? []).filter(
         (c: { slug: string }) => !metiers.some((m: { slug: string }) => m.slug === c.slug)
       );
@@ -3523,6 +3539,12 @@ function SectionAnnuaire() {
 
   const effectiveMetierSlug = metierSlug === "autre" ? slugify(customMetierLabel) : metierSlug;
 
+  // Un métier hors liste standard n'apparaît dans le hub /annuaire qu'une fois
+  // validé par l'équipe (Admin → Config) : la fiche reste joignable par son URL.
+  const awaitingValidation = !!effectiveMetierSlug
+    && !metiers.some((m: { slug: string }) => m.slug === effectiveMetierSlug)
+    && !promotedSlugs.has(effectiveMetierSlug);
+
   const previewUrl = isListed && effectiveMetierSlug && primaryZone
     ? `/annuaire/${effectiveMetierSlug}/${villeSlug}`
     : null;
@@ -3584,6 +3606,13 @@ function SectionAnnuaire() {
                   maxLength={80}
                   className="mt-2 border rounded-lg px-3 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
                 />
+              )}
+              {awaitingValidation && (
+                <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Ce métier n&apos;est pas encore dans la liste de l&apos;annuaire : l&apos;équipe Klientys le valide
+                  avant de l&apos;afficher sur la page d&apos;accueil de l&apos;annuaire. En attendant, votre fiche reste
+                  accessible par son adresse directe{previewUrl ? " (lien ci-dessous)" : ""}.
+                </p>
               )}
             </div>
 
@@ -3762,19 +3791,19 @@ function SectionSupport({ onTicketRead }: { onTicketRead?: () => void }) {
 
   // Poll la liste toutes les 20s pour mettre à jour les statuts (badge parent)
   useEffect(() => {
-    const iv = setInterval(() =>
+    const stopPolling = setVisibleInterval(() =>
       api.listSupportTickets()
         .then((data: any[]) => setTickets(data))
         .catch(() => {}),
       20_000,
     );
-    return () => clearInterval(iv);
+    return stopPolling;
   }, []);
 
   // Poll les messages du ticket ouvert toutes les 10s
   useEffect(() => {
     if (!selected) return;
-    const iv = setInterval(async () => {
+    const stopPolling = setVisibleInterval(async () => {
       try {
         const full = await api.getSupportTicket(selected.id);
         const next = full.messages || [];
@@ -3784,7 +3813,7 @@ function SectionSupport({ onTicketRead }: { onTicketRead?: () => void }) {
         });
       } catch {}
     }, 10_000);
-    return () => clearInterval(iv);
+    return stopPolling;
   }, [selected?.id]);
 
   // Reset du flash après 3s
@@ -4064,8 +4093,8 @@ export default function SettingsPage() {
         .then((tickets: any[]) => setOpenTickets(tickets.filter((t: any) => t.status === "in_progress").length))
         .catch(() => {});
     refreshBadge();
-    const iv = setInterval(refreshBadge, 30_000);
-    return () => clearInterval(iv);
+    const stopPolling = setVisibleInterval(refreshBadge, 30_000);
+    return stopPolling;
   }, []);
 
   const isMember = myRole === "member";

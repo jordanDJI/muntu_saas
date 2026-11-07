@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, Header, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 import secrets
 
@@ -362,8 +362,8 @@ async def list_tenants(
             )
             if r.status_code == 200:
                 email_map = {u["id"]: u.get("email", "") for u in r.json().get("users", [])}
-    except Exception:
-        pass
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     result = []
     for t in tenants:
@@ -427,6 +427,20 @@ async def get_tenant(tenant_id: str, admin=Depends(viewer_or_above)):
 
     profile = _compute_profile_score(sb, tenant_id, site)
 
+    # Consommation IA des 30 derniers jours (migration 085), par fonctionnalité
+    ai_usage = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "by_feature": {}}
+    try:
+        since = (now - timedelta(days=30)).date().isoformat()
+        for u in sb.table("ai_usage_daily").select("feature, calls, input_tokens, output_tokens").eq("tenant_id", tenant_id).gte("day", since).execute().data or []:
+            f = ai_usage["by_feature"].setdefault(u["feature"], {"calls": 0, "tokens": 0})
+            f["calls"] += u["calls"]
+            f["tokens"] += u["input_tokens"] + u["output_tokens"]
+            ai_usage["calls"] += u["calls"]
+            ai_usage["input_tokens"] += u["input_tokens"]
+            ai_usage["output_tokens"] += u["output_tokens"]
+    except Exception as exc:
+        logger.warning("Consommation IA illisible (migration 085 appliquée ?) : %s", exc)
+
     sub_map = {tenant_id: sub} if sub else {}
     return {
         "tenant": {**tenant, "computed_status": _compute_status(tenant, sub_map, now)},
@@ -447,6 +461,7 @@ async def get_tenant(tenant_id: str, admin=Depends(viewer_or_above)):
         "trial_reminders_sent": sorted(trial_reminders),
         "overrides": overrides,
         "action_log": logs,
+        "ai_usage_30d": ai_usage,
     }
 
 
@@ -710,8 +725,8 @@ async def set_override(
             try:
                 dt = datetime.fromisoformat(body.expires_at.replace("Z", "+00:00"))
                 notif_body += f" Valable jusqu'au {dt.strftime('%d/%m/%Y')}."
-            except Exception:
-                pass
+            except Exception as exc_ignored:
+                logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
         else:
             notif_body += " Durée permanente."
 
@@ -946,8 +961,14 @@ async def create_tenant(body: CreateTenantIn, admin=Depends(get_current_admin)):
 
 # ─── Impersonation ────────────────────────────────────────────────────────────
 
+class ImpersonateIn(BaseModel):
+    # Motif obligatoire : la session ouverte donne tous les droits du propriétaire,
+    # le journal et le tenant doivent savoir pourquoi.
+    reason: str = Field(..., min_length=5, max_length=500)
+
+
 @router.post("/tenants/{tenant_id}/impersonate")
-async def impersonate(tenant_id: str, admin=Depends(get_current_admin)):
+async def impersonate(tenant_id: str, body: ImpersonateIn, admin=Depends(get_current_admin)):
     # 3 impersonations max par admin par tranche de 5 minutes
     check_rate_by_key(admin["sub"], "impersonate", max_calls=3, window_seconds=300)
 
@@ -979,7 +1000,8 @@ async def impersonate(tenant_id: str, admin=Depends(get_current_admin)):
         if not email_otp:
             raise HTTPException(502, "Impossible d'extraire l'OTP Supabase")
 
-    _log(admin, "impersonate", tenant_id, payload={"email": user["email"]})
+    reason = body.reason.strip()
+    _log(admin, "impersonate", tenant_id, payload={"email": user["email"], "reason": reason})
 
     # Notification transparente au tenant (non bloquante)
     tenant_row = sb.table("tenant").select("name").eq("id", tenant_id).limit(1).execute().data
@@ -992,10 +1014,23 @@ async def impersonate(tenant_id: str, admin=Depends(get_current_admin)):
             admin_email=admin.get("email", ""),
             accessed_at=accessed_at,
         )
-    except Exception:
-        pass  # non bloquant — l'impersonation continue même si l'email échoue
+    except Exception as exc:
+        # non bloquant — l'impersonation continue même si l'email échoue
+        logger.warning("Email de notification d'impersonation non envoyé (tenant %s) : %s", tenant_id, exc)
 
-    return {"email": user["email"], "otp": email_otp}
+    # Trace visible dans le dashboard, en plus de l'email
+    try:
+        sb.table("tenant_notification").insert({
+            "tenant_id": tenant_id,
+            "type":      "support_access",
+            "title":     "Le support Klientys a accédé à votre espace",
+            "body":      f"Accès le {accessed_at}. Motif : {reason}",
+            "data":      {"admin_email": admin.get("email", ""), "reason": reason},
+        }).execute()
+    except Exception as exc:
+        logger.warning("Notification in-app d'impersonation non créée (tenant %s) : %s", tenant_id, exc)
+
+    return {"email": user["email"], "otp": email_otp, "admin_email": admin.get("email", "")}
 
 
 # ─── Changer l'email du propriétaire ─────────────────────────────────────────
@@ -1204,8 +1239,8 @@ async def create_support_account(body: SupportAccountIn, admin=Depends(get_curre
             role=body.role,
             setup_link=setup_link,
         )
-    except Exception:
-        pass  # non bloquant
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée (non bloquant) : %s", exc_ignored, exc_info=True)
 
     _log(admin, "create_support_account", payload={"email": body.email, "role": body.role})
     return {"id": user_id, "email": body.email, "role": body.role}
@@ -1476,8 +1511,8 @@ async def get_billing_overview(admin=Depends(get_current_admin)):
                 u = sb.auth.admin.get_user_by_id(m["user_id"])
                 if u and u.user:
                     owner_email_map[m["tenant_id"]] = u.user.email or ""
-            except Exception:
-                pass
+            except Exception as exc_ignored:
+                logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
     def _enrich(items: list) -> list:
         result = []
@@ -2316,8 +2351,20 @@ def _resolve_published_at(status: str, requested: Optional[str], current: Option
     return date.today().isoformat() if status == "published" else None
 
 
+# Ces segments désignent la liste du blog d'une langue (/blog/en…) : un article
+# portant ce slug serait inaccessible.
+_RESERVED_BLOG_SLUGS = {"en", "de", "nl"}
+
+
+def _check_blog_slug(v: str) -> str:
+    if v.strip().lower() in _RESERVED_BLOG_SLUGS:
+        raise ValueError("Slug réservé (liste du blog par langue) : choisissez-en un autre")
+    return v
+
+
 class BlogPostIn(BaseModel):
     slug:            str
+    _slug_ok = field_validator("slug")(classmethod(lambda cls, v: _check_blog_slug(v)))
     title:           str
     description:     Optional[str] = None
     category:        Optional[str] = None
@@ -2374,6 +2421,7 @@ async def agent_list_blog(request: Request, x_content_agent_secret: str = Header
 
 class BlogProposeIn(BaseModel):
     slug:            str
+    _slug_ok = field_validator("slug")(classmethod(lambda cls, v: _check_blog_slug(v)))
     title:           str
     description:     Optional[str] = None
     category:        Optional[str] = None
@@ -2913,5 +2961,3 @@ async def demote_metier(slug: str, admin=Depends(get_current_admin)):
     ).execute()
     _log(admin, "demote_metier", payload={"slug": slug})
     return {"ok": True}
-
-    return row[0]

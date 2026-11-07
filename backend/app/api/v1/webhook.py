@@ -14,8 +14,9 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from app.core.config import settings
+from app.core.crypto import encrypt, lookup_hash
 from app.core.supabase import get_supabase_admin
-from app.services.llm import chat_completion
+from app.services.llm import chat_completion, set_ai_context
 from app.services.ocr import extract_summary
 from app.services.whatsapp import download_media, send_text, verify_signature
 
@@ -104,8 +105,36 @@ _CALENDAR_STOPWORDS = {
 
 # ── Webhook Telegram ──────────────────────────────────────────────────────────
 
+@router.post("/telegram/w/{webhook_id}", status_code=200)
+async def telegram_inbound_by_id(webhook_id: str, request: Request):
+    """Route enregistrée par /agents/telegram/setup depuis la migration 081 :
+    l'URL porte un identifiant aléatoire au lieu du jeton du bot."""
+    from app.services.telegram import stored_bot_token
+
+    rows = (
+        get_supabase_admin()
+        .table("agent_config")
+        .select("telegram_bot_token")
+        .eq("agent_type", "support_client")
+        .eq("telegram_webhook_id", webhook_id)
+        .limit(1)
+        .execute()
+        .data
+    )
+    bot_token = stored_bot_token(rows[0]) if rows else ""
+    if not bot_token:
+        raise HTTPException(status_code=404, detail="Webhook inconnu")
+    return await _handle_telegram_update(request, bot_token)
+
+
 @router.post("/telegram/{bot_token}", status_code=200)
 async def telegram_inbound(bot_token: str, request: Request):
+    """Ancienne route (jeton dans l'URL), gardée pour les bots enregistrés avant
+    la migration 081. Relancer /agents/telegram/setup bascule sur la nouvelle."""
+    return await _handle_telegram_update(request, bot_token)
+
+
+async def _handle_telegram_update(request: Request, bot_token: str) -> dict:
     # Vérifier la signature Telegram (X-Telegram-Bot-Api-Secret-Token)
     _verify_telegram_secret(request, bot_token)
 
@@ -158,7 +187,8 @@ async def _process_telegram_message(msg: dict, bot_token: str) -> None:
             "followup_enabled, followup_delay_hours, followup_message, diagnostic_mode_enabled"
         )
         .eq("agent_type", "support_client")
-        .eq("telegram_bot_token", bot_token)
+        # Le jeton est chiffré en base (non déterministe) : recherche par empreinte.
+        .eq("telegram_bot_token_hash", lookup_hash(bot_token))
         .eq("status", "active")
         .execute()
     )
@@ -168,6 +198,7 @@ async def _process_telegram_message(msg: dict, bot_token: str) -> None:
 
     config = cfg_res.data[0]
     tenant_id = config["tenant_id"]
+    set_ai_context(tenant_id, "agent_support")
 
     # 2. Commande /start
     if text.startswith("/start"):
@@ -252,8 +283,8 @@ async def _process_telegram_message(msg: dict, bot_token: str) -> None:
                 asyncio.ensure_future(
                     _update_contact_memory_async(sb, contact_id, conv_id, config.get("model", "gemini-2.5-flash"))
                 )
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
 
 # ── Flux de réservation interactif (Agent 2 Telegram) ────────────────────────
@@ -475,8 +506,8 @@ async def _handle_telegram_booking_flow(
                     )
                     if summary:
                         sb.table("appointment").update({"conversation_summary": summary}).eq("id", appt["id"]).execute()
-                except Exception:
-                    pass
+                except Exception as exc_ignored:
+                    logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
                 dt = datetime.fromisoformat(chosen_slot["start"].replace("Z", "+00:00"))
 
@@ -550,6 +581,7 @@ async def _handle_telegram_booking_flow(
 def _do_notify_pending(sb, tenant_id: str, bot_token: str, contact_info: dict, chosen_slot: dict, dt: datetime) -> None:
     """Notifie le tenant (WhatsApp/Telegram Agent 3) qu'un nouveau RDV est en attente."""
     from app.api.v1.booking import _notify_tenant_pending
+    from app.services.telegram import send_message
     _notify_tenant_pending(
         sb, tenant_id,
         contact_info.get("first_name", ""),
@@ -1181,7 +1213,7 @@ async def _extract_telegram_content(
             sb.table("ocr_summary").insert({
                 "tenant_id": tenant_id,
                 "contact_id": contact_id,
-                "summary_encrypted": ocr_text,
+                "summary_encrypted": encrypt(ocr_text),
                 "document_type": "autre",
                 "processed_at": datetime.now(timezone.utc).isoformat(),
             }).execute()
@@ -1261,6 +1293,7 @@ async def _process_message(msg: dict, waba_number: str, contacts_meta: list) -> 
 
     config = cfg_res.data[0]
     tenant_id = config["tenant_id"]
+    set_ai_context(tenant_id, "agent_support")
 
     contact = _upsert_contact(sb, tenant_id, wa_id, contacts_meta)
     contact_id = contact["id"]
@@ -1283,8 +1316,8 @@ async def _process_message(msg: dict, waba_number: str, contacts_meta: list) -> 
             )
             if summary:
                 _update_conv_metadata(sb, conv_id, {"booking_summary": summary})
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
         reply = await _booking_redirect_reply(sb, tenant_id)
     else:
         history = _load_history(sb, conv_id, limit=20)
@@ -1312,8 +1345,8 @@ async def _process_message(msg: dict, waba_number: str, contacts_meta: list) -> 
                 asyncio.ensure_future(
                     _update_contact_memory_async(sb, contact_id, conv_id, config.get("model", "gemini-2.5-flash"))
                 )
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
 
 # ── Helpers base de données ───────────────────────────────────────────────────
@@ -1836,7 +1869,7 @@ async def _extract_content(
             sb.table("ocr_summary").insert({
                 "tenant_id": tenant_id,
                 "contact_id": contact_id,
-                "summary_encrypted": ocr_text,
+                "summary_encrypted": encrypt(ocr_text),
                 "document_type": "autre",
                 "processed_at": datetime.now(timezone.utc).isoformat(),
             }).execute()

@@ -1,5 +1,8 @@
 import asyncio
 import logging
+import os
+import socket
+from functools import wraps
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime, timedelta, timezone
@@ -87,8 +90,11 @@ async def run_synthesis_worker() -> None:
         .execute()
     )
 
+    from app.services.llm import set_ai_context
+
     for config in configs_res.data or []:
         tenant_id = config["tenant_id"]
+        set_ai_context(tenant_id, "synthesis")
         schedule_min = config.get("synthesis_schedule_minutes", 180)
         config_id = config["id"]
 
@@ -303,8 +309,8 @@ async def send_trial_reminders() -> None:
             already = sb.table("trial_reminder_log").select("id").eq("tenant_id", tenant_id).eq("days_before", days_remaining).maybe_single().execute()
             if already.data:
                 continue
-        except Exception:
-            pass
+        except Exception as exc_ignored:
+            logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
 
         # Owner
         memberships = tenant.get("membership") or []
@@ -556,26 +562,69 @@ async def cancel_abandoned_deposit_bookings() -> None:
         logger.error("purge pending_payment: annulation echouee: %s", exc)
 
 
+# ── Exécution unique entre instances ──────────────────────────────────────────
+
+_HOLDER = f"{socket.gethostname()}:{os.getpid()}"
+
+
+def _claim_lease(job: str, seconds: int) -> bool:
+    """Réserve l'exécution de `job` pour `seconds` secondes (migration 082).
+
+    Si la fonction SQL est indisponible (migration non appliquée, base
+    injoignable), la tâche s'exécute quand même : un doublon vaut mieux qu'un
+    rappel jamais envoyé, et c'est le comportement d'avant le verrou.
+    """
+    try:
+        res = get_supabase_admin().rpc(
+            "claim_scheduler_lease", {"p_job": job, "p_holder": _HOLDER, "p_seconds": seconds}
+        ).execute()
+        return bool(res.data)
+    except Exception as exc:
+        logger.warning("Bail scheduler %s indisponible, exécution sans verrou : %s", job, exc)
+        return True
+
+
+def _single_instance(job: str, lease_seconds: int):
+    """N'exécute la tâche que sur l'instance qui obtient le bail.
+
+    Le bail doit être plus court que l'intervalle de la tâche (sinon la suivante
+    serait sautée) et plus long que l'écart d'horloge entre instances.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        async def wrapper(*args, **kwargs):
+            if not _claim_lease(job, lease_seconds):
+                logger.info("Tâche %s déjà prise par une autre instance", job)
+                return None
+            return await fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+_HOUR = 3600
+_DAY = 24 * _HOUR
+
+
 # ── Démarrage / arrêt ─────────────────────────────────────────────────────────
 
 def start_scheduler() -> None:
     # Rappels 24h : vérifie toutes les heures (fenêtre 23h-25h pour absorber les décalages)
     scheduler.add_job(
-        send_appointment_reminders,
+        _single_instance("appointment_reminders", 50 * 60)(send_appointment_reminders),
         IntervalTrigger(hours=1),
         id="appointment_reminders",
         replace_existing=True,
     )
     # Worker de synthèse : vérifie toutes les 30 min
     scheduler.add_job(
-        run_synthesis_worker,
+        _single_instance("synthesis_worker", 25 * 60)(run_synthesis_worker),
         IntervalTrigger(minutes=30),
         id="synthesis_worker",
         replace_existing=True,
     )
     # Relances CRM auto-send : chaque jour à 8h00 (Europe/Brussels)
     scheduler.add_job(
-        send_crm_auto_reminders,
+        _single_instance("crm_auto_reminders", 20 * _HOUR)(send_crm_auto_reminders),
         "cron",
         hour=8,
         minute=0,
@@ -584,7 +633,7 @@ def start_scheduler() -> None:
     )
     # Rappels expiration trial J-7, J-3, J-1 : chaque jour à 9h00
     scheduler.add_job(
-        send_trial_reminders,
+        _single_instance("trial_reminders", 20 * _HOUR)(send_trial_reminders),
         "cron",
         hour=9,
         minute=0,
@@ -593,7 +642,7 @@ def start_scheduler() -> None:
     )
     # Rapport analytics mensuel : 1er du mois à 9h30
     scheduler.add_job(
-        send_monthly_reports,
+        _single_instance("monthly_reports", 20 * _DAY)(send_monthly_reports),
         "cron",
         day=1,
         hour=9,
@@ -603,7 +652,7 @@ def start_scheduler() -> None:
     )
     # Purge RGPD : chaque jour à 3h00 (faible trafic)
     scheduler.add_job(
-        run_gdpr_retention_purge,
+        _single_instance("gdpr_retention_purge", 20 * _HOUR)(run_gdpr_retention_purge),
         "cron",
         hour=3,
         minute=0,
@@ -612,7 +661,7 @@ def start_scheduler() -> None:
     )
     # Suivi du dépassement de quota contacts : chaque jour à 3h30
     scheduler.add_job(
-        update_contact_overage_status,
+        _single_instance("contact_overage_status", 20 * _HOUR)(update_contact_overage_status),
         "cron",
         hour=3,
         minute=30,
@@ -621,7 +670,7 @@ def start_scheduler() -> None:
     )
     # Purge des réservations abandonnées au paiement : toutes les 15 min
     scheduler.add_job(
-        cancel_abandoned_deposit_bookings,
+        _single_instance("abandoned_deposit_bookings", 12 * 60)(cancel_abandoned_deposit_bookings),
         IntervalTrigger(minutes=15),
         id="abandoned_deposit_bookings",
         replace_existing=True,

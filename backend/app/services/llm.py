@@ -1,10 +1,42 @@
 import logging
 import traceback
 import time
+from contextvars import ContextVar
 from google import genai
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+# ── Consommation par tenant (migration 085) ───────────────────────────────────
+# Posée par les points d'entrée (chatbot, agents, assistant, synthèse) plutôt que
+# passée à chaque appel ; asyncio.to_thread propage le contexte au thread.
+_ai_tenant: ContextVar[str | None] = ContextVar("ai_tenant", default=None)
+_ai_feature: ContextVar[str] = ContextVar("ai_feature", default="other")
+
+
+def set_ai_context(tenant_id: str | None, feature: str) -> None:
+    """Rattache les appels Gemini qui suivent à ce tenant et à cette fonctionnalité."""
+    _ai_tenant.set(tenant_id)
+    _ai_feature.set(feature)
+
+
+def _record_usage(resp) -> None:
+    tenant_id = _ai_tenant.get()
+    if not tenant_id:
+        return
+    meta = getattr(resp, "usage_metadata", None)
+    try:
+        from app.core.supabase import get_supabase_admin
+        get_supabase_admin().rpc("record_ai_usage", {
+            "p_tenant": tenant_id,
+            "p_feature": _ai_feature.get(),
+            "p_input": int(getattr(meta, "prompt_token_count", 0) or 0),
+            "p_output": int(getattr(meta, "candidates_token_count", 0) or 0),
+        }).execute()
+    except Exception as exc:
+        # Le comptage ne doit jamais faire échouer une réponse au client.
+        logger.warning("Consommation IA non enregistrée (tenant %s) : %s", tenant_id, exc)
 
 # Modèles retirés → remplacés automatiquement
 _DEPRECATED_MODELS = {
@@ -51,6 +83,7 @@ def chat_completion(
                 contents=contents,
                 config={"system_instruction": system},
             )
+            _record_usage(resp)
             return resp.text.strip()
         except Exception as exc:
             exc_str = str(exc)
@@ -94,6 +127,7 @@ def smart_chat_completion(
                 contents=contents,
                 config={"system_instruction": system},
             )
+            _record_usage(resp)
             return resp.text.strip()
         except Exception as exc:
             last_exc = exc

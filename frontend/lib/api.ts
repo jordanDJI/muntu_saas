@@ -644,7 +644,7 @@ export const api = {
   getInvoiceSettings: () => apiFetch<any>("/api/v1/invoices/settings"),
   updateInvoiceSettings: (body: object) => apiFetch("/api/v1/invoices/settings", { method: "PATCH", body: JSON.stringify(body) }),
   getInvoiceCompliance: () =>
-    apiFetch<{ country: string; compliant: boolean; missing: string[] }>("/api/v1/invoices/settings/compliance"),
+    apiFetch<{ country: string; checked: boolean; compliant: boolean; missing: string[] }>("/api/v1/invoices/settings/compliance"),
   getInvoices: (params?: { status?: string; contact_id?: string; limit?: number; offset?: number }) => {
     const qs = params ? "?" + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])) as any).toString() : "";
     return apiFetch<{ invoices: any[]; total: number; offset: number; limit: number }>(`/api/v1/invoices/${qs}`);

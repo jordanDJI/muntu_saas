@@ -12,6 +12,9 @@ from app.middleware.roles import require_owner_or_admin
 from app.middleware.tenant import get_current_tenant
 from app.services import email as email_svc
 from app.services.llm import chat_completion
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/logo-requests", tags=["Logo Requests"])
 
@@ -173,8 +176,8 @@ async def create_logo_request(body: LogoRequestIn, tenant_id: str = Depends(requ
             price_eur=tier["price_eur"],
             request_id=req["id"],
         )
-    except Exception:
-        pass  # non bloquant
+    except Exception as exc_ignored:
+        logger.warning("Erreur ignorée (non bloquant) : %s", exc_ignored, exc_info=True)
 
     return req
 

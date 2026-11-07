@@ -22,7 +22,7 @@ export default function TrackingScripts({ tracking, tenantSlug, apiUrl, consentK
 
   useEffect(() => {
     const apply = () => {
-      const detail = getCookieConsentDetail();
+      const detail = getCookieConsentDetail(consentKey);
       setAnalytics(detail.analytics);
       setMarketing(detail.marketing);
     };

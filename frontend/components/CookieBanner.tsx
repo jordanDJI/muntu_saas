@@ -20,14 +20,23 @@ export function getCookieConsent(key = STORAGE_KEY_BASE): ConsentValue | null {
   }
 }
 
-export function getCookieConsentDetail(): ConsentDetail {
+/** Clé du détail par catégorie, propre à chaque bannière. Le détail était
+ * stocké sous une clé unique : sur klientys.co, choisir sur le site d'un tenant
+ * (/{slug}) réécrivait le choix fait sur le site Klientys, et inversement. */
+function detailKeyFor(consentKey: string): string {
+  return consentKey === STORAGE_KEY_BASE ? STORAGE_KEY_DETAIL : `${consentKey}_detail`;
+}
+
+export function getCookieConsentDetail(consentKey: string = STORAGE_KEY_BASE): ConsentDetail {
   if (typeof window === "undefined") return { analytics: false, marketing: false };
+  const decision = getCookieConsent(consentKey);
+  // Pas de décision pour cette bannière : rien n'est consenti.
+  if (!decision) return { analytics: false, marketing: false };
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_DETAIL);
+    const raw = localStorage.getItem(detailKeyFor(consentKey));
     if (raw) return JSON.parse(raw) as ConsentDetail;
   } catch { /* silencieux */ }
-  const global = getCookieConsent();
-  return { analytics: global === "accepted", marketing: global === "accepted" };
+  return { analytics: decision === "accepted", marketing: decision === "accepted" };
 }
 
 interface CookieBannerProps {
@@ -89,7 +98,7 @@ export default function CookieBanner({
     setTimeout(() => {
       try {
         localStorage.setItem(consentKey, value);
-        localStorage.setItem(STORAGE_KEY_DETAIL, JSON.stringify(detail));
+        localStorage.setItem(detailKeyFor(consentKey), JSON.stringify(detail));
       } catch { /* silencieux */ }
       window.dispatchEvent(new CustomEvent("cookie-consent", { detail: { key: consentKey, value, ...detail } }));
       setState("done");

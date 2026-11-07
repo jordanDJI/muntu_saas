@@ -4,14 +4,16 @@ Couvre : agent_config, agent_link, ocr_summary, agent_synthesis
 """
 import uuid
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from jose import jwt as jose_jwt
 
 from app.core.config import settings
+from app.core.crypto import encrypt
 from app.core.supabase import get_supabase_admin
-from app.middleware.tenant import get_current_tenant
+from app.middleware.roles import require_agents_access, require_calendar_access, require_crm_access
 from app.models.agent import (
     AgentConfigOut,
     AgentConfigUpdate,
@@ -21,6 +23,7 @@ from app.models.agent import (
     AgentSynthesisOut,
 )
 from app.services.ocr import extract_summary
+from app.services.telegram import bot_token_columns, stored_bot_token
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 logger = logging.getLogger(__name__)
@@ -29,7 +32,7 @@ logger = logging.getLogger(__name__)
 # ── Setup Telegram webhook ────────────────────────────────────────────────────
 
 @router.get("/telegram/info")
-async def get_telegram_bot_info(tenant_id: str = Depends(get_current_tenant)):
+async def get_telegram_bot_info(tenant_id: str = Depends(require_agents_access)):
     """
     Retourne le username du bot Telegram configuré pour ce tenant.
     Utilisé par le dashboard pour construire les liens d'invitation et d'activation.
@@ -38,7 +41,7 @@ async def get_telegram_bot_info(tenant_id: str = Depends(get_current_tenant)):
 
     sb = get_supabase_admin()
     cfg = _require_config(sb, tenant_id, "support_client")
-    bot_token = cfg.get("telegram_bot_token", "")
+    bot_token = stored_bot_token(cfg)
     if not bot_token:
         raise HTTPException(status_code=404, detail="Aucun bot token Telegram configuré")
 
@@ -51,7 +54,7 @@ async def get_telegram_bot_info(tenant_id: str = Depends(get_current_tenant)):
 
 
 @router.post("/telegram/setup")
-async def setup_telegram_webhook(tenant_id: str = Depends(get_current_tenant)):
+async def setup_telegram_webhook(tenant_id: str = Depends(require_agents_access)):
     """
     Enregistre le webhook Telegram pour le bot configuré sur ce tenant.
     En local : APP_URL doit pointer vers le tunnel ngrok (https://…ngrok-free.app).
@@ -61,7 +64,7 @@ async def setup_telegram_webhook(tenant_id: str = Depends(get_current_tenant)):
 
     sb = get_supabase_admin()
     cfg = _require_config(sb, tenant_id, "support_client")
-    bot_token = cfg.get("telegram_bot_token", "")
+    bot_token = stored_bot_token(cfg)
     if not bot_token:
         raise HTTPException(status_code=400, detail="Aucun bot token Telegram configuré")
 
@@ -75,8 +78,16 @@ async def setup_telegram_webhook(tenant_id: str = Depends(get_current_tenant)):
             ),
         )
 
-    webhook_url = f"{settings.app_url}/api/v1/webhook/telegram/{bot_token}"
-    logger.info("Telegram webhook setup — URL : %s (token masqué)", webhook_url.rsplit("/", 1)[0] + "/***")
+    # L'URL porte un identifiant aléatoire, plus le jeton du bot : ce dernier
+    # apparaissait dans les logs d'accès et suffisait à prendre le contrôle du bot.
+    webhook_id = cfg.get("telegram_webhook_id")
+    if not webhook_id:
+        webhook_id = secrets.token_urlsafe(24)
+        sb.table("agent_config").update({"telegram_webhook_id": webhook_id}).eq(
+            "tenant_id", tenant_id
+        ).eq("agent_type", "support_client").execute()
+    webhook_url = f"{settings.app_url}/api/v1/webhook/telegram/w/{webhook_id}"
+    logger.info("Telegram webhook setup — tenant %s", tenant_id)
 
     # Dériver un secret_token depuis le bot_token pour que Telegram signe ses updates
     import hmac as _hmac, hashlib as _hashlib
@@ -103,6 +114,15 @@ def _set_tenant(sb, tenant_id: str):
     sb.postgrest.headers.update({"x-tenant-id": tenant_id})
 
 
+def _config_out(cfg: dict) -> dict:
+    """Ligne agent_config renvoyée au dashboard : jeton déchiffré, colonnes
+    techniques retirées."""
+    out = {k: v for k, v in cfg.items() if k not in ("telegram_bot_token_hash", "telegram_webhook_id")}
+    if out.get("telegram_bot_token"):
+        out["telegram_bot_token"] = stored_bot_token(cfg)
+    return out
+
+
 def _require_config(sb, tenant_id: str, agent_type: str) -> dict:
     res = (
         sb.table("agent_config")
@@ -123,7 +143,7 @@ _DEFAULT_AGENT_TYPES = ["vitrine", "support_client", "assistant_tenant"]
 
 
 @router.get("/config", response_model=list[AgentConfigOut])
-async def list_agent_configs(tenant_id: str = Depends(get_current_tenant)):
+async def list_agent_configs(tenant_id: str = Depends(require_agents_access)):
     sb = get_supabase_admin()
     res = sb.table("agent_config").select("*").eq("tenant_id", tenant_id).execute()
     configs = res.data or []
@@ -144,27 +164,31 @@ async def list_agent_configs(tenant_id: str = Depends(get_current_tenant)):
     sc = next((c for c in configs if c["agent_type"] == "support_client"), None)
     at = next((c for c in configs if c["agent_type"] == "assistant_tenant"), None)
     if sc and at and sc.get("telegram_bot_token") and not at.get("telegram_bot_token"):
-        sb.table("agent_config").update({"telegram_bot_token": sc["telegram_bot_token"]}).eq(
+        copied = {
+            "telegram_bot_token": sc["telegram_bot_token"],
+            "telegram_bot_token_hash": sc.get("telegram_bot_token_hash"),
+        }
+        sb.table("agent_config").update(copied).eq(
             "tenant_id", tenant_id
         ).eq("agent_type", "assistant_tenant").execute()
-        at["telegram_bot_token"] = sc["telegram_bot_token"]
+        at.update(copied)
 
-    return configs
+    return [_config_out(c) for c in configs]
 
 
 @router.get("/config/{agent_type}", response_model=AgentConfigOut)
-async def get_agent_config(agent_type: str, tenant_id: str = Depends(get_current_tenant)):
+async def get_agent_config(agent_type: str, tenant_id: str = Depends(require_agents_access)):
     if agent_type not in _AGENT_TYPES:
         raise HTTPException(status_code=400, detail=f"Type d'agent invalide : {agent_type}")
     sb = get_supabase_admin()
-    return _require_config(sb, tenant_id, agent_type)
+    return _config_out(_require_config(sb, tenant_id, agent_type))
 
 
 @router.patch("/config/{agent_type}", response_model=AgentConfigOut)
 async def update_agent_config(
     agent_type: str,
     body: AgentConfigUpdate,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_agents_access),
 ):
     if agent_type not in _AGENT_TYPES:
         raise HTTPException(status_code=400, detail=f"Type d'agent invalide : {agent_type}")
@@ -172,6 +196,8 @@ async def update_agent_config(
     _require_config(sb, tenant_id, agent_type)
 
     patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    if "telegram_bot_token" in patch:
+        patch.update(bot_token_columns(patch["telegram_bot_token"]))
     patch["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     res = (
@@ -187,10 +213,11 @@ async def update_agent_config(
     if agent_type == "assistant_tenant" and "telegram_bot_token" in patch:
         sb.table("agent_config").update({
             "telegram_bot_token": patch["telegram_bot_token"],
+            "telegram_bot_token_hash": patch["telegram_bot_token_hash"],
             "updated_at": patch["updated_at"],
         }).eq("tenant_id", tenant_id).eq("agent_type", "support_client").execute()
 
-    return res.data[0]
+    return _config_out(res.data[0])
 
 
 # ── agent_link ────────────────────────────────────────────────────────────────
@@ -198,7 +225,7 @@ async def update_agent_config(
 @router.post("/links", response_model=AgentLinkOut, status_code=status.HTTP_201_CREATED)
 async def create_agent_link(
     body: AgentLinkCreate,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_agents_access),
 ):
     if not settings.agent_link_secret:
         raise HTTPException(status_code=503, detail="AGENT_LINK_SECRET non configuré")
@@ -241,7 +268,7 @@ async def create_agent_link(
 
 
 @router.get("/links", response_model=list[AgentLinkOut])
-async def list_agent_links(tenant_id: str = Depends(get_current_tenant)):
+async def list_agent_links(tenant_id: str = Depends(require_agents_access)):
     sb = get_supabase_admin()
     res = (
         sb.table("agent_link")
@@ -260,7 +287,7 @@ async def upload_document_for_ocr(
     contact_id: str,
     file: UploadFile = File(...),
     appointment_id: str | None = None,
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_crm_access),
 ):
     """
     Reçoit un document, l'envoie à Gemini Vision pour OCR,
@@ -300,7 +327,7 @@ async def upload_document_for_ocr(
     row = {
         "tenant_id": tenant_id,
         "contact_id": contact_id,
-        "summary_encrypted": summary_text,
+        "summary_encrypted": encrypt(summary_text),
         "document_type": _guess_document_type(file.filename or ""),
         "processed_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -323,7 +350,7 @@ def _guess_document_type(filename: str) -> str:
 
 
 @router.get("/ocr/{contact_id}", response_model=list[OCRSummaryOut])
-async def list_ocr_summaries(contact_id: str, tenant_id: str = Depends(get_current_tenant)):
+async def list_ocr_summaries(contact_id: str, tenant_id: str = Depends(require_crm_access)):
     sb = get_supabase_admin()
     res = (
         sb.table("ocr_summary")
@@ -341,7 +368,7 @@ async def list_ocr_summaries(contact_id: str, tenant_id: str = Depends(get_curre
 @router.post("/rag/upload")
 async def upload_rag_document(
     file: UploadFile = File(...),
-    tenant_id: str = Depends(get_current_tenant),
+    tenant_id: str = Depends(require_agents_access),
 ):
     """Upload, découpe et indexe un document dans la base RAG de l'Agent 2."""
     from app.services.embeddings import generate_embedding, chunk_text
@@ -389,7 +416,7 @@ async def upload_rag_document(
 
 
 @router.get("/rag/documents")
-async def list_rag_documents(tenant_id: str = Depends(get_current_tenant)):
+async def list_rag_documents(tenant_id: str = Depends(require_agents_access)):
     """Liste les documents indexés (dédupliqués par nom de fichier)."""
     sb = get_supabase_admin()
     res = (
@@ -410,7 +437,7 @@ async def list_rag_documents(tenant_id: str = Depends(get_current_tenant)):
 
 
 @router.delete("/rag/documents")
-async def delete_rag_document(filename: str, tenant_id: str = Depends(get_current_tenant)):
+async def delete_rag_document(filename: str, tenant_id: str = Depends(require_agents_access)):
     """Supprime tous les chunks d'un document par nom de fichier."""
     sb = get_supabase_admin()
     sb.table("agent_document").delete().eq("tenant_id", tenant_id).eq("filename", filename).execute()
@@ -420,7 +447,7 @@ async def delete_rag_document(filename: str, tenant_id: str = Depends(get_curren
 # ── Follow-up post-intervention ───────────────────────────────────────────────
 
 @router.post("/followup/{appt_id}")
-async def send_appointment_followup(appt_id: str, tenant_id: str = Depends(get_current_tenant)):
+async def send_appointment_followup(appt_id: str, tenant_id: str = Depends(require_calendar_access)):
     """Envoie le message de suivi post-RDV au client via son canal de messagerie."""
     sb = get_supabase_admin()
 
@@ -476,7 +503,7 @@ async def send_appointment_followup(appt_id: str, tenant_id: str = Depends(get_c
     sent_via = None
 
     tg_chat_id = contact.get("telegram_chat_id")
-    bot_token = cfg.get("telegram_bot_token", "")
+    bot_token = stored_bot_token(cfg)
     if tg_chat_id and bot_token and cfg.get("status") == "active":
         try:
             from app.services.telegram import send_message
@@ -505,7 +532,7 @@ async def send_appointment_followup(appt_id: str, tenant_id: str = Depends(get_c
 # ── agent_synthesis ───────────────────────────────────────────────────────────
 
 @router.get("/synthesis", response_model=list[AgentSynthesisOut])
-async def list_syntheses(limit: int = 10, tenant_id: str = Depends(get_current_tenant)):
+async def list_syntheses(limit: int = 10, tenant_id: str = Depends(require_agents_access)):
     sb = get_supabase_admin()
     res = (
         sb.table("agent_synthesis")
