@@ -33,6 +33,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Comparatifs": "var(--l-teal-xl)",
   "Prix & ROI": "var(--l-gold)",
   "Acquisition clients": "var(--l-blue-l)",
+  // Catégories des univers du plan éditorial (docs/seo/content-agent-prompt.md, étape 7)
+  "Organisation": "var(--l-blue)",
+  "Agents IA": "var(--l-gold-l)",
+  "Facturation": "var(--l-gold)",
+  "Pilotage": "var(--l-sage)",
+  "Relation client": "#8b5cf6",
+  "RGPD & sécurité": "var(--l-text-2)",
 };
 
 export default async function BlogIndex() {

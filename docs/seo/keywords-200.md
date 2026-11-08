@@ -1,11 +1,36 @@
-# 200 mots-clés prioritaires — Klientys (FR + BE)
+# Mots-clés prioritaires — Klientys (FR + BE)
 
 > Volumes estimés/mois. Sources : Google Keyword Planner public, Ubersuggest, Ahrefs estimés.
 > 🇫🇷 = France · 🇧🇪 = Belgique · 🟢 Quick win (DA faible) · 🟡 Moyen terme · 🔴 Compétitif
 
+> ⚠️ **Fiabilité des volumes (catégories 1 à 18).** Ces chiffres n'ont ni date de relevé ni export
+> d'outil traçable, et beaucoup sont des valeurs rondes. Ils servent à **comparer** des mots-clés entre
+> eux, pas à prévoir du trafic. Avant d'investir dans un pilier, vérifier le volume dans Google Keyword
+> Planner (gratuit avec un compte Google Ads) puis, après publication, dans Search Console.
+> Les catégories 19 à 24 n'ont **volontairement pas de volume** : à mesurer, pas à deviner.
+
+## Comment lire ce fichier
+
+Chaque catégorie indique sa **destination** : la page du site qui doit se positionner sur ces
+mots-clés. Un mot-clé n'a qu'une seule destination. Sinon, deux pages Klientys se concurrencent
+sur la même recherche.
+
+| Destination | Qui la produit |
+|---|---|
+| **Blog** | l'agent de contenu, via le calendrier de [`editorial-cocons-plan.md`](./editorial-cocons-plan.md) §9 |
+| **Pages métier** `/site-internet-pour/{metier}[/{ville}]` | génération programmatique (aucun article de blog) |
+| **Annuaire** `/annuaire/...` | fiches des pros (capte les recherches **des clients finaux**) |
+| **Landing** `/` | page d'accueil, tarifs |
+
+Les mots-clés dont l'intention ne correspond pas au produit sont listés en **§ Intentions à
+risque**, en fin de fichier. L'agent les consulte avant d'en choisir un.
+
 ---
 
 ## CATÉGORIE 1 — Money keywords génériques (intention achat directe)
+
+> **Destination** : Landing pour #2, #4, #5, #8, #9. Blog univers C (pilier agenda + CRM) pour #3, #6,
+> #7, #10. Pages métier pour #1.
 
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
@@ -24,6 +49,8 @@
 
 ## CATÉGORIE 2 — Alternatives & comparatifs (intention achat forte)
 
+> **Destination** : Blog univers B. #20 → pages métier.
+
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
 | 11 | alternative Doctolib | 1 300 | 170 | 🟢 28 | ⭐⭐⭐ |
@@ -40,6 +67,9 @@
 ---
 
 ## CATÉGORIE 3 — Métier × besoin (santé libérale)
+
+> **Destination** : Pages métier, **pas de blog**. Exceptions : #22, #28, #35 relèvent du logiciel
+> métier (voir Intentions à risque) ; #26, #32 sont des recherches de **patients** → Annuaire.
 
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
@@ -63,6 +93,8 @@
 
 ## CATÉGORIE 4 — Métier × besoin (bien-être & coaching)
 
+> **Destination** : Pages métier, pas de blog. #42 est une recherche de **client final** → Annuaire.
+
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
 | 36 | site internet coach sportif | 650 | 85 | 🟢 26 | ⭐⭐⭐ |
@@ -79,6 +111,10 @@
 ---
 
 ## CATÉGORIE 5 — Métier × besoin (artisanat & bâtiment)
+
+> **Destination** : Pages métier. Exceptions vers le blog : #49, #56 (univers A, trouver des clients),
+> #52, #59 (univers F, devis — à vérifier : une partie des recherches vient de particuliers qui veulent
+> un devis, pas d'artisans).
 
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
@@ -102,6 +138,9 @@
 
 ## CATÉGORIE 6 — Métier × besoin (services aux particuliers)
 
+> **Destination** : Pages métier. #62, #68 ambigus (pro qui s'équipe ou client qui réserve) → vérifier
+> la page de résultats Google avant de cibler.
+
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
 | 61 | site internet photographe mariage | 890 | 140 | 🟡 39 | ⭐⭐⭐ |
@@ -119,6 +158,9 @@
 
 ## CATÉGORIE 7 — SEO local (combinaisons ville, top volume)
 
+> **Destination** : Pages métier × ville **uniquement**. Aucun article de blog. #75 est une recherche de
+> client final → Annuaire.
+
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
 | 71 | site internet plombier Paris | 390 | — | 🟢 24 | ⭐⭐⭐ |
@@ -134,7 +176,11 @@
 
 ---
 
-## CATÉGORIE 8 — Longue traîne "comment" (faible volume, conversion 80%+)
+## CATÉGORIE 8 — Longue traîne "comment" (faible volume, conversion élevée attendue)
+
+> **Destination** : Blog. Le taux de « 80 %+ » qui figurait dans le titre n'avait pas de source ; il est
+> retiré. Univers : #81, #89, #91 → A · #84, #93 → B · #87 → C/D · #82, #85, #86, #95 → F/G · #83, #88,
+> #92, #94 → pages métier ou A.
 
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
@@ -158,6 +204,10 @@
 
 ## CATÉGORIE 9 — Questions "prix / coût" (intention commerciale)
 
+> **Destination** : #96, #97, #100, #104 → article existant `cout-site-internet-independant` (ne pas
+> créer d'autre article « prix d'un site »). #99, #102 → Blog univers B. #98, #103 → Blog univers C.
+> #101 → pages métier.
+
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
 | 96 | combien coûte site internet artisan | 590 | 80 | 🟢 24 | ⭐⭐⭐ |
@@ -174,6 +224,9 @@
 ---
 
 ## CATÉGORIE 10 — SEO technique & local (décideurs qui cherchent à apprendre)
+
+> **Destination** : Blog univers A. #114, #115 : trop techniques pour la cible, à traiter en section
+> d'un pilier, pas en article.
 
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
@@ -192,6 +245,9 @@
 
 ## CATÉGORIE 11 — WhatsApp / chatbot / automatisation
 
+> **Destination** : Blog univers D (#116 à #119, #122, #124, #125) et G (#120). #120, #121, #123 :
+> voir Intentions à risque.
+
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
 | 116 | WhatsApp Business indépendant | 1 400 | 185 | 🟡 42 | ⭐⭐⭐ |
@@ -208,6 +264,8 @@
 ---
 
 ## CATÉGORIE 12 — CRM & gestion clients libéral
+
+> **Destination** : Blog univers C. #134 → G. #135 → H. Voir aussi la catégorie 22 (CRM tous métiers).
 
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
@@ -226,6 +284,9 @@
 
 ## CATÉGORIE 13 — Administratif & légal (angles confiance)
 
+> **Destination** : Blog univers H. La facturation électronique a désormais sa propre catégorie (19).
+> #139, #143, #144 : voir Intentions à risque (HDS).
+
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
 | 136 | RGPD site internet indépendant | 540 | 72 | 🟢 23 | ⭐⭐⭐ |
@@ -242,6 +303,9 @@
 ---
 
 ## CATÉGORIE 14 — Longue traîne niches spécifiques (volume faible, conversion très haute)
+
+> **Destination** : Pages métier. #150 est une recherche de client final → Annuaire. #160 → Blog D.
+> Les variantes « gratuit » : voir Intentions à risque.
 
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
@@ -265,6 +329,11 @@
 
 ## CATÉGORIE 15 — Belgique spécifique (volume BE premium)
 
+> **Destination** : #161, #164, #167 → pages métier (ville belge). #163 → Blog univers B (article
+> « alternative à Doctolib en Belgique »). #165, #170 → Blog univers A. #169 → Blog H, avec l'APD
+> (Autorité de protection des données) comme source et non la CNIL. #162, #166, #168 : voir
+> Intentions à risque. **Jamais de facturation** pour la Belgique (Peppol non couvert).
+
 | # | Mot-clé | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|------------|---------|
 | 161 | site internet kiné Belgique | 140 | 🟢 12 | ⭐⭐⭐ |
@@ -281,6 +350,10 @@
 ---
 
 ## CATÉGORIE 16 — Contenus éditoriaux (articles de blog)
+
+> **Destination** : Blog univers F (#171 à #175, #181, #183 à #185) et A/G (#176 à #180). #182 :
+> le module de facturation existe désormais — relève de la catégorie 19, attaqué par la longue traîne
+> (tête de requête 🔴).
 
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
@@ -304,6 +377,9 @@
 
 ## CATÉGORIE 17 — Mots-clés de marque (à surveiller)
 
+> **Destination** : Landing (#186, #187, #190) et article existant `doctolib-vs-klientys-kine-infirmier`
+> (#188, #189). Suivi dans Search Console, pas de nouvel article.
+
 | # | Mot-clé | Volume FR | Volume BE | Priorité |
 |---|---------|-----------|-----------|---------|
 | 186 | Klientys avis | — | — | ⭐⭐⭐ (dès J+1) |
@@ -315,6 +391,8 @@
 ---
 
 ## CATÉGORIE 18 — Mots-clés émergents IA (2026)
+
+> **Destination** : Blog univers D. #196 : voir Intentions à risque.
 
 | # | Mot-clé | Volume FR | Volume BE | Difficulté | Priorité |
 |---|---------|-----------|-----------|------------|---------|
@@ -331,7 +409,116 @@
 
 ---
 
+## CATÉGORIE 19 — Facturation électronique & mentions (France) *(nouveau)*
+
+> **Destination** : Blog univers E. France uniquement.
+> Règle : Klientys **produit** la facture (Factur-X) mais **ne la transmet pas** à une PDP — chaque
+> article le dit.
+
+| # | Mot-clé | Intention | Persona | Priorité |
+|---|---------|-----------|---------|---------|
+| 201 | facturation électronique obligatoire 2026 | comprendre ce qui change et quand | tous | ⭐⭐⭐ |
+| 202 | facture électronique auto-entrepreneur | savoir s'il est concerné | `P-CREA`, `P-SOLO` | ⭐⭐⭐ |
+| 203 | Factur-X c'est quoi | définition simple | tous | ⭐⭐⭐ |
+| 204 | mentions obligatoires facture | liste à jour | tous | ⭐⭐⭐ |
+| 205 | TVA non applicable art 293 B mention | formulation exacte | `P-CREA` | ⭐⭐⭐ |
+| 206 | facture kiné TVA exonération | mention correcte | `P-KINE` | ⭐⭐⭐ |
+| 207 | comment faire un avoir sur une facture | méthode | `P-SOLO`, `P-ART` | ⭐⭐ |
+| 208 | plateforme agréée PDP choisir | comprendre ce qu'est une PDP | tous | ⭐⭐ |
+| 209 | numérotation facture obligatoire | règle de continuité | `P-CREA` | ⭐⭐ |
+| 210 | logiciel facturation indépendant | choisir un outil | `P-SOLO` | ⭐⭐ (🔴 probable) |
+
+## CATÉGORIE 20 — Piloter son activité & analytics *(nouveau)*
+
+> **Destination** : Blog univers F.
+
+| # | Mot-clé | Intention | Persona | Priorité |
+|---|---------|-----------|---------|---------|
+| 211 | indicateurs activité indépendant | quoi suivre | `P-CROISS` | ⭐⭐⭐ |
+| 212 | savoir d'où viennent ses clients | mesurer ses sources | `P-CROISS` | ⭐⭐⭐ |
+| 213 | statistiques site vitrine | comprendre ses visites | `P-SOLO` | ⭐⭐ |
+| 214 | taux de conversion site internet professionnel | combien de visites deviennent des demandes | `P-CROISS` | ⭐⭐ |
+| 215 | Google Analytics site vitrine | installer et lire GA4 | `P-SOLO` | ⭐⭐ |
+| 216 | tableau de bord indépendant | vue d'ensemble de l'activité | `P-SOLO` | ⭐⭐ |
+
+## CATÉGORIE 21 — Croissance & équipe *(nouveau)*
+
+> **Destination** : Blog univers F.
+
+| # | Mot-clé | Intention | Persona | Priorité |
+|---|---------|-----------|---------|---------|
+| 217 | partager agenda avec secrétaire | donner accès sans tout partager | `P-TPE` | ⭐⭐⭐ |
+| 218 | logiciel gestion petite équipe | outil commun | `P-TPE` | ⭐⭐ |
+| 219 | ouvrir un deuxième cabinet | organisation multi-lieux | `P-TPE` | ⭐⭐ |
+| 220 | agenda plusieurs établissements | un agenda par lieu | `P-TPE` | ⭐⭐ |
+| 221 | déléguer administratif indépendant | ce qu'on peut confier | `P-CROISS` | ⭐⭐ |
+| 222 | embaucher premier salarié indépendant | organisation après embauche | `P-CROISS` | ⭐ (angle outil limité) |
+
+## CATÉGORIE 22 — CRM & outils tous métiers *(nouveau)*
+
+> **Destination** : Blog univers C. Complète la catégorie 12, centrée sur le libéral.
+
+| # | Mot-clé | Intention | Persona | Priorité |
+|---|---------|-----------|---------|---------|
+| 223 | CRM ou Excel | quand changer | `P-SOLO` | ⭐⭐⭐ |
+| 224 | fichier clients Excel modèle | s'organiser tout de suite | `P-CREA` | ⭐⭐ |
+| 225 | importer contacts Excel CRM | migrer sans perte | `P-SOLO` | ⭐⭐ |
+| 226 | suivi prospects freelance | ne pas perdre un prospect | `P-SERV` | ⭐⭐⭐ |
+| 227 | pipeline commercial indépendant | visualiser ses demandes | `P-SERV` | ⭐⭐ |
+| 228 | CRM consultant indépendant | choisir un outil | `P-SERV` | ⭐⭐ |
+| 229 | logiciel tout-en-un indépendant | un seul outil pour site, agenda, clients | `P-SOLO` | ⭐⭐⭐ |
+| 230 | prise de rendez-vous en ligne coach | équiper son activité | `P-SERV` | ⭐⭐ |
+| 231 | campagne email clients inactifs | relancer | `P-SOLO` | ⭐⭐ |
+
+## CATÉGORIE 23 — RDV non honorés, acompte, rappels *(nouveau)*
+
+> **Destination** : Blog univers G.
+
+| # | Mot-clé | Intention | Persona | Priorité |
+|---|---------|-----------|---------|---------|
+| 232 | rendez-vous non honoré que faire | réagir | `P-KINE`, `P-BIEN` | ⭐⭐⭐ |
+| 233 | no-show rendez-vous solution | réduire les absences | `P-BIEN` | ⭐⭐⭐ |
+| 234 | demander un acompte client réservation | légalité et méthode | `P-BIEN`, `P-RESTO` | ⭐⭐⭐ |
+| 235 | rappel rendez-vous email automatique | mettre en place | tous | ⭐⭐ |
+| 236 | réservation de groupe restaurant gestion | éviter le surbooking | `P-RESTO` | ⭐⭐ |
+
+## CATÉGORIE 24 — Équiper un site existant *(nouveau)*
+
+> **Destination** : Blog univers B. Vise ceux qui ont déjà un site et ne veulent pas en changer :
+> les widgets Klientys s'y ajoutent.
+
+| # | Mot-clé | Intention | Persona | Priorité |
+|---|---------|-----------|---------|---------|
+| 237 | ajouter prise de rendez-vous site Wix | ajouter sans refaire | `P-BIEN`, `P-SERV` | ⭐⭐⭐ |
+| 238 | module réservation WordPress | ajouter sans plugin complexe | `P-SERV`, `P-ART` | ⭐⭐⭐ |
+| 239 | chatbot site WordPress | répondre aux visiteurs | `P-SOLO` | ⭐⭐ |
+| 240 | lien de réservation Instagram bio | réserver depuis Instagram | `P-BIEN` | ⭐⭐⭐ |
+
+---
+
+## Intentions à risque
+
+Ces mots-clés ont du volume, mais la personne qui les tape attend quelque chose que Klientys ne fait
+pas, ou n'est pas un client potentiel. Les cibler tels quels fait venir des visiteurs déçus et
+pousse l'agent à promettre des fonctionnalités absentes.
+
+| Mots-clés | Problème | Conduite à tenir |
+|---|---|---|
+| #6, #22, #28, #35, #102, #162, #168 « logiciel infirmier / cabinet / gestion patients » | Attendent un **logiciel métier** : télétransmission, carte Vitale, dossier patient | Pas d'article qui se présente comme « le logiciel infirmier ». Angle honnête possible : « site + agenda + CRM à côté de votre logiciel métier » |
+| #26, #32, #42, #75, #150, #166 « prise de RDV kiné », « réservation massage »… | Recherches de **patients ou clients finaux** qui veulent réserver | Destination Annuaire, jamais le blog |
+| #120 « rappel RDV automatique SMS », #124 | Klientys envoie des rappels par **email**, pas par SMS | Article possible sur « email ou SMS » qui le dit clairement ; jamais « rappel SMS » |
+| #121 « répondeur automatique », #123 « IA réception appels », #196 « IA secrétariat médical » | Pas de **téléphonie** : Klientys ne répond pas aux appels | Exclure #121, #123. #196 uniquement sous l'angle chatbot du site + assistant Telegram, en le précisant |
+| #139, #143, #144 « hébergement / sécurité données santé » | Pas de certification **HDS** | Contenu informatif seulement (ce que dit la loi), aucune promesse de conformité |
+| #3, #12, #19, #88, #128, #146, #148, #152, #158 « … gratuit » | Klientys n'est **pas gratuit** (essai 14 jours ; seul le chatbot est gratuit sur tous les plans) | Ne jamais titrer « gratuit ». Angle : « ce que coûte vraiment une solution gratuite » ou essai gratuit |
+| #162, #168 et tout mot-clé facturation 🇧🇪 | **Peppol** non couvert | Aucun article facturation pour la Belgique |
+| #222 « embaucher premier salarié » | Klientys ne gère ni paie ni RH | Seulement sous l'angle accès partagé aux clients et à l'agenda |
+
+---
+
 ## Résumé stratégique
+
+> Mis à jour pour refléter les univers de [`editorial-cocons-plan.md`](./editorial-cocons-plan.md).
+> Les sujets à écrire et leur ordre sont dans le **calendrier** (plan, §9), pas ici.
 
 ### Top 10 Quick Wins (fort volume + faible difficulté)
 
@@ -346,10 +533,23 @@
 9. `site internet coach sportif` — 650/m, DA 26
 10. `logiciel CRM kiné` — 150/m, DA 8 ← ultra ciblé
 
-### 3 clusters à prioriser pour le blog
+> Destinations : #2, #4, #9 → pages métier ; #1, #5 → blog B ; #3, #6 → blog A ; #7 → blog D ;
+> #8 → blog F ; #10 → blog C.
 
-| Cluster | Articles | Volume cumulé estimé |
-|---------|----------|---------------------|
-| SEO local indépendant | 4 articles | ~8 000/mois |
-| Agenda / RDV sans Doctolib | 3 articles | ~6 500/mois |
-| Site internet par métier | 15 pages programmatiques | ~12 000/mois |
+### Répartition par destination
+
+| Destination | Catégories | Rôle |
+|---|---|---|
+| Pages métier (programmatiques) | 3, 4, 5, 6, 7, 14, une partie de 15 | Capter « site internet {métier} [{ville}] » à grande échelle |
+| Annuaire | recherches de clients finaux (voir Intentions à risque) | Capter ceux qui veulent réserver un pro, au bénéfice des tenants |
+| Blog | 2, 8 à 13, 16, 18 à 24 | Univers A à H du plan éditorial |
+| Landing | 1 (en partie), 17 | Marque, tarifs, requêtes génériques |
+
+### Clusters blog à prioriser
+
+| Univers | Catégories | Pourquoi |
+|---|---|---|
+| B — Alternatives & site existant | 2, 24 | Visiteurs les plus proches de l'achat |
+| E — Facturation électronique | 19 | Échéances réelles (sept. 2026, sept. 2027), fonctionnalité réelle, peu de concurrents de petite taille |
+| C — CRM & agenda | 12, 22 | Élargit la cible à tous les métiers |
+| D — Agents IA | 11, 18 | Angle réglementaire Meta 2026 peu exploité |
