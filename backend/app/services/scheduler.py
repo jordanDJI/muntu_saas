@@ -562,6 +562,18 @@ async def cancel_abandoned_deposit_bookings() -> None:
         logger.error("purge pending_payment: annulation echouee: %s", exc)
 
 
+async def import_new_companies() -> None:
+    """Prospection : créations d'entreprises de la semaine (API Sirene, migration 086)."""
+    from app.services import sirene
+
+    if not sirene.is_configured():
+        return
+    try:
+        await sirene.import_recent(days=8)
+    except Exception as exc:
+        logger.error("Import SIRENE hebdomadaire échoué : %s", exc, exc_info=True)
+
+
 # ── Exécution unique entre instances ──────────────────────────────────────────
 
 _HOLDER = f"{socket.gethostname()}:{os.getpid()}"
@@ -673,6 +685,16 @@ def start_scheduler() -> None:
         _single_instance("abandoned_deposit_bookings", 12 * 60)(cancel_abandoned_deposit_bookings),
         IntervalTrigger(minutes=15),
         id="abandoned_deposit_bookings",
+        replace_existing=True,
+    )
+    # Prospection SIRENE : chaque lundi à 6h00 (créations des 8 derniers jours)
+    scheduler.add_job(
+        _single_instance("sirene_import", 6 * _DAY)(import_new_companies),
+        "cron",
+        day_of_week="mon",
+        hour=6,
+        minute=0,
+        id="sirene_import",
         replace_existing=True,
     )
     scheduler.start()

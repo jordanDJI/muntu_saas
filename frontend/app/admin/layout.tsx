@@ -98,6 +98,17 @@ const NAV_ALL = [
     ),
   },
   {
+    id: "acquisition",
+    href: "/admin/acquisition",
+    label: "Acquisition",
+    minLevel: "support" as SupportLevel,
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+      </svg>
+    ),
+  },
+  {
     id: "support",
     href: "/admin/support",
     label: "Support",

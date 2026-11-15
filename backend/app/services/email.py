@@ -2377,3 +2377,129 @@ async def send_support_reply_to_tenant(
         })
     except Exception as exc_ignored:
         logger.warning("Erreur ignorée : %s", exc_ignored, exc_info=True)
+
+
+# ── Acquisition : outil « demande locale » et parrainage (migration 086) ──────
+
+def _klientys_header(title: str, subtitle: str = "") -> str:
+    from html import escape
+    logo_url = _KLIENTYS_LOGO.format(frontend_url=settings.frontend_url)
+    sub = (f'<p style="color:rgba(255,255,255,.65);margin:6px 0 0;font-size:13px">{escape(subtitle)}</p>'
+           if subtitle else "")
+    return f"""
+    <div style="background:linear-gradient(135deg,#0D4B58 0%,#1A6E82 100%);padding:32px 36px">
+      <img src="{logo_url}" height="34" alt="Klientys" style="margin-bottom:18px;display:block"/>
+      <h1 style="color:#fff;font-size:22px;font-weight:800;margin:0;letter-spacing:-.02em">{escape(title)}</h1>
+      {sub}
+    </div>"""
+
+
+def send_demand_report(
+    to_email: str,
+    first_name: str,
+    activity_label: str,
+    city: str,
+    report: dict,
+    signup_url: str,
+    tool_url: str,
+) -> None:
+    """Rapport complet de l'outil public « demande locale » (migration 086)."""
+    from html import escape
+
+    score = int(report.get("aggregate_score") or 0)
+    city_score = report.get("city_score")
+    keywords = [escape(k) for k in (report.get("keywords") or [])[:3]]
+    related = [escape(q) for q in (report.get("related_queries") or [])[:6]]
+    trend = report.get("trend_pct")
+    level = "forte" if score >= 67 else "moyenne" if score >= 34 else "faible"
+
+    city_line = (
+        f"À <strong>{escape(city)}</strong>, l'indice local est de <strong>{int(city_score)}/100</strong>."
+        if city_score is not None else
+        f"Google ne publie pas assez de données pour {escape(city)} seule : l'indice ci-dessus est national."
+    )
+    trend_line = ""
+    if trend is not None:
+        direction = "en hausse" if trend > 0 else "en baisse" if trend < 0 else "stable"
+        trend_line = (f'<p style="color:#AAC0D8;font-size:14px;line-height:1.6;margin:0 0 12px">'
+                      f'Sur les 3 derniers mois, la demande est <strong style="color:#fff">{direction}'
+                      f'{f" ({trend:+d} %)" if trend else ""}</strong> par rapport à l\'année.</p>')
+    related_html = "".join(
+        f'<li style="margin:0 0 6px;color:#EEF2F5;font-size:14px">« {q} »</li>' for q in related
+    ) or '<li style="color:#AAC0D8;font-size:14px">Pas assez de volume pour lister les recherches associées.</li>'
+
+    body = f"""
+      <p style="color:#EEF2F5;font-size:15px;line-height:1.65;margin:0 0 20px">
+        Bonjour{f" {escape(first_name)}" if first_name else ""},<br>
+        voici le rapport complet sur la demande pour <strong>{escape(activity_label)}</strong>.
+      </p>
+      <div style="background:rgba(13,75,88,.35);border:1px solid rgba(26,110,130,.4);border-radius:12px;padding:20px;margin-bottom:16px">
+        <p style="color:#AAC0D8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:0 0 6px">Indice de demande Google (12 mois)</p>
+        <p style="color:#DDAA40;font-size:34px;font-weight:800;margin:0">{score}<span style="font-size:16px;color:#AAC0D8">/100</span></p>
+        <p style="color:#AAC0D8;font-size:13px;margin:4px 0 0">Demande {level} — {city_line}</p>
+      </div>
+      {trend_line}
+      <p style="color:#AAC0D8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:20px 0 8px">Ce que vos futurs clients tapent dans Google</p>
+      <ul style="padding-left:18px;margin:0 0 20px">{related_html}</ul>
+      <p style="color:#AAC0D8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px">Pour capter cette demande</p>
+      <ol style="padding-left:18px;margin:0 0 24px;color:#EEF2F5;font-size:14px;line-height:1.6">
+        <li>Un site qui reprend ces mots exacts{f" ({', '.join(keywords)})" if keywords else ""} et le nom de votre ville.</li>
+        <li>La réservation ou la demande de devis en ligne, pour ne pas perdre les clients qui cherchent le soir.</li>
+        <li>Une fiche Google Business Profile à jour, avec un lien vers ce site.</li>
+      </ol>
+      <a href="{signup_url}" style="{_BTN_GOLD}">Créer mon site — 14 jours gratuits</a>
+      <p style="color:#5C7A8A;font-size:12px;line-height:1.6;margin:18px 0 0">
+        Indice relatif de 0 à 100 calculé par Google Trends : 100 correspond au pic de recherche de la période,
+        ce n'est pas un nombre de personnes.
+      </p>
+    """
+    footer = f"""
+      <p style="color:#5C7A8A;font-size:12px;line-height:1.6;margin:0">
+        Vous recevez cet email parce que vous avez demandé ce rapport sur
+        <a href="{tool_url}" style="color:#2A8FA5;text-decoration:none">klientys.co</a>.
+        Une question : <a href="mailto:support@klientys.co" style="color:#2A8FA5;text-decoration:none">support@klientys.co</a>
+      </p>
+    """
+    resend.Emails.send({
+        "from": f"Klientys <{settings.email_from}>",
+        "to": [to_email],
+        "subject": f"Votre rapport de demande locale — {activity_label}, {city}"[:150],
+        "html": _klientys_email_wrapper(
+            _klientys_header("Votre rapport de demande locale", f"{activity_label} · {city}"), body, footer),
+    })
+
+
+def send_referral_reward(
+    owner_email: str,
+    owner_name: str,
+    referred_name: str,
+    trial_extended: bool,
+    settings_url: str,
+) -> None:
+    """Prévient le parrain que son filleul s'est abonné et que son mois offert est acquis."""
+    from html import escape
+
+    reward = (
+        "Votre période d'essai est prolongée de 30 jours."
+        if trial_extended else
+        "Un mois d'abonnement est crédité sur votre compte : il sera déduit de votre prochaine facture."
+    )
+    body = f"""
+      <p style="color:#EEF2F5;font-size:15px;line-height:1.65;margin:0 0 16px">
+        Bonjour{f" {escape(owner_name)}" if owner_name else ""},<br>
+        <strong>{escape(referred_name or "Votre filleul")}</strong> vient de s'abonner à Klientys grâce à vous.
+      </p>
+      <p style="color:#EEF2F5;font-size:15px;line-height:1.65;margin:0 0 24px">{reward} Merci !</p>
+      <a href="{settings_url}" style="{_BTN_GOLD}">Voir mes parrainages</a>
+    """
+    footer = """
+      <p style="color:#5C7A8A;font-size:12px;line-height:1.6;margin:0">
+        Chaque nouvel abonné venu par votre lien ou par le badge de votre site vous rapporte un mois offert.
+      </p>
+    """
+    resend.Emails.send({
+        "from": f"Klientys <{settings.email_from}>",
+        "to": [owner_email],
+        "subject": "Un mois offert grâce à votre parrainage",
+        "html": _klientys_email_wrapper(_klientys_header("Merci pour votre parrainage"), body, footer),
+    })

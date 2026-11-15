@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     # Marge sur la revente de domaines OVH (% appliqué sur le prix HT OVH)
     domain_markup_percent: float = 25.0
 
+    # Prospection — API Sirene de l'INSEE (clé gratuite : portail-api.insee.fr,
+    # application abonnée à « API Sirene »). Sans clé, l'import hebdomadaire est inactif.
+    insee_api_key: str = ""
+    insee_sirene_url: str = "https://api.insee.fr/api-sirene/3.11"
+
     # Google Indexing API — service account JSON (stringifié)
     google_service_account_json: str = ""
 

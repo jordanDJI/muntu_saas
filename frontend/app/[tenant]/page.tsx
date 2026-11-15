@@ -610,6 +610,7 @@ export default async function TenantSitePage({
         showAbout={showAbout}
         showServices={showServices}
         tracking={tracking}
+        tenantSlug={tenantSlug}
       />
 
       {/* Scroll-reveal animation */}

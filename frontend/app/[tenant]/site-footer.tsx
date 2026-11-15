@@ -9,6 +9,19 @@ interface SiteFooterProps {
   showAbout: boolean;
   showServices: boolean;
   tracking: { ga4_id?: string; meta_pixel_id?: string; gtm_id?: string };
+  /** Slug du tenant : code de parrainage porté par le badge « Créé avec Klientys ». */
+  tenantSlug?: string;
+}
+
+// Badge : un visiteur qui crée son espace depuis ce lien est rattaché au tenant
+// comme filleul (parrainage, migration 086) — le tenant y gagne un mois offert.
+function klientysBadgeUrl(slug?: string): string {
+  const params = new URLSearchParams({ utm_source: "site_client", utm_medium: "badge" });
+  if (slug) {
+    params.set("ref", slug);
+    params.set("via", "badge");
+  }
+  return `https://klientys.co/?${params.toString()}`;
 }
 
 type Modal = "legal" | "privacy" | "cookies" | null;
@@ -157,7 +170,7 @@ function CookiesContent({ site, tracking }: { site: any; tracking: SiteFooterPro
 
 // ── Composant principal ─────────────────────────────────────────────────────
 
-export default function SiteFooter({ site, colors, showAbout, showServices, tracking }: SiteFooterProps) {
+export default function SiteFooter({ site, colors, showAbout, showServices, tracking, tenantSlug }: SiteFooterProps) {
   const [modal, setModal] = useState<Modal>(null);
   const [cookieConsent, setCookieConsent] = useState<boolean | null>(null);
   const social = site.social_links ?? {};
@@ -355,13 +368,21 @@ export default function SiteFooter({ site, colors, showAbout, showServices, trac
             <p className="text-xs" style={{ color: "rgba(255,255,255,0.32)" }}>
               © {new Date().getFullYear()} {site.title}. Tous droits réservés.
             </p>
-            <p className="text-xs" style={{ color: "rgba(255,255,255,0.22)" }}>
-              Créé avec{" "}
-              <a href="https://klientys.co" target="_blank" rel="noopener noreferrer"
-                className="hover:text-white/50 transition-colors underline">
-                Klientys
-              </a>
-            </p>
+            <a
+              href={klientysBadgeUrl(tenantSlug)}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-full px-3 py-1.5 text-xs transition-colors hover:bg-white/15"
+              style={{ color: "rgba(255,255,255,0.72)", backgroundColor: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)" }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+              <span>
+                Site créé avec <strong className="font-semibold text-white">Klientys</strong>
+                <span className="hidden sm:inline"> — créez le vôtre</span>
+              </span>
+            </a>
           </div>
         </div>
       </footer>

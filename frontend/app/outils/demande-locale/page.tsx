@@ -1,0 +1,52 @@
+import type { Metadata } from "next";
+import DemandTool from "./DemandTool";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
+
+export const metadata: Metadata = {
+  title: "Combien de clients cherchent votre métier dans votre ville ? — Outil gratuit | Klientys",
+  description:
+    "Mesurez gratuitement la demande Google pour votre activité dans votre ville : indice sur 12 mois, tendance, recherches de vos futurs clients. Résultat immédiat, sans inscription.",
+  alternates: { canonical: `${APP_URL}/outils/demande-locale` },
+  openGraph: {
+    title: "Combien de clients cherchent votre métier dans votre ville ?",
+    description: "Outil gratuit : la demande Google pour votre activité, ville par ville.",
+    url: `${APP_URL}/outils/demande-locale`,
+    type: "website",
+  },
+};
+
+export default function DemandeLocalePage() {
+  return (
+    <main>
+      <section style={{
+        background: "linear-gradient(160deg, rgba(13,75,88,.4) 0%, var(--l-bg2) 60%)",
+        borderBottom: "1px solid var(--l-border)",
+        padding: "64px 16px 48px",
+        textAlign: "center",
+      }}>
+        <div style={{ maxWidth: "680px", margin: "0 auto" }}>
+          <p style={{ fontSize: "11px", color: "var(--l-gold)", fontWeight: 600, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: "16px" }}>
+            ✦ Outil gratuit
+          </p>
+          <h1 style={{
+            fontFamily: "var(--font-bricolage), 'Bricolage Grotesque', sans-serif",
+            fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 800, lineHeight: 1.12, letterSpacing: "-.02em", margin: "0 0 16px",
+          }}>
+            Combien de clients cherchent votre métier dans votre ville&nbsp;?
+          </h1>
+          <p style={{ fontSize: "16px", color: "var(--l-text-2)", lineHeight: 1.6, margin: 0 }}>
+            Indiquez votre activité et votre ville : vous voyez tout de suite comment évolue la demande sur Google,
+            et ce que tapent vos futurs clients. Sans inscription.
+          </p>
+        </div>
+      </section>
+
+      <section style={{ padding: "40px 16px 72px" }}>
+        <div style={{ maxWidth: "720px", margin: "0 auto" }}>
+          <DemandTool />
+        </div>
+      </section>
+    </main>
+  );
+}

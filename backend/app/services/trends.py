@@ -159,6 +159,8 @@ async def get_demand_data(
         geocoded_zones.append({
             "name": zone,
             "score": score,
+            # False : Google n'a pas de donnée pour cette ville, `score` est l'indice national.
+            "matched": zone in trends["zone_scores"],
             "lat": coords[0] if coords else None,
             "lng": coords[1] if coords else None,
         })

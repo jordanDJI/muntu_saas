@@ -80,6 +80,34 @@ export const api = {
   replaceSiteTestimonials: (siteId: string, testimonials: object[]) =>
     apiFetch(`/api/v1/sites/${siteId}/testimonials`, { method: "PUT", body: JSON.stringify(testimonials) }),
 
+  // Acquisition (migration 086) — parrainage côté tenant, panel admin
+  getMyReferrals: () => apiFetch<any>("/api/v1/growth/referral/me"),
+  adminAcquisitionSummary: () => apiFetch<any>("/api/v1/admin/acquisition/summary"),
+  adminProspects: (params: Record<string, string | number | undefined>) => {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== "") qs.set(k, String(v)); });
+    return apiFetch<{ items: any[]; total: number }>(`/api/v1/admin/acquisition/prospects?${qs.toString()}`);
+  },
+  adminUpdateProspect: (id: string, body: { status?: string; notes?: string }) =>
+    apiFetch<any>(`/api/v1/admin/acquisition/prospects/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  adminImportProspects: (days = 8) =>
+    apiFetch<any>("/api/v1/admin/acquisition/prospects/import", { method: "POST", body: JSON.stringify({ days }) }),
+  adminMarketingLeads: (page = 1) =>
+    apiFetch<{ items: any[]; total: number }>(`/api/v1/admin/acquisition/leads?page=${page}`),
+  adminReferrals: () => apiFetch<any[]>("/api/v1/admin/acquisition/referrals"),
+  /** Télécharge un export CSV authentifié (le navigateur ne peut pas poser l'en-tête Authorization sur un simple lien). */
+  adminDownloadCsv: async (path: string, filename: string) => {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}${path}`, { headers });
+    if (!res.ok) throw new Error(`Export impossible (HTTP ${res.status})`);
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
   // Design requests
   createDesignRequest: (body: { message: string; is_additional: boolean; site_id?: string; support_ticket_id?: string }) =>
     apiFetch("/api/v1/design-requests/", { method: "POST", body: JSON.stringify(body) }),

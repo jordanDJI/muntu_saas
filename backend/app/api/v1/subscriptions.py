@@ -10,6 +10,7 @@ from app.middleware.tenant import get_current_tenant
 from app.core.supabase import get_supabase_admin
 from app.core.config import settings
 from app.services.subscription import get_tenant_plan
+from app.services import referral as referral_svc
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,11 @@ async def create_checkout(body: CheckoutIn, tenant_id: str = Depends(require_own
     # souscription (doublons côté Stripe, historique de facturation éclaté).
     if tenant.get("stripe_customer_id"):
         params["customer"] = tenant["stripe_customer_id"]
+    # Filleul : premier mois offert (coupon 100 % sur une facture, migration 086).
+    discounts = referral_svc.checkout_discounts(supabase, tenant_id)
+    if discounts:
+        params["discounts"] = discounts
+        params["metadata"]["referral_discount"] = "1"
 
     try:
         session = stripe.checkout.Session.create(**params)
@@ -324,6 +330,8 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
             customer_id = session.get("customer")
             if customer_id:
                 supabase.table("tenant").update({"stripe_customer_id": customer_id}).eq("id", tenant_id).execute()
+            if meta.get("referral_discount") == "1":
+                referral_svc.mark_discount_used(supabase, tenant_id)
             # Email de confirmation d'abonnement
             try:
                 plan_row = supabase.table("plan_subscription").select("name").eq("id", plan_id).maybe_single().execute()
@@ -394,6 +402,8 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
             paid_tenant_id = sub_data.get("tenant_id")
             plan_id = sub_data.get("plan_id")
             if paid_tenant_id:
+                # Première facture réellement payée d'un filleul → mois offert au parrain.
+                referral_svc.on_first_payment(supabase, paid_tenant_id)
                 try:
                     from datetime import datetime as _dt
                     plan_row = supabase.table("plan_subscription").select("name").eq("id", plan_id).maybe_single().execute()

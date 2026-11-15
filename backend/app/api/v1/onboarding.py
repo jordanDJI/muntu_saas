@@ -8,9 +8,16 @@ from app.core.config import settings
 from app.middleware.tenant import get_current_user
 from app.services.tenant_setup import provision_tenant
 from app.services.email import send_welcome_email
+from app.services import referral as referral_svc
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
 _log = logging.getLogger(__name__)
+
+# Segments de premier niveau du frontend (frontend/app/*) : un tenant ne peut pas les prendre.
+RESERVED_TENANT_SLUGS = {
+    "admin", "annuaire", "api", "auth", "blog", "dashboard", "embed", "join", "legal",
+    "login", "onboarding", "outils", "paypal-return", "site-internet-pour", "unsubscribe",
+}
 
 
 class TenantSetupIn(BaseModel):
@@ -20,6 +27,9 @@ class TenantSetupIn(BaseModel):
     tenant_slug: str
     sector: str = "other"
     country: str = "BE"
+    # Parrainage (migration 086) : slug du parrain et canal (link | badge | code).
+    referral_code: str | None = None
+    referral_via: str | None = None
 
 
 def _upsert_app_user(supabase, user_id: str, email: str, first_name: str, last_name: str) -> None:
@@ -72,6 +82,11 @@ async def setup_tenant(body: TenantSetupIn, user: dict = Depends(get_current_use
         existing_slug = row["tenant"]["slug"] if row.get("tenant") else body.tenant_slug
         return {"tenant_id": row["tenant_id"], "slug": existing_slug}
 
+    # Un slug égal à une route du frontend rendrait le site du tenant inaccessible
+    # (la route statique l'emporte sur /[tenant]).
+    if body.tenant_slug.strip().lower() in RESERVED_TENANT_SLUGS:
+        raise HTTPException(status_code=400, detail="Cette adresse est réservée. Choisissez-en une autre.")
+
     # Vérifier que le slug est disponible
     existing = supabase.table("tenant").select("id").eq("slug", body.tenant_slug).execute()
     if existing.data:
@@ -109,6 +124,23 @@ async def setup_tenant(body: TenantSetupIn, user: dict = Depends(get_current_use
 
     # Créer calendrier, pipeline, site, agents IA
     await provision_tenant(tenant_id, user_id, body.tenant_name)
+
+    # Parrainage : le code vient du formulaire, sinon des métadonnées posées à
+    # l'inscription par email (le lien de confirmation peut s'ouvrir sur un autre appareil).
+    meta = user.get("user_metadata") or {}
+    referral_code = body.referral_code or meta.get("referral_code")
+    if referral_code:
+        referral_svc.record_signup(
+            supabase, tenant_id, user_id, referral_code, body.referral_via or meta.get("referral_via"),
+        )
+
+    # Lead de l'outil « demande locale » devenu client : mesure de conversion de l'outil.
+    if email:
+        try:
+            supabase.table("marketing_lead").update({"converted_tenant_id": tenant_id}) \
+                .eq("email", email.strip().lower()).is_("converted_tenant_id", "null").execute()
+        except Exception as exc:
+            _log.warning("marketing_lead : conversion non enregistrée pour %s : %s", tenant_id, exc)
 
     # Injecter tenant_id dans app_metadata du JWT
     try:

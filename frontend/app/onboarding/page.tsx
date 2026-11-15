@@ -8,6 +8,33 @@ import { COUNTRIES } from "../../lib/countries";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// Parrainage (migration 086) : le code survit à la redirection Google/LinkedIn
+// et à la confirmation par email, qui repassent toutes deux par /auth/callback
+// sans conserver les paramètres d'URL. Même principe que klientys_pending_invite.
+const PENDING_REF_KEY = "klientys_pending_ref";
+const PENDING_REF_TTL = 30 * 24 * 60 * 60 * 1000;
+
+type PendingRef = { code: string; via: string };
+
+function readPendingRef(): PendingRef | null {
+  try {
+    const raw = localStorage.getItem(PENDING_REF_KEY);
+    if (!raw) return null;
+    const { code, via, ts } = JSON.parse(raw);
+    if (code && ts && Date.now() - ts < PENDING_REF_TTL) return { code, via: via || "link" };
+    localStorage.removeItem(PENDING_REF_KEY);
+  } catch { /* stockage indisponible */ }
+  return null;
+}
+
+function savePendingRef(ref: PendingRef) {
+  try { localStorage.setItem(PENDING_REF_KEY, JSON.stringify({ ...ref, ts: Date.now() })); } catch { /* ignoré */ }
+}
+
+function clearPendingRef() {
+  try { localStorage.removeItem(PENDING_REF_KEY); } catch { /* ignoré */ }
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const { t, lang } = useLanguage();
@@ -38,6 +65,34 @@ export default function OnboardingPage() {
   });
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
+  const [referralCode, setReferralCode] = useState("");
+  const [referralVia, setReferralVia] = useState("code");
+  const [referrerName, setReferrerName] = useState<string | null>(null);
+  const [referralInvalid, setReferralInvalid] = useState(false);
+
+  const checkReferral = async (code: string) => {
+    const value = code.trim();
+    setReferralInvalid(false);
+    if (!value) { setReferrerName(null); return; }
+    try {
+      const res = await fetch(`${API}/api/v1/growth/referral/check?code=${encodeURIComponent(value)}`);
+      const data = res.ok ? await res.json() : { valid: false };
+      setReferrerName(data.valid ? data.name : null);
+      setReferralInvalid(!data.valid);
+      if (data.valid) setReferralCode(data.code);
+    } catch { setReferrerName(null); }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlRef = params.get("ref");
+    const pending = urlRef ? { code: urlRef, via: params.get("via") || "link" } : readPendingRef();
+    if (!pending) return;
+    if (urlRef) savePendingRef(pending);
+    setReferralCode(pending.code);
+    setReferralVia(pending.via);
+    checkReferral(pending.code);
+  }, []);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const slugify = (v: string) => v.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
@@ -96,6 +151,12 @@ export default function OnboardingPage() {
         }
         if (meta.pending_sector)  set("sector",  meta.pending_sector);
         if (meta.pending_country) set("country", meta.pending_country);
+        // Code de parrainage saisi à l'inscription par email, confirmée sur un autre appareil
+        if (meta.referral_code && !readPendingRef()) {
+          setReferralCode(meta.referral_code);
+          setReferralVia(meta.referral_via || "link");
+          checkReferral(meta.referral_code);
+        }
       });
     }
   }, []);
@@ -141,6 +202,8 @@ export default function OnboardingPage() {
         first_name: form.first_name, last_name: form.last_name,
         tenant_name: form.tenant_name, tenant_slug: form.tenant_slug,
         sector: form.sector, country: form.country,
+        referral_code: referralCode.trim() || null,
+        referral_via: referralCode.trim() ? referralVia : null,
       }),
     });
     if (!res.ok) {
@@ -149,6 +212,7 @@ export default function OnboardingPage() {
       setLoading(false);
       return;
     }
+    clearPendingRef();
     // Conversions — compte créé avec succès
     if (typeof window !== "undefined") {
       const provider = (await supabase.auth.getSession()).data.session?.user?.app_metadata?.provider;
@@ -201,6 +265,8 @@ export default function OnboardingPage() {
           last_name: form.last_name,
           full_name: `${form.first_name} ${form.last_name}`.trim(),
           lang,
+          // Relu par /onboarding/setup si le lien de confirmation est ouvert sur un autre appareil.
+          ...(referrerName ? { referral_code: referralCode, referral_via: referralVia } : {}),
         },
       },
     });
@@ -341,6 +407,15 @@ export default function OnboardingPage() {
                 <h1 style={{ fontSize:"22px", fontWeight:800, fontFamily:"var(--font-bricolage),'Bricolage Grotesque',sans-serif", marginBottom:"24px", color:"var(--l-text)", letterSpacing:"-.02em" }}>
                   {t.ob_title}
                 </h1>
+
+                {referrerName && (
+                  <div style={{ display:"flex", alignItems:"center", gap:"10px", padding:"10px 14px", borderRadius:"10px", background:"rgba(221,170,64,.1)", border:"1px solid rgba(221,170,64,.35)", marginTop:"-8px", marginBottom:"20px" }}>
+                    <span style={{ fontSize:"18px" }} aria-hidden="true">🎁</span>
+                    <p style={{ margin:0, fontSize:"13px", color:"var(--l-text)", lineHeight:1.5 }}>
+                      Invité par <strong>{referrerName}</strong> : votre premier mois d&apos;abonnement est offert.
+                    </p>
+                  </div>
+                )}
 
                 <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:"14px" }}>
                   {!isFromGoogle && (
@@ -483,6 +558,22 @@ export default function OnboardingPage() {
                         <select className="d-select" value={form.country} onChange={(e) => set("country", e.target.value)}>
                           {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
                         </select>
+                      </div>
+
+                      <div>
+                        <label className="d-label">Code de parrainage <span style={{ color:"var(--l-text-3)", fontWeight:400 }}>(facultatif)</span></label>
+                        <input
+                          className="d-input"
+                          placeholder="Ex : salon-claire"
+                          value={referralCode}
+                          onChange={(e) => { setReferralCode(e.target.value); setReferralVia("code"); setReferrerName(null); setReferralInvalid(false); }}
+                          onBlur={(e) => checkReferral(e.target.value)}
+                        />
+                        {referralInvalid && (
+                          <p style={{ fontSize:"12px", color:"#FC8181", margin:"6px 0 0" }}>
+                            Ce code ne correspond à aucun espace Klientys. Vérifiez-le ou laissez le champ vide.
+                          </p>
+                        )}
                       </div>
 
                       {error && (

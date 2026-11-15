@@ -35,7 +35,20 @@ export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [tenantCount, setTenantCount] = useState<number | null>(null);
   const [testimonials, setTestimonials] = useState<Testimonial[]>(DEFAULT_TESTIMONIALS);
+  // Parrainage : un visiteur arrivé par le badge d'un site client ou par un lien
+  // de parrainage (?ref=slug) garde son code jusqu'à l'inscription.
+  const [signupHref, setSignupHref] = useState("/onboarding");
   const { t } = useLanguage();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (!ref) return;
+    const next = new URLSearchParams({ ref });
+    const via = params.get("via");
+    if (via) next.set("via", via);
+    setSignupHref(`/onboarding?${next.toString()}`);
+  }, []);
 
   // Supabase redirige les erreurs OTP vers le Site URL (klientys.co/#error=...)
   // On intercepte le hash et on renvoie vers /login avec un message lisible
@@ -132,7 +145,7 @@ export default function LandingPage() {
             <Link href="/dashboard" className="l-btn l-btn-primary" style={{ justifyContent: "center" }} onClick={closeMobile}>{t.nav_dashboard}</Link>
           ) : (
             <>
-              <Link href="/onboarding" className="l-btn l-btn-primary" style={{ justifyContent: "center" }} onClick={() => { closeMobile(); trackLead(); }}>{t.lp_nav_start}</Link>
+              <Link href={signupHref} className="l-btn l-btn-primary" style={{ justifyContent: "center" }} onClick={() => { closeMobile(); trackLead(); }}>{t.lp_nav_start}</Link>
               <Link href="/login" className="l-btn l-btn-ghost" style={{ justifyContent: "center" }} onClick={closeMobile}>{t.lp_nav_login}</Link>
             </>
           )}
@@ -159,7 +172,7 @@ export default function LandingPage() {
             ) : (
               <>
                 <Link href="/login" className="l-btn l-btn-ghost" style={{ padding: "9px 20px", fontSize: "14px" }}>{t.lp_nav_login}</Link>
-                <Link href="/onboarding" className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }} onClick={trackLead}>{t.lp_nav_start}</Link>
+                <Link href={signupHref} className="l-btn l-btn-primary" style={{ padding: "9px 20px", fontSize: "14px" }} onClick={trackLead}>{t.lp_nav_start}</Link>
               </>
             )}
             <button className="l-nav-hamburger" onClick={() => setMobileMenuOpen(true)} aria-label="Menu">
@@ -181,7 +194,7 @@ export default function LandingPage() {
           <h1>{t.lp_h1}<br /><span className="l-gradient-text">{t.lp_h1b}</span></h1>
           <p className="l-hero-sub">{t.lp_sub}</p>
           <div className="l-hero-ctas">
-            <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg" onClick={trackLead}>
+            <Link href={signupHref} className="l-btn l-btn-primary l-btn-lg" onClick={trackLead}>
               {t.lp_cta}
             </Link>
             <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">{t.lp_cta2}</Link>
@@ -451,7 +464,7 @@ export default function LandingPage() {
                 <li>Support email</li>
               </ul>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-                <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center", whiteSpace: "nowrap" }} onClick={trackLead}>{t.lp_waitlist}</Link>
+                <Link href={signupHref} className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center", whiteSpace: "nowrap" }} onClick={trackLead}>{t.lp_waitlist}</Link>
                 <span style={{ fontSize: "12px", visibility: "hidden" }}>placeholder</span>
               </div>
             </div>
@@ -481,7 +494,7 @@ export default function LandingPage() {
                 <li>Support prioritaire 24/7</li>
               </ul>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-                <Link href="/onboarding" className="l-btn l-btn-primary l-btn-featured" style={{ width: "100%", justifyContent: "center", whiteSpace: "nowrap" }} onClick={trackLead}>{t.lp_waitlist_arr}</Link>
+                <Link href={signupHref} className="l-btn l-btn-primary l-btn-featured" style={{ width: "100%", justifyContent: "center", whiteSpace: "nowrap" }} onClick={trackLead}>{t.lp_waitlist_arr}</Link>
                 <span style={{ fontSize: "12px", color: "var(--l-text-3)" }}>✓ Sans carte bancaire &nbsp;·&nbsp; 14 jours offerts</span>
               </div>
             </div>
@@ -509,7 +522,7 @@ export default function LandingPage() {
                 <li>Account manager dédié</li>
               </ul>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-                <Link href="/onboarding" className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center", whiteSpace: "nowrap" }} onClick={trackLead}>{t.lp_waitlist}</Link>
+                <Link href={signupHref} className="l-btn l-btn-ghost" style={{ width: "100%", justifyContent: "center", whiteSpace: "nowrap" }} onClick={trackLead}>{t.lp_waitlist}</Link>
                 <span style={{ fontSize: "12px", visibility: "hidden" }}>placeholder</span>
               </div>
             </div>
@@ -555,7 +568,7 @@ export default function LandingPage() {
             <h2>{t.lp_final_h2a}<br /><span className="l-gradient-text">{t.lp_final_h2b}</span></h2>
             <p style={{ whiteSpace: "pre-line" }}>{t.lp_final_sub}</p>
             <div className="l-cta-group">
-              <Link href="/onboarding" className="l-btn l-btn-primary l-btn-lg" onClick={trackLead}>{t.lp_final_cta}</Link>
+              <Link href={signupHref} className="l-btn l-btn-primary l-btn-lg" onClick={trackLead}>{t.lp_final_cta}</Link>
               <Link href="/login" className="l-btn l-btn-ghost l-btn-lg">{t.lp_cta2}</Link>
             </div>
             <p className="l-cta-note">{t.lp_final_note}</p>
@@ -584,8 +597,9 @@ export default function LandingPage() {
             <div className="l-footer-col">
               <h4>{t.lp_footer_access}</h4>
               <Link href="/login">{t.lp_nav_login}</Link>
-              <Link href="/onboarding">{t.lp_footer_create}</Link>
+              <Link href={signupHref}>{t.lp_footer_create}</Link>
               <Link href="/blog">Blog</Link>
+              <Link href="/outils/demande-locale">Outil gratuit : demande locale</Link>
             </div>
             <div className="l-footer-col">
               <h4>{t.lp_footer_contact_h}</h4>
@@ -650,7 +664,7 @@ export default function LandingPage() {
 
       {/* ── STICKY MOBILE CTA ── */}
       <div className="l-sticky-cta">
-        <Link href="/onboarding" className="l-btn l-btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={trackLead}>{t.lp_nav_start}</Link>
+        <Link href={signupHref} className="l-btn l-btn-primary" style={{ flex: 1, justifyContent: "center" }} onClick={trackLead}>{t.lp_nav_start}</Link>
         <Link href="/login" className="l-btn l-btn-ghost" style={{ padding: "12px 20px" }}>{t.lp_nav_login}</Link>
       </div>
 

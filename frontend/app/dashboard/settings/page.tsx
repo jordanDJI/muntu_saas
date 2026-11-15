@@ -13,6 +13,7 @@ import dynamic from "next/dynamic";
 import { isOptimizableImage } from "../../../lib/imageHost";
 import { setVisibleInterval } from "../../../lib/visibleInterval";
 import MfaSettingsCard from "../../../components/MfaSettingsCard";
+import SectionParrainage from "./SectionParrainage";
 const DesignRequestModal = dynamic(() => import("../../../components/DesignRequestModal"), { ssr: false });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -20,7 +21,8 @@ const DesignRequestModal = dynamic(() => import("../../../components/DesignReque
 type Section =
   | "profil" | "securite" | "site" | "metriques"
   | "abonnement" | "notifications" | "preferences"
-  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire" | "facturation" | "support" | "rgpd" | "contact_fields";
+  | "membres" | "integrations" | "export" | "activite" | "domaine" | "annuaire" | "facturation" | "support" | "rgpd" | "contact_fields"
+  | "parrainage";
 
 function getNav(t: any) {
   return [
@@ -38,6 +40,7 @@ function getNav(t: any) {
     { key: "contact_fields", label: t.sett_nav_contact_fields, icon: "🧩" },
     { key: "facturation",   label: t.sett_nav_facturation,   icon: "🧾" },
     { key: "integrations",  label: t.sett_nav_integrations,  icon: "🔗" },
+    { key: "parrainage",    label: t.sett_nav_parrainage,    icon: "🎁" },
     { key: "support",       label: t.sett_nav_support,       icon: "💬" },
     { key: "export",        label: t.sett_nav_export,        icon: "📤" },
     { key: "activite",      label: t.sett_nav_activite,      icon: "📋" },
@@ -4066,6 +4069,7 @@ const SECTION_MAP: Record<Exclude<Section, "domaine" | "support">, React.FC> = {
   contact_fields: SectionContactFields,
   facturation:   SectionFacturation,
   integrations:  SectionIntegrations,
+  parrainage:    SectionParrainage,
   export:        SectionExport,
   activite:      SectionActivite,
 };
