@@ -2398,32 +2398,42 @@ def send_demand_report(
     to_email: str,
     first_name: str,
     activity_label: str,
-    city: str,
     report: dict,
     signup_url: str,
     tool_url: str,
 ) -> None:
-    """Rapport complet de l'outil public « demande locale » (migration 086)."""
+    """Rapport complet de l'outil public « demande locale » (migration 086).
+
+    Granularité régionale : Google Trends ne publie pas de données par ville.
+    """
     from html import escape
 
-    score = int(report.get("aggregate_score") or 0)
-    city_score = report.get("city_score")
+    region = report.get("region") or {}
+    region_label = escape(region.get("name") or "votre région")
+    region_score = region.get("score")
     keywords = [escape(k) for k in (report.get("keywords") or [])[:3]]
     related = [escape(q) for q in (report.get("related_queries") or [])[:6]]
+    top = [escape(r.get("name", "")) for r in (report.get("top_regions") or [])[:3]]
     trend = report.get("trend_pct")
-    level = "forte" if score >= 67 else "moyenne" if score >= 34 else "faible"
 
-    city_line = (
-        f"À <strong>{escape(city)}</strong>, l'indice local est de <strong>{int(city_score)}/100</strong>."
-        if city_score is not None else
-        f"Google ne publie pas assez de données pour {escape(city)} seule : l'indice ci-dessus est national."
-    )
+    if region_score is None:
+        headline = "—"
+        region_line = (f"Trop peu de recherches en {region_label} pour que Google publie un indice "
+                       "régional : la tendance ci-dessous est nationale.")
+    else:
+        headline = f'{int(region_score)}<span style="font-size:16px;color:#AAC0D8">/100</span>'
+        region_line = (f"{region_label} se classe <strong style=\"color:#fff\">{region.get('rank')}<sup>e</sup> "
+                       f"sur {region.get('count')}</strong>. 100 = la région où ce métier pèse le plus "
+                       "dans les recherches Google.")
+    if top:
+        region_line += f" En tête : {', '.join(top)}."
+
     trend_line = ""
     if trend is not None:
         direction = "en hausse" if trend > 0 else "en baisse" if trend < 0 else "stable"
         trend_line = (f'<p style="color:#AAC0D8;font-size:14px;line-height:1.6;margin:0 0 12px">'
-                      f'Sur les 3 derniers mois, la demande est <strong style="color:#fff">{direction}'
-                      f'{f" ({trend:+d} %)" if trend else ""}</strong> par rapport à l\'année.</p>')
+                      f'Au niveau national, la demande des 3 derniers mois est <strong style="color:#fff">{direction}'
+                      f'{f" ({trend:+d} %)" if trend else ""}</strong> par rapport à la moyenne de l\'année.</p>')
     related_html = "".join(
         f'<li style="margin:0 0 6px;color:#EEF2F5;font-size:14px">« {q} »</li>' for q in related
     ) or '<li style="color:#AAC0D8;font-size:14px">Pas assez de volume pour lister les recherches associées.</li>'
@@ -2434,23 +2444,23 @@ def send_demand_report(
         voici le rapport complet sur la demande pour <strong>{escape(activity_label)}</strong>.
       </p>
       <div style="background:rgba(13,75,88,.35);border:1px solid rgba(26,110,130,.4);border-radius:12px;padding:20px;margin-bottom:16px">
-        <p style="color:#AAC0D8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:0 0 6px">Indice de demande Google (12 mois)</p>
-        <p style="color:#DDAA40;font-size:34px;font-weight:800;margin:0">{score}<span style="font-size:16px;color:#AAC0D8">/100</span></p>
-        <p style="color:#AAC0D8;font-size:13px;margin:4px 0 0">Demande {level} — {city_line}</p>
+        <p style="color:#AAC0D8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:0 0 6px">Indice régional Google (12 mois) — {region_label}</p>
+        <p style="color:#DDAA40;font-size:34px;font-weight:800;margin:0">{headline}</p>
+        <p style="color:#AAC0D8;font-size:13px;line-height:1.6;margin:6px 0 0">{region_line}</p>
       </div>
       {trend_line}
       <p style="color:#AAC0D8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:20px 0 8px">Ce que vos futurs clients tapent dans Google</p>
       <ul style="padding-left:18px;margin:0 0 20px">{related_html}</ul>
       <p style="color:#AAC0D8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;margin:0 0 8px">Pour capter cette demande</p>
       <ol style="padding-left:18px;margin:0 0 24px;color:#EEF2F5;font-size:14px;line-height:1.6">
-        <li>Un site qui reprend ces mots exacts{f" ({', '.join(keywords)})" if keywords else ""} et le nom de votre ville.</li>
+        <li>Un site qui reprend ces mots exacts{f" ({', '.join(keywords)})" if keywords else ""} et les villes où vous intervenez.</li>
         <li>La réservation ou la demande de devis en ligne, pour ne pas perdre les clients qui cherchent le soir.</li>
         <li>Une fiche Google Business Profile à jour, avec un lien vers ce site.</li>
       </ol>
       <a href="{signup_url}" style="{_BTN_GOLD}">Créer mon site — 14 jours gratuits</a>
       <p style="color:#5C7A8A;font-size:12px;line-height:1.6;margin:18px 0 0">
-        Indice relatif de 0 à 100 calculé par Google Trends : 100 correspond au pic de recherche de la période,
-        ce n'est pas un nombre de personnes.
+        Indices relatifs de 0 à 100 calculés par Google Trends, ce ne sont pas des nombres de personnes.
+        Google ne publie pas de données par ville : la mesure locale la plus fine est la région.
       </p>
     """
     footer = f"""
@@ -2463,9 +2473,10 @@ def send_demand_report(
     resend.Emails.send({
         "from": f"Klientys <{settings.email_from}>",
         "to": [to_email],
-        "subject": f"Votre rapport de demande locale — {activity_label}, {city}"[:150],
+        "subject": f"Votre rapport de demande — {activity_label}, {region.get('name') or 'votre région'}"[:150],
         "html": _klientys_email_wrapper(
-            _klientys_header("Votre rapport de demande locale", f"{activity_label} · {city}"), body, footer),
+            _klientys_header("Votre rapport de demande locale",
+                             f"{activity_label} · {region.get('name') or ''}"), body, footer),
     })
 
 

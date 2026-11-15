@@ -1,8 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+// Google Trends ne publie pas de données par ville (France, Belgique) : la mesure
+// locale la plus fine est la région. La liste vient de GET /growth/regions.
 
 const SECTORS = [
   { value: "trade",      label: "Artisanat, bâtiment" },
@@ -16,20 +19,23 @@ const SECTORS = [
 ];
 
 const COUNTRIES = [
-  { value: "FR", label: "France" },
-  { value: "BE", label: "Belgique" },
-  { value: "CH", label: "Suisse" },
-  { value: "LU", label: "Luxembourg" },
-  { value: "CA", label: "Canada" },
+  { value: "FR", label: "France", regionLabel: "Région" },
+  { value: "BE", label: "Belgique", regionLabel: "Région" },
+  { value: "CH", label: "Suisse", regionLabel: "Canton" },
+  { value: "LU", label: "Luxembourg", regionLabel: "District" },
+  { value: "CA", label: "Canada", regionLabel: "Province" },
 ];
+
+type RegionOption = { code: string; name: string; hint: string };
+type RegionResult = { code: string; name: string | null; score: number | null; rank: number | null; count: number };
 
 type Result = {
   activity: string;
-  city: string;
   country: string;
   keywords: string[];
   aggregate_score: number;
-  city_score: number | null;
+  region: RegionResult;
+  top_regions: { code: string; name: string; score: number }[];
   interest_over_time: { date: string; value: number }[];
   related_queries?: string[];
   related_count?: number;
@@ -56,19 +62,20 @@ function Trend({ points }: { points: { date: string; value: number }[] }) {
   return (
     <figure style={{ margin: "20px 0 0" }}>
       <svg viewBox="0 0 100 40" preserveAspectRatio="none" style={{ width: "100%", height: "88px", display: "block" }}
-        role="img" aria-label={`Évolution de la demande de ${first} à ${last}`}>
+        role="img" aria-label={`Évolution nationale de la demande de ${first} à ${last}`}>
         <polygon points={`0,40 ${line} 100,40`} fill="rgba(42,143,165,.14)" />
         <polyline points={line} fill="none" stroke="var(--l-teal-xl)" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       </svg>
       <figcaption style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--l-text-3)", marginTop: "6px" }}>
-        <span>{first}</span><span>Recherches Google, 12 mois</span><span>{last}</span>
+        <span>{first}</span><span>Recherches Google dans tout le pays, 12 mois</span><span>{last}</span>
       </figcaption>
     </figure>
   );
 }
 
 export default function DemandTool() {
-  const [form, setForm] = useState({ sector: "trade", activity: "", city: "", country: "FR" });
+  const [regions, setRegions] = useState<Record<string, RegionOption[]>>({});
+  const [form, setForm] = useState({ sector: "trade", activity: "", country: "FR", region: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result | null>(null);
@@ -76,7 +83,18 @@ export default function DemandTool() {
   const [sending, setSending] = useState(false);
   const [reportSent, setReportSent] = useState(false);
 
-  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  useEffect(() => {
+    fetch(`${API}/api/v1/growth/regions`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then(setRegions)
+      .catch(() => setError("Le service est momentanément indisponible. Réessayez dans quelques minutes."));
+  }, []);
+
+  const set = (k: keyof typeof form, v: string) =>
+    setForm((f) => ({ ...f, [k]: v, ...(k === "country" ? { region: "" } : {}) }));
+
+  const country = COUNTRIES.find((c) => c.value === form.country) ?? COUNTRIES[0];
+  const regionOptions = regions[form.country] ?? [];
 
   const analyse = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +138,8 @@ export default function DemandTool() {
     }
   };
 
-  const lvl = result ? level(result.aggregate_score) : null;
+  const region = result?.region;
+  const lvl = region?.score != null ? level(region.score) : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -138,18 +157,29 @@ export default function DemandTool() {
               value={form.activity} onChange={(e) => set("activity", e.target.value)} />
           </div>
           <div>
-            <label className="d-label" htmlFor="dl-city">Ville</label>
-            <input id="dl-city" className="d-input" placeholder="Ex : Marseille" required minLength={2} maxLength={80}
-              value={form.city} onChange={(e) => set("city", e.target.value)} />
-          </div>
-          <div>
             <label className="d-label" htmlFor="dl-country">Pays</label>
             <select id="dl-country" className="d-select" value={form.country} onChange={(e) => set("country", e.target.value)}>
               {COUNTRIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </div>
+          <div>
+            <label className="d-label" htmlFor="dl-region">{country.regionLabel}</label>
+            <select id="dl-region" className="d-select" required value={form.region} onChange={(e) => set("region", e.target.value)}
+              disabled={regionOptions.length === 0}>
+              <option value="">Choisir…</option>
+              {regionOptions.map((r) => (
+                <option key={r.code} value={r.code}>{r.hint ? `${r.name} (${r.hint})` : r.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <button type="submit" disabled={loading} className="l-btn l-btn-primary" style={{ justifyContent: "center", opacity: loading ? 0.6 : 1 }}>
+        {form.country === "FR" && (
+          <p style={{ margin: 0, fontSize: "12px", color: "var(--l-text-3)", lineHeight: 1.5 }}>
+            Google mesure la France selon les anciennes régions : repérez la vôtre grâce aux numéros de départements.
+          </p>
+        )}
+        <button type="submit" disabled={loading || !form.region} className="l-btn l-btn-primary"
+          style={{ justifyContent: "center", opacity: loading || !form.region ? 0.6 : 1 }}>
           {loading ? "Analyse en cours… (jusqu'à 30 s)" : "Mesurer la demande"}
         </button>
         {error && !result && (
@@ -157,34 +187,44 @@ export default function DemandTool() {
         )}
       </form>
 
-      {result && lvl && (
+      {result && region && (
         <div style={card} aria-live="polite">
           <p style={{ margin: "0 0 4px", fontSize: "12px", color: "var(--l-text-3)", textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 600 }}>
-            {result.activity} · {result.city}
+            {result.activity} · {region.name}
           </p>
-          <div style={{ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" }}>
-            <span style={{ fontFamily: "var(--font-bricolage), 'Bricolage Grotesque', sans-serif", fontSize: "56px", fontWeight: 800, color: lvl.color, lineHeight: 1 }}>
-              {result.aggregate_score}
-            </span>
-            <span style={{ fontSize: "16px", color: "var(--l-text-2)" }}>/100</span>
-            <span style={{ fontSize: "14px", fontWeight: 600, color: lvl.color }}>{lvl.label}</span>
-          </div>
-          <p style={{ margin: "12px 0 0", fontSize: "14px", color: "var(--l-text-2)", lineHeight: 1.6 }}>
-            {result.city_score !== null
-              ? <>À <strong style={{ color: "var(--l-text)" }}>{result.city}</strong>, l&apos;indice local est de <strong style={{ color: "var(--l-text)" }}>{result.city_score}/100</strong>.</>
-              : <>Google ne publie pas assez de données pour {result.city} seule : l&apos;indice ci-dessus est celui du pays.</>}
-            {result.trend_pct !== null && result.trend_pct !== 0 && (
-              <> Sur les 3 derniers mois, la demande est <strong style={{ color: "var(--l-text)" }}>
-                {result.trend_pct > 0 ? "en hausse" : "en baisse"} ({result.trend_pct > 0 ? "+" : ""}{result.trend_pct} %)
-              </strong> par rapport à la moyenne de l&apos;année.</>
-            )}
-          </p>
-          <Trend points={result.interest_over_time} />
-          {result.keywords.length > 0 && (
-            <p style={{ margin: "14px 0 0", fontSize: "12px", color: "var(--l-text-3)" }}>
-              Recherche analysée : « {result.keywords[0]} ». Indice relatif Google Trends : 100 correspond au pic de la période, ce n&apos;est pas un nombre de personnes.
+          {region.score != null && lvl ? (
+            <>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "12px", flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "var(--font-bricolage), 'Bricolage Grotesque', sans-serif", fontSize: "56px", fontWeight: 800, color: lvl.color, lineHeight: 1 }}>
+                  {region.score}
+                </span>
+                <span style={{ fontSize: "16px", color: "var(--l-text-2)" }}>/100</span>
+                <span style={{ fontSize: "14px", fontWeight: 600, color: lvl.color }}>{lvl.label}</span>
+              </div>
+              <p style={{ margin: "12px 0 0", fontSize: "14px", color: "var(--l-text-2)", lineHeight: 1.6 }}>
+                {region.name} se classe <strong style={{ color: "var(--l-text)" }}>{region.rank}<sup>e</sup> sur {region.count}</strong>.
+                {result.top_regions.length > 0 && <> En tête : {result.top_regions.map((r) => r.name).join(", ")}.</>}
+              </p>
+            </>
+          ) : (
+            <p style={{ margin: "8px 0 0", fontSize: "15px", color: "var(--l-text)", lineHeight: 1.6 }}>
+              Trop peu de recherches en {region.name} pour que Google publie un indice régional sur cette activité.
+              Essayez un métier plus courant, ou regardez la tendance nationale ci-dessous.
             </p>
           )}
+          {result.trend_pct !== null && result.trend_pct !== 0 && (
+            <p style={{ margin: "10px 0 0", fontSize: "14px", color: "var(--l-text-2)", lineHeight: 1.6 }}>
+              Dans tout le pays, la demande des 3 derniers mois est <strong style={{ color: "var(--l-text)" }}>
+                {result.trend_pct > 0 ? "en hausse" : "en baisse"} ({result.trend_pct > 0 ? "+" : ""}{result.trend_pct} %)
+              </strong> par rapport à la moyenne de l&apos;année.
+            </p>
+          )}
+          <Trend points={result.interest_over_time} />
+          <p style={{ margin: "14px 0 0", fontSize: "12px", color: "var(--l-text-3)", lineHeight: 1.5 }}>
+            {result.keywords.length > 0 && <>Recherche analysée : « {result.keywords[0]} ». </>}
+            Indice relatif Google Trends : 100 = la région où cette recherche pèse le plus. Ce n&apos;est pas un nombre de personnes,
+            et Google ne publie pas de données par ville.
+          </p>
         </div>
       )}
 

@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import { api } from "../../../lib/api";
 import { useLanguage } from "../../../contexts/LanguageContext";
 
-const DemandMap = dynamic(() => import("./DemandMap"), { ssr: false });
+// Google Trends ne publie pas de données par ville (France, Belgique) : la demande
+// locale se lit par région. La région du tenant vient du code postal de son site.
+type RegionScore = { code: string; name: string; score: number; rank?: number; count?: number };
 
 type Period = "week" | "month" | "quarter" | "year";
 
@@ -126,7 +127,11 @@ export default function DemandPotentialCard() {
 
   const switchPeriod = (p: Period) => { setPeriod(p); load(p); };
 
-  const zones: any[]      = data?.zones ?? [];
+  const regions: RegionScore[] = data?.regions ?? [];
+  const myRegion: RegionScore | null = data?.region ?? null;
+  // Les 5 premières régions, plus celle du tenant si elle n'en fait pas partie.
+  const shownRegions: RegionScore[] = regions.slice(0, 5).map((r, i) => ({ ...r, rank: i + 1 }));
+  if (myRegion?.rank && myRegion.rank > 5) shownRegions.push(myRegion);
   const related: string[] = data?.related_queries ?? [];
   const chart: any[]      = data?.interest_over_time ?? [];
   const agg: number       = data?.aggregate_score ?? 0;
@@ -235,28 +240,32 @@ export default function DemandPotentialCard() {
             </div>
           )}
 
-          {/* Zones */}
-          {zones.length > 0 ? (
+          {/* Régions */}
+          {regions.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs font-semibold text-gray-700">{t.dem_zones}</p>
+              {myRegion && (
+                <p className="text-xs text-primary-700 bg-primary-50 rounded-lg px-3 py-2">
+                  {t.dem_your_region} : <strong>{myRegion.name}</strong> —{" "}
+                  {t.dem_rank.replace("{rank}", String(myRegion.rank)).replace("{count}", String(myRegion.count))}
+                </p>
+              )}
               <div className="space-y-2">
-                {zones.map((z) => (
-                  <div key={z.name} className="flex items-center gap-3">
-                    <span className="text-xs text-gray-600 w-24 truncate">{z.name}</span>
-                    <div className="flex-1"><ScoreBar score={z.score ?? 0} /></div>
-                  </div>
-                ))}
+                {shownRegions.map((r) => {
+                  const mine = r.code === myRegion?.code;
+                  return (
+                    <div key={r.code} className="flex items-center gap-3">
+                      <span className={`text-[11px] w-5 text-right tabular-nums ${mine ? "font-bold text-primary-700" : "text-gray-400"}`}>{r.rank}</span>
+                      <span className={`text-xs w-32 truncate ${mine ? "font-semibold text-primary-700" : "text-gray-600"}`} title={r.name}>{r.name}</span>
+                      <div className="flex-1"><ScoreBar score={r.score} /></div>
+                    </div>
+                  );
+                })}
               </div>
-              {zones.some((z) => z.lat) && (
-                <div className="rounded-xl overflow-hidden border border-gray-100">
-                  <DemandMap zones={zones} />
-                </div>
+              {!myRegion && (
+                <p className="text-xs text-gray-400 italic">{t.dem_no_zones}</p>
               )}
             </div>
-          ) : (
-            <p className="text-xs text-gray-400 italic text-center py-2">
-              {t.dem_no_zones}
-            </p>
           )}
 
           {/* Requêtes associées */}

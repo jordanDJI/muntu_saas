@@ -236,12 +236,14 @@ async def export_leads(admin=Depends(get_current_admin)):
     )
     _log(admin, "acquisition_export_leads", payload={"count": len(rows)})
     for row in rows:
-        row["score"] = (row.get("report") or {}).get("aggregate_score")
+        row["score"] = (row.get("report") or {}).get("region_score")
+        row["rank"] = (row.get("report") or {}).get("region_rank")
         row["consent"] = "oui" if row.get("marketing_consent") else "non"
         row["converted"] = "oui" if row.get("converted_tenant_id") else "non"
     return _csv(rows, [
         ("created_at", "Date"), ("email", "Email"), ("first_name", "Prénom"), ("sector", "Secteur"),
-        ("activity", "Activité"), ("city", "Ville"), ("country", "Pays"), ("score", "Indice"),
+        ("activity", "Activité"), ("city", "Région"), ("country", "Pays"),
+        ("score", "Indice régional"), ("rank", "Rang"),
         ("consent", "Accepte d'être recontacté"), ("converted", "Inscrit"),
     ])
 

@@ -15,20 +15,21 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.core.config import settings
 from app.core.supabase import get_supabase_admin
 from app.middleware.rate_limit import check_rate_async, check_rate_by_key
 from app.middleware.tenant import get_current_tenant
 from app.services import referral as referral_svc
-from app.services.trends import SECTOR_KEYWORDS, get_demand_data
+from app.services.trends import REGIONS, SECTOR_KEYWORDS, get_demand_data, rank_region, region_name
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/growth", tags=["Growth"])
 
 CACHE_DAYS = 7
-SUPPORTED_COUNTRIES = {"FR", "BE", "CH", "LU", "CA", "DE", "NL"}
+# Pays dont Google publie les régions (services/trends.REGIONS).
+SUPPORTED_COUNTRIES = set(REGIONS)
 SECTOR_LABELS = {
     "health": "santé", "beauty": "beauté et bien-être", "coaching": "coaching et sport",
     "finance": "comptabilité et finance", "trade": "artisanat et bâtiment",
@@ -39,8 +40,9 @@ SECTOR_LABELS = {
 class DemandIn(BaseModel):
     sector: str = "other"
     activity: str = Field("", max_length=60)
-    city: str = Field(..., min_length=2, max_length=80)
     country: str = "FR"
+    # Code de région Google (ex. « FR-U ») : Google ne publie pas de données par ville.
+    region: str = Field(..., max_length=8)
 
     @field_validator("sector")
     @classmethod
@@ -53,10 +55,17 @@ class DemandIn(BaseModel):
         v = (v or "").strip().upper()
         return v if v in SUPPORTED_COUNTRIES else "FR"
 
-    @field_validator("activity", "city")
+    @field_validator("activity")
     @classmethod
     def _strip(cls, v: str) -> str:
         return " ".join((v or "").split())
+
+    @model_validator(mode="after")
+    def _region_in_country(self):
+        self.region = (self.region or "").strip().upper()
+        if not any(code == self.region for code, _, _ in REGIONS[self.country]):
+            raise ValueError("Région inconnue pour ce pays")
+        return self
 
 
 class DemandReportIn(DemandIn):
@@ -64,10 +73,6 @@ class DemandReportIn(DemandIn):
     first_name: str = Field("", max_length=60)
     marketing_consent: bool = False
     website: str = ""  # pot de miel : un humain ne le remplit jamais
-
-
-def _city_title(city: str) -> str:
-    return "-".join(part[:1].upper() + part[1:] for part in city.strip().split("-"))
 
 
 def trend_pct(points: list[dict]) -> int | None:
@@ -82,9 +87,9 @@ def trend_pct(points: list[dict]) -> int | None:
     return int(round((sum(recent) / len(recent) - overall) / overall * 100))
 
 
-async def _compute(body: DemandIn) -> dict:
-    city = _city_title(body.city)
-    key = f"{body.country}|{city.lower()}|{body.sector}|{body.activity.lower()}"
+async def _country_data(body: DemandIn) -> dict:
+    """Mesure d'un pays entier, mise en cache : une seule requête Google sert toutes ses régions."""
+    key = f"{body.country}|{body.sector}|{body.activity.lower()}"
     sb = get_supabase_admin()
     since = (datetime.now(timezone.utc) - timedelta(days=CACHE_DAYS)).isoformat()
     try:
@@ -92,7 +97,7 @@ async def _compute(body: DemandIn) -> dict:
             sb.table("public_demand_cache").select("data")
             .eq("cache_key", key).gte("computed_at", since).limit(1).execute().data
         )
-        if cached:
+        if cached and "regions" in cached[0]["data"]:
             return cached[0]["data"]
     except Exception as exc:
         logger.warning("public_demand_cache illisible : %s", exc)
@@ -104,22 +109,17 @@ async def _compute(body: DemandIn) -> dict:
     raw = await get_demand_data(
         sector=body.sector,
         country=body.country,
-        zones=[city],
         period="year",
         offer_names=[],
         custom_keywords=[body.activity] if body.activity else None,
     )
-    zone = (raw.get("zones") or [{}])[0]
     data = {
         "activity": body.activity or SECTOR_LABELS.get(body.sector, "services"),
         "sector": body.sector,
-        "city": city,
         "country": body.country,
         "keywords": raw.get("keywords", [])[:3],
         "aggregate_score": raw.get("aggregate_score", 0),
-        "city_score": zone.get("score") if zone.get("matched") else None,
-        "lat": zone.get("lat"),
-        "lng": zone.get("lng"),
+        "regions": raw.get("regions", []),
         "interest_over_time": raw.get("interest_over_time", []),
         "related_queries": raw.get("related_queries", []),
         "trend_pct": trend_pct(raw.get("interest_over_time", [])),
@@ -136,10 +136,35 @@ async def _compute(body: DemandIn) -> dict:
     return data
 
 
+async def _compute(body: DemandIn) -> dict:
+    data = await _country_data(body)
+    ranked = rank_region(data.get("regions") or [], body.region)
+    return {
+        **data,
+        # Région demandée, avec son rang. Absente du classement Google (trop peu de
+        # recherches) → score None : l'écran l'explique au lieu d'afficher 0.
+        "region": ranked or {
+            "code": body.region, "name": region_name(body.region), "score": None,
+            "rank": None, "count": len(data.get("regions") or []),
+        },
+        "top_regions": (data.get("regions") or [])[:3],
+    }
+
+
 def _public_view(data: dict) -> dict:
-    """Ce qui s'affiche sans email : le score et la courbe, pas les recherches associées."""
-    return {k: v for k, v in data.items() if k != "related_queries"} | {
+    """Ce qui s'affiche sans email : indice régional et courbe, pas les recherches associées."""
+    hidden = {"related_queries", "regions"}
+    return {k: v for k, v in data.items() if k not in hidden} | {
         "related_count": len(data.get("related_queries") or []),
+    }
+
+
+@router.get("/regions")
+async def list_regions():
+    """Régions publiées par Google Trends, par pays (liste de l'outil public)."""
+    return {
+        country: [{"code": code, "name": name, "hint": hint} for code, name, hint in regions]
+        for country, regions in REGIONS.items()
     }
 
 
@@ -164,6 +189,7 @@ async def demand_report(body: DemandReportIn, request: Request):
     if data["degraded"]:
         raise HTTPException(503, "Google Trends ne répond pas pour le moment. Réessayez dans quelques minutes.")
 
+    region = data["region"]
     sb = get_supabase_admin()
     try:
         sb.table("marketing_lead").insert({
@@ -172,10 +198,19 @@ async def demand_report(body: DemandReportIn, request: Request):
             "source": "demand_tool",
             "sector": body.sector,
             "activity": body.activity or None,
-            "city": data["city"],
+            # La colonne `city` (migration 086) porte la région : Google ne publie pas de villes.
+            "city": region.get("name"),
             "country": body.country,
             "marketing_consent": body.marketing_consent,
-            "report": {k: data.get(k) for k in ("aggregate_score", "city_score", "trend_pct", "keywords")},
+            "report": {
+                "aggregate_score": data.get("aggregate_score"),
+                "region_code": region.get("code"),
+                "region_score": region.get("score"),
+                "region_rank": region.get("rank"),
+                "region_count": region.get("count"),
+                "trend_pct": data.get("trend_pct"),
+                "keywords": data.get("keywords"),
+            },
         }).execute()
     except Exception as exc:
         logger.error("marketing_lead non enregistré : %s", exc, exc_info=True)
@@ -188,15 +223,14 @@ async def demand_report(body: DemandReportIn, request: Request):
             to_email=email,
             first_name=body.first_name.strip(),
             activity_label=data["activity"],
-            city=data["city"],
             report=data,
-            signup_url=f"{base}/onboarding?via=demand_tool",
+            signup_url=f"{base}/onboarding",
             tool_url=f"{base}/outils/demande-locale",
         )
     except Exception as exc:
         logger.error("Rapport de demande non envoyé à %s : %s", email, exc, exc_info=True)
         raise HTTPException(502, "Le rapport n'a pas pu être envoyé. Réessayez dans quelques minutes.")
-    return data
+    return {k: v for k, v in data.items() if k != "regions"}
 
 
 # ── Parrainage ────────────────────────────────────────────────────────────────

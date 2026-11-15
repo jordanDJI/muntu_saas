@@ -314,7 +314,7 @@ function LeadsTab() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", color: C.text }}>
             <thead>
               <tr style={{ textAlign: "left", color: C.muted, fontSize: "11px", textTransform: "uppercase", letterSpacing: ".05em" }}>
-                {["Date", "Email", "Activité", "Ville", "Indice", "Consentement", "Inscrit"].map((h) => (
+                {["Date", "Email", "Activité", "Région", "Indice régional", "Consentement", "Inscrit"].map((h) => (
                   <th key={h} style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, fontWeight: 600 }}>{h}</th>
                 ))}
               </tr>
@@ -326,7 +326,11 @@ function LeadsTab() {
                   <td style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>{l.first_name ? `${l.first_name} · ` : ""}{l.email}</td>
                   <td style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>{l.activity || SECTORS[l.sector] || "—"}</td>
                   <td style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>{l.city} {l.country ? `(${l.country})` : ""}</td>
-                  <td style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>{l.report?.aggregate_score ?? "—"}</td>
+                  <td style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                    {l.report?.region_score != null
+                      ? `${l.report.region_score}/100 · ${l.report.region_rank}e/${l.report.region_count}`
+                      : "—"}
+                  </td>
                   <td style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}`, color: l.marketing_consent ? C.green : C.faint }}>{l.marketing_consent ? "Oui" : "Non"}</td>
                   <td style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
                     {l.converted_tenant_id

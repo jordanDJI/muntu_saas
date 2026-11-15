@@ -4,13 +4,13 @@ import DemandTool from "./DemandTool";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://klientys.co";
 
 export const metadata: Metadata = {
-  title: "Combien de clients cherchent votre métier dans votre ville ? — Outil gratuit | Klientys",
+  title: "Votre métier est-il recherché dans votre région ? — Outil gratuit | Klientys",
   description:
-    "Mesurez gratuitement la demande Google pour votre activité dans votre ville : indice sur 12 mois, tendance, recherches de vos futurs clients. Résultat immédiat, sans inscription.",
+    "Mesurez gratuitement la demande Google pour votre activité dans votre région : indice sur 12 mois, classement des régions, recherches de vos futurs clients. Résultat immédiat, sans inscription.",
   alternates: { canonical: `${APP_URL}/outils/demande-locale` },
   openGraph: {
-    title: "Combien de clients cherchent votre métier dans votre ville ?",
-    description: "Outil gratuit : la demande Google pour votre activité, ville par ville.",
+    title: "Votre métier est-il recherché dans votre région ?",
+    description: "Outil gratuit : la demande Google pour votre activité, région par région.",
     url: `${APP_URL}/outils/demande-locale`,
     type: "website",
   },
@@ -33,11 +33,11 @@ export default function DemandeLocalePage() {
             fontFamily: "var(--font-bricolage), 'Bricolage Grotesque', sans-serif",
             fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 800, lineHeight: 1.12, letterSpacing: "-.02em", margin: "0 0 16px",
           }}>
-            Combien de clients cherchent votre métier dans votre ville&nbsp;?
+            Votre métier est-il recherché dans votre région&nbsp;?
           </h1>
           <p style={{ fontSize: "16px", color: "var(--l-text-2)", lineHeight: 1.6, margin: 0 }}>
-            Indiquez votre activité et votre ville : vous voyez tout de suite comment évolue la demande sur Google,
-            et ce que tapent vos futurs clients. Sans inscription.
+            Indiquez votre activité et votre région : vous voyez tout de suite où elle se situe face aux autres régions
+            sur Google, comment évolue la demande, et ce que tapent vos futurs clients. Sans inscription.
           </p>
         </div>
       </section>

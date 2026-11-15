@@ -423,26 +423,26 @@ async def get_roi_potential(
     country         = tenant_row.get("country", "BE") or "BE"
     custom_keywords = tenant_row.get("trend_keywords") or None
 
-    # ── Site + zones + offers ─────────────────────────────────────────────────
-    zones: list[str] = []
+    # ── Site : prestations + région du tenant ─────────────────────────────────
+    # Google Trends ne publie que des régions (pas de villes) : la région du
+    # tenant est déduite du code postal de l'adresse de son site.
+    from app.services.trends import get_demand_data, region_from_postal
+
     offer_names: list[str] = []
+    tenant_region: str | None = None
     try:
-        sites_res = sb.table("site").select("id, coverage_zones").eq("tenant_id", tenant_id).execute()
+        sites_res = sb.table("site").select("id, site_style").eq("tenant_id", tenant_id).execute()
         site_row = sites_res.data[0] if sites_res.data else None
-        _roi_logger.info("roi-potential tenant=%s site_row=%s", tenant_id, site_row)
         if site_row:
-            site_id = site_row["id"]
-            raw_zones = site_row.get("coverage_zones") or []
-            zones = [str(z).strip() for z in raw_zones if z and str(z).strip()]
-            _roi_logger.info("roi-potential zones trouvées: %s", zones)
-            offers = sb.table("service_offer").select("name").eq("site_id", site_id).execute()
+            address = (site_row.get("site_style") or {}).get("address_parts") or {}
+            tenant_region = region_from_postal(address.get("country") or country, address.get("postal_code"))
+            offers = sb.table("service_offer").select("name").eq("site_id", site_row["id"]).execute()
             offer_names = [o["name"] for o in (offers.data or []) if o.get("name")]
     except Exception as e:
-        _roi_logger.warning("roi-potential: erreur lecture site/zones: %s", e)
+        _roi_logger.warning("roi-potential: erreur lecture site: %s", e)
 
     # ── Fetch from pytrends ───────────────────────────────────────────────────
-    from app.services.trends import get_demand_data
-    data = await get_demand_data(sector, country, zones, period, offer_names, custom_keywords)
+    data = await get_demand_data(sector, country, period, offer_names, custom_keywords, region=tenant_region)
     data["period"] = period
 
     # Google n'a pas répondu : ne pas figer des zéros pour 24 h. On sert le

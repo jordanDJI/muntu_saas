@@ -23,7 +23,15 @@ os.environ.setdefault("FRONTEND_URL", "https://klientys.co")
 os.environ.setdefault("APP_URL", "https://klientys.co")
 os.environ.setdefault("AGENT_LINK_SECRET", "test")
 
-from app.api.v1.growth import trend_pct  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
+
+from app.api.v1.growth import DemandIn, trend_pct  # noqa: E402
+from app.services.trends import (  # noqa: E402
+    REGIONS,
+    _FR_DEPT_REGION,
+    rank_region,
+    region_from_postal,
+)
 from app.services.referral import (  # noqa: E402
     credit_cents,
     extended_trial_end,
@@ -180,6 +188,44 @@ class DemandTrendTest(unittest.TestCase):
 
     def test_no_volume(self):
         self.assertIsNone(trend_pct([{"value": 0}] * 52))
+
+
+class RegionTest(unittest.TestCase):
+    def test_every_metropolitan_department_has_a_region(self):
+        # 01 à 95 ; la Corse (2A, 2B) partage le préfixe postal « 20 ».
+        self.assertEqual(set(_FR_DEPT_REGION), {f"{n:02d}" for n in range(1, 96)})
+
+    def test_french_postal_codes(self):
+        self.assertEqual(region_from_postal("FR", "13001"), "FR-U")   # Marseille → PACA
+        self.assertEqual(region_from_postal("fr", "33000"), "FR-B")   # Bordeaux → Aquitaine
+        self.assertEqual(region_from_postal("FR", "75011"), "FR-J")
+        self.assertEqual(region_from_postal("FR", "20000"), "FR-H")   # Ajaccio
+        self.assertIsNone(region_from_postal("FR", "97400"))          # outre-mer : pas une région Google
+        self.assertIsNone(region_from_postal("FR", "abc"))
+
+    def test_belgian_postal_codes(self):
+        self.assertEqual(region_from_postal("BE", "1000"), "BE-BRU")
+        self.assertEqual(region_from_postal("BE", "1500"), "BE-VLG")  # Halle
+        self.assertEqual(region_from_postal("BE", "1300"), "BE-WAL")  # Wavre
+        self.assertEqual(region_from_postal("BE", "4000"), "BE-WAL")
+        self.assertEqual(region_from_postal("BE", "9000"), "BE-VLG")
+        self.assertIsNone(region_from_postal("CH", "1200"))
+
+    def test_rank(self):
+        regions = [{"code": "FR-A", "score": 40}, {"code": "FR-U", "score": 90}, {"code": "FR-B", "score": 60}]
+        ranked = rank_region(regions, "FR-B")
+        self.assertEqual((ranked["rank"], ranked["count"]), (2, 3))
+        self.assertIsNone(rank_region(regions, "FR-J"))
+        self.assertIsNone(rank_region(regions, None))
+
+    def test_region_must_belong_to_the_country(self):
+        self.assertEqual(DemandIn(country="FR", region="fr-u").region, "FR-U")
+        with self.assertRaises(ValidationError):
+            DemandIn(country="BE", region="FR-U")
+
+    def test_region_codes_are_unique(self):
+        codes = [code for regions in REGIONS.values() for code, _, _ in regions]
+        self.assertEqual(len(codes), len(set(codes)))
 
 
 if __name__ == "__main__":
