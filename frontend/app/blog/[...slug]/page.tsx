@@ -121,7 +121,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     languages["x-default"] = languages["fr"] ?? `${APP_URL}${pathFor(lang, post.slug)}`;
   }
 
-  const ogImage = `${APP_URL}/api/og?title=${encodeURIComponent(post.title)}&color=indigo`;
+  const ogImage = `${APP_URL}/api/og/blog?title=${encodeURIComponent(post.title)}`
+    + (post.category ? `&category=${encodeURIComponent(post.category)}` : "");
   return {
     title: post.title, // le layout racine applique déjà le template "%s | Klientys"
     description: post.description,

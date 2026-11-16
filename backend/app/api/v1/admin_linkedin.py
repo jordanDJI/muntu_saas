@@ -106,7 +106,7 @@ async def share_blog_post(post_id: str, body: ShareIn, admin=Depends(get_current
     sb = get_supabase_admin()
     rows = (
         sb.table("blog_post")
-        .select("id, slug, title, description, status, lang, linkedin_post_urn")
+        .select("id, slug, title, description, category, status, lang, linkedin_post_urn")
         .eq("id", post_id).limit(1).execute().data or []
     )
     if not rows:
@@ -125,7 +125,9 @@ async def share_blog_post(post_id: str, body: ShareIn, admin=Depends(get_current
             title=post["title"],
             description=post.get("description"),
             commentary=body.commentary,
-            image_url=f"{base}/api/og?title={quote(post['title'])}&color=indigo",
+            # Même image que la balise og:image de l'article (charte Klientys).
+            image_url=f"{base}/api/og/blog?title={quote(post['title'])}"
+                      + (f"&category={quote(post['category'])}" if post.get("category") else ""),
         )
     except linkedin.LinkedInError as exc:
         logger.warning("Partage LinkedIn échoué (article %s) : %s", post_id, exc)

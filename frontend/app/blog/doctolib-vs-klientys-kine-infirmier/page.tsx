@@ -7,7 +7,7 @@ const SLUG = "doctolib-vs-klientys-kine-infirmier";
 const TITLE = "Doctolib vs Klientys : ce que les kinés et infirmiers ne savent pas";
 const DESCRIPTION = "Doctolib coûte 160 €/mois et vous rend invisible en dehors de votre ville principale. Voici pourquoi de plus en plus de libéraux font le switch.";
 const PUBLISHED = "2025-05-16";
-const OG_IMAGE = `${APP_URL}/api/og?title=${encodeURIComponent("Doctolib vs Klientys")}&color=indigo`;
+const OG_IMAGE = `${APP_URL}/api/og/blog?title=${encodeURIComponent(TITLE)}&category=${encodeURIComponent("Comparatifs")}`;
 
 export const metadata: Metadata = {
   title: `${TITLE} | Klientys`,

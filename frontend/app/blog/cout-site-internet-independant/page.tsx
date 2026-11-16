@@ -11,7 +11,7 @@ const TITLE = `Combien coûte vraiment un site internet pour indépendant en ${Y
 const DESCRIPTION = "Wix, Squarespace, site sur mesure, tout-en-un : comparaison honnête des coûts réels pour un indépendant ou une TPE. Avec le calcul que personne ne fait.";
 const PUBLISHED = "2025-05-16";
 const DATE_MODIFIED = `${YEAR}-01-01`;
-const OG_IMAGE = `${APP_URL}/api/og?title=${encodeURIComponent("Coût site internet indépendant")}&color=indigo`;
+const OG_IMAGE = `${APP_URL}/api/og/blog?title=${encodeURIComponent(TITLE)}&category=${encodeURIComponent("Prix & ROI")}`;
 
 export const metadata: Metadata = {
   title: `${TITLE} | Klientys`,

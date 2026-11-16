@@ -7,7 +7,7 @@ const SLUG = "remplir-agenda-en-ligne-sans-plateforme";
 const TITLE = "Comment remplir son agenda en ligne sans Habitatpresto ni Superprof";
 const DESCRIPTION = "Ces plateformes prennent 15 à 20 % sur chaque mission. Voici comment attirer des clients directement via Google — et garder 100 % de vos revenus.";
 const PUBLISHED = "2025-05-16";
-const OG_IMAGE = `${APP_URL}/api/og?title=${encodeURIComponent("Agenda en ligne sans plateforme")}&color=teal`;
+const OG_IMAGE = `${APP_URL}/api/og/blog?title=${encodeURIComponent(TITLE)}&category=${encodeURIComponent("Acquisition clients")}`;
 
 export const metadata: Metadata = {
   title: `${TITLE} | Klientys`,
