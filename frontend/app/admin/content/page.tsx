@@ -23,7 +23,12 @@ async function adminFetch<T>(path: string, options: RequestInit = {}): Promise<T
   return res.json();
 }
 
-const BLOG_CATEGORIES = ["Comparatifs", "Prix & ROI", "Acquisition clients", "Outils", "Témoignages", "Actualités"];
+// Les huit premières = univers du plan éditorial (catégories posées par l'agent de contenu,
+// docs/seo/content-agent-prompt.md étape 7) ; les suivantes restent pour les articles existants.
+const BLOG_CATEGORIES = [
+  "Acquisition clients", "Comparatifs", "Organisation", "Agents IA", "Facturation", "Pilotage",
+  "Relation client", "RGPD & sécurité", "Prix & ROI", "Outils", "Témoignages", "Actualités",
+];
 const BLOG_METIERS = ["Santé", "Artisans & services", "Beauté", "Coaching", "Finance", "Restaurant", "Commerce"];
 
 type BlogPost = {

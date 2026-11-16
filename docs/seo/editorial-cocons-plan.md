@@ -44,7 +44,9 @@ Un article ne cite **que** des fonctionnalités de cette liste. En cas de doute,
 | Agents IA | Chatbot sur le site (gratuit sur tous les plans), agent support client, assistant du pro sur Telegram / WhatsApp |
 | Widgets | Chatbot, réservation et formulaire de contact intégrables sur un site existant (Wix, WordPress…), multilingues fr/en/de/nl, mesure des demandes par support |
 | Facturation (France) | Factures générées depuis un rendez-vous, suivi brouillon → envoyée → payée, avoirs, numérotation continue, mentions légales françaises (franchise 293 B, exonération médicale 261-4-1°, autoliquidation…), PDF **Factur-X** (EN 16931) + UBL |
-| Analytics | Visites, clics, formulaires et conversations du site ; potentiel de demande locale (Google Trends par zone) |
+| Analytics | Visites, clics, formulaires et conversations du site ; potentiel de demande locale : indice Google Trends **par région** (classement des régions du pays, celle du pro mise en avant d'après le code postal de son site) |
+| Outil gratuit | Page publique `/outils/demande-locale`, sans inscription : indice de demande Google pour un métier dans une région, rang de la région, tendance nationale ; rapport complet par email |
+| Parrainage | Lien et code de parrainage dans les paramètres ; le filleul a son premier mois offert, le parrain reçoit un mois offert quand le filleul paie (ou 30 jours d'essai en plus s'il est encore en essai) ; le badge « Site créé avec Klientys » en pied de site porte le code du pro |
 | Annuaire | Fiche gratuite dans l'annuaire public `/annuaire/{metier}/{ville}` |
 | Équipe & croissance | Membres invités avec accès limités par section (CRM, agenda, site, analytics, agents) ; plan Business : membres illimités, plusieurs espaces de travail avec un calendrier chacun, contacts illimités |
 | Accompagnement | Guides interactifs intégrés au tableau de bord, support par email (prioritaire en Pro) ; plan Business : onboarding personnalisé, refonte du design par l'équipe Klientys (1 site, sur demande), interlocuteur dédié |
@@ -59,6 +61,7 @@ Un article ne cite **que** des fonctionnalités de cette liste. En cas de doute,
 - **Télétransmission / carte Vitale / tiers payant / dossier patient médical** : n'existe pas.
 - **Paiement en ligne de la prestation complète** (hors acompte PayPal), **Stripe pour les clients finaux**, **SMS** : n'existe pas.
 - **Application mobile native** : n'existe pas (le dashboard est responsive).
+- **Demande par ville** : Google Trends ne publie pas de données par ville pour la France et la Belgique, seulement par région (anciennes régions en France). Ne jamais écrire « la demande dans votre ville » ni parler d'une carte par ville.
 - Aucun **chiffre de clients, de RDV pris, de gain de temps** : il n'existe pas de statistique publiée. Ne pas en inventer.
 
 ---
@@ -409,7 +412,7 @@ Colonnes :
 | 35 | `pause-dejeuner-conges-agenda-en-ligne` | C | GUIDE | RÉTENTION | `P-KINE`, `P-INF` | à mesurer | Comment régler pause déjeuner et congés dans l'agenda ? | Plusieurs plages par jour, périodes bloquées | `rdv-non-honores-solutions-independant` |
 | 36 | `travailler-avec-secretaire-acces-limite` | F | GUIDE | RÉTENTION | `P-KINE`, `P-ART` | #217 | Comment donner accès à une secrétaire sans tout partager, pas à pas ? | Invitation, rôle membre, accès par section | `rgpd-donnees-clients-independant` |
 | 37 | `double-authentification-comptes-pro` | H | GUIDE | RÉTENTION | tous | à mesurer | Comment protéger son compte avec la double authentification ? | Activation pas à pas (annexe A) | `rgpd-donnees-clients-independant` |
-| 38 | `potentiel-demande-locale-google-trends` | A | CAS | RÉTENTION | tous | #113 | Mon métier est-il recherché dans ma ville ? | Carte de potentiel de demande locale (Google Trends par zone) | `avis-google-artisan` |
+| 38 | `potentiel-demande-locale-google-trends` | A | CAS | RÉTENTION | tous | #113 | Mon métier est-il recherché dans ma région ? | Classement des régions Google Trends (celle du pro mise en avant) et outil gratuit `/outils/demande-locale` ; dire pourquoi il n'existe pas de donnée par ville | `avis-google-artisan` |
 | 39 | `essai-gratuit-klientys-14-jours` | C | GUIDE | BOFU | tous | à mesurer | Que mettre en place pendant les 14 jours d'essai, dans quel ordre ? | Parcours réel : site → disponibilités → prestations → publication → chatbot ; essai sans carte | `agenda-en-ligne-crm-independant-guide-2026` |
 
 > **Pour allonger le calendrier** : ajouter des lignes en respectant §4 (« ce qu'on n'écrit pas »),

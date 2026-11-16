@@ -1,9 +1,9 @@
 # Consigne de l'agent de contenu Klientys
 
-> Texte à coller tel quel comme consigne de la routine planifiée. Versionné ici pour garder
-> l'historique ; la routine elle-même vit hors du repo.
-> Remplacer `{API_URL}` par l'URL du backend de production. Le secret est fourni à la routine via
-> la variable d'environnement `CONTENT_AGENT_SECRET`, jamais écrit dans cette consigne.
+> Texte à coller tel quel comme consigne de la routine planifiée, à partir de la ligne `---`.
+> Versionné ici pour garder l'historique ; la routine elle-même vit hors du repo : après toute
+> modification de ce fichier, recoller le texte dans la routine. Le secret est fourni à la routine
+> via la variable d'environnement `CONTENT_AGENT_SECRET`, jamais écrit dans cette consigne.
 
 ---
 
@@ -27,7 +27,7 @@ bas) et tu suis le plan éditorial.
 ## Déroulé
 
 1. **Liste l'existant.**
-   `GET {API_URL}/api/v1/admin/content/blog/agent-list` avec l'en-tête
+   `GET https://api.klientys.co/api/v1/admin/content/blog/agent-list` avec l'en-tête
    `X-Content-Agent-Secret: $CONTENT_AGENT_SECRET`. Garde l'ensemble des `slug` (toutes langues,
    brouillons et publiés). Ajoute-y les slugs publiés en dur listés au début du §9 du plan.
 
@@ -78,7 +78,7 @@ bas) et tu suis le plan éditorial.
    - [ ] Pays précisé si l'article parle de réglementation ; rien sur la facturation belge.
 
 7. **Envoie le brouillon.**
-   `POST {API_URL}/api/v1/admin/content/blog/propose` avec l'en-tête
+   `POST https://api.klientys.co/api/v1/admin/content/blog/propose` avec l'en-tête
    `X-Content-Agent-Secret: $CONTENT_AGENT_SECRET` et ce corps JSON :
 
    | Champ | Valeur |
