@@ -28,7 +28,7 @@ from datetime import datetime, timedelta, timezone
 
 import stripe
 
-from app.core.config import settings
+from app.core.urls import default_frontend
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +244,7 @@ def _notify_referrer(sb, referrer_id: str, referred_name: str, status: str) -> N
                 owner_name=owner.get("name", ""),
                 referred_name=referred_name,
                 trial_extended=(status == "trial_extended"),
-                settings_url=f"{settings.frontend_url}/dashboard/settings?section=parrainage",
+                settings_url=f"{default_frontend()}/dashboard/settings?section=parrainage",
             )
     except Exception as exc:
         logger.warning("Email de récompense parrainage non envoyé (%s) : %s", referrer_id, exc, exc_info=True)
@@ -270,7 +270,7 @@ def referral_overview(sb, tenant_id: str) -> dict:
         "created_at": r.get("created_at"),
         "converted_at": r.get("converted_at"),
     } for r in rows]
-    base = settings.frontend_url.rstrip("/")
+    base = default_frontend()  # lien partagé par le tenant : domaine de production
     return {
         "code": slug,
         "link": f"{base}/?ref={slug}" if slug else "",

@@ -17,8 +17,8 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
-from app.core.config import settings
 from app.core.supabase import get_supabase_admin
+from app.core.urls import default_frontend
 from app.middleware.rate_limit import check_rate_async, check_rate_by_key
 from app.middleware.tenant import get_current_tenant
 from app.services import referral as referral_svc
@@ -215,7 +215,7 @@ async def demand_report(body: DemandReportIn, request: Request):
     except Exception as exc:
         logger.error("marketing_lead non enregistré : %s", exc, exc_info=True)
 
-    base = settings.frontend_url.rstrip("/")
+    base = default_frontend()
     try:
         from app.services.email import send_demand_report
         await asyncio.to_thread(

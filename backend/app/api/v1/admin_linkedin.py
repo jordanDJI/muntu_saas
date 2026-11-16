@@ -21,15 +21,20 @@ from app.api.v1.admin import _blog_path, _log
 from app.core.config import settings
 from app.core.crypto import decrypt
 from app.core.supabase import get_supabase_admin
+from app.core.urls import default_frontend
 from app.middleware.admin import get_current_admin, viewer_or_above
 from app.services import linkedin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["Admin — LinkedIn"])
 
+# Liens publics et retours navigateur : toujours le domaine de production
+# (FRONTEND_URL_PROD), jamais FRONTEND_URL qui peut désigner le domaine Vercel —
+# LinkedIn affichait « muntu-saas.vercel.app » sous les articles partagés.
+
 
 def _content_url(**params) -> str:
-    return f"{settings.frontend_url.rstrip('/')}/admin/content?{urlencode(params)}"
+    return f"{default_frontend()}/admin/content?{urlencode(params)}"
 
 
 @router.get("/linkedin/status")
@@ -112,7 +117,7 @@ async def share_blog_post(post_id: str, body: ShareIn, admin=Depends(get_current
     if post.get("linkedin_post_urn"):
         raise HTTPException(409, "Cet article a déjà été partagé sur LinkedIn.")
 
-    base = settings.frontend_url.rstrip("/")
+    base = default_frontend()
     try:
         urn = await linkedin.share_article(
             sb,

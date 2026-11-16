@@ -576,7 +576,7 @@ async def import_new_companies() -> None:
 
 async def check_linkedin_connection() -> None:
     """Rafraîchit le jeton LinkedIn si possible, sinon alerte l'opérateur 7 jours avant l'expiration."""
-    from app.core.config import settings
+    from app.core.urls import default_frontend
     from app.services import linkedin
 
     if not linkedin.is_configured():
@@ -600,7 +600,7 @@ async def check_linkedin_connection() -> None:
     try:
         from app.services.email import send_linkedin_expiry_admin
         await asyncio.to_thread(
-            send_linkedin_expiry_admin, left, f"{settings.frontend_url.rstrip('/')}/admin/content",
+            send_linkedin_expiry_admin, left, f"{default_frontend()}/admin/content",
         )
         sb.table("linkedin_connection").update(
             {"expiry_notified_at": datetime.now(timezone.utc).isoformat()}

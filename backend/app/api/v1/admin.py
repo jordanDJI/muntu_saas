@@ -2448,12 +2448,13 @@ async def propose_blog_post(request: Request, body: BlogProposeIn, x_content_age
 
     sb = get_supabase_admin()
 
-    # Évite les collisions avec la contrainte UNIQUE sur (slug, lang)
+    # Un slug déjà pris est refusé. Il recevait auparavant un suffixe aléatoire
+    # (« …-a3f2 ») : un run qui n'avait pas pu lire agent-list déposait alors un
+    # doublon du sujet sous un slug hors calendrier, sans que l'agent le voie.
     slug = body.slug
-    existing = sb.table("blog_post").select("slug").eq("lang", "fr").like("slug", f"{slug}%").execute().data or []
-    taken = {r["slug"] for r in existing}
-    if slug in taken:
-        slug = f"{slug}-{secrets.token_hex(2)}"
+    taken = sb.table("blog_post").select("id").eq("lang", "fr").eq("slug", slug).limit(1).execute().data
+    if taken:
+        raise HTTPException(409, f"Le slug « {slug} » existe déjà (brouillon ou publié) : aucun article créé.")
 
     row = sb.table("blog_post").insert({
         "slug":            slug,

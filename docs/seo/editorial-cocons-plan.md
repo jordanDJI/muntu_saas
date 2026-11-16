@@ -149,7 +149,7 @@ seulement du produit.
 
 ### E — Facturation électronique & conformité *(mis à jour : Klientys a désormais un module de facturation)*
 - **Pilier** : « Facturation électronique 2026-2027 : ce qui change pour un indépendant en France ».
-- **Faits vérifiés** : réception des factures électroniques obligatoire pour toutes les entreprises assujetties à la TVA au **1er septembre 2026** ; émission obligatoire pour les TPE/PME au **1er septembre 2027** ; la transmission passe par une **PDP**.
+- **Faits vérifiés** : réception des factures électroniques obligatoire **depuis le 1er septembre 2026** pour toutes les entreprises assujetties à la TVA ; émission obligatoire pour les TPE/PME **à partir du 1er septembre 2027** ; la transmission passe par une **PDP**. Écrire chaque date au temps qui correspond au jour de rédaction, et la revérifier à la source (DGFiP) avant de la citer.
 - **Angle Klientys** : factures et avoirs conformes aux mentions françaises, format Factur-X.
 - **⚠️ Limite à toujours écrire** : Klientys **produit** la facture au bon format, mais **ne la transmet pas** à une PDP. L'article le dit clairement et explique que le pro devra choisir une PDP. Ne jamais écrire « 100 % conforme à la réforme ».
 - **France uniquement** : pas d'article sur Peppol / Belgique dans cet univers.
@@ -352,6 +352,18 @@ L'ancienne URL `cout-site-internet-independant-2025` redirige en 301 vers
 `cout-site-internet-independant` (`frontend/next.config.ts`) : ne jamais créer de slug « prix /
 coût d'un site » avec une année.
 
+Les lignes 3 et 4 portent les slugs d'articles **déjà publiés** depuis la base
+(`agenda-en-ligne-crm-independant-guide-2026`, `agent-ia-whatsapp-legal-2026-regles-meta`) : ce
+sont ces piliers. Ils ne sont pas à réécrire, et les liens croisés pointent vers eux.
+
+Publiés depuis la base hors calendrier (constat du 16/11/2026) — ne pas les retraiter, y renvoyer
+par un lien quand le sujet les recoupe : `combien-coute-doctolib-par-mois`,
+`crm-profession-liberale-lequel-choisir-2026`, `google-my-business-artisan-guide-2026`,
+`logiciel-agenda-liberal-pas-cher-2026`, `site-internet-automatise-ia-independant-2026`.
+Recoupements connus : la ligne 1 avec `combien-coute-doctolib-par-mois` et
+`logiciel-agenda-liberal-pas-cher-2026` (la ligne 1 traite *comment quitter* une plateforme, pas
+son prix ni le choix d'un logiciel) ; les lignes 13 et 26 avec `google-my-business-artisan-guide-2026`.
+
 Colonnes :
 - **Mots-clés** : numéros de [`keywords-200.md`](./keywords-200.md). Le premier est le mot-clé principal (H1, slug, description). « à mesurer » = pas encore de donnée de volume.
 - **Répond à** : la question précise de l'article. **Deux lignes ne répondent jamais à la même question** : si un sujet voisin existe, l'article renvoie vers lui au lieu de le retraiter.
@@ -360,10 +372,10 @@ Colonnes :
 
 | # | Slug | Univers | Format | Étape | Persona | Mots-clés | Répond à | Source unique | Lien croisé |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | `quitter-plateforme-reservation-independant` | B | PILIER | MOFU | `P-KINE`, `P-BIEN`, `P-SERV` | #11, #13, #14, #17 | Pourquoi et comment quitter une plateforme de réservation sans perdre ses clients ? | Export des données, site à soi, fiche annuaire gratuite, pas de commission | `agenda-crm-independant-guide` |
+| 1 | `quitter-plateforme-reservation-independant` | B | PILIER | MOFU | `P-KINE`, `P-BIEN`, `P-SERV` | #11, #13, #14, #17 | Pourquoi et comment quitter une plateforme de réservation sans perdre ses clients ? | Export des données, site à soi, fiche annuaire gratuite, pas de commission | `agenda-en-ligne-crm-independant-guide-2026` |
 | 2 | `facturation-electronique-independant-2026-2027` | E | PILIER | TOFU | `P-CREA`, `P-SOLO`, `P-ART` | #201, #202 | Qu'est-ce qui change, pour qui et à quelle date ? | Calendrier officiel DGFiP ; ce que Klientys fait (Factur-X) et ne fait pas (PDP) | `devis-facture-relance-artisan` |
-| 3 | `agenda-crm-independant-guide` | C | PILIER | MOFU | tous | #7, #126, #127, #10 | Comment organiser agenda, demandes et fiches clients dans un seul outil ? | Plages multiples, périodes bloquées, demandes en Kanban, import CSV avec enrichissement | `rgpd-donnees-clients-independant` |
-| 4 | `agent-ia-whatsapp-regles-meta-2026` | D | PILIER | TOFU | tous | #116, #124 | A-t-on le droit d'utiliser un agent IA sur WhatsApp depuis 2026 ? | Politique WhatsApp Business de Meta (15/01/2026), distinction agent métier / chatbot généraliste | `rdv-non-honores-solutions-independant` |
+| 3 | `agenda-en-ligne-crm-independant-guide-2026` | C | PILIER | MOFU | tous | #7, #126, #127, #10 | Comment organiser agenda, demandes et fiches clients dans un seul outil ? | Plages multiples, périodes bloquées, demandes en Kanban, import CSV avec enrichissement | `rgpd-donnees-clients-independant` |
+| 4 | `agent-ia-whatsapp-legal-2026-regles-meta` | D | PILIER | TOFU | tous | #116, #124 | A-t-on le droit d'utiliser un agent IA sur WhatsApp depuis 2026 ? | Politique WhatsApp Business de Meta (15/01/2026), distinction agent métier / chatbot généraliste | `rdv-non-honores-solutions-independant` |
 | 5 | `excel-ou-crm-independant` | C | COMPAR | MOFU | `P-SOLO` | #223, #229 | À partir de quand Excel ne suffit plus ? | Import du fichier Excel sans doublon, export toujours possible (pas d'enfermement) | `outils-disperses-independant-centraliser` |
 | 6 | `ajouter-reservation-site-wix-wordpress` | B | GUIDE | MOFU | `P-BIEN`, `P-SERV`, `P-ART` | #237, #238, #239 | Comment ajouter la prise de RDV à mon site actuel sans le refaire ? | Widgets Klientys (réservation, contact, chatbot) avec mesure par support | `quitter-plateforme-reservation-independant` |
 | 7 | `mentions-obligatoires-facture` | E | REGLE | TOFU | `P-CREA`, `P-SOLO` | #204, #205, #209 | Quelles mentions doit porter ma facture, selon mon régime de TVA ? | Mentions gérées par le module (293 B, 261-4-1°, autoliquidation…) ; source impots.gouv | `facturation-electronique-independant-2026-2027` |
@@ -371,14 +383,14 @@ Colonnes :
 | 9 | `outils-disperses-independant-centraliser` | C | ERREURS | TOFU | `P-SOLO` | #229, #183 | Que perd-on à jongler entre Excel, WhatsApp, agenda papier et Word ? | Ce qui se perd entre les outils ; site + agenda + demandes + factures au même endroit | `excel-ou-crm-independant` |
 | 10 | `factur-x-cest-quoi` | E | QUESTION | TOFU | tous | #203 | Factur-X, c'est quoi, concrètement ? | PDF lisible + XML EN 16931 embarqué, expliqué simplement | `facturation-electronique-independant-2026-2027` |
 | 11 | `indicateurs-piloter-activite-independant` | F | PILIER | TOFU | `P-CROISS` | #211, #216, #85 | Quels chiffres suivre chaque mois pour savoir si mon activité progresse ? | Visites, demandes, taux de conversion, RDV — tels que les mesure le tableau de bord | `savoir-dou-viennent-ses-clients` |
-| 12 | `rgpd-donnees-clients-independant` | H | PILIER | TOFU | tous | #136, #140, #135 | Que dois-je vraiment faire avec les données de mes clients ? | Export RGPD, bandeau cookies, consentement au formulaire ; source CNIL (APD pour la Belgique) | `agenda-crm-independant-guide` |
+| 12 | `rgpd-donnees-clients-independant` | H | PILIER | TOFU | tous | #136, #140, #135 | Que dois-je vraiment faire avec les données de mes clients ? | Export RGPD, bandeau cookies, consentement au formulaire ; source CNIL (APD pour la Belgique) | `agenda-en-ligne-crm-independant-guide-2026` |
 | 13 | `avis-google-artisan` | A | GUIDE | TOFU | `P-ART` | #112, #81 | Comment obtenir des avis Google, concrètement, après un chantier ? | Cohérence fiche Google / site / fiche annuaire | `devis-facture-relance-artisan` |
 | 14 | `acompte-reservation-en-ligne` | G | GUIDE | MOFU | `P-BIEN`, `P-RESTO` | #234 | Comment demander un acompte à la réservation, et est-ce légal ? | Paramétrage PayPal, remboursement automatique au refus | `rdv-non-honores-solutions-independant` |
 | 15 | `consultant-coach-site-suivi-prospects` | C | CAS | MOFU | `P-SERV` | #226, #227, #228, #230 | Comment un consultant ou un coach suit ses prospects jusqu'au premier RDV ? | Demandes en Kanban, questions personnalisées au formulaire, timeline des échanges | `excel-ou-crm-independant` |
 | 16 | `facture-kine-exoneration-tva` | E | REGLE | TOFU | `P-KINE` | #206 | Quelle mention d'exonération sur une facture de kiné ? | Différence exonération / autoliquidation (erreur fréquente des logiciels) | `quitter-plateforme-reservation-independant` |
 | 17 | `instagram-reservation-estheticienne` | B | CAS | MOFU | `P-BIEN` | #240, #177 | Comment passer des réservations par DM Instagram à un vrai agenda ? | Intégration de type lien (bio Instagram) + mesure des demandes par support | `acompte-reservation-en-ligne` |
 | 18 | `erreurs-premier-site-internet-independant` | A | ERREURS | TOFU | `P-CREA` | #94, #179 | Quelles erreurs rendent un premier site inutile ? | Assistant de création en 9 étapes : ce que chaque étape évite | `cout-site-internet-independant` |
-| 19 | `chatbot-site-prise-rdv-fonctionnement` | D | CAS | MOFU | `P-KINE` | #117, #122, #193 | À quoi ressemble une journée avec un chatbot sur son site ? | Chatbot gratuit sur tous les plans ; ce qu'il lui faut pour bien répondre (prestations, contact) | `agenda-crm-independant-guide` |
+| 19 | `chatbot-site-prise-rdv-fonctionnement` | D | CAS | MOFU | `P-KINE` | #117, #122, #193 | À quoi ressemble une journée avec un chatbot sur son site ? | Chatbot gratuit sur tous les plans ; ce qu'il lui faut pour bien répondre (prestations, contact) | `agenda-en-ligne-crm-independant-guide-2026` |
 | 20 | `savoir-dou-viennent-ses-clients` | F | GUIDE | TOFU | `P-CROISS` | #212, #214 | Comment savoir quel canal m'apporte des demandes ? | Source de chaque demande, mesure par support (site, Instagram, page externe) — sans reprendre la liste des indicateurs (→ #11) | `indicateurs-piloter-activite-independant` |
 | 21 | `devis-facture-relance-artisan` | F | GUIDE | MOFU | `P-ART` | #52, #207 | Comment ne plus perdre une demande entre le devis et le paiement ? | Demandes centralisées, facture depuis le RDV, suivi jusqu'à « payée » | `facturation-electronique-independant-2026-2027` |
 | 22 | `infirmier-liberal-telephone-tournee` | D | CAS | MOFU | `P-INF` | #118, #125 | Comment ne plus être interrompu par le téléphone pendant les soins ? | Assistant Telegram/WhatsApp du pro + chatbot du site (pas de réponse aux appels — le dire) | `rdv-non-honores-solutions-independant` |
@@ -398,7 +410,7 @@ Colonnes :
 | 36 | `travailler-avec-secretaire-acces-limite` | F | GUIDE | RÉTENTION | `P-KINE`, `P-ART` | #217 | Comment donner accès à une secrétaire sans tout partager, pas à pas ? | Invitation, rôle membre, accès par section | `rgpd-donnees-clients-independant` |
 | 37 | `double-authentification-comptes-pro` | H | GUIDE | RÉTENTION | tous | à mesurer | Comment protéger son compte avec la double authentification ? | Activation pas à pas (annexe A) | `rgpd-donnees-clients-independant` |
 | 38 | `potentiel-demande-locale-google-trends` | A | CAS | RÉTENTION | tous | #113 | Mon métier est-il recherché dans ma ville ? | Carte de potentiel de demande locale (Google Trends par zone) | `avis-google-artisan` |
-| 39 | `essai-gratuit-klientys-14-jours` | C | GUIDE | BOFU | tous | à mesurer | Que mettre en place pendant les 14 jours d'essai, dans quel ordre ? | Parcours réel : site → disponibilités → prestations → publication → chatbot ; essai sans carte | `agenda-crm-independant-guide` |
+| 39 | `essai-gratuit-klientys-14-jours` | C | GUIDE | BOFU | tous | à mesurer | Que mettre en place pendant les 14 jours d'essai, dans quel ordre ? | Parcours réel : site → disponibilités → prestations → publication → chatbot ; essai sans carte | `agenda-en-ligne-crm-independant-guide-2026` |
 
 > **Pour allonger le calendrier** : ajouter des lignes en respectant §4 (« ce qu'on n'écrit pas »),
 > en vérifiant que la question de « Répond à » n'est traitée par aucune autre ligne, et en remplissant

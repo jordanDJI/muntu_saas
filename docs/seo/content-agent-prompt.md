@@ -97,7 +97,8 @@ bas) et tu suis le plan éditorial.
    Pas de style en ligne, pas de script, pas d'`id`.
 
    Un seul appel. Si l'appel échoue, ne réessaie pas plus de deux fois. N'envoie jamais un deuxième
-   article dans la même exécution.
+   article dans la même exécution. Une réponse **409** signifie que le slug existe déjà : ne
+   réessaie pas, ne change pas de slug, signale-le dans le rapport.
 
 ## Rapport final
 
