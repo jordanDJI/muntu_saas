@@ -102,7 +102,7 @@
 **Tickets** : KLT-1509
 
 ### US-15.09 · Partager les articles sur la page LinkedIn de Klientys
-**Statut** : ⬜ À faire · **Persona** : Opérateur
+**Statut** : 🟡 Développé, à valider en réel · **Persona** : Opérateur
 
 > En tant qu'**opérateur**, je veux qu'un article publié puisse être partagé sur la page LinkedIn de Klientys afin de diffuser le contenu sans copier-coller.
 
@@ -198,9 +198,11 @@
 **Estimation** — S
 
 ### KLT-1521 · Publication des articles sur la page LinkedIn
-**Type** : Amélioration · **Statut** : ⬜ À faire · **Priorité** : P3 · **US** : US-15.09 · **Réf.** : mémoire projet « Partage blog → page LinkedIn »
+**Type** : Amélioration · **Statut** : 🟡 Développé (16 novembre 2026), non testé contre l'API réelle · **Priorité** : P3 · **US** : US-15.09 · **Réf.** : migration `087_linkedin_share.sql`, `services/linkedin.py`, `api/v1/admin_linkedin.py`, `admin/content/page.tsx`, CLAUDE.md « Partage sur la page LinkedIn »
 
-**En attente** — Demande d'accès à la Community Management API envoyée ; le développement attend la réponse de LinkedIn (décision du 3 novembre 2026).
+**Accès accordé (16 novembre 2026)** — LinkedIn a provisionné l'app « Klientys Publisher » (id `266675869`) en *Development Tier* de la Community Management API. Le développement peut démarrer une fois récupérés le Client ID / Client Secret de cette app, l'URL de redirection déclarée et l'ID numérique de la page.
+
+**Contraintes connues** — jeton d'accès d'environ 60 jours ; le jeton de rafraîchissement n'est pas garanti en Development Tier : prévoir une reconnexion de la page et une alerte avant expiration. Le compte qui autorise doit être administrateur de la page (`w_organization_social`).
 
 **Constat** — L'accès à la Community Management API a été demandé ; un formulaire doit être rempli **avant le 21 novembre 2026**. Aucun code n'existe encore.
 

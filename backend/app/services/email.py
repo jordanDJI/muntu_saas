@@ -2514,3 +2514,26 @@ def send_referral_reward(
         "subject": "Un mois offert grâce à votre parrainage",
         "html": _klientys_email_wrapper(_klientys_header("Merci pour votre parrainage"), body, footer),
     })
+
+
+def send_linkedin_expiry_admin(days_left: int, reconnect_url: str) -> None:
+    """Prévient l'opérateur que la connexion à la page LinkedIn va expirer (migration 087)."""
+    when = "aujourd'hui" if days_left <= 0 else f"dans {days_left} jour{'s' if days_left > 1 else ''}"
+    resend.Emails.send({
+        "from": f"{settings.email_from_name} <{settings.email_from}>",
+        "to": [settings.email_from],
+        "subject": f"[Klientys] La connexion à la page LinkedIn expire {when}",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;background:#fff">
+          <h2 style="color:#07222F;margin-bottom:8px">Connexion LinkedIn à renouveler</h2>
+          <p style="color:#374151;font-size:14px;line-height:1.6">
+            L'autorisation de publier sur la page LinkedIn de Klientys expire {when}.
+            LinkedIn ne permet pas de la renouveler automatiquement à notre niveau d'accès :
+            reconnectez la page pour continuer à partager les articles du blog.
+          </p>
+          <div style="margin-top:24px">
+            <a href="{reconnect_url}" style="{_BTN}">Reconnecter la page</a>
+          </div>
+        </div>
+        """,
+    })

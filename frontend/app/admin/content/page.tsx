@@ -31,7 +31,21 @@ type BlogPost = {
   category?: string; metier?: string; body_html?: string;
   reading_minutes: number; status: string; published_at?: string; updated_at?: string;
   lang?: string; translation_group_id?: string; translated_from?: string;
+  linkedin_post_urn?: string | null; linkedin_shared_at?: string | null;
 };
+
+// Partage sur la page LinkedIn de Klientys (migration 087) : articles FR publiés,
+// une seule fois, déclenché à la main — jamais par l'agent de contenu.
+type LinkedInStatus = {
+  configured: boolean; connected: boolean; redirect_uri?: string;
+  days_left?: number | null; expired?: boolean; auto_refresh?: boolean; connected_by?: string | null;
+};
+
+const linkedinPostUrl = (urn: string) => `https://www.linkedin.com/feed/update/${urn}/`;
+
+function defaultCommentary(title?: string, description?: string) {
+  return [title?.trim(), description?.trim(), "À lire sur le blog Klientys :"].filter(Boolean).join("\n\n");
+}
 
 const LANG_LABELS: Record<string, string> = { fr: "🇫🇷 FR", en: "🇬🇧 EN", de: "🇩🇪 DE", nl: "🇳🇱 NL" };
 
@@ -86,6 +100,13 @@ export default function ContentPage() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [editPost, setEditPost] = useState<Partial<BlogPost> | null>(null);
   const [previewHtml, setPreviewHtml] = useState(false);
+  const [originalStatus, setOriginalStatus] = useState<string | null>(null);
+
+  // ── LinkedIn ──
+  const [li, setLi] = useState<LinkedInStatus | null>(null);
+  const [shareChecked, setShareChecked] = useState(true);
+  const [shareText, setShareText] = useState<string | null>(null); // null = texte par défaut
+  const [shareModal, setShareModal] = useState<{ post: BlogPost; text: string } | null>(null);
 
   // ── Testimonials state ──
   const [testis, setTestis] = useState<Testimonial[]>([]);
@@ -103,7 +124,65 @@ export default function ContentPage() {
     try { setTestis(await adminFetch("/api/v1/admin/content/testimonials")); } catch {}
   }, []);
 
-  useEffect(() => { loadPosts(); loadTestis(); }, [loadPosts, loadTestis]);
+  const loadLinkedIn = useCallback(async () => {
+    try { setLi(await adminFetch<LinkedInStatus>("/api/v1/admin/linkedin/status")); } catch { setLi(null); }
+  }, []);
+
+  useEffect(() => { loadPosts(); loadTestis(); loadLinkedIn(); }, [loadPosts, loadTestis, loadLinkedIn]);
+
+  // Retour de l'autorisation LinkedIn (?linkedin=connected|error)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("linkedin");
+    if (!result) return;
+    if (result === "connected") showToast("Page LinkedIn connectée ✓");
+    else showToast(`Connexion LinkedIn refusée : ${params.get("reason") ?? "erreur inconnue"}`, false);
+    window.history.replaceState(null, "", "/admin/content");
+  }, []);
+
+  const liReady = !!(li?.connected && !li.expired);
+
+  const connectLinkedIn = async () => {
+    try {
+      const { url } = await adminFetch<{ url: string }>("/api/v1/admin/linkedin/connect", { method: "POST" });
+      window.location.href = url;
+    } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
+  };
+
+  const disconnectLinkedIn = async () => {
+    if (!confirm("Déconnecter la page LinkedIn ? Les articles ne pourront plus y être partagés.")) return;
+    try {
+      await adminFetch("/api/v1/admin/linkedin/connection", { method: "DELETE" });
+      await loadLinkedIn();
+    } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
+  };
+
+  /** Partage un article publié ; un échec ne touche pas à l'article. */
+  const shareToLinkedIn = async (id: string, commentary: string): Promise<boolean> => {
+    try {
+      const res = await adminFetch<{ post_url: string }>(`/api/v1/admin/content/blog/${id}/linkedin-share`, {
+        method: "POST", body: JSON.stringify({ commentary }),
+      });
+      showToast("Partagé sur LinkedIn ✓");
+      window.open(res.post_url, "_blank", "noopener");
+      return true;
+    } catch (e: any) {
+      showToast(`Article publié, mais le partage LinkedIn a échoué : ${e.message}`, false);
+      return false;
+    }
+  };
+
+  const openEditor = (p: Partial<BlogPost>) => {
+    setEditPost(p);
+    setPreviewHtml(false);
+    setOriginalStatus(p.id ? p.status ?? null : null);
+    setShareChecked(true);
+    setShareText(null);
+  };
+
+  // La case n'apparaît qu'à la première publication d'un article français jamais partagé.
+  const offerShare = !!(editPost && liReady && (editPost.lang ?? "fr") === "fr"
+    && editPost.status === "published" && originalStatus !== "published" && !editPost.linkedin_post_urn);
 
   // ── Blog handlers ──
   const savePost = async () => {
@@ -112,7 +191,9 @@ export default function ContentPage() {
     try {
       const method = editPost.id ? "PATCH" : "POST";
       const path = editPost.id ? `/api/v1/admin/content/blog/${editPost.id}` : "/api/v1/admin/content/blog";
-      await adminFetch(path, { method, body: JSON.stringify({
+      const commentary = shareText ?? defaultCommentary(editPost.title, editPost.description);
+      const shareAfterSave = offerShare && shareChecked && commentary.trim().length > 0;
+      const saved = await adminFetch<BlogPost>(path, { method, body: JSON.stringify({
         slug: editPost.slug, title: editPost.title, description: editPost.description || null,
         category: editPost.category || null, metier: editPost.metier || null,
         body_html: editPost.body_html || null, reading_minutes: editPost.reading_minutes || 5,
@@ -122,6 +203,7 @@ export default function ContentPage() {
       }) });
       showToast(editPost.id ? "Article mis à jour ✓" : "Article créé ✓");
       setEditPost(null);
+      if (shareAfterSave && saved?.id) await shareToLinkedIn(saved.id, commentary);
       await loadPosts();
     } catch (e: any) { showToast(`Erreur : ${e.message}`, false); }
     finally { setBusy(false); }
@@ -211,6 +293,47 @@ export default function ContentPage() {
         ))}
       </div>
 
+      {/* ── LinkedIn ── */}
+      {tab === "blog" && li && (
+        <div className="mb-5 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+          style={{
+            background: K.card,
+            border: `1px solid ${li.connected && (li.expired || (li.days_left ?? 99) <= 7) ? "rgba(221,170,64,0.45)" : K.border}`,
+          }}>
+          <div className="text-xs min-w-0" style={{ color: K.muted }}>
+            <span className="font-semibold" style={{ color: "#4C9BE8" }}>LinkedIn</span>{" · "}
+            {!li.configured ? (
+              <>Non configuré : ajoutez LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET et LINKEDIN_ORGANIZATION_ID sur le backend.</>
+            ) : !li.connected ? (
+              <>Page non connectée. URL de redirection à déclarer dans l&apos;app LinkedIn : <code className="break-all">{li.redirect_uri}</code></>
+            ) : li.expired ? (
+              <span style={{ color: K.gold }}>Connexion expirée : reconnectez la page pour partager les articles.</span>
+            ) : (
+              <>
+                Page connectée{li.connected_by ? ` par ${li.connected_by}` : ""} ·{" "}
+                <span style={{ color: (li.days_left ?? 99) <= 7 && !li.auto_refresh ? K.gold : K.muted }}>
+                  {li.auto_refresh ? "renouvellement automatique" : `expire dans ${li.days_left} j`}
+                </span>
+              </>
+            )}
+          </div>
+          {li.configured && (
+            <div className="flex gap-2 shrink-0">
+              <button onClick={connectLinkedIn} className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                style={{ background: "#0A66C2", color: "#fff" }}>
+                {li.connected ? "Reconnecter" : "Connecter la page LinkedIn"}
+              </button>
+              {li.connected && (
+                <button onClick={disconnectLinkedIn} className="px-3 py-1.5 rounded-lg text-xs"
+                  style={{ color: K.muted, border: `1px solid ${K.border}` }}>
+                  Déconnecter
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── BLOG ── */}
       {tab === "blog" && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -218,7 +341,7 @@ export default function ContentPage() {
           <div className="lg:col-span-3">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-medium" style={{ color: K.muted }}>Articles</span>
-              <button onClick={() => { setEditPost({ ...BLANK_POST }); setPreviewHtml(false); }}
+              <button onClick={() => openEditor({ ...BLANK_POST })}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium"
                 style={{ background: K.teal, color: "#fff" }}>
                 + Nouvel article
@@ -263,7 +386,18 @@ export default function ContentPage() {
                                   🌐 Traduire
                                 </button>
                               )}
-                              <button onClick={() => { setEditPost({ ...p }); setPreviewHtml(false); }}
+                              {(p.lang ?? "fr") === "fr" && p.status === "published" && (
+                                p.linkedin_post_urn ? (
+                                  <a href={linkedinPostUrl(p.linkedin_post_urn)} target="_blank" rel="noopener noreferrer"
+                                    className="text-xs" style={{ color: K.success }} title="Voir le post sur LinkedIn">in ✓</a>
+                                ) : liReady && (
+                                  <button onClick={() => setShareModal({ post: p, text: defaultCommentary(p.title, p.description) })}
+                                    disabled={busy} className="text-xs" style={{ color: "#4C9BE8" }} title="Partager sur la page LinkedIn">
+                                    in Partager
+                                  </button>
+                                )
+                              )}
+                              <button onClick={() => openEditor({ ...p })}
                                 className="text-xs" style={{ color: K.tealXL }}>Éditer</button>
                               <button onClick={() => deletePost(p.id)} disabled={busy}
                                 className="text-xs" style={{ color: K.danger }}>Supprimer</button>
@@ -374,6 +508,25 @@ export default function ContentPage() {
                     Balises supportées : &lt;h2&gt; &lt;h3&gt; &lt;p&gt; &lt;strong&gt; &lt;em&gt; &lt;ul&gt;&lt;li&gt; &lt;a href&gt;
                   </p>
                 </Field>
+
+                {offerShare && (
+                  <div className="rounded-lg p-3 space-y-2" style={{ background: "rgba(10,102,194,0.08)", border: "1px solid rgba(10,102,194,0.3)" }}>
+                    <label className="flex items-center gap-2 text-xs cursor-pointer" style={{ color: K.text }}>
+                      <input type="checkbox" checked={shareChecked} onChange={(e) => setShareChecked(e.target.checked)} />
+                      Partager sur la page LinkedIn à la publication
+                    </label>
+                    {shareChecked && (
+                      <>
+                        <textarea {...inp} rows={5} maxLength={2500}
+                          value={shareText ?? defaultCommentary(editPost.title, editPost.description)}
+                          onChange={(e) => setShareText(e.target.value)} />
+                        <p className="text-[10px]" style={{ color: "rgba(170,189,216,0.4)" }}>
+                          Le lien de l&apos;article et son image sont ajoutés automatiquement sous ce texte.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 <button onClick={savePost} disabled={busy}
                   className="w-full py-2 rounded-xl text-sm font-medium disabled:opacity-50"
@@ -522,6 +675,36 @@ export default function ContentPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Partage LinkedIn d'un article déjà publié */}
+      {shareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}
+          onClick={(e) => { if (e.target === e.currentTarget && !busy) setShareModal(null); }}>
+          <div className="w-full max-w-lg rounded-xl p-5 space-y-3" style={{ background: K.card, border: `1px solid ${K.border}` }}>
+            <h3 className="text-sm font-medium" style={{ color: K.text }}>Partager sur la page LinkedIn</h3>
+            <p className="text-xs" style={{ color: K.muted }}>{shareModal.post.title}</p>
+            <textarea {...inp} rows={6} maxLength={2500} value={shareModal.text}
+              onChange={(e) => setShareModal((m) => (m ? { ...m, text: e.target.value } : m))} />
+            <p className="text-[10px]" style={{ color: "rgba(170,189,216,0.4)" }}>
+              Le lien de l&apos;article et son image sont ajoutés automatiquement. Un article ne se partage qu&apos;une fois.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShareModal(null)} disabled={busy} className="px-3 py-1.5 rounded-lg text-xs"
+                style={{ color: K.muted, border: `1px solid ${K.border}` }}>Annuler</button>
+              <button disabled={busy || !shareModal.text.trim()} className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+                style={{ background: "#0A66C2", color: "#fff" }}
+                onClick={async () => {
+                  setBusy(true);
+                  const ok = await shareToLinkedIn(shareModal.post.id, shareModal.text);
+                  setBusy(false);
+                  if (ok) { setShareModal(null); await loadPosts(); }
+                }}>
+                {busy ? "Publication…" : "Publier sur LinkedIn"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

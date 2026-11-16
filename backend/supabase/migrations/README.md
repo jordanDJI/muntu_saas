@@ -20,7 +20,7 @@ L'ordre d'application a été l'ordre alphabétique :
 
 ## Règles pour les prochaines migrations
 
-- Numéro suivant **unique** (la dernière est `086`), sur trois chiffres.
+- Numéro suivant **unique** (la dernière est `087`), sur trois chiffres.
 - Idempotente autant que possible (`if not exists`, `create or replace`).
 - Une table interne (non lue par le frontend) : `enable row level security` sans policy.
 - Une colonne utilisée dans un `on_conflict=` : la contrainte d'unicité va dans la même migration.

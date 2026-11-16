@@ -574,6 +574,41 @@ async def import_new_companies() -> None:
         logger.error("Import SIRENE hebdomadaire échoué : %s", exc, exc_info=True)
 
 
+async def check_linkedin_connection() -> None:
+    """Rafraîchit le jeton LinkedIn si possible, sinon alerte l'opérateur 7 jours avant l'expiration."""
+    from app.core.config import settings
+    from app.services import linkedin
+
+    if not linkedin.is_configured():
+        return
+    sb = get_supabase_admin()
+    try:
+        conn = linkedin.get_connection(sb)
+    except Exception as exc:  # migration 087 non appliquée
+        logger.warning("LinkedIn : connexion illisible : %s", exc)
+        return
+    if not conn:
+        return
+    try:
+        await linkedin.access_token(sb)  # rafraîchit à J-7 quand LinkedIn fournit un jeton de rafraîchissement
+    except linkedin.LinkedInError:
+        pass  # expirée : l'alerte ci-dessous s'en charge
+    conn = linkedin.get_connection(sb) or conn
+    left = linkedin.days_left(conn.get("expires_at"))
+    if left is None or left > 7 or conn.get("expiry_notified_at"):
+        return
+    try:
+        from app.services.email import send_linkedin_expiry_admin
+        await asyncio.to_thread(
+            send_linkedin_expiry_admin, left, f"{settings.frontend_url.rstrip('/')}/admin/content",
+        )
+        sb.table("linkedin_connection").update(
+            {"expiry_notified_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("id", 1).execute()
+    except Exception as exc:
+        logger.warning("LinkedIn : alerte d'expiration non envoyée : %s", exc, exc_info=True)
+
+
 # ── Exécution unique entre instances ──────────────────────────────────────────
 
 _HOLDER = f"{socket.gethostname()}:{os.getpid()}"
@@ -695,6 +730,15 @@ def start_scheduler() -> None:
         hour=6,
         minute=0,
         id="sirene_import",
+        replace_existing=True,
+    )
+    # Connexion LinkedIn (partage du blog) : chaque jour à 9h15
+    scheduler.add_job(
+        _single_instance("linkedin_connection", 20 * _HOUR)(check_linkedin_connection),
+        "cron",
+        hour=9,
+        minute=15,
+        id="linkedin_connection",
         replace_existing=True,
     )
     scheduler.start()

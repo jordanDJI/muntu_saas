@@ -86,6 +86,15 @@ class Settings(BaseSettings):
     insee_api_key: str = ""
     insee_sirene_url: str = "https://api.insee.fr/api-sirene/3.11"
 
+    # Partage des articles du blog sur la page LinkedIn de Klientys (migration 087).
+    # App « Klientys Publisher » (Community Management API) — distincte de l'app de
+    # connexion linkedin_oidc. Redirection OAuth : {APP_URL}/api/v1/admin/linkedin/callback
+    linkedin_client_id: str = ""
+    linkedin_client_secret: str = ""
+    linkedin_organization_id: str = ""              # ID numérique de la page entreprise
+    linkedin_scopes: str = "w_organization_social"
+    linkedin_api_version: str = "202609"            # en-tête LinkedIn-Version (AAAAMM)
+
     # Google Indexing API — service account JSON (stringifié)
     google_service_account_json: str = ""
 

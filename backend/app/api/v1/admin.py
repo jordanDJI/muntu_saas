@@ -2382,14 +2382,18 @@ async def admin_list_blog(admin=Depends(viewer_or_above)):
     # le formulaire d'édition (page /admin/content) — les en exclure ferait apparaître
     # les brouillons/articles comme vides à l'édition et risquerait d'écraser leur
     # contenu réel en base sur un simple "Mettre à jour" sans modification.
-    rows = (
-        get_supabase_admin().table("blog_post")
-        .select("id, slug, title, description, category, metier, status, published_at, "
-                "reading_minutes, body_html, lang, translation_group_id, translated_from, updated_at")
-        .order("created_at", desc=True)
-        .execute().data or []
+    columns = ("id, slug, title, description, category, metier, status, published_at, "
+               "reading_minutes, body_html, lang, translation_group_id, translated_from, updated_at")
+    query = lambda cols: (  # noqa: E731
+        get_supabase_admin().table("blog_post").select(cols)
+        .order("created_at", desc=True).execute().data or []
     )
-    return rows
+    try:
+        # Partage LinkedIn (migration 087).
+        return query(columns + ", linkedin_post_urn, linkedin_shared_at")
+    except Exception as exc:
+        logger.warning("blog_post : colonnes LinkedIn absentes (migration 087 ?) : %s", exc)
+        return query(columns)
 
 
 def _check_content_agent_secret(secret: str):
