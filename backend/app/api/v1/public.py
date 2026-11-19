@@ -100,14 +100,16 @@ async def get_public_site(request: Request, slug: str, preview: bool = Query(Fal
     if not preview:
         query = query.eq("status", "published")
 
-    site_res = query.single().execute()
+    # .limit(1) et non .single() : sans site publié, .single() levait PGRST116
+    # (« 0 rows ») et le visiteur recevait une erreur 500 au lieu d'un 404.
+    site_res = query.limit(1).execute()
     if not site_res.data:
         raise HTTPException(status_code=404, detail="Site introuvable ou non publié")
 
     domain_res = sb.table("custom_domain").select("domain").eq("tenant_id", tenant["id"]).eq("status", "active").limit(1).execute()
     custom_domain = domain_res.data[0]["domain"] if domain_res.data else None
 
-    site_data = dict(site_res.data)
+    site_data = dict(site_res.data[0])
     # Ne jamais exposer le secret PayPal dans l'API publique
     site_data.pop("paypal_client_secret", None)
 

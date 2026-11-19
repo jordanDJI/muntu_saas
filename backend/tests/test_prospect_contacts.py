@@ -27,9 +27,11 @@ from app.services.prospect_contacts import (  # noqa: E402
     decide,
     extract_contacts,
     is_excluded,
+    is_quota_error,
     mentions_company,
     normalize_phone,
     parse_model_json,
+    retry_delay,
 )
 from app.services.prospect_letters import (  # noqa: E402
     city_label,
@@ -118,6 +120,23 @@ class DecideTest(unittest.TestCase):
         linkedin = decide({"email": "c@x.fr", "source_url": "https://linkedin.com/in/c", "confidence": "haute"},
                           False, [], [], None)
         self.assertIsNone(linkedin["contact_email"])
+
+
+class QuotaTest(unittest.TestCase):
+    # Message réel reçu en production le 19/11/2026 (offre gratuite, 5 requêtes / minute).
+    ERROR = ("429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota "
+             "... Please retry in 41.525885038s.', 'status': 'RESOURCE_EXHAUSTED', 'details': "
+             "[{'@type': 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay': '41s'}]}}")
+
+    def test_quota_error_and_delay(self):
+        self.assertTrue(is_quota_error(self.ERROR))
+        self.assertEqual(retry_delay(self.ERROR), 42)
+        self.assertEqual(retry_delay("... 'retryDelay': '37s' ..."), 38)
+
+    def test_other_errors(self):
+        self.assertFalse(is_quota_error("402 Your prepayment credits are depleted"))
+        self.assertIsNone(retry_delay("500 INTERNAL"))
+        self.assertIsNone(retry_delay(None))
 
 
 class LetterTest(unittest.TestCase):

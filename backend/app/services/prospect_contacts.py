@@ -61,7 +61,26 @@ _IGNORED_EMAIL_PARTS = ("example", "exemple", "sentry", "wixpress", "domain.", "
                         "noreply", "no-reply", "@2x", ".png", ".jpg", ".webp", ".svg")
 
 
+class LookupUnavailable(Exception):
+    """Recherche impossible pour l'instant (quota ou crédit Gemini, panne) : ne compte pas comme un essai."""
+
+    def __init__(self, message: str, retry_after: int | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 # ── Règles pures ───────────────────────────────────────────────────────────────
+
+def retry_delay(error_text: str) -> int | None:
+    """Délai demandé par Gemini après un 429 (« retry in 41.5s » / « retryDelay: '41s' »)."""
+    match = re.search(r"retry in ([\d.]+)\s*s", error_text or "", re.I) \
+        or re.search(r"retryDelay'?\"?:\s*'?\"?(\d+)s", error_text or "")
+    return int(float(match.group(1))) + 1 if match else None
+
+
+def is_quota_error(error_text: str) -> bool:
+    return any(code in (error_text or "") for code in ("429", "RESOURCE_EXHAUSTED"))
+
 
 def normalize_phone(raw: str | None) -> str | None:
     """Format français « 0X XX XX XX XX », ou None si ce n'est pas un numéro français."""
@@ -233,7 +252,12 @@ async def _fetch(client: httpx.AsyncClient, url: str) -> tuple[str | None, str |
     return None, None
 
 
-async def _ask_model(prospect: dict) -> dict:
+async def _ask_model(prospect: dict, wait_on_quota: bool = False) -> dict:
+    """Suggestion du modèle. Erreur Gemini → LookupUnavailable (jamais un « rien trouvé »).
+
+    `wait_on_quota` : en tâche de fond, un 429 est attendu une fois (délai indiqué par
+    Google, 60 s au plus) puis retenté ; en appel direct depuis l'admin, on rend la main.
+    """
     from app.services.llm import _client, _record_usage
 
     def call():
@@ -245,12 +269,27 @@ async def _ask_model(prospect: dict) -> dict:
         _record_usage(resp)
         return resp.text or ""
 
-    return parse_model_json(await asyncio.to_thread(call))
+    for attempt in (1, 2):
+        try:
+            return parse_model_json(await asyncio.to_thread(call))
+        except Exception as exc:
+            text = str(exc)
+            delay = retry_delay(text) if is_quota_error(text) else None
+            if delay is not None and wait_on_quota and attempt == 1 and delay <= 60:
+                logger.info("Gemini : quota atteint, nouvel essai dans %d s", delay)
+                await asyncio.sleep(delay)
+                continue
+            if is_quota_error(text):
+                raise LookupUnavailable("Quota Gemini atteint.", delay) from exc
+            if "402" in text or "credits are depleted" in text:
+                raise LookupUnavailable("Crédit Gemini épuisé.") from exc
+            raise LookupUnavailable(f"Gemini indisponible : {text[:120]}") from exc
+    raise LookupUnavailable("Quota Gemini atteint.")
 
 
-async def find_contacts(prospect: dict) -> dict:
+async def find_contacts(prospect: dict, wait_on_quota: bool = False) -> dict:
     """Coordonnées d'un prospect (colonnes `contact_*` de prospect_company)."""
-    suggestion = await _ask_model(prospect)
+    suggestion = await _ask_model(prospect, wait_on_quota)
     website = suggestion.get("website")
     website = website if isinstance(website, str) and website.startswith("http") and not is_excluded(website) else None
 
@@ -272,14 +311,21 @@ async def find_contacts(prospect: dict) -> dict:
     return decide(suggestion, site_ok, phones, emails, website)
 
 
-async def lookup_and_store(sb, prospect: dict) -> dict:
-    """Recherche + enregistrement. Sans résultat, une nouvelle recherche est planifiée."""
+async def lookup_and_store(sb, prospect: dict, wait_on_quota: bool = False) -> dict:
+    """Recherche + enregistrement. Sans résultat, une nouvelle recherche est planifiée.
+
+    Une recherche qui n'a pas pu avoir lieu (LookupUnavailable) ne touche pas la fiche :
+    auparavant un quota Gemini atteint était enregistré comme « rien trouvé » et
+    consommait l'un des trois essais.
+    """
     now = datetime.now(timezone.utc)
     try:
-        found = await find_contacts(prospect)
+        found = await find_contacts(prospect, wait_on_quota)
+    except LookupUnavailable:
+        raise
     except Exception as exc:
         logger.warning("Recherche de coordonnées échouée (%s) : %s", prospect.get("id"), exc, exc_info=True)
-        found = {}
+        raise LookupUnavailable("Erreur pendant la recherche.") from exc
     count = int(prospect.get("contact_lookup_count") or 0) + 1
     updates = {
         "contact_lookup_count": count,
@@ -308,6 +354,17 @@ async def run_due_lookups(sb, limit: int = DAILY_AUTO_CAP) -> int:
         .or_(f"contact_next_check_at.is.null,contact_next_check_at.lte.{now_iso}")
         .order("created_on").limit(limit).execute().data or []
     )
-    for prospect in rows:
-        await lookup_and_store(sb, prospect)
-    return len(rows)
+    return await lookup_batch(sb, rows)
+
+
+async def lookup_batch(sb, prospects: list[dict]) -> int:
+    """Recherches en série ; s'arrête au premier refus de Gemini (inutile d'insister)."""
+    done = 0
+    for prospect in prospects:
+        try:
+            await lookup_and_store(sb, prospect, wait_on_quota=True)
+            done += 1
+        except LookupUnavailable as exc:
+            logger.warning("Recherche de coordonnées interrompue après %d fiche(s) : %s", done, exc)
+            break
+    return done

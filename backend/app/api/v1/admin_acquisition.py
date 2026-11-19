@@ -229,15 +229,18 @@ async def lookup_prospect(prospect_id: str, admin=Depends(support_or_above)):
     rows = _fetch_prospects(sb, [prospect_id])
     if not rows:
         raise HTTPException(404, "Fiche introuvable")
-    return await prospect_contacts.lookup_and_store(sb, rows[0])
+    try:
+        return await prospect_contacts.lookup_and_store(sb, rows[0])
+    except prospect_contacts.LookupUnavailable as exc:
+        wait = f" Réessayez dans {exc.retry_after} s." if exc.retry_after else ""
+        raise HTTPException(503, f"Recherche impossible pour le moment : {exc}{wait} La fiche n'a pas été modifiée.")
 
 
 async def _lookup_many(ids: list[str]) -> None:
     from app.services import prospect_contacts
 
     sb = get_supabase_admin()
-    for prospect in _fetch_prospects(sb, ids):
-        await prospect_contacts.lookup_and_store(sb, prospect)
+    await prospect_contacts.lookup_batch(sb, _fetch_prospects(sb, ids))
 
 
 @router.post("/prospects/lookup")
