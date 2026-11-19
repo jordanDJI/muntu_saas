@@ -574,6 +574,21 @@ async def import_new_companies() -> None:
         logger.error("Import SIRENE hebdomadaire échoué : %s", exc, exc_info=True)
 
 
+async def lookup_prospect_contacts() -> None:
+    """Prospects SIRENE de plus de 30 jours sans coordonnées : nouvelle recherche (plafond quotidien)."""
+    from app.core.config import settings
+    from app.services import prospect_contacts
+
+    if not settings.gemini_api_key:
+        return
+    try:
+        done = await prospect_contacts.run_due_lookups(get_supabase_admin())
+        if done:
+            logger.info("Coordonnées de prospects : %d recherches", done)
+    except Exception as exc:
+        logger.error("Recherche de coordonnées planifiée échouée : %s", exc, exc_info=True)
+
+
 async def check_linkedin_connection() -> None:
     """Rafraîchit le jeton LinkedIn si possible, sinon alerte l'opérateur 7 jours avant l'expiration."""
     from app.core.urls import default_frontend
@@ -730,6 +745,15 @@ def start_scheduler() -> None:
         hour=6,
         minute=0,
         id="sirene_import",
+        replace_existing=True,
+    )
+    # Coordonnées des prospects SIRENE (recherche différée) : chaque jour à 7h00
+    scheduler.add_job(
+        _single_instance("prospect_contact_lookup", 20 * _HOUR)(lookup_prospect_contacts),
+        "cron",
+        hour=7,
+        minute=0,
+        id="prospect_contact_lookup",
         replace_existing=True,
     )
     # Connexion LinkedIn (partage du blog) : chaque jour à 9h15

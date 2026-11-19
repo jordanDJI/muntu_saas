@@ -88,8 +88,42 @@ export const api = {
     Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== "") qs.set(k, String(v)); });
     return apiFetch<{ items: any[]; total: number }>(`/api/v1/admin/acquisition/prospects?${qs.toString()}`);
   },
-  adminUpdateProspect: (id: string, body: { status?: string; notes?: string }) =>
+  adminUpdateProspect: (id: string, body: {
+    status?: string; notes?: string; contacted_via?: string;
+    contact_phone?: string; contact_email?: string; contact_website?: string;
+  }) =>
     apiFetch<any>(`/api/v1/admin/acquisition/prospects/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  // Coordonnées et courriers des prospects (migration 088)
+  adminLookupProspect: (id: string) =>
+    apiFetch<any>(`/api/v1/admin/acquisition/prospects/${id}/lookup`, { method: "POST" }),
+  adminLookupProspects: (ids: string[]) =>
+    apiFetch<any>("/api/v1/admin/acquisition/prospects/lookup", { method: "POST", body: JSON.stringify({ ids }) }),
+  adminBulkProspectStatus: (ids: string[], status: string, contacted_via?: string) =>
+    apiFetch<{ updated: number }>("/api/v1/admin/acquisition/prospects/bulk-status", {
+      method: "POST", body: JSON.stringify({ ids, status, contacted_via }),
+    }),
+  adminGetLetterTemplate: () => apiFetch<Record<string, string>>("/api/v1/admin/acquisition/letter-template"),
+  adminSaveLetterTemplate: (body: Record<string, string>) =>
+    apiFetch<Record<string, string>>("/api/v1/admin/acquisition/letter-template", { method: "PUT", body: JSON.stringify(body) }),
+  /** PDF des courriers de la sélection (POST authentifié → fichier téléchargé). */
+  adminDownloadLetters: async (ids: string[]) => {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/v1/admin/acquisition/prospects/letters`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(typeof err.detail === "string" ? err.detail : `Génération impossible (HTTP ${res.status})`);
+    }
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `courriers-${new Date().toISOString().slice(0, 10)}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
   adminImportProspects: (days = 8) =>
     apiFetch<any>("/api/v1/admin/acquisition/prospects/import", { method: "POST", body: JSON.stringify({ days }) }),
   adminMarketingLeads: (page = 1) =>

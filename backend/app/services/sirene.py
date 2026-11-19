@@ -225,18 +225,26 @@ def _store(rows: list[dict]) -> int:
 
 
 def purge_stale(now: datetime | None = None) -> int:
-    """Supprime les fiches jamais exploitées (nouvelles ou écartées) au-delà de la durée de conservation."""
+    """Supprime les fiches sans suite au-delà de la durée de conservation (6 mois).
+
+    - nouvelles ou écartées : 6 mois après l'import ;
+    - contactées sans devenir clientes : 6 mois après le contact. C'est la durée
+      annoncée dans le pied des courriers (services/prospect_letters.py) ;
+    - clientes : conservées (elles ont un espace Klientys).
+    """
     from app.core.supabase import get_supabase_admin
 
-    cutoff = ((now or datetime.now(timezone.utc)) - timedelta(days=RETENTION_DAYS)).isoformat()
-    res = (
-        get_supabase_admin().table("prospect_company")
-        .delete()
-        .in_("status", ["new", "ignored"])
-        .lt("imported_at", cutoff)
-        .execute()
+    sb = get_supabase_admin()
+    cutoff = ((now or datetime.now(timezone.utc)) - timedelta(days=RETENTION_DAYS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    unused = (
+        sb.table("prospect_company").delete()
+        .in_("status", ["new", "ignored"]).lt("imported_at", cutoff).execute()
     )
-    return len(res.data or [])
+    contacted = (
+        sb.table("prospect_company").delete()
+        .eq("status", "contacted").lt("status_changed_at", cutoff).execute()
+    )
+    return len(unused.data or []) + len(contacted.data or [])
 
 
 async def import_recent(days: int = 8, sectors: list[str] | None = None) -> dict:

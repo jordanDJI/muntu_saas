@@ -141,7 +141,75 @@ function ProspectsTab({ onChange, inseeConfigured }: { onChange: () => void; ins
   const [notice, setNotice] = useState("");
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  // Coordonnées et courriers (migration 088)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [lookingUp, setLookingUp] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [editingContact, setEditingContact] = useState<string | null>(null);
+  const [contactDraft, setContactDraft] = useState({ contact_phone: "", contact_email: "", contact_website: "" });
+  const [showTemplate, setShowTemplate] = useState(false);
   const PAGE_SIZE = 50;
+
+  const toggle = (id: string) => setSelected((s) => {
+    const next = new Set(s);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allOnPage = data.items.length > 0 && data.items.every((r) => selected.has(r.id));
+  const togglePage = () => setSelected((s) => {
+    const next = new Set(s);
+    data.items.forEach((r) => (allOnPage ? next.delete(r.id) : next.add(r.id)));
+    return next;
+  });
+  const ids = Array.from(selected);
+
+  const lookup = async (id: string) => {
+    setLookingUp(id); setError("");
+    try {
+      const row = await api.adminLookupProspect(id);
+      setData((d) => ({ ...d, items: d.items.map((r) => (r.id === id ? row : r)) }));
+      if (!row.contact_phone && !row.contact_email && !row.contact_website) {
+        setNotice(`Rien trouvé pour « ${row.name} »${row.contact_next_check_at ? ` : nouvelle recherche automatique le ${fmtDate(row.contact_next_check_at)}` : ""}.`);
+      }
+    } catch (e: any) { setError(e.message); }
+    finally { setLookingUp(null); }
+  };
+
+  const lookupSelection = async () => {
+    if (ids.length > 20) { setError("20 fiches au plus par recherche groupée."); return; }
+    try {
+      await api.adminLookupProspects(ids);
+      setNotice(`Recherche lancée pour ${ids.length} fiche(s) : comptez environ 20 s par fiche, puis actualisez.`);
+    } catch (e: any) { setError(e.message); }
+  };
+
+  const downloadLetters = async () => {
+    setBusy(true); setError("");
+    try {
+      await api.adminDownloadLetters(ids);
+      if (confirm(`Marquer ces ${ids.length} entreprise(s) comme contactées par courrier ? (À faire une fois les lettres postées.)`)) {
+        await api.adminBulkProspectStatus(ids, "contacted", "courrier");
+        setSelected(new Set());
+        load(); onChange();
+      }
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const bulkStatus = async (statusValue: string) => {
+    setBusy(true);
+    try {
+      await api.adminBulkProspectStatus(ids, statusValue);
+      setSelected(new Set());
+      load(); onChange();
+    } catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const saveContact = async (id: string) => {
+    await update(id, contactDraft);
+    setEditingContact(null);
+  };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -156,7 +224,9 @@ function ProspectsTab({ onChange, inseeConfigured }: { onChange: () => void; ins
     return () => clearTimeout(id);
   }, [load]);
 
-  const update = async (id: string, body: { status?: string; notes?: string }) => {
+  const update = async (id: string, body: {
+    status?: string; notes?: string; contact_phone?: string; contact_email?: string; contact_website?: string;
+  }) => {
     try {
       const row = await api.adminUpdateProspect(id, body);
       setData((d) => ({
@@ -207,15 +277,42 @@ function ProspectsTab({ onChange, inseeConfigured }: { onChange: () => void; ins
         {inseeConfigured && (
           <button onClick={runImport} style={{ ...pill(C.gold), padding: "7px 14px", fontSize: "12px" }}>Importer maintenant</button>
         )}
+        <button onClick={() => setShowTemplate((v) => !v)} style={{ ...pill("#2A8FA5", showTemplate), padding: "7px 14px", fontSize: "12px" }}>
+          ✉ Modèle de courrier
+        </button>
       </div>
+
+      {showTemplate && <LetterTemplatePanel onError={setError} />}
 
       {notice && <p style={{ color: C.gold, fontSize: "13px", margin: "0 0 12px" }}>{notice}</p>}
       {error && <p style={{ color: C.red, fontSize: "13px", margin: "0 0 12px" }}>{error}</p>}
 
       <p style={{ fontSize: "12px", color: C.faint, margin: "0 0 10px" }}>
         {data.total} entreprise(s). Source : base SIRENE de l&apos;INSEE (établissements diffusibles uniquement).
-        Au premier contact, indiquez d&apos;où viennent les coordonnées et comment s&apos;opposer à la prospection.
+        Au premier contact, indiquez d&apos;où viennent les coordonnées et comment s&apos;opposer à la prospection
+        (le pied de chaque courrier le fait).
       </p>
+
+      {data.items.length > 0 && (
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "10px",
+          position: "sticky", top: 0, zIndex: 5, background: "#071824", padding: "8px 0" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: C.muted, cursor: "pointer" }}>
+            <input type="checkbox" checked={allOnPage} onChange={togglePage} /> Toute la page
+          </label>
+          {ids.length > 0 && (
+            <>
+              <span style={{ fontSize: "12px", color: C.text, fontWeight: 600 }}>{ids.length} sélectionnée(s)</span>
+              <button disabled={busy} onClick={downloadLetters} style={{ ...pill(C.gold), padding: "6px 12px" }}>📄 Courriers PDF</button>
+              <button disabled={busy || ids.length > 20} onClick={lookupSelection}
+                title={ids.length > 20 ? "20 fiches au plus" : "Recherche Google + lecture du site de chaque entreprise"}
+                style={{ ...pill("#2A8FA5", ids.length <= 20), padding: "6px 12px" }}>🔎 Chercher les coordonnées</button>
+              <button disabled={busy} onClick={() => bulkStatus("contacted")} style={{ ...pill(C.teal), padding: "6px 12px" }}>Marquer contactées</button>
+              <button disabled={busy} onClick={() => bulkStatus("ignored")} style={{ ...pill("rgba(170,189,216,0.5)"), padding: "6px 12px" }}>Écarter</button>
+              <button onClick={() => setSelected(new Set())} style={{ fontSize: "12px", color: C.faint, background: "none", border: "none", cursor: "pointer" }}>Vider</button>
+            </>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <p style={{ color: C.faint, fontSize: "13px" }}>Chargement…</p>
@@ -226,8 +323,10 @@ function ProspectsTab({ onChange, inseeConfigured }: { onChange: () => void; ins
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {data.items.map((r) => (
-            <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "14px 18px" }}>
+            <div key={r.id} style={{ background: C.card, border: `1px solid ${selected.has(r.id) ? "rgba(42,143,165,0.5)" : C.border}`, borderRadius: "12px", padding: "14px 18px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+                <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)}
+                  aria-label={`Sélectionner ${r.name}`} style={{ marginTop: "3px" }} />
                 <div style={{ flex: "1 1 320px", minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: C.text }}>{r.name}</p>
                   <p style={{ margin: "3px 0 0", fontSize: "12px", color: C.muted }}>
@@ -241,6 +340,55 @@ function ProspectsTab({ onChange, inseeConfigured }: { onChange: () => void; ins
                       Chercher sur Google
                     </a>
                   </p>
+
+                  {/* Coordonnées retrouvées (migration 088) */}
+                  {editingContact === r.id ? (
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "8px" }}>
+                      {([["contact_phone", "Téléphone"], ["contact_email", "Email"], ["contact_website", "Site"]] as const).map(([k, label]) => (
+                        <input key={k} value={contactDraft[k]} placeholder={label}
+                          onChange={(e) => setContactDraft((d) => ({ ...d, [k]: e.target.value }))}
+                          style={{ ...inputStyle, flex: "1 1 160px" }} />
+                      ))}
+                      <button onClick={() => saveContact(r.id)} style={{ ...pill(C.teal), padding: "6px 12px" }}>OK</button>
+                      <button onClick={() => setEditingContact(null)} style={{ fontSize: "12px", color: C.faint, background: "none", border: "none", cursor: "pointer" }}>Annuler</button>
+                    </div>
+                  ) : (r.contact_phone || r.contact_email || r.contact_website) ? (
+                    <p style={{ margin: "6px 0 0", fontSize: "12px", color: C.text, display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+                      {r.contact_phone && <a href={`tel:${r.contact_phone.replace(/\s/g, "")}`} style={{ color: C.text }}>📞 {r.contact_phone}</a>}
+                      {r.contact_email && <a href={`mailto:${r.contact_email}`} style={{ color: C.text }}>✉ {r.contact_email}</a>}
+                      {r.contact_website && <a href={r.contact_website} target="_blank" rel="noopener noreferrer" style={{ color: "#2A8FA5" }}>🌐 site</a>}
+                      <span style={pill(r.contact_verified ? C.green : C.gold)} title={`Source : ${r.contact_source ?? "—"}`}>
+                        {r.contact_verified ? "vérifié" : "à vérifier"}
+                      </span>
+                      {r.contact_source?.startsWith("http") && (
+                        <a href={r.contact_source} target="_blank" rel="noopener noreferrer" style={{ color: C.faint }}>source</a>
+                      )}
+                      <button onClick={() => { setEditingContact(r.id); setContactDraft({ contact_phone: r.contact_phone ?? "", contact_email: r.contact_email ?? "", contact_website: r.contact_website ?? "" }); }}
+                        style={{ fontSize: "12px", color: C.faint, background: "none", border: "none", cursor: "pointer", padding: 0 }}>✎</button>
+                    </p>
+                  ) : (
+                    <p style={{ margin: "6px 0 0", fontSize: "12px", color: C.faint, display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                      <button disabled={lookingUp === r.id} onClick={() => lookup(r.id)}
+                        style={{ fontSize: "12px", color: "#2A8FA5", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                        {lookingUp === r.id ? "Recherche en cours… (jusqu'à 30 s)" : "🔎 Chercher les coordonnées"}
+                      </button>
+                      <button onClick={() => { setEditingContact(r.id); setContactDraft({ contact_phone: "", contact_email: "", contact_website: "" }); }}
+                        style={{ fontSize: "12px", color: C.faint, background: "none", border: "none", cursor: "pointer", padding: 0 }}>✎ Saisir</button>
+                      {r.contact_checked_at && (
+                        <span>
+                          Recherché le {fmtDate(r.contact_checked_at)}
+                          {r.contact_next_check_at ? `, nouvel essai le ${fmtDate(r.contact_next_check_at)}` : ""}
+                        </span>
+                      )}
+                    </p>
+                  )}
+                  {(r.letter_generated_at || r.contacted_via) && (
+                    <p style={{ margin: "4px 0 0", fontSize: "11px", color: C.faint }}>
+                      {r.letter_generated_at ? `Courrier généré le ${fmtDate(r.letter_generated_at)}` : ""}
+                      {r.letter_generated_at && r.contacted_via ? " · " : ""}
+                      {r.contacted_via ? `contactée par ${r.contacted_via}` : ""}
+                    </p>
+                  )}
                   {editingNote === r.id ? (
                     <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
                       <input autoFocus value={noteDraft} onChange={(e) => setNoteDraft(e.target.value)} style={{ ...inputStyle, flex: 1 }}
@@ -274,6 +422,71 @@ function ProspectsTab({ onChange, inseeConfigured }: { onChange: () => void; ins
           <button disabled={page >= pages} onClick={() => setPage((p) => p + 1)} style={{ ...pill(C.teal, page < pages), padding: "6px 14px" }}>→</button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Modèle de courrier ────────────────────────────────────────────────────────
+
+const TEMPLATE_FIELDS: { key: string; label: string; rows?: number; hint?: string }[] = [
+  { key: "brand", label: "Marque (en-tête)" },
+  { key: "sender_lines", label: "Expéditeur (une ligne par ligne d'adresse)", rows: 3 },
+  { key: "sender_email", label: "Email de contact (aussi utilisé pour les demandes d'opposition)" },
+  { key: "sender_phone", label: "Téléphone (facultatif)" },
+  { key: "place", label: "Lieu (« Marseille, le … »)" },
+  { key: "subject", label: "Objet", hint: "{nom}, {ville}, {activite} sont remplacés pour chaque entreprise." },
+  { key: "body", label: "Corps de la lettre", rows: 12, hint: "Ligne vide = nouveau paragraphe ; une ligne commençant par « - » = puce." },
+  { key: "cta", label: "Phrase à côté du QR code" },
+  { key: "signature", label: "Signature" },
+  { key: "controller", label: "Responsable du traitement (mention RGPD en pied de page)", rows: 2 },
+  { key: "qr_url", label: "Lien du QR code" },
+];
+
+function LetterTemplatePanel({ onError }: { onError: (msg: string) => void }) {
+  const [tpl, setTpl] = useState<Record<string, string> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    api.adminGetLetterTemplate().then(setTpl).catch((e) => onError(e.message));
+  }, [onError]);
+
+  const save = async () => {
+    if (!tpl) return;
+    setSaving(true);
+    try {
+      setTpl(await api.adminSaveLetterTemplate(tpl));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e: any) { onError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  if (!tpl) return <p style={{ color: C.faint, fontSize: "13px" }}>Chargement du modèle…</p>;
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "12px", padding: "16px 18px", marginBottom: "16px" }}>
+      <p style={{ margin: "0 0 12px", fontSize: "12px", color: C.muted, lineHeight: 1.5 }}>
+        Une page A4 par entreprise, destinataire placé pour une enveloppe à fenêtre. Le pied de page (origine SIRENE,
+        conservation 6 mois, droit d&apos;opposition) est ajouté automatiquement : il répond à l&apos;obligation
+        d&apos;information de l&apos;article 14 du RGPD. Un champ vidé reprend sa valeur par défaut.
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+        {TEMPLATE_FIELDS.map((f) => (
+          <label key={f.key} style={{ display: "flex", flexDirection: "column", gap: "4px", gridColumn: f.rows && f.rows > 3 ? "1 / -1" : undefined }}>
+            <span style={{ fontSize: "11px", color: C.muted }}>{f.label}</span>
+            {f.rows ? (
+              <textarea rows={f.rows} value={tpl[f.key] ?? ""} onChange={(e) => setTpl({ ...tpl, [f.key]: e.target.value })}
+                style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+            ) : (
+              <input value={tpl[f.key] ?? ""} onChange={(e) => setTpl({ ...tpl, [f.key]: e.target.value })} style={inputStyle} />
+            )}
+            {f.hint && <span style={{ fontSize: "10px", color: C.faint }}>{f.hint}</span>}
+          </label>
+        ))}
+      </div>
+      <button onClick={save} disabled={saving} style={{ ...pill(C.teal), padding: "7px 16px", marginTop: "12px" }}>
+        {saving ? "Enregistrement…" : saved ? "Enregistré ✓" : "Enregistrer le modèle"}
+      </button>
     </div>
   );
 }

@@ -399,6 +399,21 @@ def _build_html(invoice: dict, lines: list[dict], settings: dict) -> str:
 
 # ── API publique ──────────────────────────────────────────────────────────────
 
+def html_to_pdf(html: str) -> bytes:
+    """HTML → PDF avec le moteur disponible (WeasyPrint en production, xhtml2pdf en local)."""
+    if _WP is not None:
+        buf = io.BytesIO()
+        _WP(string=html).write_pdf(buf)
+        return buf.getvalue()
+    if _PISA is not None:
+        buf = io.BytesIO()
+        result = _PISA.CreatePDF(html, dest=buf, encoding="utf-8")
+        if result.err:
+            raise RuntimeError(f"xhtml2pdf error: {result.err}")
+        return buf.getvalue()
+    raise RuntimeError("Aucun moteur PDF disponible. Exécutez : pip install weasyprint xhtml2pdf")
+
+
 def generate_invoice_pdf(invoice: dict, lines: list[dict], settings: dict, pdf_a3: bool = False) -> bytes:
     """
     Génère le PDF d'une facture (A4, branding Klientys + tenant).
