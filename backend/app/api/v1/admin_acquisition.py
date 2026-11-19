@@ -47,10 +47,19 @@ def _safe_search(q: str | None) -> str:
 
 
 def _prospect_query(sb, status: str | None, sector: str | None, department: str | None, q: str | None,
-                    count: bool = False, columns: str = _PROSPECT_COLUMNS):
+                    count: bool = False, columns: str = _PROSPECT_COLUMNS, contact: str | None = None):
     query = sb.table("prospect_company").select(columns, count="exact" if count else None)
     if status:
         query = query.eq("status", status)
+    # Coordonnées (migration 088) : todo = jamais recherchées, not_found = recherchées
+    # sans résultat, found = au moins une coordonnée.
+    if contact in ("todo", "not_found"):
+        query = (query.is_("contact_phone", "null").is_("contact_email", "null")
+                 .is_("contact_website", "null"))
+        query = query.is_("contact_checked_at", "null") if contact == "todo" \
+            else query.not_.is_("contact_checked_at", "null")
+    elif contact == "found":
+        query = query.or_("contact_phone.not.is.null,contact_email.not.is.null,contact_website.not.is.null")
     if sector:
         query = query.eq("sector", sector)
     if department:
@@ -127,6 +136,7 @@ async def list_prospects(
     sector: Optional[str] = None,
     department: Optional[str] = None,
     q: Optional[str] = None,
+    contact: Optional[Literal["todo", "not_found", "found"]] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     admin=Depends(support_or_above),
@@ -134,9 +144,10 @@ async def list_prospects(
     sb = get_supabase_admin()
     start = (page - 1) * page_size
 
-    def run(columns: str):
+    def run(columns: str, contact_filter: str | None):
         return (
-            _prospect_query(sb, status, sector, department, q, count=True, columns=columns)
+            _prospect_query(sb, status, sector, department, q, count=True, columns=columns,
+                            contact=contact_filter)
             .order("created_on", desc=True)
             .order("name")
             .range(start, start + page_size - 1)
@@ -144,10 +155,10 @@ async def list_prospects(
         )
 
     try:
-        res = run(_PROSPECT_COLUMNS)
+        res = run(_PROSPECT_COLUMNS, contact)
     except Exception as exc:  # migration 088 pas encore appliquée
         logger.warning("prospect_company : colonnes de contact absentes (migration 088 ?) : %s", exc)
-        res = run(_BASE_COLUMNS)
+        res = run(_BASE_COLUMNS, None)
     return {"items": res.data or [], "total": res.count or 0, "page": page, "page_size": page_size}
 
 

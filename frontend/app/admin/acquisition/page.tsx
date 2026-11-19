@@ -133,6 +133,7 @@ function ProspectsTab({ onChange, inseeConfigured }: { onChange: () => void; ins
   const [status, setStatus] = useState("new");
   const [sector, setSector] = useState("");
   const [department, setDepartment] = useState("");
+  const [contactFilter, setContactFilter] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<{ items: any[]; total: number }>({ items: [], total: 0 });
@@ -213,11 +214,11 @@ function ProspectsTab({ onChange, inseeConfigured }: { onChange: () => void; ins
 
   const load = useCallback(() => {
     setLoading(true);
-    api.adminProspects({ status, sector, department, q, page, page_size: PAGE_SIZE })
+    api.adminProspects({ status, sector, department, q, contact: contactFilter, page, page_size: PAGE_SIZE })
       .then((d) => { setData(d); setError(""); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [status, sector, department, q, page]);
+  }, [status, sector, department, q, contactFilter, page]);
 
   useEffect(() => {
     const id = setTimeout(load, 250); // la recherche texte ne déclenche pas une requête par frappe
@@ -273,6 +274,13 @@ function ProspectsTab({ onChange, inseeConfigured }: { onChange: () => void; ins
           placeholder="Département (ex. 13)" style={{ ...inputStyle, width: "160px" }} />
         <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }}
           placeholder="Nom, ville ou code postal" style={{ ...inputStyle, flex: "1 1 200px" }} />
+        <select value={contactFilter} onChange={(e) => { setContactFilter(e.target.value); setPage(1); }} style={inputStyle}
+          aria-label="Filtrer par coordonnées">
+          <option value="">Coordonnées : toutes</option>
+          <option value="todo">Jamais recherchées</option>
+          <option value="not_found">Recherchées, rien trouvé</option>
+          <option value="found">Coordonnées trouvées</option>
+        </select>
         <button onClick={exportCsv} style={{ ...pill(C.teal), padding: "7px 14px", fontSize: "12px" }}>Exporter CSV</button>
         {inseeConfigured && (
           <button onClick={runImport} style={{ ...pill(C.gold), padding: "7px 14px", fontSize: "12px" }}>Importer maintenant</button>
@@ -367,20 +375,27 @@ function ProspectsTab({ onChange, inseeConfigured }: { onChange: () => void; ins
                         style={{ fontSize: "12px", color: C.faint, background: "none", border: "none", cursor: "pointer", padding: 0 }}>✎</button>
                     </p>
                   ) : (
-                    <p style={{ margin: "6px 0 0", fontSize: "12px", color: C.faint, display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                      <button disabled={lookingUp === r.id} onClick={() => lookup(r.id)}
-                        style={{ fontSize: "12px", color: "#2A8FA5", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                        {lookingUp === r.id ? "Recherche en cours… (jusqu'à 30 s)" : "🔎 Chercher les coordonnées"}
-                      </button>
-                      <button onClick={() => { setEditingContact(r.id); setContactDraft({ contact_phone: "", contact_email: "", contact_website: "" }); }}
-                        style={{ fontSize: "12px", color: C.faint, background: "none", border: "none", cursor: "pointer", padding: 0 }}>✎ Saisir</button>
+                    <div style={{ marginTop: "6px", fontSize: "12px" }}>
+                      {/* Déjà recherchée sans résultat : l'indiquer clairement, pour ne pas relancer à l'aveugle. */}
                       {r.contact_checked_at && (
-                        <span>
-                          Recherché le {fmtDate(r.contact_checked_at)}
-                          {r.contact_next_check_at ? `, nouvel essai le ${fmtDate(r.contact_next_check_at)}` : ""}
-                        </span>
+                        <p style={{ margin: "0 0 4px", color: C.gold }}>
+                          ⚠ Déjà recherchée {r.contact_lookup_count > 1 ? `${r.contact_lookup_count} fois` : ""} — dernière fois le {fmtDate(r.contact_checked_at)} : rien trouvé.
+                          {r.contact_next_check_at
+                            ? ` Nouvel essai automatique le ${fmtDate(r.contact_next_check_at)}.`
+                            : " Plus de nouvel essai automatique."}
+                        </p>
                       )}
-                    </p>
+                      <p style={{ margin: 0, display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                        <button disabled={lookingUp === r.id} onClick={() => lookup(r.id)}
+                          style={{ fontSize: "12px", color: "#2A8FA5", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                          {lookingUp === r.id
+                            ? "Recherche en cours… (jusqu'à 30 s)"
+                            : r.contact_checked_at ? "🔎 Relancer la recherche" : "🔎 Chercher les coordonnées"}
+                        </button>
+                        <button onClick={() => { setEditingContact(r.id); setContactDraft({ contact_phone: "", contact_email: "", contact_website: "" }); }}
+                          style={{ fontSize: "12px", color: C.faint, background: "none", border: "none", cursor: "pointer", padding: 0 }}>✎ Saisir</button>
+                      </p>
+                    </div>
                   )}
                   {(r.letter_generated_at || r.contacted_via) && (
                     <p style={{ margin: "4px 0 0", fontSize: "11px", color: C.faint }}>
